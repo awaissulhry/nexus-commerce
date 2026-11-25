@@ -474,9 +474,6 @@ function ComposeContainer() {
           open: { state: requests.state, items: openItems(requests.value, frame.prefix, locale, at) },
           allHref: pageBuilt('orders.list') ? `${frame.prefix}/orders?chip=REQUESTED` : null,
           returnsHref,
-          // B-TH-304: the catalogue door, open again (catalogue orders land in Sales › Incoming; no answer-time promise).
-          // od-w1.2 (S1-B6): no ways to the draft from here — this door is for one without the drafts right (the loop is gone).
-          catalogue: null,
         },
         receipt: answer ? receiptOf(answer.answer, answer.draft, choices, frame.prefix, at) : null,
         discardOpen,

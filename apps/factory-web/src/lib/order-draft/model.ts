@@ -150,7 +150,7 @@ export function problemWords(problem: Problem, lines: readonly DraftLine[], kit:
     case 'STYLE_NOT_SOLD':
       return t('problem.STYLE_NOT_SOLD', { style })
     case 'COLOUR_DISCONTINUED':
-      return t('problem.COLOUR_DISCONTINUED', { colour: line?.colourway.name ?? own?.colourway?.name ?? '' })
+      return t('problem.COLOUR_DISCONTINUED', { colour: line?.colourway?.name ?? own?.colourway?.name ?? '' })
     case 'SIZE_NOT_OFFERED':
       return t('problem.SIZE_NOT_OFFERED', { size: problem.size ?? '', style })
     case 'NO_SIZES':

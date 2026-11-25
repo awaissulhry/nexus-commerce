@@ -281,7 +281,7 @@ export interface PriceRow {
 export function priceRowsOf(request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>, t: Translate, locale?: Locale): PriceRow[] {
   return entriesInOrder(request).map((entry) =>
     entry.kind === 'CATALOGUE'
-      ? { id: entry.line.id, kind: entry.kind, seq: entry.line.seq, label: `${entry.line.style.code} ${entry.line.colourway.name}`, pieces: entry.line.pieces, ours: entry.line.unitPriceShown ?? null, yours: entry.line.brandUnitPrice ?? null }
+      ? { id: entry.line.id, kind: entry.kind, seq: entry.line.seq, label: `${entry.line.style.code} ${entry.line.colourway?.name ?? ''}`.trim(), pieces: entry.line.pieces, ours: entry.line.unitPriceShown ?? null, yours: entry.line.brandUnitPrice ?? null }
       : { id: entry.line.id, kind: entry.kind, seq: entry.line.seq, label: customTitleOf(entry.line, t, locale), pieces: entry.line.pieces, ours: null, yours: entry.line.brandUnitPrice ?? null },
   )
 }

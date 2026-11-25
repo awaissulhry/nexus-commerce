@@ -163,7 +163,6 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
       prefix: beta ? BETA : PREFIX,
       template: templateHref(locale),
       customerRef: view.sent?.customerRef ?? view.record?.request.customerRef ?? null,
-      sendHeld: view.sendHeld,
       discardHeld: view.writeHeld ?? (discardKey ? words.t(discardKey) : null),
       title: view.record ? draftTitleOf(view.record.request, words.t) : null,
       ask: view.record ? { type: 'PortalOrderRequest', id: view.record.request.id } : null,

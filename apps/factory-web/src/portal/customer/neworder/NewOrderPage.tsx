@@ -537,7 +537,7 @@ function NewOrderContainer() {
   // colour in words, total or by person, sizing, options). The row "Add a product" drew is saved by its first input (a new custom line).
   const rowOf = (rowId: string) => (recordRef.current ? productRowsOf(recordRef.current.request, locale).find((row) => row.id === rowId) : undefined)
 
-  const writeRow = async (rowId: string | null, fields: CustomLineFields & { colourwayId?: string }, onError?: (kind: string | null) => void): Promise<DraftRecord | null> => {
+  const writeRow = async (rowId: string | null, fields: CustomLineFields, onError?: (kind: string | null) => void): Promise<DraftRecord | null> => {
     if (writeHeld({ preview, offline, busy: false })) return null
     if (rowId === null) {
       const current = await ensureDraft().catch((error: unknown) => {

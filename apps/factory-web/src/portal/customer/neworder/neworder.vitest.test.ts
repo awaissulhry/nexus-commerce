@@ -107,7 +107,6 @@ import {
  */
 
 const t = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale][NS] ?? {})
-const kit = (locale: 'it' | 'en') => ({ t: t(locale), price: (value: string | null | undefined) => (value ? `€ ${value}` : null) })
 // od-w1.1: the ONE draft order's words moved to their own catalogue (src/lib/order-draft, `order-draft`): its functions read them there.
 const td = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale][DRAFT_NS] ?? {})
 const dkit = (locale: 'it' | 'en') => ({ t: td(locale), price: (value: string | null | undefined) => (value ? `€ ${value}` : null) })
@@ -321,7 +320,6 @@ describe('SCR-185 and SCR-226 design cases', () => {
 })
 
 // ── B-TH-220, B-TH-303: New order as an e-mail ─────────────────────────────────────────────────────────────────────────
-const PREFIX_ALPHA = '/p/BRAND-ALPHA' // F-CP-152: the made-up prefix of the catalogue door's cases
 const OFFICE_SERIES = /\b(?:INQ|QT|SO|RQ)-\d{4}-\d{2,}/
 const API_UPLOADS_CLOSED = 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.'
 const renderCase = (locale: 'it' | 'en', id: string) => {
