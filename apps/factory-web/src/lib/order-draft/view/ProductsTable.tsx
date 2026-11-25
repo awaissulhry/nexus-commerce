@@ -4,7 +4,7 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AlertTriangle, FileText, Hourglass, LayoutGrid, MoreHorizontal, Plus, Ruler, Users } from 'lucide-react'
 import { Card, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input, Select, Tag } from '@nexus/ui/primitives'
-import { choiceWords, problemWords, rowPiecesWords, rowProductOf, type ProductRow } from '../model'
+import { choiceWords, fromOrderText, problemWords, rowPiecesWords, rowProductOf, type ProductRow } from '../model'
 import type { Sizing } from '../schema'
 import { useDraftWords } from '../words'
 
@@ -193,6 +193,8 @@ function Row({ index, row, model, actions }: { index: number; row: ProductRow | 
             <span className="fw-od-productmeta">
               <Tag tone="info">{t('cell.catalogue')}</Tag> {row.style.code}
             </span>
+            {/* od-fx2 (B-TH-304): a row copied from a past order says which — the customer's own number and PO, never SO-…. */}
+            {row.from ? <span className="fw-od-productmeta">{fromOrderText(row.from, t, words.day)}</span> : null}
           </span>
         ) : (
           <>

@@ -10,7 +10,6 @@ import type { Locale } from '../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
 import type { PortalBand } from '../../shell/frame'
 import { badgesOf } from '../../shell/model'
-import { bandThreadOf, type PortalFrameMode } from '../../shell/record/model' // pp-w1 (w1.1)
 import { portalNavFor } from '../../shell/nav/portal-nav'
 import type { PortalShellViewModel } from '../../shell/view/PortalShellView'
 import type { ThreadViewModel } from '../../shell/view/ThreadView'
@@ -58,14 +57,8 @@ const LEGAL = {
 } as const
 const ALL = (permission: string) => permission.startsWith('portal.') || permission === 'files.read' || permission === 'threads.read'
 
-/**
- * pp-w1 (w1.1): the design review's band with the record frame's thread button ("Messages (2 new)" while the conversation is not on
- * screen) — the live frame puts it in the band itself (usePortalBandThread); a design case has no frame state to do it.
- */
-export function withThreadButton(band: PortalBand, frame: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly hidden?: boolean } | null | undefined): PortalBand {
-  const thread = frame ? bandThreadOf({ hasThread: true, mode: frame.mode, hidden: frame.hidden ?? false, viewOpen: frame.viewOpen ?? false, count: frame.newCount ?? 0 }) : null
-  return thread ? { ...band, thread: { count: thread.count, onClick: () => undefined } } : band
-}
+// pp-fx1: the band's thread button of a design case is the shell's (every record host's design case draws it).
+export { withThreadButton } from '../../shell/fixtures'
 
 export function shellOf(locale: Locale, band: PortalBand, over: Partial<PortalShellViewModel> = {}): PortalShellViewModel {
   // B-TH-275 (wall W02): the footer's terms link follows the reader's own prefix, as the real shell's does (PortalShell:

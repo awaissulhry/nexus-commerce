@@ -209,6 +209,7 @@
     "requested": "Data richiesta",
     "shipTo": "Indirizzo di consegna",
     "paymentTerms": "Termini di pagamento",
+    "currency": "Valuta",
     "withdrawal": "Diritto di recesso",
     "noWithdrawal": "Nessun diritto di recesso (su misura)"
   },

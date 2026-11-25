@@ -377,7 +377,8 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     // D10: the office reads the draft read-only before Send (Sales holds no price: no value, part 6 not counted); it decides nothing.
     const drafts = (await ok(P.sales, 'GET', `/sales/order-requests?status=DRAFT&partyId=${P1()}`)).requests as Json[]
     const row = drafts.find((entry) => entry.id === draft.id)!
-    expect(row.draft).toMatchObject({ startedBy: BRAND_ALPHA_TEAM.designer.name, title: draftWords, readiness: { of: 6 }, files: { logos: [expect.objectContaining({ id: G.alphaLogo })] } })
+    expect(row.draft).toMatchObject({ startedBy: BRAND_ALPHA_TEAM.designer.name, title: draftWords, openCount: expect.any(Number), files: { logos: [expect.objectContaining({ id: G.alphaLogo })] } }) // od-fx3: no checklist
+    expect(row.draft).not.toHaveProperty('readiness')
     expect(row.draft).not.toHaveProperty('draftValueAmount')
     const record = await ok(P.sales, 'GET', `/sales/order-requests/${draft.id}`)
     expect(record.request).toMatchObject({ status: 'DRAFT', acceptMap: { lineIds: [described!.id, tailored!.id] } })

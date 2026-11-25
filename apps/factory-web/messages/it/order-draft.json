@@ -136,7 +136,11 @@
     "menu": "Altro per la riga {seq}",
     "note": "Il vostro codice o una nota",
     "pieces": "Pezzi",
-    "remove": "Togli la riga"
+    "remove": "Togli la riga",
+    "fromOwn": "dal vostro ordine {seq}",
+    "fromOwnRef": "dal vostro ordine {seq} (vostro numero {ref})",
+    "fromDay": "dal vostro ordine del {day}",
+    "fromDayRef": "dal vostro ordine del {day} (vostro numero {ref})"
   },
   "notice": {
     "COLOUR_DISCONTINUED": "{colour} è fuori produzione — scegliete un altro colore",
@@ -238,6 +242,12 @@
     },
     "cf": {
       "quoteNext": "Quando il cliente accetta il preventivo, diventa l’ordine."
+    },
+    "lines": {
+      "fromOwn": "dall’ordine {seq} del cliente",
+      "fromOwnRef": "dall’ordine {seq} del cliente (suo numero {ref})",
+      "fromDay": "dall’ordine del cliente del {day}",
+      "fromDayRef": "dall’ordine del cliente del {day} (suo numero {ref})"
     }
   },
   "col": {

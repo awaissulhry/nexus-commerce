@@ -136,7 +136,11 @@
     "menu": "More for line {seq}",
     "note": "Your code or a note",
     "pieces": "Pieces",
-    "remove": "Remove line"
+    "remove": "Remove line",
+    "fromOwn": "from your order {seq}",
+    "fromOwnRef": "from your order {seq} (your PO {ref})",
+    "fromDay": "from your order of {day}",
+    "fromDayRef": "from your order of {day} (your PO {ref})"
   },
   "notice": {
     "COLOUR_DISCONTINUED": "{colour} is discontinued — choose another colour",
@@ -238,6 +242,12 @@
     },
     "cf": {
       "quoteNext": "When the customer accepts the quote, it becomes the order."
+    },
+    "lines": {
+      "fromOwn": "from the customer’s order {seq}",
+      "fromOwnRef": "from the customer’s order {seq} (their PO {ref})",
+      "fromDay": "from the customer’s order of {day}",
+      "fromDayRef": "from the customer’s order of {day} (their PO {ref})"
     }
   },
   "col": {

@@ -6,6 +6,7 @@ import { at, backJob, dayAt, FACTS, jobOf, kitJob, newJob, pageOf, PREFIX, propo
 import { ACCEPT_DRAFT, DECLINE_DRAFT, kitDraftOf, PROBLEM_DRAFT, progressDraftOf, returnDraftOf, type PersonFacts, type RecordTab } from '../model'
 import { JobsCase, type JobsCaseBuilder } from '../view/JobsCase'
 import type { JobRecordViewModel } from '../view/JobRecordView'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 
 /**
  * SCR-193 › one job (design portal.supplier.jobs rec "Job"; B-TH-277 tabs 5 → 3: Kit received with its documents, Progress,
@@ -48,7 +49,7 @@ function recordCase(job: Job | null, tab: RecordTab, over: (job: Job | null) => 
     const facts = model.facts
     const held = facts.preview ? t('held.preview') : facts.mayAct.approve ? null : t('held.may.approve')
     return {
-      shell: shellOf(locale, { path: '/jobs', preview: shell.preview ?? false, band: job ? jobBandOf({ t, job, tab, prefix: PREFIX, acceptHeld: held, declineHeld: held }) : { title: t('record.titleLoading') } }),
+      shell: shellOf(locale, { path: '/jobs', preview: shell.preview ?? false, band: job ? withThreadButton(jobBandOf({ t, job, tab, prefix: PREFIX, acceptHeld: held, declineHeld: held }), shell.frame) : { title: t('record.titleLoading') } }),
       // B-TH-277: the job's conversation docks beside every tab (no Messages tab); none while the job is not read.
       body: { kind: 'record', model, thread: job ? threadOf(locale) : null, ...(shell.frame ? { frame: shell.frame } : {}) },
     }

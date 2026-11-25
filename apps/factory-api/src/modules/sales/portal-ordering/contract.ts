@@ -4,7 +4,7 @@ import { NUMBER_FORMATS } from '@nexus/factory-domain/imports/cells'
 import { CSV_ENCODINGS } from '@nexus/factory-domain/imports/job'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/parties/address-approval'
-import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { ACCEPT_AS, DRAFT_LATER_PARTS, PROBLEM_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { DRAFT_FILE_PARTS, MOVABLE_DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072; od-ts t.6
@@ -42,7 +42,7 @@ const requestParams = input({ requestId: id() })
 const sizeAsk = input({ size: z.string().trim().min(1).max(ORDERING_LIMITS.size), quantity: z.number().int().min(1).max(ORDERING_LIMITS.quantity) })
 const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
 // B-CP-075: + the part of the checklist it holds and the person of a roster it is on ("send problems per part").
-const problem = output({ code: z.enum(PROBLEM_CODES), part: z.enum(DRAFT_PARTS), lineId: id().nullable(), size: z.string().nullable(), personId: id().nullable(), words })
+const problem = output({ code: z.enum(PROBLEM_CODES), part: z.enum(PROBLEM_PARTS) /* od-fx3: the part a problem is on (NEED, PEOPLE, DATE) */, lineId: id().nullable(), size: z.string().nullable(), personId: id().nullable(), words })
 const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
 // ---- B-CP-076 (customer page plan 11 §1.3 D3): "Your price" — the customer's own net unit price of a draft line, the price grain (a
@@ -601,11 +601,6 @@ const officeDraft = output({
   title: z.string().nullable(),
   /** The people of its roster (B-CP-075). */
   people: z.number().int(),
-  /**
-   * The checklist (12 §2): each part's state, READY parts of the parts counted, the problems that hold the send. Part 6 "Your
-   * price" is counted only for a reader with the price grain (review B4): `of` is 7 for them, 6 for anyone else.
-   */
-  readiness: output({ parts: z.array(output({ part: z.enum(DRAFT_PARTS), state: z.enum(DRAFT_PART_STATES) })), done: z.number().int(), of: z.number().int(), problems: z.number().int() }),
   /** The parts the customer marked "we send it later" (B-CP-075). */
   later: z.array(z.enum(DRAFT_LATER_PARTS)),
   /** Its conversation, for a reader of its thread (null: not one): messages, the newest, whether the factory designer was asked. */

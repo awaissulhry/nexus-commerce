@@ -76,6 +76,15 @@ const has = (locale: 'it' | 'en', key: string) => {
   return keys.has(key) || (keys.has(`${key}_one`) && keys.has(`${key}_other`))
 }
 
+// pp-fx1 (pp-w1 w1.1): under 1280 px "Messages (2 new)" rides in the band — the live frame sets it there (usePortalBandThread), the
+// design case's band carries it (withThreadButton) — ONE button, before the page's main; the body draws no row of its own.
+const inBand = (html: string, label: string) => {
+  expect(html, label).toContain('class="fw-pband-thread')
+  expect(html.indexOf('fw-pband-thread'), label).toBeLessThan(html.indexOf('id="main-content"'))
+  expect(html.match(/Messages \(2 new\)/g)?.length, label).toBe(1)
+  expect(html, label).toContain('aria-label="Messages, 2 new"')
+}
+
 describe('the web keeps the API’s codes', () => {
   it('chips, outcomes and steps are the domain’s', () => {
     expect([...CASE_CHIPS]).toEqual([...DOMAIN_CHIPS])
@@ -356,8 +365,10 @@ describe('B-TH-275 — returns, complaints and repairs dock their conversation',
     expect(docked).not.toContain('tab=messages')
     const narrow = draw(screen, 'th-275-narrow')
     expect(narrow).toContain('data-mode="stacked"')
-    expect(narrow).toContain('Messages (2 new)')
-    expect(draw(screen, 'complaint-narrow')).toContain('Messages (2 new)')
+    inBand(narrow, 'return')
+    inBand(draw(screen, 'complaint-narrow'), 'complaint')
+    inBand(draw(repairScreen as unknown as DesignScreen<unknown>, 'th-275-narrow'), 'repair')
+    for (const [screenOf, id] of [[screen, 'th-275-narrow-open'], [repairScreen as unknown as DesignScreen<unknown>, 'th-275-narrow-open']] as const) expect(draw(screenOf, id), id).not.toContain('fw-pband-thread')
     // The case pages draw no office SO- order number (plan §0.5): the replacement order and the complaint's order in words.
     for (const entry of screen.cases) expect(draw(screen, entry.id).match(/\bSO-\d{4}-\d+/)?.[0] ?? null, entry.id).toBeNull()
   })

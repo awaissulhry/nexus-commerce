@@ -209,6 +209,7 @@
     "requested": "Requested date",
     "shipTo": "Delivery address",
     "paymentTerms": "Payment terms",
+    "currency": "Currency",
     "withdrawal": "Right of withdrawal",
     "noWithdrawal": "No right of withdrawal (made to measure)"
   },
