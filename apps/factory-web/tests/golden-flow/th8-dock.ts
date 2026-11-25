@@ -18,7 +18,9 @@ import { startsWith, words } from './_harness/words'
  *   3  no loop: five picks over 10 s write the address with no router request (0 rsc), no document, at most 6 writes of the address
  *      (each with at most Next's one echo to the same address: routerActivity `writes`);
  *   4  Answer on A's line → This order with the box focused on a reply ("Replying to …"); on the general note → General, Office note;
- *   5  the keyboard walk of All of (J / K, Space), light and dark, the phone (375: the full-width view, ← Back).
+ *   5  the keyboard walk of All of (J / K, Space), light and dark, the phone (375: the full-width view, ← Back);
+ *   6  pt-t (S.6, ONE SHARED THREAD): customer A answers OUR message in its dock with a quote (the message's menu › Reply, the reply bar,
+ *      the box, Send); the reply shows its quote there, and the office reads the reply with that quote in This order.
  * Not here, said in the report: a project's scope (nothing links a project to this order), a work order's notes (10-work-order checks
  * them on the W1 order once it has one), a file opened from the body while All of shows (the order of this world carries no file the
  * body opens through the dock: a proof of delivery comes with 14-ship; the ask is held by the unit tests of F-OP-212).
@@ -40,6 +42,9 @@ const lead = (text: string) => text.split(/\{[a-zA-Z]+\}/)[0]!.trim()
 /** The made-up words of this stage. */
 const FROM_ALPHA = 'Made-up from Brand Alpha on its order: can the sleeves of the size 52 be two centimetres longer?'
 const GENERAL_NOTE = 'Made-up office note on Brand Alpha: their new warehouse takes deliveries from December.'
+// pt-t T.3 (S.6): our message in the order's portal conversation, and customer A's reply to it (no price, no other customer named).
+const FROM_OFFICE = 'Made-up from the factory: yes, the sleeves can be longer; we send you a sample first.'
+const REPLY_FROM_ALPHA = 'Made-up reply on its order: thank you, the sample is welcome.'
 // op-fx4: the order's own reference, not Brand Alpha's fixture one: th1a-sheet (later in the run) calls P1 Brand Beta and scans its
 // rows for Brand Alpha's markers, the fixture's reference among them.
 const DOCK_REF = 'T-TH8-DOCK-PO-0001'
@@ -324,6 +329,44 @@ export default defineStage({
       await go('?tab=overview&thread=all')
       await expect(feedHead(page).getByRole('button', { name: HEAD('width.label'), exact: true })).toHaveCount(0)
       await chooseFromMenu(feedHead(page).getByRole('button', { name: HEAD('more.label'), exact: true }), page.getByRole('menuitem', { name: startsWith(HEAD('width.reset')) }))
+    })
+
+    await flow.step('6 · pt-t (S.6): customer A answers our message in its dock with a quote; the office reads the reply with that quote', async () => {
+      // set-up (no screen writes it here): ONE message of ours in the order's portal conversation.
+      await flow.write(page, 'POST', `/threads/SalesOrder/${order.id}/replies`, { body: FROM_OFFICE, attachments: [] }, 201)
+      const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
+      await alpha.page.setViewportSize({ width: 1440, height: 900 })
+      await alpha.go(`/orders/${order.id}`)
+      const dock = alpha.page.locator('.fw-prf[data-mode="docked"] > aside#messages')
+      await seen(dock, 60_000)
+      // Our message, its ONE menu (the arrow on hover) › Reply: the reply bar names it, the box takes the focus.
+      const ours = dock.locator('article.fw-rt-msg').filter({ hasText: FROM_OFFICE })
+      await seen(ours, 60_000)
+      await fromBubbleMenu(alpha.page, ours, CARD('menu.reply'))
+      await seen(dock.getByRole('group', { name: startsWith(lead(BOX('link.replying'))) }))
+      const box = dock.getByRole('textbox', { name: RTP('box'), exact: true })
+      await expect(box, 'Reply puts the focus in the box').toBeFocused({ timeout: 30_000 })
+      await box.fill(REPLY_FROM_ALPHA)
+      await dock.getByRole('button', { name: RTP('send'), exact: true }).click()
+      // The posted reply shows the quote of what it answers (from its own link), a button that goes to it.
+      const reply = dock.locator('article.fw-rt-msg').filter({ hasText: REPLY_FROM_ALPHA })
+      await seen(reply, 60_000)
+      const quote = reply.locator('button.fw-rt-quote')
+      await expect(quote).toHaveAttribute('aria-label', startsWith(lead(CARD('quote.label'))))
+      await expect(quote.locator('.fw-rt-quote-text')).toContainText(FROM_OFFICE)
+      await expect(dock.getByRole('group', { name: startsWith(lead(BOX('link.replying'))) }), 'the bar goes once the reply went').toHaveCount(0)
+      await flow.shot(alpha.page, 'portal-reply-quoted')
+      await flow.settle()
+
+      // The office reads the reply with that quote in This order.
+      await go('?tab=overview')
+      await seen(pickOf(page), 60_000)
+      await pick(page, OD('record.dock.order'))
+      await expectPicked(page, OD('record.dock.order'))
+      const row = cardOf(page).locator('article.fw-rt-msg').filter({ hasText: REPLY_FROM_ALPHA })
+      await seen(row, 60_000)
+      await expect(row.locator('button.fw-rt-quote .fw-rt-quote-text')).toContainText(FROM_OFFICE)
+      await flow.shot(page, 'office-reply-quoted')
     })
 
     test.info().annotations.push(
