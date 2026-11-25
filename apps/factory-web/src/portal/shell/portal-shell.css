@@ -819,7 +819,14 @@
     color: var(--nds-text-link);
   }
 
+  /* pp-fx2 (W-02): the title fills row 1 whole: beside the back link when there is one, alone when there is none (a list, Home), so
+     nothing else fits there. Before, a page with no back link left the back link's 44 px free: the meta took it, and its "Updated"
+     pill ran under ⋯ and past the screen's edge. */
   .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    flex-basis: 100%;
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title:has(> .back) h1 {
     flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));
   }
 

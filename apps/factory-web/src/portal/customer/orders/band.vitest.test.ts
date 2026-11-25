@@ -205,6 +205,11 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
     for (const rule of ['.fw-pband .nds-detailhdr.dense .back {', '.fw-pband .nds-detailhdr.dense .fw-ppages {\n    order: 2;', 'flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));']) expect(phone, rule).toContain(rule)
+    // pp-fx2 (W-02): the pill never in row 1 — the title fills row 1 whole: alone with no back link (a list, Home), beside it when there is
+    // one (only then the back link's room is taken off). Before, a list's "Updated" pill took the back link's free 44 px, under ⋯.
+    expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    flex-basis: 100%;\n  }')
+    expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title:has(> .back) h1 {\n    flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));')
+    expect(phone).not.toMatch(/\.nds-detailhdr-title h1 \{\s*flex-basis: calc\(/)
   })
 })
 
