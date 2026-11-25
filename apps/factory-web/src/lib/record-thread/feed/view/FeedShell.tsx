@@ -1,9 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ChevronDown } from 'lucide-react'
-import { Button } from '@nexus/ui/primitives'
+import { ChevronDown, MailOpen } from 'lucide-react'
+import { Banner, EmptyState } from '@nexus/ui/components'
+import { Button, Skeleton } from '@nexus/ui/primitives'
+import type { Locale } from '../../../i18n/locales'
+import type { Translate } from '../../../i18n/messages'
 import { useT } from '../../../i18n/provider'
+import { dayWord } from '../../parts/time'
 import type { FeedShellHandles, FeedShellModel } from '../use-feed-shell'
 import '../../parts/parts.css'
 import '../feed.css'
@@ -75,6 +79,82 @@ export function FeedShell({
       <p className="fw-rt-sr" aria-live="polite">
         {shell.announce}
       </p>
+    </div>
+  )
+}
+
+// ── pt-w2 W2.2 (lane pt-, S4): the rows that are not a message, the same in both doors (moved out of Feed as they were) ─────────────
+
+/** A day's words: Today, Yesterday, the weekday inside 7 days, then the date (parts/time). */
+export function dayText(day: string, today: string, locale: Locale, t: Translate): string {
+  const word = dayWord(day, today, locale)
+  return word.kind === 'date' ? word.text : t(`day.${word.kind}`)
+}
+
+/** tw- W1.1 (S12): the day pill says the day; no time-zone tooltip per day. */
+export function DayRow({ words }: { words: string }): ReactNode {
+  return (
+    <div className="fw-rt-pillrow is-day" data-day={words}>
+      <span className="fw-rt-pill is-day">{words}</span>
+    </div>
+  )
+}
+
+/** B-TH-229 / tw- W1.3 (P12): ONE band above the first new message; 200+ says so; its count also rides on the down button. */
+export function UnreadRow({ count, t }: { count: number; t: Translate }): ReactNode {
+  const words = count > 200 ? t('unread.lineMany') : t('unread.line', { count })
+  return (
+    <div className="fw-rt-unread" data-feed-new="" role="separator" aria-label={words}>
+      <span className="fw-rt-pill is-unread">{words}</span>
+    </div>
+  )
+}
+
+/** The first read: skeleton bubbles, the list's own words for a screen reader (moved out of Feed as it was). */
+export function FeedLoading(): ReactNode {
+  const t = useT('record-thread-feed')
+  return (
+    <div className="fw-rt-feedwrap">
+      <div className="fw-rt-state" aria-busy="true">
+        <p className="fw-rt-sr" role="status">
+          {t('state.loading')}
+        </p>
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="fw-rt-skel-card" aria-hidden="true">
+            <span className="fw-rt-skel-row">
+              <Skeleton width={24} height={24} radius="50%" />
+              <Skeleton width={index === 1 ? 140 : 110} height={12} />
+            </span>
+            <Skeleton height={10} />
+            <Skeleton width="70%" height={10} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The read failed: said in the list's words, with Try again when the host can read again (moved out of Feed as it was). */
+export function FeedFailed({ onRetry }: { onRetry?: (() => void) | undefined }): ReactNode {
+  const t = useT('record-thread-feed')
+  return (
+    <div className="fw-rt-feedwrap">
+      <div className="fw-rt-state is-center">
+        <Banner tone="danger" title={t('state.error')} action={onRetry ? <Button size="sm" onClick={onRetry}>{t('state.tryAgain')}</Button> : undefined}>
+          {t('state.errorBody')}
+        </Banner>
+      </div>
+    </div>
+  )
+}
+
+/** No message yet (moved out of Feed as it was). */
+export function FeedEmpty(): ReactNode {
+  const t = useT('record-thread-feed')
+  return (
+    <div className="fw-rt-empty">
+      {/* tw- fx2 (walk G-15; 10-design § 14): ONE line, "No messages yet" — the box below says how to write. */}
+      <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} />
     </div>
   )
 }

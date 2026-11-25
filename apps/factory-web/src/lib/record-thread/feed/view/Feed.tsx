@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Lock, MailOpen, Pin, WifiOff } from 'lucide-react'
+import { Lock, Pin, WifiOff } from 'lucide-react'
 // B-TH-255: the pills of what the View hides and of the mail that waits for a person.
 import { EyeOff, MailWarning } from 'lucide-react'
 import Link from 'next/link'
 import { Banner, EmptyState } from '@nexus/ui/components'
-import { Button, Skeleton } from '@nexus/ui/primitives'
+import { Button } from '@nexus/ui/primitives'
 import { rightWords } from '../../../i18n/messages'
 import { useLocale, useT } from '../../../i18n/provider'
 import type { Translate } from '../../../i18n/messages'
@@ -15,8 +15,8 @@ import { replyWay, type CardContext, type CardMessage } from '../../card/model'
 import { MessageCard, type CardActions } from '../../card/view/MessageCard'
 // pt-w1 W1.3 (lane pt-, S4): the list both doors draw — its behaviour (the hook) and its scroller (the view); this feed draws the rows.
 import { useFeedShell } from '../use-feed-shell'
-import { FeedShell } from './FeedShell'
-import { dayOf, dayWord, timeOf } from '../../parts/time'
+import { dayText, DayRow, FeedEmpty, FeedFailed, FeedLoading, FeedShell, UnreadRow } from './FeedShell' // pt-w2 W2.2: the day pill and the unread band both doors draw
+import { dayOf, timeOf } from '../../parts/time'
 import { feedRows, whoWords, type FeedEvent, type FeedPin, type FeedRow } from '../model'
 import { stepsWordsOf, stepVerbKey } from '../model' // F-OP-214: other modules' words, the run of steps
 import { hiddenNewLine, waitingMailLine, type FeedWaitingMail } from '../model' // B-TH-255
@@ -94,38 +94,9 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
   // newest; seen; older on scroll; live arrivals and the down count; the floating day; J / K; R answers the focused message its own way.
   const shell = useFeedShell(model, rows, actions, (message) => replyWay(message, model.context) !== null)
 
-  if (model.state === 'loading') {
-    return (
-      <div className="fw-rt-feedwrap">
-        <div className="fw-rt-state" aria-busy="true">
-          <p className="fw-rt-sr" role="status">
-            {t('state.loading')}
-          </p>
-          {[0, 1, 2].map((index) => (
-            <div key={index} className="fw-rt-skel-card" aria-hidden="true">
-              <span className="fw-rt-skel-row">
-                <Skeleton width={24} height={24} radius="50%" />
-                <Skeleton width={index === 1 ? 140 : 110} height={12} />
-              </span>
-              <Skeleton height={10} />
-              <Skeleton width="70%" height={10} />
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-  if (model.state === 'error') {
-    return (
-      <div className="fw-rt-feedwrap">
-        <div className="fw-rt-state is-center">
-          <Banner tone="danger" title={t('state.error')} action={actions?.onReload ? <Button size="sm" onClick={actions.onReload}>{t('state.tryAgain')}</Button> : undefined}>
-            {t('state.errorBody')}
-          </Banner>
-        </div>
-      </div>
-    )
-  }
+  // pt-w2 W2.2: the first read and a failed one, as both doors draw them (FeedShell).
+  if (model.state === 'loading') return <FeedLoading />
+  if (model.state === 'error') return <FeedFailed onRetry={actions?.onReload} />
   if (model.state === 'forbidden') {
     return (
       <div className="fw-rt-feedwrap">
@@ -150,10 +121,7 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
       empty={
         model.messages.length === 0 && model.events.length === 0 ? (
           <>
-            <div className="fw-rt-empty">
-              {/* tw- fx2 (walk G-15; 10-design § 14): ONE line, "No messages yet" — the box below says how to write. */}
-              <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} />
-            </div>
+            <FeedEmpty />
             {/* B-TH-255: a view that hides everything, or mail that waits, still says so under the empty state. */}
             <EndLines model={model} actions={actions} t={t} />
           </>
@@ -187,12 +155,6 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
   )
 }
 
-/** A day's words: Today, Yesterday, the weekday inside 7 days, then the date (parts/time). */
-function dayText(day: string, today: string, locale: Locale, t: Translate): string {
-  const word = dayWord(day, today, locale)
-  return word.kind === 'date' ? word.text : t(`day.${word.kind}`)
-}
-
 function Row({
   row,
   t,
@@ -217,24 +179,8 @@ function Row({
   onToggleChanges: () => void
 }) {
   const statusWords = useT('search') // tw- W2.4: the record types' status words (THREAD_NAMESPACES loads them)
-  if (row.kind === 'day') {
-    // tw- W1.1 (S12): the day pill says the day; no time-zone tooltip per day.
-    const words = dayText(row.day, today, locale, t)
-    return (
-      <div className="fw-rt-pillrow is-day" data-day={words}>
-        <span className="fw-rt-pill is-day">{words}</span>
-      </div>
-    )
-  }
-  if (row.kind === 'new') {
-    // B-TH-229 / tw- W1.3 (P12): ONE band above the first new message; 200+ says so; its count also rides on the down button.
-    const words = row.count > 200 ? t('unread.lineMany') : t('unread.line', { count: row.count })
-    return (
-      <div className="fw-rt-unread" data-feed-new="" role="separator" aria-label={words}>
-        <span className="fw-rt-pill is-unread">{words}</span>
-      </div>
-    )
-  }
+  if (row.kind === 'day') return <DayRow words={dayText(row.day, today, locale, t)} />
+  if (row.kind === 'new') return <UnreadRow count={row.count} t={t} />
   if (row.kind === 'message') {
     return (
       <div className="fw-rt-feed-item" data-day={dayText(dayOf(row.message.at), today, locale, t)}>

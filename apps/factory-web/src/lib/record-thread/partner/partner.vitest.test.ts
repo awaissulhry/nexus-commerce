@@ -108,3 +108,106 @@ describe('pt-w2 W2.1 — the partner model', () => {
   })
 })
 // ---- end W2.1
+
+// ---- W2.2: the face ------------------------------------------------------------------------------------------------------------------
+import { CATALOGUE } from '../../i18n/messages'
+import { ReaderProvider } from '../../i18n/provider'
+import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
+import { scanText } from '../../testing/brand-scan'
+import { PartnerColumn, type PartnerColumnModel } from './view/PartnerColumn'
+
+describe('pt-w2 W2.2 — the partner face', () => {
+  const beta = (over: Partial<PartnerColumnModel> = {}): PartnerColumnModel => ({
+    kind: 'record',
+    state: 'ready',
+    title: 'Messages',
+    recordName: BRAND_BETA.customerRef,
+    companyName: 'Example Works',
+    messages: [
+      msg('m1', { author: { name: 'Bea Esempio', mine: false }, body: 'We confirm the new chart.', channel: 'email', at: at(1) }),
+      msg('m2', { side: 'partner', author: { name: BRAND_BETA.portalPerson.name, mine: true }, body: BRAND_BETA.message, at: at(2), replyTo: { id: 'm1', authorName: 'Bea Esempio', authorKind: 'USER', excerpt: 'We confirm the new chart.', at: at(1) }, attachments: [{ id: 'f1', name: BRAND_BETA.fileName, size: '84 KB', href: '/api/files/f1/download', contentType: 'application/pdf' }] }),
+      msg('m3', { side: 'partner', author: { name: 'Ugo Test', mine: false }, body: 'Thanks from the team.', at: at(3) }),
+    ],
+    more: true,
+    reading: { firstNewId: 'm3', newCount: 1 },
+    pins: [{ messageId: 'm1', pinnedAt: at(4), authorName: 'Bea Esempio', excerpt: 'We confirm the new chart.', files: 0, removed: false }],
+    composer: { value: '', busy: false, held: null, designer: { ask: 'Ask Dora Campione, factory designer', on: false, hint: 'Dora Campione gets your message at once.', held: null, completes: false } },
+    help: ['You can also answer our emails: the reply lands here.'],
+    ...over,
+  })
+  const draw = (model: PartnerColumnModel, locale: 'en' | 'it' = 'en', outside = true) => render(outside ? createElement(ReaderProvider, { reader: 'outside' }, createElement(PartnerColumn, { model })) : createElement(PartnerColumn, { model }), locale)
+  const views = ['./view/PartnerColumn.tsx', './view/PartnerHead.tsx', './view/PartnerComposer.tsx', './model.ts'].map((file) => [file, readFileSync(new URL(file, import.meta.url), 'utf8')] as const)
+
+  it('the face draws the office’s row, list, composer and pinned bar (the same classes) and no office-only class', () => {
+    const html = draw(beta())
+    for (const shared of ['<section class="fw-rt-column is-docked fw-rtp"', 'class="fw-rth"', 'class="fw-rt-pinbar"', 'class="fw-rt-feedwrap"', 'class="fw-rt-feed" role="feed"', 'class="fw-rt-sentinel"', 'fw-rt-msg is-ours is-others is-start', 'fw-rt-msg is-theirs is-mine is-start', 'class="fw-rt-quote fw-rt-tone-', 'class="fw-rt-composer"', 'class="fw-rt-cx-row"', 'class="fw-rt-cx-box"', 'fw-rt-cx-send', 'data-feed-new=""']) {
+      expect(html, shared).toContain(shared)
+    }
+    for (const office of ['is-note', 'fw-rt-cx-aud', 'fw-rt-cx-chipbtn', 'fw-rt-event', 'fw-rth-line', 'fw-rth-files', 'fw-rt-lock', 'lucide-globe', 'lucide-check-check', 'data-mode', 'nds-pthread', 'fw-pthread']) {
+      expect(html, office).not.toContain(office)
+    }
+    // The box is a textbox named "Your message"; Send is named "Send"; the designer ask is a checkbox; one row at rest, no counter.
+    expect(html).toMatch(/<textarea[^>]*class="nds-textarea fw-rt-cx-text"[^>]*aria-label="Your message"/)
+    expect(html).not.toMatch(/<textarea[^>]*role="combobox"/)
+    expect(html).toContain('aria-label="Send"')
+    expect(html).toMatch(/<button type="button" role="checkbox" aria-checked="false"[^>]*>.*Ask Dora Campione, factory designer<\/button>/)
+    expect(html).not.toContain('fw-rt-cx-count')
+    // A mail on an email only; the quote of the reader's colleague's message; no Reply when the box is held.
+    expect(html.match(/lucide-mail/g)?.length).toBe(1)
+    expect(draw(beta({ composer: { value: '', busy: false, held: 'You can read these messages; to write here, ask your admin (Ugo Test).' } }))).toContain('class="fw-rt-cx-held"')
+    // The ⋮ only with the frame's width chooser (A11); its rows are the office's Width rows.
+    expect(html).not.toContain('fw-rth-menu')
+    expect(draw(beta({ width: { widths: ['third', 'forty', 'half'], current: 'forty', choose: () => undefined } }))).toContain('fw-rth-menu')
+    // The face imports no office, portal or session code, and draws the shared parts.
+    for (const [file, source] of views) expect(source, file).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
+    const face = views[0]![1]
+    for (const part of ['MessageRow', 'useFeedShell', 'FeedShell', 'PinnedBar', 'feedRows']) expect(face, part).toContain(part)
+    expect(views[2]![1]).toContain('ComposerRow')
+    // The face never reports what was seen: the host marks read only while on screen (A14).
+    expect(face).not.toContain('onSeen')
+  })
+
+  it('every word EN + IT, IT voi for the outside reader, no key left on screen', () => {
+    for (const locale of ['en', 'it'] as const) {
+      expect(Object.keys(CATALOGUE[locale]['record-thread-partner'] ?? {}).sort(), locale).toEqual(Object.keys(CATALOGUE.en['record-thread-partner'] ?? {}).sort())
+      const text = textOf(draw(beta(), locale))
+      expect(text, locale).not.toMatch(/\b(kind|row|attach|keys|width|pinbar|feed|state|quote|menu|files|unread|day)\.[a-zA-Z]/)
+      expect(text, locale).not.toMatch(/\b(thread|conversation|conversazione)\b/i)
+    }
+    const it = draw(beta(), 'it')
+    expect(it).toContain('aria-label="Il vostro messaggio"')
+    expect(it).toContain('aria-label="Inviate"')
+    expect(it).toContain('placeholder="Scrivete un messaggio"')
+    expect(it).toContain('aria-label="Come funziona"')
+    expect(textOf(it)).not.toMatch(/\b(Scrivi|Rispondi|Copia il testo|Riprova|Nascondi|Tasti)\b/)
+    // The office reads its own words from the same keys.
+    expect(draw(beta(), 'it', false)).toContain('placeholder="Scrivi un messaggio"')
+  })
+
+  it('WALL: no "seen by", "read by" or "typing" field or word in the portal thread', () => {
+    for (const [file, source] of views) expect(source, file).not.toMatch(/\b(seenBy|readBy|isTyping|typingNow|readers)\b/)
+    for (const locale of ['en', 'it'] as const) {
+      expect(textOf(draw(beta(), locale)), locale).not.toMatch(/\b(seen by|read by|is typing|visto da|letto da|sta scrivendo)\b/i)
+      for (const [key, text] of Object.entries(CATALOGUE[locale]['record-thread-partner'] ?? {})) expect(text, `${locale} ${key}`).not.toMatch(/\b(seen by|read by|is typing|visto da|letto da|sta scrivendo)\b/i)
+    }
+  })
+
+  it('WALL: Brand Beta’s portal thread shows nothing of Brand Alpha', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw(beta(), locale))
+      expect(scanText(text, BRAND_ALPHA), locale).toEqual([])
+      expect(text, locale).toContain(BRAND_BETA.message)
+    }
+  })
+
+  it('a link’s guest: no Reply, no quote, the "+" of the shared files; the states (loading, error with Try again, empty)', () => {
+    const link = draw(beta({ kind: 'link', composer: { value: '', busy: false, held: null, attach: { files: [{ id: 'f1', name: BRAND_BETA.fileName }], attached: ['f1'] } } }))
+    expect(link).not.toContain('fw-rt-quote')
+    expect(link).toContain('aria-label="Attach files of this record"')
+    expect(textOf(link)).toContain('1 file attached')
+    expect(textOf(draw(beta({ state: 'loading' })))).toContain('Reading the messages…')
+    expect(textOf(draw(beta({ state: 'error' })))).toContain('The messages could not be read')
+    expect(textOf(draw(beta({ messages: [], pins: [], reading: null })))).toContain('No messages yet')
+  })
+})
+// ---- end W2.2

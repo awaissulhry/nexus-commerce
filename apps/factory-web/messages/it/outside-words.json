@@ -35,6 +35,71 @@
       "tooShort": "Prima allontanate il mirino dall'inizio."
     }
   },
+  "record-files": {
+    "priced": {
+      "lockedCount_one": "Documento con prezzi — non potete aprirlo",
+      "lockedCount_other": "{count} documenti con prezzi — non potete aprirli"
+    }
+  },
+  "record-thread-card": {
+    "menu": {
+      "reply": "Rispondete",
+      "copyText": "Copiate il testo"
+    },
+    "quote": {
+      "you": "Voi",
+      "label": "Andate al messaggio di {who} delle {time}"
+    },
+    "files": {
+      "open": "Aprite {name}",
+      "moreLabel_one": "Mostrate {count} altro file",
+      "moreLabel_other": "Mostrate altri {count} file"
+    },
+    "body": {
+      "showAll": "Mostrate tutto ({count} righe)"
+    }
+  },
+  "record-thread-composer": {
+    "placeholder": "Scrivete un messaggio"
+  },
+  "record-thread-feed": {
+    "feed": {
+      "label": "Messaggi, dal più vecchio"
+    },
+    "state": {
+      "loading": "Lettura dei messaggi…",
+      "error": "Non è stato possibile leggere i messaggi",
+      "errorBody": "Quello che avete scritto nel riquadro sotto resta.",
+      "tryAgain": "Riprovate"
+    },
+    "down": {
+      "label": "Andate al messaggio più recente"
+    },
+    "live": {
+      "arrived_one": "{count} nuovo messaggio",
+      "arrived_other": "{count} nuovi messaggi"
+    },
+    "older": {
+      "retry": "Riprovate"
+    }
+  },
+  "record-thread-head": {
+    "more": {
+      "label": "Strumenti dei messaggi"
+    },
+    "width": {
+      "hide": "Nascondete i messaggi"
+    },
+    "keys": {
+      "title": "Come funziona",
+      "quote": "su una citazione: andate al messaggio",
+      "enter": "inviate",
+      "esc": "chiudete un menu, togliete la risposta"
+    },
+    "pinbar": {
+      "label": "Messaggio fissato {n} di {count}: andate al messaggio"
+    }
+  },
   "safety-reports": {
     "held": {
       "offline": "Nessuna connessione: riprovate quando siete di nuovo online."

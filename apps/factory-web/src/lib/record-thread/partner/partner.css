@@ -1,0 +1,42 @@
+/*
+ * pt-w2 W2.2 (lane pt-, ONE SHARED THREAD): the partner face — ONLY what differs from the office's thread (every size, colour and rule
+ * else is the office's own: record-thread.css, card.css, feed.css, head.css, composer.css, helpers.css). DS tokens only.
+ */
+
+/* The ⓘ's long sentences under the keys: "You can also answer our emails…", the designer's rule, price talk. */
+.fw-rtp-help {
+  margin: var(--nds-space-8) 0 0;
+  max-width: 36ch;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+/* The designer chip held: focusable, never greyed out of reach — its lock and quieter words say it (the reason is its tooltip). */
+.fw-rtp-designer.is-held {
+  cursor: default;
+  color: var(--nds-text-muted);
+}
+
+/* A shared file ticked to go with a link guest's message, in the chips row. */
+.fw-rtp-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-rtp-file > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The designer's words stay whole on a narrow column (a third of 1280, the phone): the chip wraps, the row never scrolls sideways. */
+.fw-rtp .fw-rt-cx-chips .fw-rtp-designer {
+  white-space: normal;
+  text-align: start;
+  max-width: 100%;
+}

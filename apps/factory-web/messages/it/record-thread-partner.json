@@ -1,0 +1,25 @@
+{
+  "box": "Il vostro messaggio",
+  "send": "Inviate",
+  "sending": "Invio…",
+  "emptyHeld": "Scrivete prima un messaggio.",
+  "you": "Voi",
+  "yourTeam": "Il vostro team",
+  "copied": "Testo copiato.",
+  "row": {
+    "label": "{who}, {time}",
+    "labelEmail": "{who}, per email, {time}"
+  },
+  "kind": {
+    "record": "Messaggi di {record}",
+    "account": "Messaggi con {record}",
+    "link": "Messaggi di {record}"
+  },
+  "attach": {
+    "label": "Allegate file di questa pratica",
+    "hint": "Potete allegare solo file già condivisi con voi.",
+    "attached_one": "{count} file allegato",
+    "attached_other": "{count} file allegati",
+    "drop": "Non allegate {name}"
+  }
+}
