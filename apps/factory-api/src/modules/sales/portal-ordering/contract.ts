@@ -7,7 +7,7 @@ import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/p
 import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
-import { DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072
+import { DRAFT_FILE_PARTS, MOVABLE_DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072; od-ts t.6
 // B-CP-075: the lines of the customer's own kinds, their people, the parts sent later.
 import { MEASURE_BY, PEOPLE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { CUSTOM_LINE_KINDS, CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
@@ -430,6 +430,8 @@ export const announceDraftFileContract = defineContract({
 })
 export const completeDraftFileContract = defineContract({ params: fileParams, response: { 200: output({ file: draftFile }) } })
 export const removeDraftFileContract = defineContract({ params: fileParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+/** od-ts t.6 (the "Logo" toggle): a file of the draft moves between its logos and its references (a measurement sheet stays one). */
+export const moveDraftFileContract = defineContract({ params: fileParams, body: input({ version, part: z.enum(MOVABLE_DRAFT_FILE_PARTS) }), response: { 200: record } })
 // ---- end B-CP-072
 
 // ---- reorder -----------------------------------------------------------------------------------------------------------

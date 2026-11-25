@@ -7,7 +7,7 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 import type { RequestSource } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import type { FilesRuntime } from '../../../platform/files/service'
 import { mayOn, officeContextOf } from '../orders/access'
-import { announceDraftFile, completeDraftFile, discardDraftWithFiles, removeDraftFile, removeLineWithFiles, type DraftFileBody } from './draft-files'
+import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, removeLineWithFiles, type DraftFileBody } from './draft-files'
 import { addCustomLine, addPeople, changeCustomLine, changeHeader, changeLine, changePerson, createDraft, removePerson, requestView, type HeaderBody } from './requests'
 import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } from './writer'
 
@@ -31,6 +31,7 @@ import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } fro
  *   POST   /sales/order-requests/:id/files                         a file announced (files.upload; the outside-upload gate as ever)
  *   POST   /sales/order-requests/:id/files/:fileId/complete
  *   DELETE /sales/order-requests/:id/files/:fileId?version=
+ *   PATCH  /sales/order-requests/:id/files/:fileId                  {version, part}: a file moved between logos and references (od-ts t.6)
  *
  * Money wall: the office never types the customer's own price (`brandUnitPrice`, 400 in words); the office stamps the list price
  * on a catalogue row (W4), which the grain filter keeps out of a no-price answer. Not this round (they read the portal session):
@@ -115,6 +116,11 @@ export async function officeAnnounceFile(files: FilesRuntime, app: FastifyInstan
 
 export async function officeCompleteFile(files: FilesRuntime, app: FastifyInstance, request: FastifyRequest, requestId: string, fileId: string, idempotencyKey?: string) {
   return completeDraftFile(files, await writerOf(app, request, requestId), requestId, fileId, idempotencyKey)
+}
+
+/** od-ts t.6: PATCH /sales/order-requests/:id/files/:fileId {version, part} — the "Logo" toggle (orders.manage + files.upload). */
+export async function officeMoveFile(app: FastifyInstance, request: FastifyRequest, requestId: string, fileId: string, body: Parameters<typeof moveDraftFile>[3], idempotencyKey?: string) {
+  return moveDraftFile(await writerOf(app, request, requestId), requestId, fileId, body, idempotencyKey)
 }
 
 export async function officeRemoveFile(files: FilesRuntime, app: FastifyInstance, request: FastifyRequest, requestId: string, fileId: string, version: number, idempotencyKey?: string) {
