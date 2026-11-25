@@ -961,9 +961,8 @@
     "groupAnswered": "Con risposta · {count}",
     "pay": "Cosa pagate",
     "partPaid": "{paid} su {amount} pagati",
-    "total": "Totale ordine · IVA inclusa",
     "paid": "Pagato",
-    "still": "Ancora da pagare"
+    "notRead": "Non ancora noto"
   },
   "strip": {
     "deposit": "Acconto da pagare entro il {date}"

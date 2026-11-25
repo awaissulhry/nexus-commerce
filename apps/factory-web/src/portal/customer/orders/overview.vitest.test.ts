@@ -153,6 +153,40 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
     expect(JSON.stringify(pay)).not.toContain('door')
   })
 
+  // pp-fx4 (walk W-10): "Your order 7" (shipped) said €488 total and €288 still to pay with no Paid row: €200 unexplained.
+  it('W-10: Paid is what the read says was paid (the total less still to pay), with or without deposits; a missing figure is said', () => {
+    const words = orderWords('en')
+    const shipped = payOf(inputOf(orderRecord({ status: 'SHIPPED', grossAmount: 48800, stillToPay: 28800 }, { deposits: [] })))!
+    expect(shipped.rows.map((row) => row.id)).toEqual(['total', 'paid', 'still'])
+    expect(shipped.rows.map((row) => row.value)).toEqual([words.money(48800, 'EUR'), words.money(20000, 'EUR'), words.money(28800, 'EUR')])
+    const unread = payOf(inputOf(orderRecord({ status: 'IN_PRODUCTION', grossAmount: 48800, stillToPay: null }, { deposits: [] })))!
+    expect(unread.rows.map((row) => [row.id, row.value, row.hint ?? null])).toEqual([
+      ['total', words.money(48800, 'EUR'), null],
+      ['paid', '—', 'Not known yet'],
+      ['still', '—', 'Not known yet'],
+    ])
+  })
+
+  // pp-fx4 (walk W-16): one fact, one word — the Overview's total and what is left to pay are Lines › Totals' own words.
+  it('W-16: What you pay says the total and what is left to pay with the words of Lines › Totals', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const pay = payOf(inputOf(orderRecord({ status: 'IN_PRODUCTION', grossAmount: 48800, stillToPay: 28800 }), {}, locale))!
+      const catalogue = CATALOGUE[locale]['portal-orders']!
+      expect(pay.rows.find((row) => row.id === 'total')!.label, locale).toBe(catalogue['totals.gross'])
+      expect(pay.rows.find((row) => row.id === 'still')!.label, locale).toBe(catalogue['totals.toPay'])
+      expect(catalogue['overview.total'], locale).toBeUndefined()
+      expect(catalogue['overview.still'], locale).toBeUndefined()
+    }
+  })
+
+  // pp-fx4 (walk W-12): "Next dates" held only "Requested date —" (orders 5 and 7): a card that says nothing is left out.
+  it('W-12: Next dates with nothing to say (no requested date, no plan, no gate, no line in words) is left out', () => {
+    const bare = orderRecord({ status: 'CONFIRMED', requestedDate: null })
+    expect(datesOf(inputOf(bare, { production: { state: 'hidden', read: null } }))).toBeNull()
+    expect(overviewOf(inputOf(bare, { production: { state: 'hidden', read: null } })).dates).toBeNull()
+    expect(datesOf(inputOf(orderRecord({ status: 'CONFIRMED' }), { production: { state: 'hidden', read: null } }))!.rows.map((row) => row.id)).toEqual(['requested'])
+  })
+
   it('Order facts: PO, ordered on, the delivery address as its lines only (a stray key of the free ship-to never reaches it), terms, currency', () => {
     const record = orderRecord({ shipTo: { name: 'Bea Esempio', line1: 'Via Esempio 12', city: 'Seedville', country: 'IT', internalNote: 'office words only', priority: 'TOP' } })
     const facts = factsOf(inputOf(record))

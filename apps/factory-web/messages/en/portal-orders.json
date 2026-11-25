@@ -961,9 +961,8 @@
     "groupAnswered": "Answered · {count}",
     "pay": "What you pay",
     "partPaid": "{paid} of {amount} paid",
-    "total": "Order total · VAT incl.",
     "paid": "Paid",
-    "still": "Still to pay"
+    "notRead": "Not known yet"
   },
   "strip": {
     "deposit": "Deposit to pay by {date}"

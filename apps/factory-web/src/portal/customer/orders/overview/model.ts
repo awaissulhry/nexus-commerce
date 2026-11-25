@@ -268,6 +268,8 @@ export function datesOf(input: OverviewInput): DatesModel | null {
     if (gatesEmpty(gates)) none = t('production.gates.none')
     else if (!planned.cutStart && !planned.sewStart && !planned.finish) none = t('production.planned.none')
   }
+  // pp-fx4 (walk W-12): a card with nothing to say is left out — no requested date, no plan, no gate, no approval and no line in words.
+  if (rows.length === 1 && !order.requestedDate && none === null) return null
   return { title: t('overview.dates'), rows, none }
 }
 
@@ -378,15 +380,21 @@ export function payOf(input: OverviewInput): PayModel | null {
       chip: deposit.status === 'OPEN' ? { words: state, tone: 'warning' } : null,
     }
   })
-  const paid = record.deposits.filter((deposit) => deposit.status !== 'CANCELLED').reduce((sum, deposit) => sum + (typeof deposit.paidAmount === 'number' ? deposit.paidAmount : deposit.status === 'PAID' ? (deposit.amount ?? 0) : 0), 0)
-  const still = cancelled ? 0 : (order.stillToPay ?? null)
+  const fromDeposits = record.deposits.length > 0 ? record.deposits.filter((deposit) => deposit.status !== 'CANCELLED').reduce((sum, deposit) => sum + (typeof deposit.paidAmount === 'number' ? deposit.paidAmount : deposit.status === 'PAID' ? (deposit.amount ?? 0) : 0), 0) : null
+  const gross = typeof order.grossAmount === 'number' ? order.grossAmount : null
+  const still = cancelled ? 0 : typeof order.stillToPay === 'number' ? order.stillToPay : null
+  // pp-fx4 (walk W-10): Paid is what the read says was paid — the total less what is still to pay (deposits AND invoices paid: a
+  // shipped order's €200 had no row); only the deposits' when the read has no still-to-pay figure. A figure the read lacks is said so.
+  const paid = gross !== null && still !== null ? Math.max(0, gross - still) : fromDeposits
+  const figure = (value: number | null): Pick<OverviewRow, 'value' | 'hint'> => (value === null ? { value: '—', hint: t('overview.notRead') } : { value: money(value) })
+  // pp-fx4 (walk W-16): one fact, one word — the total and what is left to pay say what Lines › Totals says.
   const rows: OverviewRow[] = cancelled
-    ? [...deposits, { id: 'still', label: t('overview.still'), value: money(0) }]
+    ? [...deposits, { id: 'still', label: t('totals.toPay'), value: money(0) }]
     : [
-        { id: 'total', label: t('overview.total'), value: money(order.grossAmount) },
+        { id: 'total', label: t('totals.gross'), ...figure(gross) },
         ...deposits,
-        ...(record.deposits.length > 0 ? [{ id: 'paid', label: t('overview.paid'), value: money(paid) }] : []),
-        ...(still !== null ? [{ id: 'still', label: t('overview.still'), value: money(still) }] : []),
+        { id: 'paid', label: t('overview.paid'), ...figure(paid) },
+        { id: 'still', label: t('totals.toPay'), ...figure(still) },
       ]
   return { title: t('overview.pay'), rows }
 }
