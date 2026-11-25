@@ -81,13 +81,9 @@ export interface PiecesWindowActions {
 const MODE_KEY: Readonly<Record<PiecesMode, string>> = { TOTAL: 'pc.total', SIZES: 'pc.bySize', PEOPLE: 'pc.byPerson', NONE: 'state.OPEN' }
 
 export function PiecesWindow({ model, actions }: { model: PiecesWindowModel; actions?: PiecesWindowActions }) {
-  const words = useDraftWords()
-  const { t, locale } = words
-  const copy = useSizeCopy()
+  const { t } = useDraftWords()
   const row = model.row
-  const modes = piecesModesOf(row)
   const product = rowProductOf(row) ?? t('state.OPEN')
-  const locked = row.sizing === 'MADE_TO_MEASURE'
   return (
     <Modal
       open
@@ -106,53 +102,66 @@ export function PiecesWindow({ model, actions }: { model: PiecesWindowModel; act
         </>
       }
     >
-      <div className="fw-od-dialog">
-        {model.failed ? <Banner tone="danger" title={model.failed} /> : null}
-        <div className="fw-od-stack">
-          <span className="fw-od-label">{t('pc.how')}</span>
-          <SegmentedControl
-            ariaLabel={t('pc.how')}
-            wrap
-            value={model.mode}
-            onChange={(value) => actions?.onMode?.(value as PiecesMode)}
-            options={modes.map((mode) => ({ value: mode, label: t(MODE_KEY[mode]), ...(mode === 'NONE' ? { icon: <Hourglass size={12} aria-hidden /> } : {}) }))}
-          />
-          {locked ? <p className="fw-od-quiet">{t('pc.mtmLocked')}</p> : null}
-        </div>
-        {model.mode === 'TOTAL' ? (
-          <Field label={t('pc.totalField')} hint={t('pc.totalHint')}>
-            <Input value={model.total} inputMode="numeric" maxLength={6} data-autofocus onChange={(event) => actions?.onTotal?.(event.target.value)} />
-          </Field>
-        ) : null}
-        {model.mode === 'SIZES' && row.style ? (
-          <div className="fw-od-stack">
-            <span className="fw-od-label">
-              {t('pc.sizesCaption')} · {t('pc.sizesOf', { style: row.style.code })}
-            </span>
-            <SizeGridEditor
-              layout="auto"
-              colours={[{ key: row.id, label: row.colour ?? t('state.OPEN'), offered: [...row.offered] }]}
-              sizes={row.offered.map((size) => ({ key: size, label: size }))}
-              value={{ [row.id]: model.cells }}
-              onChange={(next) => actions?.onCells?.({ ...(next[row.id] ?? {}) })}
-              issues={[]}
-              caption={t('pc.sizesOf', { style: row.style.code })}
-              locale={INTL_LOCALE[locale]}
-              copy={copy}
-            />
-            <p className="fw-od-quiet">{t('cell.total', { pieces: words.pieces(piecesOfCells(model.cells)) })}</p>
-          </div>
-        ) : null}
-        {model.mode === 'PEOPLE' ? (
-          // Review G6: the riders' names and measures are personal data — said where they are typed.
-          <p className="fw-od-quiet fw-od-privacy">
-            <ShieldCheck size={14} aria-hidden /> {t('draftPage.roster.privacy')}
-          </p>
-        ) : null}
-        {model.mode === 'PEOPLE' && model.rosterLine ? <LineRoster line={model.rosterLine} model={model.roster} actions={actions?.people} /> : null}
-        {model.mode === 'PEOPLE' && !model.rosterLine ? <p className="fw-od-quiet">{t('draftPage.customLine.peopleHint')}</p> : null}
-      </div>
+      <PiecesBody model={model} actions={actions} />
     </Modal>
+  )
+}
+
+/** od-fx2: the Pieces window's body (how it is counted, the total, the size run, the roster), drawn inside its Modal. */
+export function PiecesBody({ model, actions }: { model: PiecesWindowModel; actions?: PiecesWindowActions }) {
+  const words = useDraftWords()
+  const { t, locale } = words
+  const copy = useSizeCopy()
+  const row = model.row
+  const modes = piecesModesOf(row)
+  const locked = row.sizing === 'MADE_TO_MEASURE'
+  return (
+    <div className="fw-od-dialog">
+      {model.failed ? <Banner tone="danger" title={model.failed} /> : null}
+      <div className="fw-od-stack">
+        <span className="fw-od-label">{t('pc.how')}</span>
+        <SegmentedControl
+          ariaLabel={t('pc.how')}
+          wrap
+          value={model.mode}
+          onChange={(value) => actions?.onMode?.(value as PiecesMode)}
+          options={modes.map((mode) => ({ value: mode, label: t(MODE_KEY[mode]), ...(mode === 'NONE' ? { icon: <Hourglass size={12} aria-hidden /> } : {}) }))}
+        />
+        {locked ? <p className="fw-od-quiet">{t('pc.mtmLocked')}</p> : null}
+      </div>
+      {model.mode === 'TOTAL' ? (
+        <Field label={t('pc.totalField')} hint={t('pc.totalHint')}>
+          <Input value={model.total} inputMode="numeric" maxLength={6} data-autofocus onChange={(event) => actions?.onTotal?.(event.target.value)} />
+        </Field>
+      ) : null}
+      {model.mode === 'SIZES' && row.style ? (
+        <div className="fw-od-stack">
+          <span className="fw-od-label">
+            {t('pc.sizesCaption')} · {t('pc.sizesOf', { style: row.style.code })}
+          </span>
+          <SizeGridEditor
+            layout="auto"
+            colours={[{ key: row.id, label: row.colour ?? t('state.OPEN'), offered: [...row.offered] }]}
+            sizes={row.offered.map((size) => ({ key: size, label: size }))}
+            value={{ [row.id]: model.cells }}
+            onChange={(next) => actions?.onCells?.({ ...(next[row.id] ?? {}) })}
+            issues={[]}
+            caption={t('pc.sizesOf', { style: row.style.code })}
+            locale={INTL_LOCALE[locale]}
+            copy={copy}
+          />
+          <p className="fw-od-quiet">{t('cell.total', { pieces: words.pieces(piecesOfCells(model.cells)) })}</p>
+        </div>
+      ) : null}
+      {model.mode === 'PEOPLE' ? (
+        // Review G6: the riders' names and measures are personal data — said where they are typed.
+        <p className="fw-od-quiet fw-od-privacy">
+          <ShieldCheck size={14} aria-hidden /> {t('draftPage.roster.privacy')}
+        </p>
+      ) : null}
+      {model.mode === 'PEOPLE' && model.rosterLine ? <LineRoster line={model.rosterLine} model={model.roster} actions={actions?.people} /> : null}
+      {model.mode === 'PEOPLE' && !model.rosterLine ? <p className="fw-od-quiet">{t('draftPage.customLine.peopleHint')}</p> : null}
+    </div>
   )
 }
 

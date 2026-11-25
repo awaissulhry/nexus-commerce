@@ -107,8 +107,10 @@ model PortalOrderRequest {
   /// The style drafts the office made for this draft ("Make style draft"), in the order they were made (styles of its
   /// company or tenant-wide, our own collection or its customer's private label; each once, at most 50); empty at insert,
   /// only added, while it is a DRAFT or SENT. Office only: hidden from its customer's portal people (the portal reads only
-  /// whether the design started).
-  styleIds       String[]                @default([]) @db.Uuid
+  /// whether the design started). od-fx1: the default is the DATABASE's only (dbgenerated, as fileIds and mentionedUserIds): with
+  /// `@default([])` Prisma named the column in every INSERT, and the partner role holds no column grant on it (a portal draft and
+  /// the seed's buyer inserts were refused, 42501).
+  styleIds       String[]                @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
   // ── end OD s.1
 
   company    Company                  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)

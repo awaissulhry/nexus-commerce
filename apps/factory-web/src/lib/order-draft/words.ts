@@ -27,6 +27,11 @@ export const OFFICE_VOICE: ReadonlySet<string> = new Set([
   'cell.productPh',
   'cf.quoteNext',
   'date.ref',
+  // od-fx2: a reordered row's origin, in the office's voice (the customer's order)
+  'lines.fromDay',
+  'lines.fromDayRef',
+  'lines.fromOwn',
+  'lines.fromOwnRef',
   'mail.attHint',
   'mail.drop',
   'mail.message',
