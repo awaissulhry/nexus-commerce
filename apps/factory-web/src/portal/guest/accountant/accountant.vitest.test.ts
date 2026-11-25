@@ -39,6 +39,15 @@ import {
 const t = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale][NS] ?? {})
 const FACTS = { preview: false, offline: false, busy: false }
 
+// pp-fx1 (pp-w1 w1.1): under 1280 px "Messages (2 new)" rides in the band — the live frame sets it there (usePortalBandThread), the
+// design case's band carries it (withThreadButton) — ONE button, before the page's main; the body draws no row of its own.
+const inBand = (html: string, label: string) => {
+  expect(html, label).toContain('class="fw-pband-thread')
+  expect(html.indexOf('fw-pband-thread'), label).toBeLessThan(html.indexOf('id="main-content"'))
+  expect(html.match(/Messages \(2 new\)/g)?.length, label).toBe(1)
+  expect(html, label).toContain('aria-label="Messages, 2 new"')
+}
+
 describe('the address and the period picker', () => {
   it('reads a month, a quarter or a year from ?period=, and nothing else', () => {
     expect(addressOf(new URLSearchParams('period=2026-10'))).toEqual({ period: '2026-10' })
@@ -202,10 +211,11 @@ describe('B-TH-276 — Ask finance docked like every portal record page', () => 
     const narrow = renderCase('narrow')
     expect(narrow).toContain('data-mode="stacked"')
     expect(narrow).toContain('data-view="body"')
-    expect(narrow).toContain('Messages (2 new)')
+    inBand(narrow, 'narrow')
     const open = renderCase('narrow-open')
     expect(open).toContain('data-view="thread"')
     expect(open).not.toContain('Messages (2 new)')
+    expect(open).not.toContain('fw-pband-thread')
     expect(renderCase('narrow-open', 'it')).toContain('Indietro')
   })
 
