@@ -340,9 +340,14 @@ describe('pg-s1 S1.5 the band of Portal › Orders counts each customer’s own 
   it('pg-fx4 (Z5): a sent draft carries its subject (an order and a draft without one: null); words find it — each customer its own only', async () => {
     const subjects = { a: 'PGFX4 made-up suit for the alpha riders', b: 'PGFX4 made-up vests for the beta riders' }
     const draft = { a: await sentDraft(P1, { number: 'RQ-PG-A-0002', subject: subjects.a }), b: await sentDraft(world.partyId, { number: 'RQ-PG-B-0002', subject: subjects.b }) }
+    // Its one custom-size row (made to measure, by person): two riders, no size row — the Owner's draft read "0 asked".
+    const line = newId()
+    await forced(`INSERT INTO "PortalOrderRequestLine" (id, "tenantId", "partyId", "requestId", seq, kind, sizing, "byPerson", "garmentType", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, 1, 'MADE_TO_MEASURE', 'MADE_TO_MEASURE', true, 'SUIT', now(), now())`, [line, T, P1, draft.a])
+    for (const seq of [1, 2]) await forced(`INSERT INTO "PortalOrderRequestPerson" (id, "tenantId", "partyId", "requestId", "lineId", seq, name, "measureBy", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, 'LATER', now(), now())`, [newId(), T, P1, draft.a, line, seq, `Made-up rider ${seq}`])
     for (const url of ['/portal/sales-orders?chip=ALL&limit=200', '/portal/sales-orders/sheet?chip=ALL&limit=200']) {
       const rows = new Map(((await ok(browsers.a, url)).items as Json[]).map((row) => [row.id as string, row]))
       expect(rows.get(draft.a), url).toMatchObject({ kind: 'REQUEST', subject: subjects.a, customerRef: null, number: null, yourNumber: null })
+      expect(rows.get(draft.a)!.pieces, url).toEqual({ ordered: 2, shipped: 0, open: 2 }) // its people, as New order counts them
       expect(rows.get(made.A.catalogue), url).toMatchObject({ kind: 'REQUEST', subject: null })
       expect(rows.get(made.A.confirmed), url).toMatchObject({ kind: 'ORDER', subject: null })
       // The wall: never the other customer's subject (or its row), either way.
