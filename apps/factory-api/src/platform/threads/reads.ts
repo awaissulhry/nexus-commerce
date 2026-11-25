@@ -20,6 +20,7 @@ import { partnerViewOf, viewFits } from '../search/partner/views'
 import { isPartnerKind, partnerKindsOf, type PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import type { PartnerReader } from '../search/partner/view'
+import { databaseNow } from '../audit/security-events/record' // pg-fx2: a read mark's time is never ahead of the database's
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -147,7 +148,12 @@ export async function readOwnMessage(
   message: { readonly id: string; readonly at: Date },
 ): Promise<boolean> {
   if (writer.userId === null || writer.preview === true || thread.partyId === null) return false
-  return moveMark(tools, thread, { userId: writer.userId, office: false }, message, true)
+  // pg-fx2: read at the earlier of the command's clock and the database's own (its transaction's start, read in the same scope). The
+  // database refuses a read mark more than 5 minutes ahead of its clock (ThreadRead_guard: "read at a time not in the future"), and a
+  // command's clock ahead of it (a test world after its sign-ins, a server's drift) must never refuse the customer's write the mark
+  // rides on — the ask, the post, the answer. The mark still stops at the writer's own message.
+  const databaseAt = await databaseNow(tools.tx)
+  return moveMark({ ...tools, now: databaseAt < tools.now ? databaseAt : tools.now }, thread, { userId: writer.userId, office: false }, message, true)
 }
 // ---- end pg-s1 S1.4
 
