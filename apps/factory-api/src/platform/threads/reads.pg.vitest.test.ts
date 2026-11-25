@@ -18,6 +18,11 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
 import { moveMark } from './reads'
 import { ensureThread, writeMessage } from './threads'
+// pg-s1 S1.4: the one helper of every portal write path, in the two scopes they write in.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { readOwnMessage } from './reads'
+import { systemContext } from '../outbox/system'
 
 /**
  * B-TH-027 — each person's own read mark (threads plan TH-2, G10; wall W08 / T08) through the app's real routes on a throwaway
@@ -190,6 +195,112 @@ describe('T08 portal people: shared messages only, their own mark only, another 
     expect([403, 404]).toContain((await call('berta', 'POST', `/threads/Inquiry/${inquiry}/read`, {})).statusCode)
   })
 })
+
+// ── pg-s1 S1.4 (the pt- lane's L-1): a portal person's own message is never new to them, on every portal write path ──────────
+// The portal's write paths write a person's words in one of two scopes, then move the writer's own mark through ONE helper
+// (readOwnMessage): the partner scope (the portal post — the thread page, a request's first words and its files, a production
+// problem — and a change asked on the order page) and the tenant's system scope (an approval answered in the portal). Both are
+// written here as those paths write them; the order page's ask and the portal approval are also checked through their own routes
+// (sales/change-requests B-SA-048, approvals-out pg-s1 S1.4).
+describe('pg-s1 S1.4: a portal person’s own message never counts as new to them; another brand’s never moves their count', () => {
+  type ThreadOf = { id: string; companyId: string | null; siteId: string | null; partyId: string | null }
+  const threadOf = async (recordId: string) => (await one('SELECT id, "companyId", "siteId", "partyId" FROM "Thread" WHERE "recordType" = $1 AND "recordId" = $2', ['Inquiry', recordId])) as ThreadOf
+  const countOn = async (session: string, recordId: string) => (await unread(session, [{ recordType: 'Inquiry', recordId }]))[0]!.newCount as number
+  const markOf = async (userId: string, threadId: string) => (await admin('SELECT "lastReadMessageId"::text AS id FROM "ThreadRead" WHERE "userId" = $1 AND "threadId" = $2', [userId, threadId]))[0]?.id ?? null
+
+  /** The person's words as the partner scope writes them (the portal post, the order page's ask): INBOUND PORTAL by their name. */
+  async function partnerPost(session: 'anna' | 'alba' | 'berta', recordId: string, body: string): Promise<{ id: string; moved: boolean }> {
+    const context = contextOf(session)
+    const thread = await threadOf(recordId)
+    const { result } = await command(callerFor(h.database, context), { name: 'portal.postMessage', input: { recordId, body } }, async (tools) => {
+      const id = newId()
+      const row = await tools.tx.message.create({
+        data: { id, threadId: thread.id, partyId: thread.partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorName: `Made-up ${session}`, bodyText: body, bodyHtml: null, attachmentFileIds: [], emailMessageId: null, at: tools.now, createdAt: tools.now },
+        select: { id: true, at: true },
+      })
+      tools.audit({ recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL' } })
+      return { id: row.id, moved: await readOwnMessage(tools, thread, { userId: context.actorId }, row) }
+    })
+    return result
+  }
+
+  /** An answer as the tenant's system writes it after a portal answer (approvals-out settle): INBOUND PORTAL by the typed name. */
+  async function systemPost(recordId: string, body: string, writers: readonly { readonly userId: string | null; readonly preview?: boolean }[]): Promise<{ id: string; moved: boolean[] }> {
+    const { result } = await command(callerFor(h.database, systemContext(T, newId())), { name: 'approvalsOut.settle', input: { recordId, body } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'Inquiry', id: recordId }, null)
+      const written = await writeMessage(tools, thread, { direction: 'INBOUND', channel: 'PORTAL', author: { kind: 'PARTY', id: null, name: 'Made-up typed name' }, bodyText: body })
+      const moved: boolean[] = []
+      for (const writer of writers) moved.push(await readOwnMessage(tools, thread, writer, written))
+      return { id: written.id, moved }
+    })
+    return result
+  }
+
+  it('the partner scope (the portal post, a change asked on the order page): Anna’s own words leave her count at 0; Alba counts them; Berta (Brand B) nothing', async () => {
+    const thread = await threadOf(inquiry)
+    const before = { anna: await countOn('anna', inquiry), alba: await countOn('alba', inquiry), ada: await countOn('ada', inquiry) }
+    expect(before.anna).toBe(0) // T08 above: Anna read up to the answer
+    const posted = await partnerPost('anna', inquiry, 'Made-up words of Anna: can the sleeves be longer?')
+    expect(posted.moved).toBe(true)
+    expect(await countOn('anna', inquiry)).toBe(0)
+    expect(await markOf(PEOPLE.anna, thread.id)).toBe(posted.id)
+    // Her colleague and the office read it as new; another brand's person counts nothing of it.
+    expect(await countOn('alba', inquiry)).toBe(before.alba + 1)
+    expect(await countOn('ada', inquiry)).toBe(before.ada + 1)
+    expect(await countOn('berta', inquiry)).toBe(0)
+  })
+
+  it('the tenant’s system scope (an approval answered in the portal): Alba’s own answer leaves her count at 0; Anna counts it', async () => {
+    const thread = await threadOf(inquiry)
+    const anna = await countOn('anna', inquiry)
+    const answered = await systemPost(inquiry, 'Made-up answer of Alba: approved.', [{ userId: PEOPLE.alba }])
+    expect(answered.moved).toEqual([true])
+    expect(await countOn('alba', inquiry)).toBe(0)
+    expect(await markOf(PEOPLE.alba, thread.id)).toBe(answered.id)
+    expect(await countOn('anna', inquiry)).toBe(anna + 1)
+    expect(await countOn('berta', inquiry)).toBe(0)
+  })
+
+  it('no mark for a link (no person) or a preview: everybody still counts the message as new', async () => {
+    const thread = await threadOf(inquiry)
+    const before = { anna: await countOn('anna', inquiry), alba: await countOn('alba', inquiry), annaMark: await markOf(PEOPLE.anna, thread.id) }
+    const linked = await systemPost(inquiry, 'Made-up words of an invited link.', [{ userId: null }, { userId: PEOPLE.anna, preview: true }])
+    expect(linked.moved).toEqual([false, false])
+    expect(await countOn('anna', inquiry)).toBe(before.anna + 1)
+    expect(await countOn('alba', inquiry)).toBe(before.alba + 1)
+    expect(await markOf(PEOPLE.anna, thread.id)).toBe(before.annaMark)
+  })
+
+  it('Brand B’s own words on its own request never move Brand A’s counts, and Brand B can never mark Brand A’s thread', async () => {
+    const theirs = (await ok('ada', 'POST', '/sales/inquiries', { companyId: idOf('company:A'), source: 'PHONE', partyId: P3, request: 'Made-up: ten rain jackets.', lines: [{ description: 'Made-up: rain jacket', quantity: 10 }] }, 201)).inquiry.id as string
+    await command(callerFor(h.database, contextOf('ada')), { name: 'threads.postNote', input: { body: 'Made-up question to Brand B' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'Inquiry', id: theirs }, PEOPLE.ada)
+      return { id: (await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: PEOPLE.ada, name: 'Made-up ada' }, bodyText: 'Made-up question to Brand B: which colour?' })).id }
+    })
+    const brandA = { anna: await countOn('anna', inquiry), alba: await countOn('alba', inquiry) }
+    expect(await countOn('berta', theirs)).toBe(1)
+    const posted = await partnerPost('berta', theirs, 'Made-up words of Berta: navy, please.')
+    expect(posted.moved).toBe(true)
+    expect(await countOn('berta', theirs)).toBe(0)
+    // Brand A's people: their own request's counts do not move, and Brand B's request is not theirs to count.
+    expect({ anna: await countOn('anna', inquiry), alba: await countOn('alba', inquiry) }).toEqual(brandA)
+    expect(await countOn('anna', theirs)).toBe(0)
+    expect(await countOn('alba', theirs)).toBe(0)
+    // Berta's scope cannot write a mark on Brand A's thread (row-level security: her party only).
+    const aThread = await threadOf(inquiry)
+    const aMessage = (await one('SELECT id, at FROM "Message" WHERE id = $1', [M.answer])) as { id: string; at: Date }
+    await expect(command(callerFor(h.database, contextOf('berta')), { name: 'threads.markRead', input: { messageId: M.answer } }, async (tools) => ({ moved: await readOwnMessage(tools, aThread, { userId: PEOPLE.berta }, aMessage) }))).rejects.toThrow()
+    expect(await markOf(PEOPLE.berta, aThread.id)).toBeNull()
+  })
+
+  it('every portal write path moves the writer’s mark through the one helper (no copy of it)', () => {
+    const src = fileURLToPath(new URL('../..', import.meta.url))
+    const source = (path: string) => readFileSync(join(src, path), 'utf8')
+    for (const path of ['platform/threads/partner/service.ts', 'modules/sales/change-requests/portal.ts', 'platform/approvals-out/settle.ts']) expect(source(path), path).toMatch(/await readOwnMessage\(tools, /)
+    expect(source('platform/threads/partner/service.ts')).not.toMatch(/moveMark\(/)
+  })
+})
+// ── end pg-s1 S1.4 ──
 
 // ── B-OP-061 (order page dock A2): asked with `readable`, each row says whether the reader may read the record's thread ──
 describe('B-OP-061: POST /threads/unread {readable: true} — readable per record, false alike for an unknown record and another customer\'s', () => {
