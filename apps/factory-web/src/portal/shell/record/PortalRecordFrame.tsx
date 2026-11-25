@@ -306,12 +306,19 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
     const measure = () => {
       const scroller = scrollerOf(element)
       const band = scroller?.querySelector<HTMLElement>(':scope > .fw-pband') ?? null
-      const bars = [...document.querySelectorAll<HTMLElement>('.nds-bottombar, .nds-pab:not(.inline)')].reduce((sum, bar) => sum + (getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().height : 0), 0)
+      // pp-fx4 (walk W-06): the room ends where the page stops being visible — the scroller's foot, or the top of a phone's fixed bar
+      // over it. The action bar's spacer already shortens the scroller: its bar is not counted twice (the open view was 391 px, its
+      // list 188 px). A bar not drawn (from 720 px, or stepped aside) has no box and counts for nothing.
+      const scrollerTop = scroller?.getBoundingClientRect().top ?? 0
+      const visibleFoot = [...document.querySelectorAll<HTMLElement>('.nds-bottombar, .nds-pab:not(.inline)')].reduce((foot, bar) => {
+        const box = bar.getBoundingClientRect()
+        return box.height > 0 && box.top > scrollerTop ? Math.min(foot, box.top) : foot
+      }, scrollerTop + (scroller?.clientHeight ?? window.innerHeight))
       const sticky = (band?.getBoundingClientRect().height ?? 0) + 16
       const shown = dock.current && getComputedStyle(dock.current).display !== 'none' ? dock.current : null
-      const real = shown && scroller ? shown.getBoundingClientRect().top - scroller.getBoundingClientRect().top : sticky
+      const real = shown && scroller ? shown.getBoundingClientRect().top - scrollerTop : sticky
       const top = Math.max(sticky, real)
-      const room = (scroller?.clientHeight ?? window.innerHeight) - top - 16 - bars
+      const room = visibleFoot - scrollerTop - top - 16
       element.style.setProperty('--fw-prf-top', `${Math.round(sticky)}px`)
       element.style.setProperty('--fw-prf-h', `${Math.max(360, Math.round(room))}px`)
     }

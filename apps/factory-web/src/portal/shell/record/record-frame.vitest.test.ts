@@ -205,6 +205,17 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
     expect(frame).toContain('if (band) observer?.observe(band)')
     expect(frame).toContain('if (main) observer?.observe(main)')
   })
+  // pp-fx4 (walk W-06, G3): at 375 the open view was a 391 px box (the action bar counted twice: its spacer already shortens the scroller)
+  // with the page's foot under it. The room now ends at the visible foot (the scroller's, or a fixed bar's top); foot and action bar step
+  // aside while the view is open (the picture: nothing under the conversation).
+  it('G3: the open full-width view ends at the visible foot (no bar counted twice); the foot and the action bar step aside while it is open', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('return box.height > 0 && box.top > scrollerTop ? Math.min(foot, box.top) : foot')
+    expect(frame).toContain('const room = visibleFoot - scrollerTop - top - 16')
+    expect(frame).not.toMatch(/- 16 - bars/)
+    const css = readFileSync(new URL('./record-frame.css', import.meta.url), 'utf8')
+    expect(css).toContain(".fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .fw-pfoot,\n.fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .nds-pab-host {\n  display: none;")
+  })
   // pt-w2 W2.3: the docked conversation's own tests (its count, read only while on screen, a removed message) live with the thread now:
   // portal/shell/thread/thread.vitest.test.ts.
 })
