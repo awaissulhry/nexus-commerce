@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { Eye, PencilLine, RefreshCw, WifiOff } from 'lucide-react'
+import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { Banner, Card, Field } from '@nexus/ui/components'
 import { SaveStatus, type SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
 import { Button, Input, Select } from '@nexus/ui/primitives'
@@ -112,7 +113,9 @@ function DraftBody({ model, actions, slots, onSendKey }: { model: DraftPageModel
   const capKey = request ? filesAddHeld(request, { preview: false, offline: false, busy: false }) : null
   const own = files ? [...files.logos, ...files.references].filter((file) => file.lineId === null) : []
   const entries = request ? stillOpenEntries(request.stillOpen, rows, t) : []
-  const headerProblems = request ? request.problems.filter((problem) => problem.lineId === null) : []
+  // od-fx12: only an INVALID value is said (the domain's holdsSend) — a missing one (NO_LINES: "Add at least one line.") never shows:
+  // nothing is required (R1).
+  const headerProblems = request ? request.problems.filter((problem) => problem.lineId === null && holdsSend(problem.code)) : []
   const saved = model.save.kind === 'saving' || model.save.kind === 'failed'
   return (
     <div

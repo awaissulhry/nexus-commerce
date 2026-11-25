@@ -149,8 +149,8 @@
   },
   "sent": {
     "title": "Richiesta d'ordine inviata",
-    "bodyNone": "La trovate in Ordini e richieste come ordine da catalogo.",
-    "bodyYours": "Il vostro numero {ref}: la trovate in Ordini e richieste come ordine da catalogo.",
+    "bodyNone": "La trovate in Ordini e richieste.",
+    "bodyYours": "Il vostro numero {ref}: la trovate in Ordini e richieste.",
     "next": "Fino ad allora la seguite negli Ordini come «Da confermare da noi».",
     "open": "Apri l'ordine",
     "newOrder": "Nuovo ordine"
