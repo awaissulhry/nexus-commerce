@@ -11,8 +11,9 @@ import { draftsTouched, officeDraftHref, type DraftsRead } from './model'
 
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6) — the reads of "Drafts of <customer>": the customer's portal drafts (B-CP-071's
- * walled list, only while the view is shown), live changes coalesced (800 ms) behind "N updates · Show" (rows never jump), and the
- * draft open in its read-only window — the Incoming container itself (useCatalogueOrder) in draft mode: one reader, no copy.
+ * walled list, only while the view is shown) and live changes coalesced (800 ms) behind "N updates · Show" (rows never jump).
+ * od-w2.3 / od-fx5: a row opens the office draft page (`officeDraftHref`), where the office writes and confirms it — the read-only
+ * window is gone; the customer's own decisions stay with Incoming's catalogue pane (a draft draws none there).
  */
 
 const OFF: DraftsRead = { status: 'off' }
