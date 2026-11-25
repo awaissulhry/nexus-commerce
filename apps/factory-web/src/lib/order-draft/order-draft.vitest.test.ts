@@ -7,9 +7,10 @@ import { CATALOGUE, createTranslator, messagesFor } from '../i18n/messages'
 import { I18nProvider } from '../i18n/provider'
 import { draftRecord, kindsRecord, describedLine, mtmLine, TODAY } from '../../portal/customer/neworder/design-data'
 import { draftSendHeld } from '../../portal/customer/neworder/model'
-import { choiceWords, draftViewOf, headerDraftOf, productRowsOf, savedByWords } from './model'
-import { DRAFT_NS } from './words'
+import { choiceWords, draftViewOf, headerDraftOf, productRowsOf, rowProductOf, savedByWords } from './model'
+import { DRAFT_NS, draftWordsFor } from './words'
 import { DraftPage, type DraftPageModel } from './view/DraftPage'
+import { PiecesBody, piecesOpenOf } from './view/RowWindows'
 
 /**
  * THE SIMPLE ORDER START (od-tw t.2) — the ONE draft order's pins, for both doors:
@@ -77,7 +78,7 @@ describe('"saved by": the portal never names a factory worker', () => {
     const time = () => '10:42'
     expect(savedByWords({ ...at, lastEditedBy: 'Sam Example', savedBy: { who: 'FACTORY', name: 'Sam Example' } }, td('en'), time)).toBe('Saved 10:42 by the factory')
     expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'FACTORY', name: null } }, td('it'), time)).toBe('Salvata alle 10:42 dalla fabbrica')
-    expect(td('it')('head.savedByFactory', { time: '10:42' })).not.toContain('da la')
+    expect(td('it')('head.savedByFactory', { when: 'alle 10:42' })).not.toContain('da la')
   })
 
   it('drawn: the portal head and a 409 say "the factory", never the worker; the office names its colleague', () => {
@@ -113,3 +114,67 @@ describe('Send is never held by a missing cell', () => {
     expect(draftSendHeld(draftRecord({ request: { problems: [{ code: 'DATE_PAST', lineId: null, size: null }] } }).request, facts, [])).toEqual({ key: 'held.problems', count: 1 })
   })
 })
+
+describe('od-fx8 — the walk of the shared part (W-01, W-09, W-10, W-15, W-21, W-25, looks)', () => {
+  const at = { updatedAt: '2026-11-12T09:40:00Z', lastEditedAt: null }
+  const time = () => '10:40'
+  const day = () => '12/11/2026'
+  const office = (locale: 'it' | 'en') => draftWordsFor(td(locale), locale, 'office').t
+
+  it('W-09: the office names the person — a colleague by name, a customer’s person with the customer; the portal keeps "the factory"', () => {
+    const today = '2026-11-12'
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'FACTORY', name: 'Sam Sales' } }, office('en'), { time, day, today, door: 'office' })).toBe('Saved 10:40 by Sam Sales')
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'COLLEAGUE', name: 'Bianca Brand' } }, office('en'), { time, day, today, door: 'office', customer: 'Seed Racing' })).toBe('Saved 10:40 by Bianca Brand (Seed Racing)')
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'COLLEAGUE', name: 'Bianca Brand' } }, office('it'), { time, day, today, door: 'office', customer: 'Seed Racing' })).toBe('Salvata alle 10:40 da Bianca Brand (Seed Racing)')
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'FACTORY', name: 'Sam Sales' } }, td('en'), { time, day, today, door: 'portal' })).toBe('Saved 10:40 by the factory')
+    // Drawn: the office page passes its customer.
+    expect(page('office', { draft: draftViewOf(kindsRecord({ request: { savedBy: { who: 'COLLEAGUE', name: 'Bianca Brand' } } })), customer: 'Seed Racing' })).toContain('Bianca Brand (Seed Racing)')
+  })
+
+  it('W-21: a save of another day says its day too ("Saved 12/11/2026, 10:40 by …")', () => {
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'COLLEAGUE', name: 'Bianca Brand' } }, td('en'), { time, day, today: '2026-11-25' })).toBe('Saved 12/11/2026, 10:40 by Bianca Brand')
+    expect(savedByWords({ ...at, lastEditedBy: null, savedBy: { who: 'FACTORY', name: null } }, td('it'), { time, day, today: '2026-11-25' })).toBe('Salvata il 12/11/2026 alle 10:40 dalla fabbrica')
+    expect(savedByWords({ ...at, lastEditedBy: null }, td('en'), { time, day, today: '2026-11-12' })).toBe('Draft saved 10:40')
+  })
+
+  it('W-01: "Add from" says its three ways in words (it, en)', () => {
+    for (const locale of ['it', 'en'] as const) for (const key of ['add.from', 'add.catalogue', 'add.pastOrder', 'add.sheet']) expect(td(locale)(key), `${key} ${locale}`).not.toBe(key)
+  })
+
+  it('W-25: ONE name for a product — the customer’s words, else the style’s name (its code beside it in the table)', () => {
+    expect(rowProductOf({ words: null, style: { id: 's', code: 'SEED-JKT-02', name: 'Seed production jacket' } })).toBe('Seed production jacket')
+    expect(rowProductOf({ words: 'Team gloves', style: null })).toBe('Team gloves')
+  })
+
+  it('W-15: the Pieces window opens on what the row holds — "Not decided yet" for a row with no pieces', () => {
+    const rows = productRowsOf(kindsRecord({ custom: [describedLine({ quantity: null, pieces: 0 })] }).request)
+    const own = rows.find((row) => !row.catalogue)!
+    expect(own.pieces.mode).toBe('NONE')
+    expect(piecesOpenOf(own).mode).toBe('NONE')
+    const catalogue = rows.find((row) => row.catalogue)!
+    expect(piecesOpenOf(catalogue)).toMatchObject({ mode: 'SIZES' })
+    expect(piecesOpenOf({ ...own, sizing: 'MADE_TO_MEASURE' }).mode).toBe('PEOPLE')
+  })
+
+  it('W-10: a reader’s Pieces window reads — no field, no size grid to type in', () => {
+    const rows = productRowsOf(kindsRecord().request)
+    const catalogue = rows.find((row) => row.catalogue)!
+    const record = kindsRecord()
+    const view = draftViewOf(record)
+    const model = { row: catalogue, ...piecesOpenOf(catalogue), roster: { draft: view, writeHeld: 'You can read, not change: your role does not manage orders.', uploadsOpen: true, addHeld: null, draftName: '' }, rosterLine: null, busy: false, failed: null, writeHeld: 'You can read, not change: your role does not manage orders.' }
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', [DRAFT_NS, 'ds-words']) }, createElement(PiecesBody, { model })))
+    expect(html).toContain('You can read, not change')
+    expect(html).not.toContain('<input')
+    expect(html).toContain('data-mode="view"')
+  })
+
+  it('looks (W-07, W-11, W-16, W-18): the phone bar above the bottom bars, boxes in their tracks, Still open fills its row, a card’s number', () => {
+    const css = readFileSync(new URL('./order-draft.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-portal .fw-od-actionbar {\n    bottom: calc(56px + env(safe-area-inset-bottom));')
+    expect(css).toContain('.fw-office-main .fw-od-actionbar {\n    bottom: calc(64px + env(safe-area-inset-bottom));')
+    expect(css).toMatch(/\.fw-od-trow input,\n\.fw-od-trow select \{\n  width: 100%;\n  min-width: 0;/)
+    expect(css).toContain('grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));')
+    expect(css).toContain("'n product product more'")
+  })
+})
+

@@ -3,13 +3,14 @@ import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import type { ApiClient } from '../../../../../lib/api/client'
 import { LOCALES } from '../../../../../lib/i18n/locales'
-import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
+import { CATALOGUE, createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
+import { DRAFT_NS } from '../../../../../lib/order-draft/words'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { catalogueHeld } from '../../../inquiries/catalogue-model'
 import { workEntry } from '../use-customer-work'
 import { workViewsOf } from '../view/WorkTab' // F-CQ-303: no DRAFTS_VIEW (the drafts are Quotes & incoming's "Customer is writing")
 import { listCustomerDrafts, type DraftRow } from './api'
-import { draftPick, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, officeDraftHref, readyOf, showsValue } from './model' // F-CQ-303: no draftsShown / draftsAddress
+import { draftPick, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, officeDraftHref, readyOf, showsValue, untitledOf } from './model' // F-CQ-303: no draftsShown / draftsAddress
 import { draftValueOf } from './model' // F-CP-141
 import { CustomerDraftsList, type CustomerDraftsListModel } from './view/CustomerDraftsList'
 
@@ -62,8 +63,8 @@ describe('a draft row in words', () => {
   it('its title (else "Untitled draft"), its counts, its files (counts only), how ready it is, its conversation', () => {
     expect(draftTitle(row(), 'Untitled draft')).toBe('STY-01 Giacca demo')
     expect(draftTitle(row({}, { title: null }), 'Untitled draft')).toBe('Untitled draft')
-    expect(linesWords(row()).map(say)).toEqual(['3 lines', '140 pieces', '12 people'])
-    expect(linesWords(row({ lines: 1, pieces: 1 }, { people: 0 })).map(say)).toEqual(['1 line', '1 piece'])
+    expect(linesWords(row()).map(say)).toEqual(['3 products', '140 pieces', '12 people'])
+    expect(linesWords(row({ lines: 1, pieces: 1 }, { people: 0 })).map(say)).toEqual(['1 product', '1 piece']) // od-fx8 W-23: products, not lines
     expect(filesWords(row()).map(say)).toEqual(['2 logos', '1 measurement sheet'])
     // A locked measurement sheet is counted, never named.
     expect(JSON.stringify(filesWords(row()))).not.toContain('s1.pdf')
@@ -206,9 +207,10 @@ describe('the read, live changes and the states', () => {
   it('the words in both languages', () => {
     for (const locale of LOCALES) {
       const words = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
-      for (const key of ['customers.drafts.col.draft', 'customers.drafts.col.value', 'customers.drafts.untitled', 'customers.drafts.open', 'customers.drafts.noun']) expect(words(key), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['customers.drafts.col.draft', 'customers.drafts.col.value', 'customers.drafts.col.ready', 'customers.drafts.open', 'customers.drafts.noun']) expect(words(key), `${locale} ${key}`).not.toBe(key)
       expect(words('customers.work.view.drafts', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
-      expect(words('customers.drafts.readOnly', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
+      // od-fx8 W-24: the read-only window's words went with it (a row opens the office draft page, editable).
+      expect(words('customers.drafts.readOnly', { customer: 'Brand Alpha' }), locale).toBe('customers.drafts.readOnly')
     }
   })
 })
@@ -260,3 +262,17 @@ describe('cp-walk: the draft window', () => {
   })
 })
 // ---- end cp-walk
+
+describe('od-fx8 (walk W-03, W-23, W-24): the customer page names a draft as the portal does and loads the part’s words', () => {
+  it('an untitled draft is "Draft order <day>"; the quotes tab loads the draft words; "read only" is gone', () => {
+    const dt = createTranslator('en', CATALOGUE.en[DRAFT_NS] ?? {})
+    expect(untitledOf(row({}, { title: null, startedAt: '2026-11-24T09:00:00Z' }), dt, () => '24/11/2026')).toBe('Draft order 24/11/2026')
+    expect(draftTitle(row({}, { title: null }), untitledOf(row({}, { title: null }), dt, () => '24/11/2026'))).toBe('Draft order 24/11/2026')
+    expect(readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')).toContain("namespaces={['parties', BEFORE_ORDER_NS, DRAFT_NS")
+    for (const locale of LOCALES) {
+      const before = JSON.stringify(CATALOGUE[locale]['before-order'])
+      expect(before, locale).not.toMatch(/read only|sola lettura/i)
+    }
+  })
+})
+

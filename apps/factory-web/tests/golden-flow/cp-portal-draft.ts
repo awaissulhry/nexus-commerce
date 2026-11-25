@@ -162,7 +162,7 @@ export default defineStage({
       const send = page.getByRole('button', { name: DW('send.title'), exact: true }).first()
       await seen(send, 60_000)
       await expect(page.getByRole('heading', { name: DW('price.title'), exact: true })).toHaveCount(0)
-      await expect(page.getByLabel(DW('price.yours'))).toHaveCount(0)
+      await expect(page.getByText(DW('price.col'), { exact: true })).toHaveCount(0) // od-fx8 W-17: the price column's own word
       expect(await page.locator('body').innerText(), 'no money on the Designer’s draft').not.toMatch(/€|\bEUR\b/)
       // Send held for one who may not order, said in words (the colleagues who may send it, or "ask your admin") — never by a cell.
       await expect(send).toHaveAttribute('aria-disabled', 'true')

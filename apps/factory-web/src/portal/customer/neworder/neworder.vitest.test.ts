@@ -56,7 +56,6 @@ import {
   customTitleOf,
   EMPTY_PERSON,
   entriesInOrder,
-  kindKey,
   MEASURES,
   mtmOf,
   ownPriceOf,
@@ -977,11 +976,9 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     // Read in another order: still by seq (a row never jumps).
     const swapped = { lines: record.request.lines, customLines: [mtmLine(), describedLine()] }
     expect(entriesInOrder(swapped).map((entry) => entry.line.seq)).toEqual([1, 2, 3])
-    expect(td('en')(kindKey('CATALOGUE'))).toBe('From the catalogue')
-    expect(td('en')(kindKey('DESCRIBED'))).toBe('Described by you')
-    expect(td('en')(kindKey('MADE_TO_MEASURE'))).toBe('Made to measure')
-    expect(td('it')(kindKey('DESCRIBED'))).toBe('Descritto da voi')
-    expect(td('it')(kindKey('MADE_TO_MEASURE'))).toBe('Su misura')
+    // od-fx8 (walk W-22): the old line kinds ("Described by you", "Made to measure") are no word of the R1 face any more — a row says
+    // its Sizing (Standard sizes · Custom size · Not decided yet).
+    expect(td('en')('draftPage.kind.MADE_TO_MEASURE')).toBe('draftPage.kind.MADE_TO_MEASURE')
     expect(draftTitleOf({ lines: [], customLines: [describedLine({ seq: 1 })] }, td('en'))).toBe('Maglietta box a maniche corte, rossa e bianca come il rifer…')
     expect(draftTitleOf({ lines: [], customLines: [mtmLine({ seq: 1 })] }, td('en'), 'en')).toBe('One-piece race suit')
     // od-w1.2 (R1): a row whose product is not decided yet says so; one table row per line of any kind, its pieces in words.
@@ -1033,12 +1030,13 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
   it('the roster: Size · Measurement sheet · Sending later only (no saved measurements in v1), rows by seq, what is there in words', () => {
     expect([...MEASURES]).toEqual([...DOMAIN_MEASURES])
     expect(MEASURES).not.toContain('PROFILE')
-    expect(MEASURES.map((measure) => td('en')(`draftPage.measure.${measure}`))).toEqual(['Size', 'Measurement sheet', 'Sending later'])
-    expect(MEASURES.map((measure) => td('it')(`draftPage.measure.${measure}`))).toEqual(['Taglia', 'Scheda misure', 'Le mandiamo dopo'])
+    // od-fx8 W-22 (R1 ros.later): "later" says who sends what.
+    expect(MEASURES.map((measure) => td('en')(`draftPage.measure.${measure}`))).toEqual(['Size', 'Measurement sheet', 'We send the measures later.'])
+    expect(MEASURES.map((measure) => td('it')(`draftPage.measure.${measure}`))).toEqual(['Taglia', 'Scheda misure', 'Le misure ve le mandiamo dopo.'])
     const [andrea, luca, tommaso] = RIDERS()
     expect(personWhat(andrea!, td('en'))).toBe(SHEET_ON_MTM.originalName)
     expect(personWhat(luca!, td('en'))).toBe('50')
-    expect(personWhat(tommaso!, td('en'))).toBe('Sending later')
+    expect(personWhat(tommaso!, td('en'))).toBe('We send the measures later.')
     expect(personWhat({ measureBy: 'SHEET', size: null, sheet: null }, td('en'))).toBe('a sheet no longer on the draft')
     // od-w1.2 (R3): the roster lives in the row's Pieces window (a custom size is by person).
     const html = renderPieces('en', 'od-pieces')
@@ -1081,10 +1079,11 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
       expect(html, locale).toContain(td(locale)('draftPage.line.inSheet'))
       expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
     }
-    // No one named and no sheet (od-w1.2, R1): said on the row, never a hold on Send — a missing piece is not an invalid one.
+    // No one named and no sheet (od-w1.2, R1): never a hold on Send — a missing piece is not an invalid one; od-fx8 W-14: and no red
+    // line on the row either (nothing is required: Still open tells what is not decided yet).
     const empty = kindsRecord({ custom: [describedLine(), mtmLine({ people: [], pieces: 0, problems: [{ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null, personId: null }] })], request: { files: { logos: [], references: [], sheets: [] }, problems: [{ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null, personId: null }] } })
     expect(draftSendHeld(empty.request, FACTS, [])).toBeNull()
-    expect(renderCase('en', 'cp154-no-people')).toContain(td('en')('draftPage.problem.NO_PEOPLE'))
+    expect(renderCase('en', 'cp154-no-people')).not.toContain(td('en')('draftPage.problem.NO_PEOPLE'))
     // A described line with no total yet: its pieces are "Not decided yet".
     expect(productRowsOf(kindsRecord({ custom: [describedLine({ quantity: null, pieces: 0 })] }).request).find((entry) => entry.id === describedLine().id)!.pieces).toEqual({ mode: 'NONE' })
   })
@@ -1109,16 +1108,17 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     expect(yourPriceAccess(true, 'Offline')).toBe('read')
     for (const locale of ['it', 'en'] as const) {
       const admin = renderCase(locale, 'cp154-kinds')
-      expect(admin, locale).toContain(td(locale)('price.yours'))
+      expect(admin, locale).toContain(td(locale)('price.col'))
       expect(admin, locale).toContain(t(locale)('draftPage.price.cell', { seq: 2 }))
       const designer = renderCase(locale, 'cp154-designer')
       expect(designer, locale).not.toMatch(/€|EUR/)
-      expect(designer, locale).not.toContain(td(locale)('price.yours'))
+      expect(designer, locale).not.toContain(td(locale)('price.col'))
       expect(designer, locale).not.toContain(td(locale)('price.title'))
       expect(designer.match(KEY)?.[0] ?? null, locale).toBeNull()
     }
-    expect(td('en')('price.yours')).toBe('Your price (without VAT)')
-    expect(td('it')('price.yours')).toBe('Il vostro prezzo (IVA esclusa)')
+    // od-fx8 W-17: the card says "Your price"; its column "Without VAT" (whole on a phone card).
+    expect(td('en')('price.col')).toBe('Without VAT')
+    expect(td('it')('price.col')).toBe('IVA esclusa')
   })
 
   it('Your price: typed the customer’s way, the API’s decimal; our list price beside it on catalogue lines only; the total', () => {
@@ -1145,7 +1145,7 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     expect(ownTotalOf(rows, { [mtmLine().id]: '' })).toEqual({ total: null, missing: 1 })
     const typed = renderCase('en', 'cp154-price-typed')
     expect(typed).toContain('A price of 0 or more, with up to 6 decimals.')
-    expect(typed).toContain('1 line still without your price')
+    expect(typed).toContain('1 product still without your price')
   })
 
   it('od-w1.2 (R3): a row’s windows — Pieces by the row’s sizing; Options held at their fields, names only, "Not decided yet" an answer', () => {

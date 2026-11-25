@@ -361,7 +361,7 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
   cases: [
     ...REQUEST_CASES,
     { id: 'start', label: 'How do you want to order? (no drafts)', model: start(), note: 'Three ways in, one draft. A way makes the draft on the server; the address keeps it (?draft=).' },
-    { id: 'start-drafts', label: 'Drafts to continue', model: start(() => ({ drafts: DRAFTS })), note: '“Continue your draft from … · 3 lines” (PressableRow).' },
+    { id: 'start-drafts', label: 'Drafts to continue', model: start(() => ({ drafts: DRAFTS })), note: '“From … · 3 products” (PressableRow; od-fx8 W-23).' },
     { id: 'start-loading', label: 'The drafts loading', model: start(() => ({ state: 'loading' })) },
     { id: 'start-error', label: 'The drafts could not be read', model: start(() => ({ state: 'error' })), note: 'Never drawn as no drafts: the problem in our words + Try again.' },
     { id: 'draft', label: 'A draft: the checklist, the lines with their size grids, date and delivery, notes, your price — its conversation docked', model: page(), note: 'F-CP-150: saved on leaving a field (“Saved 10:42 · v7”); one size grid per line (stacked on a phone); Send to the factory and Discard… in the band; “The factory can read this draft. Work starts only when you send it.”' },
