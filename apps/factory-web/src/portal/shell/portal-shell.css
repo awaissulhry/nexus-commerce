@@ -854,6 +854,16 @@
     flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));
   }
 
+  /* pp-fx7 (re-walk R2-02): no cut word — on a phone the title wraps to a second line instead of the DS ellipsis ("Quality claim
+     SEED-CMP…"); its lines are still row 1 (‹ · title · Messages · ⋯), a word breaks only when it alone is wider than the row. From
+     1280 px the title never shrinks (N-01). */
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
   /* pp-fx5 (walk W-07): the reference never breaks inside its number ("SEED- / PO- / 78" beside Pages): it stays whole, and row 2 wraps
      between its items — the meta takes its content's width (at most the row), Pages goes under it when both do not fit. */
   .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
