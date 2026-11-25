@@ -23,7 +23,7 @@ export interface PartnerDesigner {
   /** Its words ("Ask Dora Campione, factory designer"): the host's catalogue. */
   readonly ask: string
   readonly on: boolean
-  /** The rule, in the chip's tooltip and for screen readers. */
+  /** The rule, in the chip's tooltip and for a screen reader. */
   readonly hint: string
   /** Why it cannot be ticked now, in words; null: it can. */
   readonly held: string | null
