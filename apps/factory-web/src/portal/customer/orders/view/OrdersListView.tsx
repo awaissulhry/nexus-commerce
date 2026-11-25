@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { PackageSearch, WifiOff } from 'lucide-react'
+import { PackageSearch, Search } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input } from '@nexus/ui/primitives'
@@ -115,7 +115,7 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
   const l = useT(LAST_MESSAGE_NS) // B-TH-230: the shared message cell's words (the portal's "voi" in outside-words)
   const words = useOrderWords()
   const cells = useCellWords()
-  const { t, locale, time } = words
+  const { t, locale } = words
   const read = model.read
   const seesPrices = read?.seesPrices ?? true
   const room = useRoomWidth(roomOf, 0)
@@ -251,7 +251,9 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
           const said = text(data)
           return said === null ? <span className="fw-ocl-sub">—</span> : door(view, said)
         }
-        return { ...column(entry.columnId, portalColumnLabel(entry, locale), Cell, fixed(LIST_WIDTHS.portal)), headerTooltip: t('sheet.columnHint'), valueGetter: ({ data }: { data?: ListRow }) => text(data) ?? '' }
+        // pg-fx3 (walk W-04): its head wraps to two lines (the Work tab's wrapHeads), never cut; its tip names the column, then the hint.
+        const label = portalColumnLabel(entry, locale)
+        return { ...column(entry.columnId, label, Cell, fixed(LIST_WIDTHS.portal)), wrapHeaderText: true, headerClass: 'fw-pgl-hwrap', headerTooltip: `${label} · ${t('sheet.columnHint')}`, valueGetter: ({ data }: { data?: ListRow }) => text(data) ?? '' }
       }),
     ]
   }, [t, l, cells, locale, words, seesPrices, model.unread ? 1 : 0, read?.columns, fit.ordered, fit.portal])
@@ -313,9 +315,10 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       <EmptyState title={t('list.failed')} description={t('list.failedBody')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('state.retry')}</Button>} />
     ) : rows !== null && rows.length === 0 ? (
       searching ? (
-        <EmptyState title={t('list.noMatchSearch', { q: model.q.trim() })} action={<Button size="sm" onClick={() => actions?.onClearSearch?.()}>{t('list.clearSearch')}</Button>} />
+        // pg-fx3 (walk W-07; 10-design § 2): the empty states draw the picture's mark — the magnifier.
+        <EmptyState icon={<Search size={24} aria-hidden />} title={t('list.noMatchSearch', { q: model.q.trim() })} action={<Button size="sm" onClick={() => actions?.onClearSearch?.()}>{t('list.clearSearch')}</Button>} />
       ) : model.group !== null ? (
-        <EmptyState title={t('list.noMatch')} description={t('list.noMatchChip')} action={<Button size="sm" onClick={() => actions?.onGroup?.(null)}>{t('list.clear')}</Button>} />
+        <EmptyState icon={<Search size={24} aria-hidden />} title={t('list.noMatch')} description={t('list.noMatchChip')} action={<Button size="sm" onClick={() => actions?.onGroup?.(null)}>{t('list.clear')}</Button>} />
       ) : (
         <EmptyState
           icon={<PackageSearch size={24} aria-hidden />}
@@ -334,7 +337,7 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
 
   return (
     <div className="fw-pord fw-pgl" ref={room.ref}>
-      {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
+      {/* pg-fx3 (walk W-03): no connection is said ONCE — by the portal shell's own banner; the list keeps its rows and holds Show more. */}
       <GroupsBand
         model={{ face: 'customer', groups: band.groups, total: band.total, needsYou: band.needsYou, shown: band.shown, state: band.state, ...(model.windowOpen ? { windowOpen: true } : {}) }}
         actions={{

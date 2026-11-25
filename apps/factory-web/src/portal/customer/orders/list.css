@@ -26,6 +26,13 @@
   text-align: right;
 }
 
+/* pg-fx3 (walk W-04): a column the office ticks for the customer wraps its head to two lines (as the Work tab's heads), never cut. */
+.fw-pgl .ag-header-cell.fw-pgl-hwrap .ag-header-cell-comp-wrapper,
+.fw-pgl .ag-header-cell.fw-pgl-hwrap .ag-header-cell-text {
+  white-space: normal;
+  line-height: 1.15;
+}
+
 /* Where it is and the picture are doors too (every cell a door): no link colour on the chips, the hand and the focus ring only. */
 .fw-pgl-where,
 .fw-pgl-pic {

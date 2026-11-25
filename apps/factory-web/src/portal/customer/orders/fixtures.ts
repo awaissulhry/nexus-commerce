@@ -131,7 +131,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'loading', label: 'Loading', model: listCase(() => ({ state: 'loading', read: null, rows: [] })) },
     { id: 'error', label: 'The list could not be read', model: listCase(() => ({ state: 'error', read: null, rows: [] })), note: 'A failed read is never drawn as an empty list; the band says so once, with Try again.' },
     { id: 'updates', label: 'Changes waiting', model: listCase(() => ({ updates: 2 })), note: 'Rows never move under the pointer: “2 updates · Show”.' },
-    { id: 'offline', label: 'No connection', model: listCase(() => ({ offlineSince: at(-1) })), note: '“No connection — showing what was loaded at …”; Show more is held with the reason.' },
+    { id: 'offline', label: 'No connection', model: listCase(() => ({ offlineSince: at(-1) })), note: 'pg-fx3 (walk W-03): the portal shell says it once, at the top; the rows stay and Show more is held with the reason.' },
     { id: 'more', label: 'More than one page', model: listCase(() => ({ read: { ...bandRead(ordersRead('OPEN'), ROWS, []), count: 64 }, more: { loading: false } })), note: 'Pages of 50: “Show more” in the footer.' },
     { id: 'keys', label: 'The keys in the footer’s info icon', model: listCase(() => ({ keysOpen: true })), note: 'Key hints only in the table footer (Owner rule 2026-10-29).' },
     {

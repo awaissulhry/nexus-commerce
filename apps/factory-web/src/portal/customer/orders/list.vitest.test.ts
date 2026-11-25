@@ -298,6 +298,34 @@ describe('pg-t: Brand Beta\'s cases hold nothing of Brand Alpha and no office se
   })
 })
 
+describe('pg-fx3: the end walk\'s fixes (40-walk.md)', () => {
+  const screen = listScreen as unknown as DesignScreen<unknown>
+  const render = (id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
+  const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+  it('W-03: no connection is said once — by the shell; the list draws no banner of its own (its rows stay, Show more is held)', () => {
+    expect(view).not.toContain("t('offline.title'")
+    expect(render('offline')).not.toContain('No connection — showing what was loaded')
+    expect(view).toContain("model.offlineSince ? t('held.offline') : null")
+  })
+  it('W-04: a ticked column\'s head wraps to two lines (never cut); its tip names the column, then the hint', () => {
+    expect(view).toContain("wrapHeaderText: true, headerClass: 'fw-pgl-hwrap', headerTooltip: `${label} · ${t('sheet.columnHint')}`")
+    const css = readFileSync(new URL('./list.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-pgl \.ag-header-cell\.fw-pgl-hwrap \.ag-header-cell-comp-wrapper,\s*\.fw-pgl \.ag-header-cell\.fw-pgl-hwrap \.ag-header-cell-text \{\s*white-space: normal;/)
+  })
+  it('W-07: the two empty states draw the picture\'s magnifier (nothing in a group, nothing found); the empty list its own mark', () => {
+    expect(render('chip-empty')).toContain('lucide-search')
+    expect(render('th-223-search')).toContain('lucide-search')
+    expect(render('th-223-empty')).toContain('lucide-package-search')
+  })
+  it('W-06: a failed read — the band says only "Couldn\'t be read · Try again" (no notes line, no ⓘ); the grid slot says why', () => {
+    const html = render('error')
+    expect(html).toContain('class="fw-cb-failed" role="status"')
+    expect(html).not.toContain('Your open orders and requests')
+    expect(html).not.toContain('About these numbers')
+    expect(html).toContain('Your orders and requests could not be read')
+  })
+})
+
 describe('pg-t: Download (Excel) is the one export, of the group shown', () => {
   it('the page asks the server\'s file with the group\'s own chip and the search; none under Closed requests', () => {
     const page = readFileSync(new URL('./OrdersPage.tsx', import.meta.url), 'utf8')
