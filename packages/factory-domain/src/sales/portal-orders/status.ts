@@ -1,5 +1,6 @@
 import type { BusinessDate } from '../../core/time'
 import type { SalesOrderStatus } from '../orders/orders'
+import type { PortalRequestState } from '../portal-requests/state' // pg-s1 S1.2: a request's state counts in the band
 
 /**
  * An order's status in the customer's words (B-W2b-175, SAL-075; design portal.customer.orders "Which orders" chips and
@@ -11,8 +12,9 @@ import type { SalesOrderStatus } from '../orders/orders'
  *               is SHIPPED, or DELIVERED once every shipment that left arrived); a SENT portal order request that has no
  *               order yet is REQUESTED
  *   chips       the list's saved filters: Open (default: everything not delivered or cancelled, requests included),
- *               Requested, In production, Ready, Shipped (partly or all), Delivered, Cancelled, All, and Date moved
- *               (the promise changed in the last 14 days)
+ *               Requested, Confirmed (pg-s1), In production, Ready, Shipped (partly or all), Delivered, Cancelled, All, and Date
+ *               moved (the promise changed in the last 14 days)
+ *   groups      pg-s1: the band's numbers (bandCounts), counted over the party's own rows before the search
  *   milestones  the six steps, each DONE (with the day it happened when known), PARTLY (shipped in part), TODO (with the
  *               day expected when one is promised) or SKIPPED (a cancelled order's steps it never reached)
  */
@@ -65,12 +67,14 @@ export function customerStatusOf(status: SalesOrderStatus, shipments: LeftShipme
 
 // ---- the list's chips ------------------------------------------------------------------------------------------------------
 
-export const ORDER_CHIPS = ['OPEN', 'REQUESTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'ALL', 'DATE_MOVED'] as const
+// pg-s1 S1.1 (portal grid Z3): CONFIRMED, the band's Confirmed group as a chip (its rows: `inChip`'s default branch).
+export const ORDER_CHIPS = ['OPEN', 'REQUESTED', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'ALL', 'DATE_MOVED'] as const
 export type OrderChip = (typeof ORDER_CHIPS)[number]
 
 export const CHIP_WORDS: Readonly<Record<OrderChip, Words>> = Object.freeze({
   OPEN: { it: 'Aperti', en: 'Open' },
   REQUESTED: { it: 'Richiesti', en: 'Requested' },
+  CONFIRMED: { it: 'Confermati', en: 'Confirmed' }, // pg-s1 S1.1
   IN_PRODUCTION: { it: 'In produzione', en: 'In production' },
   READY: { it: 'Pronti', en: 'Ready' },
   SHIPPED: { it: 'Spediti', en: 'Shipped' },
@@ -105,6 +109,78 @@ export function inChip(chip: OrderChip, status: CustomerOrderStatus, movedLately
 export function chipCounts(rows: readonly { readonly status: CustomerOrderStatus; readonly movedLately: boolean }[]): { chip: OrderChip; count: number; words: Words }[] {
   return ORDER_CHIPS.map((chip) => ({ chip, count: rows.filter((row) => inChip(chip, row.status, row.movedLately)).length, words: CHIP_WORDS[chip] }))
 }
+
+// ---- pg-s1 S1.2 (portal grid Z3, H4): the band's numbers, counted by the server over the party's own rows --------------------
+
+/**
+ * The groups of the portal list's band (the face of the customer page's Work band): Requests · Confirmed · In production · Ready to
+ * ship · Shipped · Delivered, with Cancelled and Closed requests apart. The API counts them over the party's OWN rows (its partner
+ * reads) BEFORE the search, so a search never moves them; the browser never sums them.
+ */
+export const ORDER_GROUPS = ['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'CLOSED_REQUESTS'] as const
+export type OrderGroup = (typeof ORDER_GROUPS)[number]
+
+/** The groups of "everything open": each row of them once. */
+const OPEN_GROUPS: readonly OrderGroup[] = ['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED']
+
+/**
+ * One row the band counts: a row of the orders list (an order, or a catalogue order request still waiting: REQUESTED) with its
+ * customer status and whether it waits for the customer (a revised order to re-confirm), or one of the customer's requests by its
+ * state as the customer reads it.
+ */
+export type BandRow = { readonly kind: 'ROW'; readonly status: CustomerOrderStatus; readonly needsYou: boolean } | { readonly kind: 'INQUIRY'; readonly state: PortalRequestState }
+
+const GROUP_OF_STATUS: Readonly<Record<CustomerOrderStatus, OrderGroup>> = Object.freeze({
+  REQUESTED: 'REQUESTS',
+  CONFIRMED: 'CONFIRMED',
+  IN_PRODUCTION: 'IN_PRODUCTION',
+  READY: 'READY',
+  PARTLY_SHIPPED: 'SHIPPED',
+  SHIPPED: 'SHIPPED',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED',
+})
+
+/**
+ * A request's group by its state: open → Requests, but ORDER_WAITING (its order waits for our yes and is the list's REQUESTED row:
+ * never counted twice) and ORDER_CONFIRMED (the order carries on in Orders) are in none; declined, closed and withdrawn → Closed
+ * requests (never vanished).
+ */
+const GROUP_OF_REQUEST: Readonly<Record<PortalRequestState, OrderGroup | null>> = Object.freeze({
+  SENT: 'REQUESTS',
+  BEING_REVIEWED: 'REQUESTS',
+  NEED_INFO: 'REQUESTS',
+  QUOTE_BEING_PREPARED: 'REQUESTS',
+  QUOTE_SENT: 'REQUESTS',
+  QUOTE_ACCEPTED: 'REQUESTS',
+  ORDER_WAITING: null,
+  ORDER_CONFIRMED: null,
+  DECLINED: 'CLOSED_REQUESTS',
+  CLOSED: 'CLOSED_REQUESTS',
+  WITHDRAWN: 'CLOSED_REQUESTS',
+})
+
+/** The group a row is counted in (null: in none). */
+export const groupOf = (row: BandRow): OrderGroup | null => (row.kind === 'ROW' ? GROUP_OF_STATUS[row.status] : GROUP_OF_REQUEST[row.state])
+
+/** The band's numbers: each group's count (in the groups' order), everything open (each row once), and what needs the customer. */
+export interface BandCounts {
+  readonly groups: { group: OrderGroup; count: number }[]
+  /** Every row of Requests … Shipped, each once. */
+  readonly open: number
+  /** The requests we asked something about (NEED_INFO) and the OPEN orders waiting for the customer's re-confirmation. */
+  readonly needsYou: number
+}
+
+/** The band's numbers over the rows given (the caller gives the party's own rows, before any search). */
+export function bandCounts(rows: readonly BandRow[]): BandCounts {
+  const groups = ORDER_GROUPS.map((group) => ({ group, count: rows.filter((row) => groupOf(row) === group).length }))
+  const open = groups.filter((entry) => OPEN_GROUPS.includes(entry.group)).reduce((sum, entry) => sum + entry.count, 0)
+  // Only an open order needs the customer (the lead's rule): a cancelled or delivered one with a stale re-confirmation wait never counts.
+  const needsYou = rows.filter((row) => (row.kind === 'ROW' ? row.needsYou && isOpenForCustomer(row.status) : row.state === 'NEED_INFO')).length
+  return { groups, open, needsYou }
+}
+// ---- end pg-s1 S1.2
 
 /** An order the customer still waits for (Home's "Open orders", the next deliveries). */
 export const isOpenForCustomer = (status: CustomerOrderStatus): boolean => OPEN.includes(status)

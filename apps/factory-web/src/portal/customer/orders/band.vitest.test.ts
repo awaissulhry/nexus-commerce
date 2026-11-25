@@ -180,7 +180,7 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   })
 
   it('the page draws them in its body (after the band, inside main), the band draws none; each tab draws its part', () => {
-    const entry = recordScreen.cases.find((item) => item.id === 'status')!
+    const entry = recordScreen.cases.find((item) => item.id === 'overview')!
     for (const locale of ['en', 'it'] as const) {
       const html = render(createElement(recordScreen.view, { model: entry.model }), locale)
       expect(html, locale).not.toContain('fw-ptabs')
@@ -189,7 +189,7 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
       for (const tab of RECORD_TABS) expect(html, `${locale} ${tab}`).toContain(`?tab=${tab}"`)
       expect(html, locale).toContain('aria-current="page"')
     }
-    const files = recordScreen.cases.find((item) => item.id === 'documents')!
+    const files = recordScreen.cases.find((item) => item.id === 'files')!
     expect(textOf(render(createElement(recordScreen.view, { model: files.model }), 'en'))).toContain(CATALOGUE.en['portal-orders']!['docs.filesTitle']!)
   })
 

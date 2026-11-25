@@ -17,7 +17,6 @@ import { ProductionListView, type ProductionListModel } from '../view/Production
 import { fetchPointerSources, problemAnswerSchema, reportProblem, type ProblemAnswer } from './api'
 import {
   excerptOf,
-  orderFilesOf,
   pointerOptionsOf,
   problemBodyOf,
   problemChipOf,
@@ -280,17 +279,6 @@ describe('the chip: "Waiting on us since 16 Nov", then "Answered 17 Nov", "Answe
     expect(parsed).not.toHaveProperty('words')
     expect(productionOrderSchema.shape.problem.parse(null)).toBeNull()
     expect(productionOrderSchema.shape.problem.parse(undefined)).toBeUndefined()
-  })
-})
-
-describe('the order’s files card: the newest three current files, "All in Documents (n)"; none: not drawn', () => {
-  it('current versions only, newest first', () => {
-    const files = orderFilesOf(documentsRead().items)
-    expect(files.count).toBe(4)
-    expect(files.shown).toHaveLength(3)
-    expect(files.shown.every((item) => item.current)).toBe(true)
-    expect([...files.shown].map((item) => item.date)).toEqual([...files.shown].map((item) => item.date).sort().reverse())
-    expect(orderFilesOf([])).toEqual({ shown: [], count: 0 })
   })
 })
 

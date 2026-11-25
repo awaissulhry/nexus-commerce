@@ -129,6 +129,28 @@ export async function moveMark(tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>
   return true
 }
 
+// ---- pg-s1 S1.4 (the pt- lane's L-1): a portal person's own message is never new to them, on every portal write path ----------
+/**
+ * The portal person who wrote a shared message has read it: their own mark moves to it, in the write's own command, as the portal
+ * post's does (B-TH-027). Every portal path that writes a person's words as a message calls this ONE helper — the portal post
+ * (platform/threads/partner postPartnerMessage: the thread page, a request's first words and its files, a production problem), a
+ * change asked on the order page (sales/change-requests portal.ts) and an approval answered in the portal (approvals-out settle.ts)
+ * — so no list, bubble or record counts the person's own words as new to them. Only the writer's mark: the party's other people
+ * still read it as new, and another customer's never moves (row-level security; the database also checks the mark is the person's
+ * own party's, ThreadRead_guard). Nothing for a preview (no write), for a link (no person: an invited link keeps no mark) or for a
+ * thread with no party. The partner scope writes its own party's marks; the tenant's system scope any of the tenant's.
+ */
+export async function readOwnMessage(
+  tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>,
+  thread: { readonly id: string; readonly companyId: string | null; readonly siteId: string | null; readonly partyId: string | null },
+  writer: { readonly userId: string | null; readonly preview?: boolean },
+  message: { readonly id: string; readonly at: Date },
+): Promise<boolean> {
+  if (writer.userId === null || writer.preview === true || thread.partyId === null) return false
+  return moveMark(tools, thread, { userId: writer.userId, office: false }, message, true)
+}
+// ---- end pg-s1 S1.4
+
 const THREAD_SCOPE = { id: true, companyId: true, siteId: true, partyId: true, recordType: true, recordId: true } as const satisfies Prisma.ThreadSelect
 
 // ---- B-CP-071 residual (customer page lead addition 5; PA1's known residual): a portal person's unread read counts only the records

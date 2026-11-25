@@ -280,7 +280,7 @@ export const waitingInputOf = (waiting: ProductionWaiting): WaitingInput => ({ w
 /** The plain stage of the lib's strip (the API's five stages are the same). */
 export const plainStageOf = (stage: { readonly code: string } | null): PlainStage | null => (stage ? (stage.code as PlainStage) : null)
 
-// ── F-PR-12a: the order's Status & progress (portal/customer/orders/view/StatusTab.tsx) ─────────────────────────────────────
+// ── F-PR-12a: the order's Overview (portal/customer/orders/overview/model.ts; was Status & progress) ─────────────────────────────────────
 /** What holds its work, as the lib's banner reads it: the curated words only (every level). */
 export const holdsOf = (holds: ProductionOrder['holds'], locale: Locale): HoldInput[] => holds.map((hold, index) => ({ id: `${hold.kind}-${index}`, kind: hold.kind, since: hold.since, customerWords: say(hold.words, locale) }))
 

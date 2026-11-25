@@ -27,6 +27,7 @@ import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { command } from '../../../core/command'
 import { systemCallerOf } from '../../../platform/files/files'
 import { ensureThread } from '../../../platform/threads/threads'
+import { readOwnMessage } from '../../../platform/threads/reads' // pg-s1 S1.4
 import { reopenOnSharedMessage } from '../../../platform/threads/work-state'
 import { cancelFeeFor } from '@nexus/factory-domain/sales/change-requests/fee'
 import { asMoney } from '@nexus/factory-domain/money/marked'
@@ -511,7 +512,7 @@ async function askOne(app: FastifyInstance, request: FastifyRequest, reader: Por
     const files = await designFileProblems(tools.tx, reader, facts.order, prepared.fileIds)
     if (files.length > 0) throw new DomainError('not_found', 'File not found.', files)
     // B-SA-048: their ask as their own message, written first so the request names it (askMessageId, set with the ask).
-    const message = await askMessageInCommand(tools, { threadId, order: facts.order, body, prepared, lines: facts.lines, person: session.person })
+    const message = await askMessageInCommand(tools, { threadId, order: facts.order, body, prepared, lines: facts.lines, person: session.person, /* pg-s1 S1.4 */ writer: { userId: session.userId, preview: session.preview } })
     await askInCommand(tools, { requestId, order: facts.order, body, prepared, impact, partnerUserId: session.userId, batchId, askMessageId: message?.id ?? null })
     return { requestId, message: message && { id: message.id, threadId: message.threadId, at: toUtcIso(message.at) } }
   })
@@ -577,7 +578,16 @@ export function askMessageText(kind: OrderRequestKind, cells: readonly AskedCell
  */
 async function askMessageInCommand(
   tools: CommandTools,
-  input: { readonly threadId: string | null; readonly order: PortalOrderRow; readonly body: AskBody; readonly prepared: PreparedAsk; readonly lines: readonly PortalLine[]; readonly person: { readonly displayName: string; readonly locale: string } },
+  input: {
+    readonly threadId: string | null
+    readonly order: PortalOrderRow
+    readonly body: AskBody
+    readonly prepared: PreparedAsk
+    readonly lines: readonly PortalLine[]
+    readonly person: { readonly displayName: string; readonly locale: string }
+    /** pg-s1 S1.4: the asking person, whose own mark moves to the ask (their own words are never new to them). */
+    readonly writer: { readonly userId: string; readonly preview: boolean }
+  },
 ): Promise<{ readonly id: string; readonly threadId: string; readonly at: Date } | null> {
   if (!input.threadId) return null
   const { tx, now } = tools
@@ -608,6 +618,8 @@ async function askMessageInCommand(
   })
   tools.audit({ action: 'portal.postMessage' /* threads/partner POST_ACTION: the portal reads its own posts as "mine" by it */, recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...input.prepared.fileIds], askOf: input.body.kind } })
   tools.emit(eventFor(messagePosted, { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId, payload: { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: thread.partyId } }))
+  // pg-s1 S1.4 (the pt- lane's L-1): the asker read their own ask — never "1 new" on their own words (their mark only; the partner scope).
+  await readOwnMessage(tools, thread, input.writer, { id, at: now })
   return { id, threadId: thread.id, at: now }
 }
 

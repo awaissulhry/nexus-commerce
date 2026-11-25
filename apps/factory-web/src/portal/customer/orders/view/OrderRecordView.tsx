@@ -32,7 +32,7 @@ import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/m
 import { LinesTab } from './LinesTab'
 import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
-import { StatusTab } from './StatusTab'
+import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & progress
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -94,8 +94,6 @@ export interface OrderRecordViewModel {
   copied: string | null
   /** B-W2b-170: why "Copy tracking link" waits (a preview, offline), or null; `link:<shipment id>` in `copied` once copied. */
   linkHeld?: string | null
-  /** The promise history is open (the band's ⋯ opens it too). */
-  historyOpen?: boolean
   dialog: OrderDialog | null
   /** B-W2b-194: "Reorder this line" (New order's reorder of this order; a person who may order), else null. */
   reorderHref?: string | null
@@ -145,7 +143,6 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onWithdraw?: (request: ChangeRequest) => void
   onChangeLine?: (lineId: string) => void
   onLine?: (lineId: string) => void
-  onHistory?: (open: boolean) => void
   onCopy?: (text: string) => void
   /** B-W2b-170: a link to the shipment's branded tracking page, copied to the clipboard. */
   onCopyTrackingLink?: (shipmentId: string) => void
@@ -239,7 +236,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
           {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
           {model.notice && model.notice.tone !== 'danger' ? notice : null}
         </RecordNotices>
-        {model.tab === 'overview' ? <StatusTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'overview' ? <OverviewTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
         {model.tab === 'files' ? <DocumentsTab model={model} actions={actions} /> : null}

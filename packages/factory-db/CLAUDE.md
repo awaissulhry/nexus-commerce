@@ -665,7 +665,18 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    order (`factory_file_ask_guard`: never deleted; born OPEN; the order's company and customer, none on a CLOSED or CANCELLED order;
    the order, a line of it or a work order of it (and a step); exactly one addressee of its kind; the floor only on a work order,
    never priced or body data; OPEN → ARRIVED → ACCEPTED, ARRIVED → OPEN asked again, → CANCELLED; the files of the record it lands
-   on, accepted only AVAILABLE; no earlier function redefined, nothing old reads it)):
+   on, accepted only AVAILABLE; no earlier function redefined, nothing old reads it)),
+   `…_order_start_guards` (order start OD s.1, schema wave 'order start 1/1', with the Owner's change of 11-25 10:12 "no
+   requirements at all": it first back-fills `PortalOrderRequestLine.sizing` once (MADE_TO_MEASURE kind → MADE_TO_MEASURE; size
+   rows, a total, or people / a sheet on a by-person line → STANDARD; else null) with `PortalOrderRequestLine_guard` off for that
+   one statement; then it redefines the portal's `factory_portal_order_request_guard` and
+   `factory_portal_order_request_line_guard` from their newest bodies in `…_customer_page_guards` (the office edits a DRAFT and
+   names its style drafts; NEW SENT → SENT for `styleIds`, office only; a new request starts with no style draft; `subject` a
+   draft column of both doors, null or 1 to 200 trimmed; Send needs NOTHING, no line, no pieces, the date rule stays; a line's
+   `choices` are null or 1 to 10 {topic, options, picked}; every line cell optional: a CATALOGUE line needs its style but not its
+   colourway, a DESCRIBED line no words, a MADE_TO_MEASURE line no garment type (still by person); kind MADE_TO_MEASURE exactly
+   when `sizing` is MADE_TO_MEASURE), and adds `factory_portal_draft_choices_ok` and
+   `factory_portal_order_request_style_drafts_check` (a copy of the Inquiry's, without its party-change part)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

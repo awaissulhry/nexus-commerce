@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
-import { Banner, Card, Disclosure, KeyValue, SummaryTable, type KeyValueItem } from '@nexus/ui/components'
+import { Banner, Disclosure, KeyValue, SummaryTable, type KeyValueItem } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
 import { FileRow, Modal } from '../../../../lib/i18n/ds-parts'
 import { FreshnessLine } from '../../../../lib/production/view/FreshnessLine'
@@ -10,9 +10,10 @@ import type { FinalInspection, ProductionQuality, QualityPhoto } from '../../pro
 import { anyTakenBack, checkPiecesText, FINAL_STATE_TONE, finalLinesText, photoStepHeld, qualityLinesOf, qualityNothing, reportNamesOf, type QualityLineRow } from '../../production/model'
 import { useOrderWords } from '../words'
 import { Loading, ReadFailed, SizeRunTable } from './parts'
+import { OverviewCard } from '../../../../lib/record-overview/Overview' // pp-w2 (w2.3)
 
 /**
- * F-PR-12c — portal order › Status & progress, part 3: + Quality & photos (production plan §4 "first piece, in-line, final
+ * F-PR-12c — portal order › Overview (pp-w2; was Status & progress), part 3: + Quality & photos (production plan §4 "first piece, in-line, final
  * results and photos of its own goods — single-brand work orders only"; 06-tree P-ORD-quality; wall PW-P04), drawn only at the
  * level Quality & photos (the order's quality read, B-PR-19: below it the API answers 404 and nothing is drawn).
  *
@@ -63,12 +64,13 @@ export function ProductionQualityCard({
     )
   ) : null
   return (
-    <Card header={t('production.quality.title')} headingLevel={2} headerAction={fresh}>
+    // pp-w2 (w2.3; 10-design § 5.4): its body as it is, inside the SHARED kit's card (Overview's pair B, level QUALITY only).
+    <OverviewCard title={t('production.quality.title')} aside={fresh}>
       <div className="fw-pord-stack">
         {quality.state === 'error' ? <ReadFailed title={t('production.quality.failed')} onRetry={actions?.onRetryQuality} /> : null}
         {read ? <QualityBody read={read} fileHeld={fileHeld} actions={actions} /> : quality.state === 'loading' ? <Loading rows={2} height={40} label={t('production.quality.label')} /> : null}
       </div>
-    </Card>
+    </OverviewCard>
   )
 }
 

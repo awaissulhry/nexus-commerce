@@ -258,7 +258,8 @@ describe('a draft and its send (SAL-074)', { timeout: SLOW_TEST_TIMEOUT_MS }, ()
 
   it('the office makes the order from it (prices again) and the customer reads ACCEPTED with the order', async () => {
     const view = await officeRequestView(office(), requestA.id)
-    expect(view.may).toEqual({ order: true, quote: true, refuse: true })
+    // od-s s.3: + confirm (orders.manage on a sent request) and styleDraft (held: this office person has no product.styles.manage).
+    expect(view.may).toEqual({ order: true, quote: true, refuse: true, confirm: true, styleDraft: false })
     expect(view.request.lines[0]).toMatchObject({ unitPriceShown: '420.00', listPriceNow: '420.00', pieces: 7 })
     const accepted = await acceptRequest(office(), requestA.id, { version: view.request.version, as: 'ORDER' })
     expect(accepted.request.status).toBe('ACCEPTED')
@@ -347,11 +348,12 @@ describe('withdraw and discard', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     const other = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
     expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${other.request.id}?version=${other.request.version}`)).toEqual({ discarded: true })
     expect((await call(browsers.buyer, 'GET', `/portal/order-requests/${other.request.id}`)).status).toBe(404)
-    // B-CP-071 (D10, K9 reversed): the office READS a draft from its first save, read-only — it decides it only once sent.
+    // B-CP-071 (D10, K9 reversed): the office READS a draft from its first save; accept and refuse wait for the Send. od-s s.3 (Owner
+    // yes 2a): its door on a draft is Confirm (send + accept in one command), never accept.
     const kept = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
     const read = await officeRequestView(office(), kept.request.id)
     expect(read.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ readiness: expect.objectContaining({ of: 7 }) }) })
-    expect(read.may).toEqual({ order: false, quote: false, refuse: false })
+    expect(read.may).toEqual({ order: false, quote: false, refuse: false, confirm: true, styleDraft: false })
     await expect(acceptRequest(office(), kept.request.id, { version: read.request.version, as: 'ORDER' })).rejects.toThrow(/still the customer's draft/)
   })
 })

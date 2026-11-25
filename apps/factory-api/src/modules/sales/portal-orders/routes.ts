@@ -1,10 +1,10 @@
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { inTransitContract, listContract, progressContract, recordContract, shipmentsContract } from './contract'
+import { listContract, progressContract, recordContract, shipmentsContract } from './contract'
 import { manifest } from './manifest'
 import { listOrders, orderRecord } from './orders'
 import { orderProgressView } from './progress'
-import { inTransit, orderShipments } from './shipments'
+import { orderShipments } from './shipments'
 // B-TH-061: the customer's own sheet and its "Download all".
 import { sheetContract, sheetDownloadContract } from './contract'
 import { orderSheet, orderSheetFile } from './sheet'
@@ -26,8 +26,6 @@ import { orderPictures } from './pictures'
  */
 export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   app.get('/portal/sales-orders', { schema: listContract }, async (request) => listOrders(app, request, request.query, appClock(app).now()))
-
-  app.get('/portal/sales-orders/in-transit', { schema: inTransitContract }, async (request) => inTransit(app, request, appClock(app).now()))
 
   // ---- B-TH-061
   app.get('/portal/sales-orders/sheet', { schema: sheetContract }, async (request) => orderSheet(app, request, request.query, appClock(app).now()))
