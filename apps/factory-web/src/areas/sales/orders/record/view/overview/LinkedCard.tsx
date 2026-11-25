@@ -11,10 +11,10 @@ import { linkedRowsOf, type LinkCount, type LinkedDoor, type LinkedQuiet, type L
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { useSearchParams } from 'next/navigation'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 // ---- F-CO-K2: its rows are the kit's ONE list (its look comes with it: no stylesheet of the card's own); the rows' words are the
 // kit's (useOverviewWords: "None yet: …", "… ›" whose arrow never stands alone on a line — F-OM-fx6, now the kit's door(), S31) ----
-import { QuietLine, Row, RowList, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
+import { QuietLine, Row, RowList, useOverviewWords } from '../../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K2
 
 /**

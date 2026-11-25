@@ -4,9 +4,9 @@ import { useId, useMemo, useState, type ReactNode } from 'react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { CircleAlert } from 'lucide-react' // F-CO-K2: the failed read's strip mark
-import { catalogueFor, createTranslator } from '../../../lib/i18n/messages'
-import { useLocale, useReader } from '../../../lib/i18n/provider'
-import { WithMessages } from '../../../record-panels/i18n'
+import { catalogueFor, createTranslator } from '../i18n/messages'
+import { useLocale, useReader } from '../i18n/provider'
+import { WithMessages } from '../../record-panels/i18n'
 import { OVERVIEW_NS, STRIPS_SHOWN, type StripTone } from './model'
 import './record-overview.css'
 

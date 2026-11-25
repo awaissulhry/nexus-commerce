@@ -77,7 +77,7 @@ import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the 
 // ---- end F-SA-232
 // ---- F-CO-K1 (the shared overview kit): PartState draws the kit's CardState. F-CO-K2: no stylesheet order decides a look any more
 // (the two dead align-items went), so the kit's stylesheet may load before or after the order's own (Changes reaches it first). ----
-import { CardState } from '../../../../_shared/record-overview/Overview'
+import { CardState } from '../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K1
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'

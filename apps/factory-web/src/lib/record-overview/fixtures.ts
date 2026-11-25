@@ -1,8 +1,8 @@
-import { defineDesignScreen } from '../../../lib/design/design-screen'
+import { defineDesignScreen } from '../design/design-screen'
 import { OverviewLab, type OverviewLabModel } from './view/OverviewLab'
 
 /**
- * The shared overview kit's lab (`/design/record-overview`, F-CO-K1): every part of `areas/_shared/record-overview` alone, each in
+ * The shared overview kit's lab (`/design/record-overview`, F-CO-K1): every part of `lib/record-overview` alone, each in
  * three rooms — a 343 px card (a phone), a 425 px card (a pair's card beside the docked thread at 1440) and an 829 px card (a
  * full-width card there). This step holds the frame: the card (a bare title, a head row with its right side, the lead card, busy),
  * a card's loading and failed states, the headline (alone, with its quiet line, while read), a pair of two and of one, and the
