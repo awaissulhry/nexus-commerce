@@ -52,6 +52,8 @@ const row = output({
   id: id(),
   /** Their purchase order number (first in the row). */
   customerRef: z.string().nullable(),
+  /** pg-fx4 (Z5): a REQUEST row's subject (the sent draft's title, 1 to 200 characters); null: none, and always for an ORDER row. */
+  subject: z.string().nullable(),
   number: z.null(),
   /** B-TH-105 (Owner decision PR-06): "Your order 12", the customer's own count beside our number (a request: null). */
   yourNumber,
@@ -79,8 +81,8 @@ export const listContract = defineContract({
   querystring: input({
     chip: z.enum(ORDER_CHIPS).default('OPEN'),
     /**
-     * Their PO number, our order number, or a style's code or name. pg-s1 S1.3: a number alone ("12", "#12") is their own number,
-     * matched exactly ("Your order 12", never 112), or (without "#") a PO holding it.
+     * Their PO number, our order number, or a style's code or name; pg-fx4: a request's subject. pg-s1 S1.3: a number alone ("12",
+     * "#12") is their own number, matched exactly ("Your order 12", never 112), or (without "#") a PO holding it.
      */
     q: z.string().trim().max(80).optional(),
     /** The production progress % of the page's first 10 rows (Home's next deliveries), when shared. */

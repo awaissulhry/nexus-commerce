@@ -194,7 +194,9 @@ export async function requestSends(db: Reader, orderIds: readonly string[]): Pro
 export async function sentRequests(db: Reader, companyId: string) {
   const requests = await db.portalOrderRequest.findMany({
     where: { companyId, status: 'SENT' },
-    select: { id: true, number: true, customerRef: true, requestedDate: true, sentAt: true, currency: true },
+    // pg-fx4: its subject (the draft's title, od- s.3: partner-readable) names the row. NEVER `styleIds` or `decidedById` here: the
+    // partner role cannot read them (the whole read would fail).
+    select: { id: true, number: true, customerRef: true, subject: true, requestedDate: true, sentAt: true, currency: true },
     orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
     take: ORDERS_MAX,
   })

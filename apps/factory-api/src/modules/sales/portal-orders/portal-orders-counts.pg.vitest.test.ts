@@ -124,6 +124,13 @@ async function catalogueRequest(partyId: string, facts: { readonly number: strin
   return id
 }
 
+/** pg-fx4: a draft of the party sent with its subject (the draft's title), no PO: a REQUEST row of the list, as the Owner's own. */
+async function sentDraft(partyId: string, facts: { readonly number: string; readonly subject: string }): Promise<string> {
+  const id = newId()
+  await forced(`INSERT INTO "PortalOrderRequest" (id, "tenantId", "companyId", "partyId", number, subject, currency, status, "sentAt", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, 'EUR', 'SENT', now(), now(), now())`, [id, T, companyA, partyId, facts.number, facts.subject])
+  return id
+}
+
 /** A request (inquiry) of the party sent from its portal, in a status; ORDERED names the order made from it. */
 async function request(partyId: string, facts: { readonly number: string; readonly seq: number; readonly status: string; readonly orderId?: string }): Promise<string> {
   const id = newId()
@@ -328,5 +335,27 @@ describe('pg-s1 S1.5 the band of Portal › Orders counts each customer’s own 
     expect(rows.get(made.A.cancelled)).toMatchObject({ status: 'CANCELLED', needsYou: false })
     expect(rows.get(made.A.delivered)).toMatchObject({ status: 'DELIVERED', needsYou: false })
     expect((await numbers('a')).needsYou).toBe(stale.needsYou)
+  })
+
+  it('pg-fx4 (Z5): a sent draft carries its subject (an order and a draft without one: null); words find it — each customer its own only', async () => {
+    const subjects = { a: 'PGFX4 made-up suit for the alpha riders', b: 'PGFX4 made-up vests for the beta riders' }
+    const draft = { a: await sentDraft(P1, { number: 'RQ-PG-A-0002', subject: subjects.a }), b: await sentDraft(world.partyId, { number: 'RQ-PG-B-0002', subject: subjects.b }) }
+    for (const url of ['/portal/sales-orders?chip=ALL&limit=200', '/portal/sales-orders/sheet?chip=ALL&limit=200']) {
+      const rows = new Map(((await ok(browsers.a, url)).items as Json[]).map((row) => [row.id as string, row]))
+      expect(rows.get(draft.a), url).toMatchObject({ kind: 'REQUEST', subject: subjects.a, customerRef: null, number: null, yourNumber: null })
+      expect(rows.get(made.A.catalogue), url).toMatchObject({ kind: 'REQUEST', subject: null })
+      expect(rows.get(made.A.confirmed), url).toMatchObject({ kind: 'ORDER', subject: null })
+      // The wall: never the other customer's subject (or its row), either way.
+      expect(JSON.stringify(await ok(browsers.b, url)), url).not.toContain(subjects.a)
+      expect(JSON.stringify(await ok(browsers.a, url)), url).not.toContain(subjects.b)
+      expect(rows.has(draft.b), url).toBe(false)
+    }
+    const search = async (who: keyof typeof people, q: string) => ids(await ok(browsers[who], `/portal/sales-orders?chip=ALL&q=${encodeURIComponent(q)}`))
+    expect(await search('a', 'made-up suit')).toEqual([draft.a])
+    expect(await search('a', 'MADE-UP SUIT FOR THE ALPHA')).toEqual([draft.a])
+    expect(await search('b', 'made-up vests')).toEqual([draft.b])
+    expect(await search('b', 'made-up suit')).toEqual([])
+    expect(await search('a', 'made-up vests')).toEqual([])
+    expect(await search('a', 'PGFX4')).toEqual([draft.a])
   })
 })
