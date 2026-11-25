@@ -29,3 +29,26 @@
     height: max(420px, calc(100dvh - 140px));
   }
 }
+
+/* pt-t T.1: the design review's frames (SCR-027-thread) — the dock at a third (433 px at 1440), 40 % (450), half (562), 40 % at 1920
+   (642), a main column (~865), the phone (375); as tall as a dock at 1440 × 900. */
+.fw-ptc {
+  display: flex;
+  flex-direction: column;
+  height: 720px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fw-ptc > .fw-rtp {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.fw-ptc.is-third { width: 433px; }
+.fw-ptc.is-forty { width: 450px; }
+.fw-ptc.is-half { width: 562px; }
+.fw-ptc.is-wide { width: 642px; }
+.fw-ptc.is-main { width: 865px; }
+.fw-ptc.is-phone { width: 375px; height: 640px; }
