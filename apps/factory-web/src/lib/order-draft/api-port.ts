@@ -39,4 +39,9 @@ export interface OrderDraftPort {
   completeFile(id: string, fileId: string, idempotencyKey: string): Promise<DraftFile>
   /** The FILE's version; the draft as read comes back. */
   removeFile(id: string, fileId: string, version: number, idempotencyKey: string): Promise<DraftRecord>
+  /** od-w2.4: a file of the draft marked a logo or a reference (the DRAFT's version; a measurement sheet stays one: 409). */
+  markFile(id: string, fileId: string, body: { version: number; part: MarkablePart }, idempotencyKey: string): Promise<DraftRecord>
 }
+
+/** What a draft's own file may be marked (od-ts: the draft files' own values; a measurement sheet never moves). */
+export type MarkablePart = 'LOGO' | 'REFERENCE'

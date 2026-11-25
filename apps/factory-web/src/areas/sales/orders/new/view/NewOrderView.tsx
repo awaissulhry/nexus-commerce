@@ -24,7 +24,7 @@ import '../../orders.css'
 
 /**
  * SCR-039 (draft) — a typed New order (design pop:orders.new → "Lines tab editable until 'Confirm order'"; SAL-202):
- * the band "New order · <customer>" with "Draft — not confirmed", the number it will get and Confirm order (held with its
+ * the band "New order · <customer>" with "Not saved yet" (od-w2.3, S2-B5: "draft" names the shared draft order now), the number it will get and Confirm order (held with its
  * reason: no line yet, a price not read, a problem the API names); the order's dates and an internal note; the lines
  * editor (styles, colours, sizes, prices; an empty price is the customer's list price); the summary rail priced by the
  * API as it is typed — net, VAT, gross, the deposit and the payment schedule the order will get, the problems in words.

@@ -9,7 +9,7 @@ import { catalogueHeld } from '../../../inquiries/catalogue-model'
 import { workEntry } from '../use-customer-work'
 import { workViewsOf } from '../view/WorkTab' // F-CQ-303: no DRAFTS_VIEW (the drafts are Quotes & incoming's "Customer is writing")
 import { listCustomerDrafts, type DraftRow } from './api'
-import { draftPick, draftsNav, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue } from './model' // F-CQ-303: no draftsShown / draftsAddress
+import { draftPick, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, officeDraftHref, readyOf, showsValue } from './model' // F-CQ-303: no draftsShown / draftsAddress
 import { draftValueOf } from './model' // F-CP-141
 import { CustomerDraftsList, type CustomerDraftsListModel } from './view/CustomerDraftsList'
 
@@ -44,7 +44,8 @@ const row = (over: Partial<DraftRow> = {}, draft: Partial<NonNullable<DraftRow['
     lastEditedAt: '2026-11-19T10:42:00.000Z',
     title: 'STY-01 Giacca demo',
     people: 12,
-    readiness: { parts: [], done: 5, of: 6, problems: 1 },
+    openCount: 2,
+    confirmHeld: true,
     later: ['PEOPLE'],
     thread: { messages: 4, lastAt: '2026-11-19T10:40:00.000Z', designerAsked: true },
     files: { logos: [file('l1'), file('l2')], references: [], sheets: [file('s1', true)] },
@@ -66,15 +67,16 @@ describe('a draft row in words', () => {
     expect(filesWords(row()).map(say)).toEqual(['2 logos', '1 measurement sheet'])
     // A locked measurement sheet is counted, never named.
     expect(JSON.stringify(filesWords(row()))).not.toContain('s1.pdf')
-    expect(readyOf(row())).toEqual({ words: { key: 'customers.drafts.ready', params: { done: 5, of: 6 } }, problems: 1 })
-    expect(say(readyOf(row())!.words)).toBe('5 of 6')
+    // od-w2.3 (R1): what is still open (the server's count; information) — never the old seven-part checklist.
+    expect(readyOf(row())).toEqual({ open: 2, confirmHeld: true })
+    expect(readyOf(row({}, { openCount: undefined }))).toBeNull()
     expect(say(messagesWords(row())!)).toBe('4 messages · asked the factory designer')
     expect(messagesWords(row({}, { thread: null }))).toBeNull()
   })
 
-  it('the dock pick is the draft\'s own conversation; the window walks the list in its order', () => {
+  it('the dock pick is the draft\'s own conversation; a row opens the office draft page (od-w2.3: editable, the read-only window went)', () => {
     expect(draftPick(row(), 'STY-01 Giacca demo')).toEqual({ type: 'PortalOrderRequest', id: row().id, label: 'STY-01 Giacca demo', companyId: null })
-    expect(draftsNav([{ id: 'a' }, { id: 'b' }], 'b')).toEqual({ ids: ['a', 'b'], current: 'b' })
+    expect(officeDraftHref('/w/DEMO', 'd 1')).toBe('/w/DEMO/sales/orders/new?draft=d%201')
   })
 })
 
@@ -83,7 +85,7 @@ describe('the view and its address (fx-12, review G4; F-CQ-303: the drafts moved
     expect(workViewsOf({ price: true }, { priceCheck: true })).not.toContain('drafts:customer')
     const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain('<CustomerDraftsList')
-    expect(tab).toContain('<DraftWindow')
+    expect(tab).not.toContain('<DraftWindow') // od-w2.3: a row opens the office draft page
   })
 
   it('F-CQ-303: an old address of the view opens Quotes & incoming at WRITING — in one write, the dock kept, never a loop', () => {
@@ -141,9 +143,10 @@ describe('read only: the decisions wait until the customer sends it', () => {
     expect(pane).not.toContain("main || (model.draft && request.status === 'DRAFT')")
     const container = readFileSync(new URL('../../../inquiries/use-catalogue-order.tsx', import.meta.url), 'utf8')
     expect(container).toContain('!told.current.draft')
-    const window = readFileSync(new URL('./view/DraftWindow.tsx', import.meta.url), 'utf8')
-    expect(window).toContain("t('customers.drafts.readOnly', { customer: model.customer })")
-    expect(window).toContain('nav={{ ids: model.nav.ids, current: model.nav.current')
+    // od-w2.3: the customer page's read-only window went — a row opens the office draft page, where the office writes it.
+    const hook = readFileSync(new URL('./use-customer-drafts.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('router.push(officeDraftHref(')
+    expect(hook).not.toContain('useCatalogueOrder')
     for (const locale of LOCALES) {
       const inquiries = createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)
       expect(inquiries('catalogue.held.DRAFT'), locale).not.toBe('catalogue.held.DRAFT')

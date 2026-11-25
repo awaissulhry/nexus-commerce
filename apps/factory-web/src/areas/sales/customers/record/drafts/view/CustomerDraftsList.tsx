@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Tag } from '@nexus/ui/primitives'
+import { Button } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../../list-frame/ListFrame'
 import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
@@ -13,6 +13,7 @@ import { WithMessages } from '../../../../../../record-panels/i18n'
 import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'
 import type { DraftRow } from '../api'
 import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, type DraftsRead, type Words } from '../model'
+import { DRAFT_NS } from '../../../../../../lib/order-draft/words'
 import { draftValueOf } from '../model' // F-CP-141 (follow-up 6): the draft's own value when the API sends it
 import { money } from '../../../../quotes/model' // F-CP-141: minor units
 // ---- F-CQ-205 (customer page › Quotes & incoming): the section "Customer is writing" mounts this list too — no Views ▾ there, each
@@ -81,6 +82,7 @@ function useWide(forced: boolean | undefined): boolean {
 
 function DraftsList({ model, actions }: { model: CustomerDraftsListModel; actions?: CustomerDraftsListActions }) {
   const t = useT('parties')
+  const dt = useT(DRAFT_NS) // od-w2.3: the ONE draft order's words (one key, one place)
   const locale = useLocale()
   const wide = useWide(model.wide)
   const latest = useRef(actions)
@@ -111,13 +113,8 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     const ReadyCell = ({ data }: ICellRendererParams<DraftRow>) => {
       const ready = data ? readyOf(data) : null
       if (!ready) return <span>—</span>
-      return (
-        // cq fx5 W-04: "5 of 6" and its tag wrap onto two lines when the column is at its least width ("1 proble…" was cut at every room).
-        <span className="fw-cwd-inline is-wrap">
-          <span>{say(ready.words)}</span>
-          {ready.problems > 0 && <Tag tone="warning">{t('customers.drafts.problems', { count: ready.problems })}</Tag>}
-        </span>
-      )
+      // od-w2.3 (R1): "N still open" in the draft part's own words (information, never a hold); nothing open: "Nothing is open."
+      return <span className="fw-cwd-inline is-wrap">{ready.open === 0 ? dt('still.none') : ready.open === 1 ? dt('still.count_one', { n: 1 }) : dt('still.count_other', { n: ready.open })}</span>
     }
     const OpenCell = ({ data }: ICellRendererParams<DraftRow>) =>
       data ? (
@@ -138,7 +135,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       // F-CW-102 (lead settle S28: only the Drafts view's sideways scroll): Ready and Wanted by had no share of the room, so the grid
       // gave each its 200 px default — 1058 px of columns in the 863 px beside the dock, the Open button off-screen. Each now takes
       // its share from its own least width ("5 of 6" beside "1 problem" whole): 200 + 130 + 88 + 136 + 140 + 92 + 64 = 850 px.
-      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 120, flex: 0.8, autoHeight: true, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
+      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 120, flex: 0.8, autoHeight: true, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.openCount ?? null },
       {
         colId: 'changed',
         headerName: t('customers.drafts.col.changed'),

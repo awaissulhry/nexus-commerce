@@ -1513,7 +1513,7 @@
     "startAgain": "Start a new order",
     "discard": "Discard",
     "confirm": "Confirm order",
-    "draft": "Draft — not confirmed",
+    "draft": "Not saved yet",
     "contactIs": "Contact: {name}",
     "nothingSaved": "Nothing is saved until Confirm order: the lines stay in this tab, even if it reloads. Confirm makes the order confirmed at once, with its deposit request.",
     "details": "Dates and note",

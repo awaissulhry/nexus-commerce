@@ -41,10 +41,11 @@ export function filesWords(row: DraftRow): Words[] {
 }
 
 /** "5 of 7" and its problems (a mark, in words). The price part is counted only for a price holder (the API's `of`). */
-export function readyOf(row: DraftRow): { readonly words: Words; readonly problems: number } | null {
-  const readiness = row.draft?.readiness
-  if (!readiness) return null
-  return { words: { key: 'customers.drafts.ready', params: { done: readiness.done, of: readiness.of } }, problems: readiness.problems }
+export function readyOf(row: DraftRow): { readonly open: number; readonly confirmHeld: boolean } | null {
+  // od-w2.3 (R1): what is still open (the server's count) — information; the Confirm window asks what the order needs.
+  const open = row.draft?.openCount
+  if (open === undefined) return null
+  return { open, confirmHeld: row.draft?.confirmHeld ?? false }
 }
 
 /** "4 · asked the factory designer" (its conversation, for a reader of its thread); null: no conversation to show. */
@@ -57,8 +58,8 @@ export function messagesWords(row: DraftRow): Words | null {
 /** The dock's pick of a draft: its own conversation (PortalOrderRequest is a customer-side dock type). */
 export const draftPick = (row: Pick<DraftRow, 'id'>, label: string): DockPick => ({ type: 'PortalOrderRequest', id: row.id, label, companyId: null })
 
-/** The window's walk: the rows' ids in the order shown, the current one. */
-export const draftsNav = (rows: readonly Pick<DraftRow, 'id'>[], current: string): { readonly ids: readonly string[]; readonly current: string } => ({ ids: rows.map((row) => row.id), current })
+/** od-w2.3: where a draft opens — the office draft page (editable), `/w/<co>/sales/orders/new?draft=<id>`. */
+export const officeDraftHref = (prefix: string, id: string): string => `${prefix}/sales/orders/new?draft=${encodeURIComponent(id)}`
 
 /**
  * Money wall: the "Value at the prices shown" column only for a price holder — the API drops `netShown` (a price-grain field) for
