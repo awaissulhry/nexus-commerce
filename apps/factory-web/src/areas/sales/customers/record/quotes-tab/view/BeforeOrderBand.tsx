@@ -5,8 +5,8 @@ import { GROUP_WAITS_ON, type BeforeOrderGroup } from '@nexus/factory-domain/sal
 import { Button } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import { CustomerBand } from '../../band/CustomerBand' // F-CQ-B: the customer page's ONE band part
-import type { BandTile } from '../../band/customer-band'
+import { CustomerBand } from '../../../../../../lib/customer-band/CustomerBand' // F-CQ-B: the customer page's ONE band part (pg-w1: in lib/customer-band, the portal draws it too)
+import type { BandTile } from '../../../../../../lib/customer-band/customer-band'
 // F-CQ-B fx1 (walk B-02, B-03): the open door is drawn by the Orders sheet's own chips part (the same chip + why as the Work tab's).
 import { SheetChips } from '../../../../orders/list/sheet/parts'
 import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'

@@ -12,8 +12,8 @@ import type { BeforeLinePart } from '../before-order'
 import type { StripTile } from '../use-customer-work'
 import type { BandChip, BandGroup, BandPicture } from '../work-band'
 // F-CQ-B (band consistency, Owner 2026-11-23): the band is drawn by the customer page's ONE band part (the design system's tiles and chips).
-import { CustomerBand } from '../band/CustomerBand'
-import type { BandChipItem, BandTile } from '../band/customer-band'
+import { CustomerBand } from '../../../../../lib/customer-band/CustomerBand'
+import type { BandChipItem, BandTile } from '../../../../../lib/customer-band/customer-band'
 
 /**
  * F-CW-101 (customer Work tab plan §1; 10-design §2; picture 20; lead settles S2, S3, S16, S24, S27, S32, S38) — the Work tab's band,

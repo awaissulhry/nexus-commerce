@@ -429,7 +429,7 @@ describe('walk W-15, W-26, W-32: the foot, the "Waiting for <customer>" window, 
     expect(win).toContain("{t('customers.band.workOrders', { customer })}")
     expect(band).toContain('window: { title: all, notes: windowNotes')
     // The phone (the band's own room < 720): the notes line folds away; the window says it.
-    expect(read('../../customers/record/band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
+    expect(read('../../../../lib/customer-band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
     for (const locale of LOCALES) expect(words(locale, 'parties')('customers.band.workOrders', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
   })
 })
@@ -568,7 +568,7 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
     expect(failed).toContain("onClick={() => actions.onRetry?.('late')}")
     expect(band).toContain("const state = model.failed || picture.state === 'failed' ? 'failed'")
     expect(band.match(/model\.failed/g)?.length).toBe(1) // once
-    const part = read('../../customers/record/band/CustomerBand.tsx')
+    const part = read('../../../../lib/customer-band/CustomerBand.tsx')
     expect(part).toContain("model.state === 'failed' ? (")
     expect(part.match(/\{model\.failed\}/g)?.length).toBe(1) // said once
     expect(read('../../customers/record/view/WorkTab.tsx')).toContain("failed: work.reads.board.status === 'failed',")
