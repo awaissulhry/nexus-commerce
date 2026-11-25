@@ -14,8 +14,9 @@ import { designScreen as recordScreen } from './record/fixtures'
  * `?tab=messages` showing the docked conversation focused (record-frame.vitest.test.ts), My production's links on Overview
  * (production.vitest.test.ts, approve-ask.vitest.test.ts) and `recordHref(…, 'shipments')`. Pinned here what was left: an old
  * `?tab=status` / `?tab=documents` opens no conversation and keeps its address (only `tab=messages` is an arrival term the frame
- * takes away), the clean address after `?tab=messages` is Overview's, and the pg- lane's shipment link — `?tab=shipments#shipment-<id>`
- * from the orders list's "On the way" — lands on Shipments with no conversation opened and the shipment's card under that anchor.
+ * takes away), the clean address after `?tab=messages` is Overview's, and a shipment's address — `?tab=shipments#shipment-<id>` (the
+ * orders list's old "On the way" door, pg- lane; pg-w2's list opens Shipments by `recordHref(…, 'shipments')`) — lands on Shipments
+ * with no conversation opened, the page bringing the shipment's card into view once the shipments are read.
  * Made-up data only.
  */
 
@@ -38,7 +39,7 @@ describe('old addresses: a mail before round 1, a list\'s door', () => {
     expect(tabOf(new URLSearchParams(clean).get('tab'))).toBe('overview')
   })
 
-  it('the shipment link of the orders list lands: Shipments, no conversation, the shipment\'s card under #shipment-<id>', () => {
+  it('a shipment\'s address lands: Shipments, no conversation, the shipment\'s card under #shipment-<id> brought into view', () => {
     const shipments = shipmentsRead().shipments
     expect(shipments.length).toBeGreaterThan(0)
     const url = new URL(`${recordHref('/p/X', 'o1', 'shipments')}#shipment-${shipments[0]!.id}`, 'https://portal.example')
@@ -53,7 +54,9 @@ describe('old addresses: a mail before round 1, a list\'s door', () => {
       const html = render(createElement(recordScreen.view, { model: entry!.model }), locale)
       for (const shipment of shipments) expect(html, `${locale} ${shipment.id}`).toContain(`id="shipment-${shipment.id}"`)
     }
-    // The list's door builds that address (OrdersPage, "On the way" › a shipment): the record's Shipments tab, then the anchor.
-    expect(readFileSync(new URL('./OrdersPage.tsx', import.meta.url), 'utf8')).toMatch(/recordHref\([^)]*'shipments'\)\}#shipment-\$\{/)
+    // The page brings that card into view once the shipments are read (the browser's own jump comes before the card exists): pp-w2.
+    const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+    expect(page).toMatch(/if \(tab !== 'shipments' \|\| !shipmentsReady \|\| !window\.location\.hash\.startsWith\('#shipment-'\)\) return/)
+    expect(page).toContain('document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView(')
   })
 })
