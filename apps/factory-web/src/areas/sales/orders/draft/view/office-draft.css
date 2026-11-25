@@ -1,0 +1,5 @@
+/* od-w2.2 (THE SIMPLE ORDER START R1): the office's Confirm window — one section per row, divided. Tokens only. */
+.fw-od-confirmrow {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}

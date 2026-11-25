@@ -25,6 +25,7 @@ export type DraftDoor = 'portal' | 'office'
  */
 export const OFFICE_VOICE: ReadonlySet<string> = new Set([
   'cell.productPh',
+  'cf.quoteNext',
   'date.ref',
   'mail.attHint',
   'mail.drop',
@@ -35,6 +36,7 @@ export const OFFICE_VOICE: ReadonlySet<string> = new Set([
   'opt.needChoices',
   'opt.needTopic',
   'save.notYet',
+  'save.readonly',
   'siz.peopleFirst',
   'start.continue',
   'still.info',

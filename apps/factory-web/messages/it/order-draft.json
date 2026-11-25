@@ -122,7 +122,8 @@
     "savedBy": "Salvata alle {time} da {name}",
     "savedByFactory": "Salvata alle {time} dalla fabbrica",
     "shared": "La fabbrica legge questa bozza dal primo salvataggio.",
-    "untitled": "Bozza d’ordine del {date}"
+    "untitled": "Bozza d’ordine del {date}",
+    "title": "Bozza d’ordine · {title}"
   },
   "lines": {
     "colour": "Colore",
@@ -185,7 +186,9 @@
   },
   "state": {
     "saving": "Salvataggio…",
-    "OPEN": "Non ancora deciso"
+    "OPEN": "Non ancora deciso",
+    "DECIDED": "Deciso",
+    "MISSING": "Manca"
   },
   "add": {
     "from": "Aggiungi da:",
@@ -221,7 +224,8 @@
       "needChoices": "Scrivi almeno due scelte, una per riga."
     },
     "save": {
-      "notYet": "Si salva quando scrivi"
+      "notYet": "Si salva quando scrivi",
+      "readonly": "Puoi leggere, non modificare: il tuo ruolo non gestisce gli ordini."
     },
     "siz": {
       "peopleFirst": "Questa riga ha delle persone: toglile prima, poi scegli Taglie standard."
@@ -231,6 +235,9 @@
     },
     "still": {
       "info": "Solo informazione: la finestra di conferma chiede quello che serve all’ordine (modello, colore, pezzi per taglia, prezzo)."
+    },
+    "cf": {
+      "quoteNext": "Quando il cliente accetta il preventivo, diventa l’ordine."
     }
   },
   "col": {
@@ -297,17 +304,21 @@
     "date": "Data di consegna richiesta",
     "label": "Riga {seq}",
     "remove": "Togli il prodotto",
-    "shipTo": "Consegna a"
+    "shipTo": "Consegna a",
+    "style": "Modello"
   },
   "save": {
     "changedByFactory": "Modificata dalla fabbrica poco fa.",
     "draftSaved": "Bozza salvata alle {time}",
-    "notYet": "Si salva quando scrivete"
+    "notYet": "Si salva quando scrivete",
+    "readonly": "Questa richiesta è stata inviata: la nostra risposta arriva negli Ordini. Per cambiarla ritiratela negli Ordini o chiedeteci.",
+    "saving": "Salvataggio…"
   },
   "send": {
     "body": "Vuol dire: questo è il nostro ordine — fateci il prezzo e confermate. Niente è obbligatorio: quello che è ancora aperto ve lo chiede la fabbrica.",
     "later": "Un dettaglio che decidete dopo passa dai messaggi.",
-    "title": "Invia alla fabbrica"
+    "title": "Invia alla fabbrica",
+    "sent": "Richiesta inviata"
   },
   "siz": {
     "MADE_TO_MEASURE": "Su misura",
@@ -317,7 +328,13 @@
   "start": {
     "continue": "Continuate una bozza",
     "draftRow": "{open} ancora aperti · salvata {when} da {name}",
-    "draftRowFactory": "{open} ancora aperti · salvata {when} dalla fabbrica"
+    "draftRowFactory": "{open} ancora aperti · salvata {when} dalla fabbrica",
+    "customer": "Cliente",
+    "customerHeld": "Scegli prima il cliente.",
+    "customerHint": "Una bozza d’ordine appartiene a un solo cliente.",
+    "prospect": "Un potenziale cliente, non ancora cliente?",
+    "request": "Nuova richiesta in In arrivo",
+    "typed": "Scrivi subito un ordine da catalogo"
   },
   "still": {
     "count_other": "{n} ancora aperti",
@@ -333,5 +350,58 @@
     "count_one": "{n} prodotto",
     "empty": "Ancora nessun prodotto.",
     "title": "Prodotti"
+  },
+  "cf": {
+    "asksTitle": "La finestra di conferma chiede",
+    "body": "La invia per il cliente se è ancora una bozza, e ne fa un ordine. La finestra chiede quello che le righe hanno lasciato aperto.",
+    "choices": "Le opzioni aperte vanno sulla riga d’ordine come parole; le scegli sull’ordine.",
+    "done": "Confermata come ordine {number}.",
+    "doneQuote": "Confermata come preventivo {number}.",
+    "fromDraft": "Come nella bozza",
+    "fromPeople": "Dalle {count} persone",
+    "go": "Conferma ordine…",
+    "goQuote": "Conferma come preventivo",
+    "heldRow": "Alla riga {seq} mancano ancora {list}: scrivili qui o chiedili al cliente nella conversazione.",
+    "listPrice": "prezzo di listino",
+    "noRows": "Un ordine ha bisogno di almeno un prodotto: aggiungine prima uno.",
+    "nothingAsked": "Niente: ogni riga è pronta.",
+    "open": "Apri l’ordine",
+    "openQuote": "Apri il preventivo",
+    "pickColour": "Scegli un colore",
+    "pickStyle": "Scegli un modello",
+    "quote": "La riga {seq} è su misura: la conferma fa prima un preventivo (il su misura parte come preventivo).",
+    "quoteNext": "Quando accettate il preventivo, diventa l’ordine.",
+    "sizesAfterStyle": "Scegli prima il modello: qui compaiono le sue taglie.",
+    "title": "Conferma ordine",
+    "travel": "Sulla riga d’ordine come parole: {words}",
+    "travelQuote": "Sulla riga del preventivo come parole: {words}",
+    "unit": "Prezzo unitario",
+    "window": "Conferma {title} come ordine",
+    "windowQuote": "Conferma {title} come preventivo"
+  },
+  "dw": {
+    "make": "Crea bozza di modello",
+    "none": "Ancora nessuna bozza di modello.",
+    "seen": "Il cliente la vede da solo in Preventivi e campioni.",
+    "title": "Lavoro di design"
+  },
+  "line": {
+    "styleDraft": "Bozza di modello {code} · {name} · {status}"
+  },
+  "need": {
+    "colour": "colore",
+    "pieces": "pezzi per taglia",
+    "style": "modello"
+  },
+  "pm": {
+    "noList": "Nessun prezzo di listino per un modello nuovo: lo scrivi alla conferma.",
+    "theirs": "Il loro prezzo (IVA esclusa)",
+    "title": "Prezzo"
+  },
+  "st": {
+    "draft": "Bozza d’ordine"
+  },
+  "thread": {
+    "title": "Messaggi · questa bozza"
   }
 }
