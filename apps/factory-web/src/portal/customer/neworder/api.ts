@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import type { ServerDraftBody } from '../../../lib/request-compose/server-draft' // B-TH-287
 // od-w1.1: the draft order's record is the ONE shape both doors read (src/lib/order-draft/schema.ts); the portal's fetchers stay here.
-import type { OrderDraftPort } from '../../../lib/order-draft/api-port'
+import type { MarkablePart, OrderDraftPort } from '../../../lib/order-draft/api-port'
 import { draftFileSchema, named, noticeSchema, ownNumber, pair, presignedSchema, recordSchema, sizeRow, SOURCES, STATUSES, type CustomLineFields, type CustomLineKind, type DraftChoice, type DraftFile, type DraftFileAnnounce, type DraftRecord, type HeaderBody, type NewLine, type PersonFields, type RequestSource, type SizeAsk, type Sizing, savedBySchema } from '../../../lib/order-draft/schema'
 export * from '../../../lib/order-draft/schema'
 
@@ -122,6 +122,10 @@ export const completeDraftFile = (api: ApiClient, id: string, fileId: string, id
 
 export const removeDraftFile = (api: ApiClient, id: string, fileId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.request('DELETE', `${path(id)}/files/${encodeURIComponent(fileId)}`, { query: { version }, schema: recordSchema, idempotencyKey })
+
+/** od-w2.4: PATCH …/files/:fileId {version, part} — the mail's Logo mark (the DRAFT's version; a measurement sheet stays one: 409). */
+export const markDraftFile = (api: ApiClient, id: string, fileId: string, body: { version: number; part: MarkablePart }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('PATCH', `${path(id)}/files/${encodeURIComponent(fileId)}`, { body, schema: recordSchema, idempotencyKey })
 // ---- end F-CP-151
 
 // ---- od-w1.1 (THE SIMPLE ORDER START): the portal's door to the ONE draft order's commands (lib/order-draft/api-port.ts) — the same
@@ -139,6 +143,7 @@ export const portalDraftPort = (api: ApiClient): OrderDraftPort => ({
   announceFile: (id, body, idempotencyKey) => announceDraftFile(api, id, body, idempotencyKey),
   completeFile: (id, fileId, idempotencyKey) => completeDraftFile(api, id, fileId, idempotencyKey),
   removeFile: (id, fileId, version, idempotencyKey) => removeDraftFile(api, id, fileId, version, idempotencyKey),
+  markFile: (id, fileId, body, idempotencyKey) => markDraftFile(api, id, fileId, body, idempotencyKey),
 })
 // ---- end od-w1.1
 
