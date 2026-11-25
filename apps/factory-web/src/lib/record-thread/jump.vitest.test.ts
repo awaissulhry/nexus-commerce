@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../i18n/locales'
 import { createTranslator, messagesFor } from '../i18n/messages'
-import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, pageBack } from './jump'
+import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, pageBack, pageBackOrNow } from './jump'
 
 /** pt-w1 W1.4 (lane pt-, S5; ONE SHARED THREAD): the jump both doors run — pages of 200 until the message is there, at most 1,000. */
 
@@ -62,6 +62,28 @@ describe('pt-w1 W1.4 — the jump both doors run', () => {
 
     // No older page at all.
     expect(await pageBack({ id: 'm1', has, cursor: null, readPage: olderThread(10).readPage, page: JUMP_PAGE, limit: JUMP_LIMIT })).toEqual({ read: [], cursor: null, found: false, failed: false, pages: 0 })
+  })
+
+  it('pt-fx1 R-1: a message loaded already is reached AT ONCE (no promise), so a caller’s focus scheduled after the jump comes last', async () => {
+    const thread = olderThread(5000)
+    const ask = (id: string) => ({ id, has, cursor: 'c0', readPage: thread.readPage, page: JUMP_PAGE, limit: JUMP_LIMIT })
+    const now = pageBackOrNow(ask('new-1'))
+    expect(now).not.toBeInstanceOf(Promise)
+    expect(now).toEqual({ read: [], cursor: 'c0', found: true, failed: false, pages: 0 })
+    expect(thread.asked).toEqual([])
+    const later = pageBackOrNow(ask('m450'))
+    expect(later).toBeInstanceOf(Promise)
+    expect(await later).toMatchObject({ found: true, pages: 3 })
+    // The office's Answer door: jump (the row is lit and focused in a frame), then the box's focus in the next one — in this order.
+    const frames: string[] = []
+    const jump = async (id: string) => {
+      const back = pageBackOrNow(ask(id))
+      const found = back instanceof Promise ? await back : back
+      if (found.found) frames.push(`row ${id}`)
+    }
+    void jump('new-2')
+    frames.push('box')
+    expect(frames).toEqual(['row new-2', 'box'])
   })
 
   // Moved from areas/_shared/record-thread/use-record-thread.vitest.test.ts (tw- W1.4, B10) with jumpRefusal.

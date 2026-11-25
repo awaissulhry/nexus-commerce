@@ -5,7 +5,7 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 // pt-w2 W2.3 (lane pt-, S5): the jump both doors run — pages of 200 over the SAME portal page read, at most 1,000, the row lit.
-import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, lightRow, pageBack } from '../../../lib/record-thread/jump'
+import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, lightRow, pageBackOrNow } from '../../../lib/record-thread/jump'
 import type { PortalThreadMessage } from '../../../lib/record-thread/partner/model'
 import { fetchThread, postMessage, type PartnerMessageRead, type PartnerRecord, type PartnerThreadRead } from '../api'
 // B-TH-229: reading marks the conversation read for this portal person.
@@ -261,7 +261,8 @@ export function PortalThread({ type, id, focus = false, title, onRecord, onMissi
     async (messageId: string) => {
       const now = latest.current
       const loaded = new Set([...(now.read?.messages ?? []), ...now.older].map((message) => message.id))
-      const { read: pages, cursor: after, found, failed: broke, pages: count } = await pageBack({
+      // pt-fx1 R-1: a loaded message is reached in this same turn (no await), the same timing in both doors.
+      const back = pageBackOrNow({
         id: messageId,
         has: (one) => loaded.has(one),
         cursor: now.cursor,
@@ -269,6 +270,7 @@ export function PortalThread({ type, id, focus = false, title, onRecord, onMissi
         page: JUMP_PAGE,
         limit: JUMP_LIMIT,
       })
+      const { read: pages, cursor: after, found, failed: broke, pages: count } = back instanceof Promise ? await back : back
       if (count > 0) {
         olderRead.current = true
         setOlder((list) => [...list, ...pages.filter((message) => !list.some((one) => one.id === message.id))])

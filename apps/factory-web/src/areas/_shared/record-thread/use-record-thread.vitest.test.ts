@@ -844,6 +844,19 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
 
   // pt-w1 W1.4: B10 (the words when a jump does not reach its message) moved with jumpRefusal to lib/record-thread/jump.vitest.test.ts.
 
+  it('pt-fx1 R-1: the Answer door’s box keeps the focus — a jump to a loaded message lights its row in the same turn (no await before it)', () => {
+    const loop = container.slice(container.indexOf('const jumpTo = useCallback('), container.indexOf('const refusal = jumpRefusal('))
+    expect(loop).toContain('const back = pageBackOrNow({')
+    expect(loop).toContain('const { read, cursor, found, failed, pages } = back instanceof Promise ? await back : back')
+    expect(loop).not.toMatch(/=\s*await pageBack\(/)
+    // The door: the jump first (it lights and focuses the row), the box's focus after it — the box ends with the focus.
+    const door = docked.slice(docked.indexOf('const composeAsk = frame?.composeAsk ?? null'), docked.indexOf('// ---- end F-OP-212'))
+    const jumped = door.indexOf('const reached = jumpTo(messageId)')
+    const boxFocus = door.indexOf("requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.fw-rcf-dock .fw-rt-composer textarea')?.focus())")
+    expect(jumped).toBeGreaterThan(-1)
+    expect(boxFocus).toBeGreaterThan(jumped)
+  })
+
   it('the found message is lit (the flash, seq again on the next jump), centred at once and focused — no anchor ring', () => {
     expect(container).toContain('setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))')
     // tw- fx2 (G-3): centred in its LIST only (never scrollIntoView, which also scrolled the office page). pt-w1 W1.4: jump.ts lightRow.
