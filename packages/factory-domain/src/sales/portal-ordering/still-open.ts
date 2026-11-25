@@ -11,9 +11,12 @@ import type { LineKind, SizeAsk, Words } from './rules'
  *             size: a size run, or every person of a by-person row with a size) · each CHOICE (picked, or "Not decided yet")
  *   the draft DATE (a requested delivery date) · SHIP_TO (a delivery address in use: the draft's, active, or the customer's default)
  *
- * Each item is DECIDED or NOT_DECIDED; `confirmNeeds` marks what the ORDER needs (a style, a colour, pieces by size per row; an
- * address in use). The draft's read never says MISSING: the office's Confirm window types what is open, so an item is MISSING only
- * when the Confirm's body still leaves it open (`typed`, the Confirm's own check: 409 in words). No price item, ever (money wall).
+ * Each item is DECIDED or NOT_DECIDED by what the row holds in the customer's terms (od-fx7, walk W-04): PRODUCT a style OR its
+ * own words; SIZING its sizing; COLOUR a colour of ours OR colours in words; PIECES a size run, a total OR its people (or a sheet).
+ * Apart from it, `confirmNeeds` marks what the ORDER needs (a style, a colour of ours, pieces by size per row; an address in use)
+ * and `confirmReady` whether the row has it already — so a row decided in words still tells the Confirm card what the order asks.
+ * The draft's read never says MISSING: the office's Confirm window types what is open, so an item is MISSING only when the
+ * Confirm's body still leaves what the order needs open (`typed`, the Confirm's own check: 409 in words). No price item, ever.
  * (LATER stays in the states for the earlier "sending later" toggles; nothing is marked so now.)
  */
 
@@ -35,6 +38,8 @@ export interface StillOpenItem {
   readonly state: StillOpenState
   /** The order needs it at Confirm (a style, a colour, pieces by size per row; an address in use). */
   readonly confirmNeeds: boolean
+  /** od-fx7: what the order needs is there already (always true where it needs nothing); the Confirm card asks the rest. */
+  readonly confirmReady: boolean
 }
 
 export interface StillOpen {
@@ -42,7 +47,7 @@ export interface StillOpen {
   readonly items: StillOpenItem[]
   /** Items not DECIDED. */
   readonly openCount: number
-  /** An item the order needs is open (the office card says the Confirm window asks it; it never holds Send). */
+  /** What the order needs is not there yet on some item (the office card says the Confirm window asks it; it never holds Send). */
   readonly confirmHeld: boolean
 }
 
@@ -59,6 +64,15 @@ export interface StillOpenLine {
   /** A by-person row: each person's size in roster order (null: measured by a sheet, or later). */
   readonly peopleSizes: readonly (string | null)[]
   readonly choices: readonly DraftChoice[] | null
+  // ---- od-fx7 (walk W-04): what the row holds in the customer's own terms (absent: none).
+  /** Its own words (a description, else a garment type). */
+  readonly ownWords?: string | null | undefined
+  /** Its colours in words. */
+  readonly colourText?: string | null | undefined
+  /** A described row's total. */
+  readonly quantity?: number | null | undefined
+  /** A measurement sheet on the row stands for its roster. */
+  readonly sheetOnLine?: boolean | undefined
 }
 
 export interface StillOpenFacts {
@@ -86,19 +100,28 @@ export const piecesBySize = (line: Pick<StillOpenLine, 'sizes' | 'byPerson' | 'p
  */
 export function stillOpenOf(facts: StillOpenFacts, typed?: ReadonlyMap<string, ConfirmTyped>): StillOpen {
   const items: StillOpenItem[] = []
-  const state = (decided: boolean, needs: boolean, byBody: boolean): StillOpenState => (decided || byBody ? 'DECIDED' : needs && typed !== undefined ? 'MISSING' : 'NOT_DECIDED')
+  const words = (value: string | null | undefined): boolean => value !== undefined && value !== null && value.trim() !== ''
+  /**
+   * One item: `decided` in the customer's terms; `needs` — the order needs it; `orderHas` — the order's need is met by the row;
+   * `byBody` — the Confirm's body types it. With a Confirm body, what the order needs and still lacks is MISSING.
+   */
+  const item = (kind: StillOpenKind, line: StillOpenLine | null, decided: boolean, needs: boolean, orderHas: boolean, byBody = false, topic: string | null = null): void => {
+    const confirmReady = !needs || orderHas || byBody
+    const state: StillOpenState = typed !== undefined && !confirmReady ? 'MISSING' : decided || (typed !== undefined && byBody) ? 'DECIDED' : 'NOT_DECIDED'
+    items.push({ kind, lineId: line?.id ?? null, seq: line?.seq ?? null, topic, state, confirmNeeds: needs, confirmReady })
+  }
   for (const line of [...facts.lines].sort((a, b) => a.seq - b.seq)) {
     const body = typed?.get(line.id)
-    const row = (kind: StillOpenKind, decided: boolean, needs: boolean, byBody = false, topic: string | null = null): void => void items.push({ kind, lineId: line.id, seq: line.seq, topic, state: state(decided, needs, byBody), confirmNeeds: needs })
-    row('PRODUCT', line.styleId !== null, true, body?.style ?? false)
-    row('SIZING', line.sizing !== null, false)
-    row('COLOUR', line.colourwayId !== null, true, body?.colour ?? false)
-    row('PIECES', piecesBySize(line), true, body?.pieces ?? false)
-    for (const choice of line.choices ?? []) row('CHOICE', choice.picked !== null, false, false, choice.topic)
+    const hasPeople = line.byPerson && (line.peopleSizes.length > 0 || line.sheetOnLine === true)
+    item('PRODUCT', line, line.styleId !== null || words(line.ownWords), true, line.styleId !== null, body?.style ?? false)
+    item('SIZING', line, line.sizing !== null, false, true)
+    item('COLOUR', line, line.colourwayId !== null || words(line.colourText), true, line.colourwayId !== null, body?.colour ?? false)
+    item('PIECES', line, line.sizes.length > 0 || (line.quantity !== undefined && line.quantity !== null) || hasPeople, true, piecesBySize(line), body?.pieces ?? false)
+    for (const choice of line.choices ?? []) item('CHOICE', line, choice.picked !== null, false, true, false, choice.topic)
   }
-  items.push({ kind: 'DATE', lineId: null, seq: null, topic: null, state: facts.requestedDate !== null && facts.requestedDate >= facts.today ? 'DECIDED' : 'NOT_DECIDED', confirmNeeds: false })
-  items.push({ kind: 'SHIP_TO', lineId: null, seq: null, topic: null, state: state(facts.shipToInUse, true, false), confirmNeeds: true })
-  return { items, openCount: items.filter((item) => item.state !== 'DECIDED').length, confirmHeld: items.some((item) => item.confirmNeeds && item.state !== 'DECIDED') }
+  item('DATE', null, facts.requestedDate !== null && facts.requestedDate >= facts.today, false, true)
+  item('SHIP_TO', null, facts.shipToInUse, true, facts.shipToInUse)
+  return { items, openCount: items.filter((entry) => entry.state !== 'DECIDED').length, confirmHeld: items.some((entry) => entry.confirmNeeds && !entry.confirmReady) }
 }
 
 /** The Confirm's 409 in words: what the order still needs after its body (the office types it in the Confirm window), or null. */

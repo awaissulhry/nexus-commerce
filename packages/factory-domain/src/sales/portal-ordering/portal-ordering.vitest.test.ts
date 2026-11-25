@@ -480,6 +480,36 @@ describe('od-s s.4: nothing is required to Send; Still open is information; choi
     expect(stillOpenOf({ lines: [row({ id: 'l3', seq: 1, byPerson: true, peopleSizes: ['50', '52'] })], requestedDate: null, today: '2026-11-25', shipToInUse: true }).items.find((item) => item.kind === 'PIECES')?.state).toBe('DECIDED')
   })
 
+  // od-fx7 (walk W-04): decided in the customer's terms; what the ORDER needs stays apart (confirmNeeds / confirmReady).
+  it('W-04: a row decided in words, a total or people is decided; the Confirm card still asks what the order needs', () => {
+    const lines = [
+      row({ id: 'w1', seq: 1, ownWords: 'Team gloves', colourText: 'Black and red', quantity: 20, sizing: 'STANDARD' }),
+      row({ id: 'w2', seq: 2, kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, ownWords: 'Custom race suit', peopleSizes: ['50', null] }),
+      row({ id: 'w3', seq: 3, kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, sheetOnLine: true }),
+      row({ id: 'w4', seq: 4, kind: 'CATALOGUE', styleId: 's1', colourwayId: 'k1', sizing: 'STANDARD', sizes: [{ size: '50', quantity: 2 }] }),
+    ]
+    const open = stillOpenOf({ lines, requestedDate: null, today: '2026-11-25', shipToInUse: true })
+    const at = (seq: number, kind: string) => open.items.find((entry) => entry.seq === seq && entry.kind === kind)!
+    // Row 1: words, colours in words and a total decide Product, Colour and Pieces; the order still needs a style, a colour of ours, sizes.
+    for (const kind of ['PRODUCT', 'SIZING', 'COLOUR', 'PIECES']) expect(at(1, kind).state, kind).toBe('DECIDED')
+    for (const kind of ['PRODUCT', 'COLOUR', 'PIECES']) expect([at(1, kind).confirmNeeds, at(1, kind).confirmReady], kind).toEqual([true, false])
+    expect([at(1, 'SIZING').confirmNeeds, at(1, 'SIZING').confirmReady]).toEqual([false, true])
+    // Row 2: its people (one later) decide its pieces; by size they are not all there.
+    expect(at(2, 'PIECES')).toMatchObject({ state: 'DECIDED', confirmNeeds: true, confirmReady: false })
+    // Row 3: a sheet on the row stands for its people.
+    expect(at(3, 'PIECES').state).toBe('DECIDED')
+    expect(at(3, 'COLOUR').state).toBe('NOT_DECIDED')
+    // Row 4: a catalogue row has everything the order needs.
+    for (const kind of ['PRODUCT', 'COLOUR', 'PIECES']) expect(at(4, kind), kind).toMatchObject({ state: 'DECIDED', confirmReady: true })
+    // Nothing is MISSING without a Confirm body; the card is held: rows 1–3 lack what the order needs.
+    expect(open.items.filter((entry) => entry.state === 'MISSING')).toEqual([])
+    expect(open.confirmHeld).toBe(true)
+    // With a Confirm body, what the order still lacks is MISSING — though the customer decided it in words.
+    const typed = stillOpenOf({ lines: [lines[0]!], requestedDate: null, today: '2026-11-25', shipToInUse: true }, new Map([['w1', { style: true, colour: true, pieces: false }]]))
+    expect(typed.items.filter((entry) => entry.state === 'MISSING').map((entry) => [entry.kind, entry.seq])).toEqual([['PIECES', 1]])
+    expect(stillOpenOf({ lines: [lines[3]!], requestedDate: null, today: '2026-11-25', shipToInUse: true }).confirmHeld).toBe(false)
+  })
+
   it('keeps a choice to names: a topic once, 2 to 6 distinct options, the pick one of them or "Not decided yet"; its words go to the order line', () => {
     expect(choiceProblems([leather])).toEqual([])
     expect(choiceProblems(null)).toEqual([])
