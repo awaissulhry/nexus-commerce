@@ -16,6 +16,7 @@ import { bandChipsOf, bandHealthOf, bandProductionOf, orderBandOf, orderTabsOf, 
 import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './design-data'
 import { RECORD_TABS, tabOf } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+import { keyJoinOf } from '../../shell/view/FrameDialogs' // pp-fx5 (walk W-18)
 import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 
 /**
@@ -227,6 +228,23 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {\n    order: 1;\n    flex: 1 1 auto;\n    min-width: 0;\n  }')
     expect(phone).toContain('.fw-pband .nds-ref-value {\n    overflow-wrap: normal;\n    white-space: nowrap;\n  }')
     expect(phone).not.toMatch(/\.nds-detailhdr-meta \{\s*order: 1;\s*flex: 1 1 0;/)
+  })
+
+  // pp-fx5 (walk W-18): the keys window said "⌘ then J", "⌘ then ↵", "← then →", "j then k" — "then" reads as a sequence.
+  it('W-18: ⌘J and ⌘↵ are ONE press (two keycaps side by side), ←/→ and j/k either one ("or"), only g h one after the other', () => {
+    const band = orderBandOf({ words: orderWords('en'), record: orderRecord({ status: 'IN_PRODUCTION' }), prefix: PREFIX, facts: { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null } })
+    expect(band.keys?.map((entry) => [entry.keys.join(' '), keyJoinOf(entry.keys)])).toEqual([
+      ['j k', 'or'],
+      ['← →', 'or'],
+      ['⌘ J', 'press'],
+      ['⌘ ↵', 'press'],
+      ['Esc', 'then'],
+    ])
+    expect(keyJoinOf(['g', 'h'])).toBe('then')
+    expect(keyJoinOf(['Ctrl', 'Enter'])).toBe('press')
+    expect([CATALOGUE.en.portal!['keys.or'], CATALOGUE.it.portal!['keys.or']]).toEqual(['or', 'o'])
+    const view = readFileSync(new URL('../../shell/view/FrameDialogs.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{index > 0 && keyJoinOf(entry.keys) !== 'press' ? <span className=\"fw-pkeys-then\"> {t(keyJoinOf(entry.keys) === 'or' ? 'keys.or' : 'keys.then')} </span> : null}")
   })
 
   // pp-fx5 (walk W-14): at 1440 with the conversation hidden, "Messages (2 new)" pushed "Made from your request #1 ›" under the reference

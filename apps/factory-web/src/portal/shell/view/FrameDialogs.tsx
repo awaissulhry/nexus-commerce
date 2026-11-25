@@ -61,6 +61,19 @@ export function StillThereView({ model, onStay, onSignOut, onEnded }: { model: S
 }
 
 // ── Keyboard shortcuts ───────────────────────────────────────────────────────────────────────────────────────────────
+const MODIFIERS = new Set(['⌘', 'Ctrl', 'Alt', '⌥', 'Shift', '⇧'])
+const PAIRS = new Set(['j k', 'J K', '← →', '↑ ↓', '[ ]'])
+
+/**
+ * pp-fx5 (walk W-18): how a shortcut's keys go together — ONE press with a modifier (⌘J, ⌘↵, Ctrl Enter: the office's two keycaps
+ * side by side), either one of a pair (j / k, ← / →: "or"), else one after the other (g then h). It said "then" for all of them.
+ */
+export function keyJoinOf(keys: readonly string[]): 'press' | 'or' | 'then' {
+  if (keys.length > 1 && MODIFIERS.has(keys[0]!)) return 'press'
+  if (PAIRS.has(keys.join(' '))) return 'or'
+  return 'then'
+}
+
 export interface ShortcutGroup {
   title: string
   keys: readonly { keys: readonly string[]; words: string }[]
@@ -82,7 +95,7 @@ export function ShortcutsView({ open, groups, onClose }: { open: boolean; groups
                     <dt>
                       {entry.keys.map((key, index) => (
                         <span key={`${key}-${index}`}>
-                          {index > 0 ? <span className="fw-pkeys-then"> {t('keys.then')} </span> : null}
+                          {index > 0 && keyJoinOf(entry.keys) !== 'press' ? <span className="fw-pkeys-then"> {t(keyJoinOf(entry.keys) === 'or' ? 'keys.or' : 'keys.then')} </span> : null}
                           <Kbd>{key}</Kbd>
                         </span>
                       ))}
