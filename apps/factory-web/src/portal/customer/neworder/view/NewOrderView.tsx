@@ -252,6 +252,8 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
   const addFrom = (
     <span className="fw-pno-addfrom">
       <span className="fw-pno-quiet">{dw.t('add.from')}</span>
+      {/* od-fx10 W-19: the three ways stay together on a phone (none wraps alone). */}
+      <span className="fw-pno-addways">
       {(['pick', 'reorder', 'upload'] as const).map((way, index) => {
         const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : writeHeld
         return (
@@ -263,6 +265,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
           </span>
         )
       })}
+      </span>
     </span>
   )
   const panels = (
@@ -401,7 +404,7 @@ function PriceCard({ model, actions }: { model: NewOrderViewModel; actions?: New
   const typed = model.ownPrices ?? {}
   const own = ownTotalOf(rows, typed)
   return (
-    <Card padded>
+    <Card padded className="fw-od-pricecard">
       <section className="fw-pno-section" aria-labelledby="od-price-title">
         <h2 id="od-price-title" className="fw-pno-h2">
           {dw.t('price.title')}

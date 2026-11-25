@@ -88,7 +88,8 @@
       "remove": "Remove",
       "sheetGone": "a sheet no longer on the draft",
       "sheetOnLine": "Measurement sheet on this row: {names}",
-      "title": "Row {seq} · {kind} · {title} — one line per person"
+      "title": "Row {seq} · {kind} · {title} — one row per person",
+      "notYet": "Not yet"
     }
   },
   "head": {
@@ -255,6 +256,9 @@
     "draftPage": {
       "measure": {
         "LATER": "They send the measures later."
+      },
+      "roster": {
+        "privacy": "The names and measures of the customer’s riders and team are personal data: they serve only this order, and only the people who handle measurements open the measurement sheets."
       }
     }
   },

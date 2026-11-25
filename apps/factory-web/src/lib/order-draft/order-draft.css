@@ -289,9 +289,10 @@
 
 .fw-od-trow {
   display: grid;
-  /* od-fx8 W-11 / W-12: the minimums (32 + 150 + 160 + 100 + 100 + 110 + 48 + 32, the gaps, the padding = 812 px) fit the one-line
-     room from 800 px (the office at 1440 with its thread open has ≈ 829 px); Sizing holds "Non ancora deciso" whole. */
-  grid-template-columns: 32px minmax(150px, 2fr) minmax(160px, 1.3fr) minmax(100px, 1.1fr) minmax(100px, 1fr) minmax(110px, 1.4fr) 48px 32px;
+  /* od-fx10 W-12 / W-30: every box holds its longest words whole in EN and IT — Sizing "Non ancora deciso" (a 180 px box), Colour
+     "Not decided yet" / "Non ancora deciso" as its placeholder (140 px); the minimums (32 + 150 + 180 + 140 + 100 + 110 + 48 + 32,
+     the gaps, the padding = 872 px) fit the one-line room from 900 px. */
+  grid-template-columns: 32px minmax(150px, 2fr) minmax(180px, 1.3fr) minmax(140px, 1.1fr) minmax(100px, 1fr) minmax(110px, 1.4fr) 48px 32px;
   grid-template-areas: 'n product sizing colour pieces options files more';
   gap: var(--nds-space-8);
   align-items: start;
@@ -331,6 +332,7 @@
 .fw-od-trow .nds-select,
 .fw-od-trow input,
 .fw-od-trow select {
+  box-sizing: border-box; /* od-fx10 W-32: its padding inside its width (it ran into the ⋯ button on a phone) */
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -451,25 +453,30 @@
 }
 
 /* Below 800 px: line 1 = # · Product · Sizing · Colour · Pieces · ⋯; line 2 = Options (under Product → Colour) and Files (under Pieces). */
-@container (max-width: 799px) {
+/* od-fx10 W-12 / W-30: below 900 px two lines — # · Product · Sizing · Pieces · ⋯, then Colour (under Product, the room of a long
+   placeholder), Options (under Sizing) and Files (under Pieces); every box keeps its longest words whole. */
+@container (max-width: 899px) {
   .fw-od-trow {
-    grid-template-columns: 28px minmax(140px, 2fr) minmax(150px, 1.3fr) minmax(100px, 1fr) minmax(100px, 1fr) 32px; /* od-fx8 W-12 */
+    grid-template-columns: 28px minmax(0, 2fr) minmax(180px, 1.4fr) minmax(100px, 1fr) 32px;
     grid-template-areas:
-      'n product sizing colour pieces more'
-      '. options options options files .';
+      'n product sizing pieces more'
+      '. colour options files .';
   }
+  .fw-od-thead .fw-od-c-colour,
   .fw-od-thead .fw-od-c-options,
   .fw-od-thead .fw-od-c-files {
     display: none;
   }
+  .fw-od-c-colour .fw-od-celllabel,
   .fw-od-c-options .fw-od-celllabel,
   .fw-od-c-files .fw-od-celllabel {
     display: block;
   }
 }
 
-/* A phone: one stacked card per row — head # · Product · ⋯, then labelled cells in two columns. */
-@container (max-width: 519px) {
+/* A phone (and a narrow host below 640 px): one stacked card per row — head # · Product · ⋯, Sizing on its own line (its longest
+   option whole: od-fx10 W-12), then labelled cells in two columns. */
+@container (max-width: 639px) {
   .fw-od-thead {
     display: none;
   }
@@ -478,9 +485,10 @@
     grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 32px;
     grid-template-areas:
       'n product product more'
-      'sizing sizing colour colour'
-      'pieces pieces options options'
-      'files files files files';
+      'sizing sizing sizing sizing'
+      'colour colour pieces pieces'
+      'options options files files';
+    column-gap: var(--nds-space-12); /* od-fx10 W-32: the Product box keeps its distance from the ⋯ button */
   }
   .fw-od-celllabel {
     display: block;
@@ -655,3 +663,9 @@
   border-top: 1px solid var(--nds-border-subtle);
 }
 /* ---- end od-fx8 */
+
+/* ---- od-fx10 W-17: a price card takes the whole row under the other cards (its product names whole beside the price column). */
+.fw-od-hostrow > .fw-od-pricecard {
+  grid-column: 1 / -1;
+}
+/* ---- end od-fx10 */

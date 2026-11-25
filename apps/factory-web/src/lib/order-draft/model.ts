@@ -378,7 +378,7 @@ export const sheetsOfLine = (request: Pick<DraftRequest, 'files'>, lineId: strin
 export function personWhat(person: Pick<DraftPerson, 'measureBy' | 'size' | 'sheet'>, t: Translate): string {
   if (person.measureBy === 'SIZE') return person.size ?? '—'
   if (person.measureBy === 'SHEET') return person.sheet?.originalName ?? t('draftPage.roster.sheetGone')
-  return t('draftPage.measure.LATER')
+  return t('draftPage.roster.notYet') // od-fx10 W-29: "How we get the size" already says "We send the measures later.
 }
 
 export interface PersonDraft {
