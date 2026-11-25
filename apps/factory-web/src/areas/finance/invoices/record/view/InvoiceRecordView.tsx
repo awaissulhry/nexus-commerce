@@ -25,7 +25,7 @@ import { SdiTab } from './SdiTab'
 import '../../../_shared/finance.css'
 // ---- B-TH-268: the invoice on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame, useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { InvoiceDepthSlots, InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 

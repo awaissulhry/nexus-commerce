@@ -4,7 +4,7 @@ import { createElement, type ComponentType } from 'react'
 import { render, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { workOrder } from '../../_shared/fixtures'
 import { DOCK_DEFAULT, MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
-import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-OP-316
+import { defaultWidthAt } from '../../../../lib/record-frame/model' // F-OP-316 (pp-k1 k1.2: the frame's core)
 import { designScreen } from './fixtures'
 import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fixtures'
 import { hasOrderFiles, leftOutOf, orderFilesCount, pickOf, threadChoices, type OrderFilesModel } from './order-files/model'

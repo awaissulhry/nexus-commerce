@@ -45,7 +45,7 @@ import { bandMenuFor, bandStepOf } from '../../model' // F-OP-311 (oo-walk #10):
 import type { NextStep } from '../../model' // F-OS-101 (L10): the band's step on the Shipments tab
 import type { NoticeWords } from '../record-model' // F-OS-204
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
 import { TabLink } from '../../../../../lib/tab-link/TabLink' // F-OP-210
 // ---- B-TH-256: what points at the order (its complaints and returns, planning's re-promises, the gates' refusals) ----

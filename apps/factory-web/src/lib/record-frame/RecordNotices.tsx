@@ -3,9 +3,10 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@nexus/ui/primitives'
-import { useT } from '../../../lib/i18n/provider'
-import { WithMessages } from '../../../record-panels/i18n'
-import { FRAME_NS } from './RecordFrame'
+import { useT } from '../i18n/provider'
+import { WithMessages } from '../../record-panels/i18n'
+import { FRAME_NS } from './model'
+import './record-notices.css'
 
 /**
  * The record's ONE notice (O-SAL-ORD-REC.notice; G.3 of the tree): the notices as children, most serious first; the first shows and

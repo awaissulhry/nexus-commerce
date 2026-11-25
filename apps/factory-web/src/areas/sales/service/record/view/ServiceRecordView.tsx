@@ -8,7 +8,7 @@ import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { Freshness, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
 // ---- B-TH-259: the case on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import type { CaseRecord } from '../../api'
 import { actionHeld, coverDraftOf, emptyReturnDraft, MOVE_ACTIONS, mailStatusKey, personPhrase, primaryOf, RECORD_TABS, recordHref, repairDraftOf, type MoveAction } from '../../model'
 import { KindTag, NoticeLine, PriorityTag, ServiceMessages, StatusPill, useWords } from '../../parts'

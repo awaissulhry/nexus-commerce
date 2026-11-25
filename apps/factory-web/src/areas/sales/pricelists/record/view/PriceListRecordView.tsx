@@ -11,7 +11,7 @@ import { archiveHeld, isWideTab, nextVersionHeld, RECORD_TABS } from '../../mode
 import { Freshness, KindTag, PriceListsMessages, RecordState, say, StatePill, useDepthWords, useSayAny, useValidity, useWords } from '../../parts'
 // ---- B-TH-258: the price list on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 // B-W2b-343: Breaks & surcharges, the import, the version's export and the price list PDF.
 import { exportHref } from '../../depth/api'
 import { BreaksTab } from './BreaksTab'

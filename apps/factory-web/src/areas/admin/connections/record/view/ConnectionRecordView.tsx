@@ -15,7 +15,7 @@ import { INBOUND_STATUSES, type InboundDelivery, type IntegrationAccount, type I
 import { CALL_TONE, CONNECTION_TABS, FAILED_CALL, INBOUND_TONE, KNOWN_REASONS, KNOWN_SETTINGS, MODE_TONE, isTestMode, nextSwitch, type ConnectionRecordModel, type PauseConfirm } from '../../model'
 // ---- B-TH-269: the connection on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { SwitchConfirm, useStateWords } from '../../view/ConnectionsView'
 import { ConnectionsMessages, ConnNotice, SecretField } from '../../view/parts'
 

@@ -1,5 +1,5 @@
 import type { Tone } from '@nexus/ui/primitives'
-import type { DockDefault } from '../../_shared/record-frame/model' // F-OP-316
+import type { DockDefault } from '../../../lib/record-frame/model' // F-OP-316 (pp-k1 k1.2: the frame's core)
 import { isApiError, issuePath } from '../../../lib/api/errors'
 // F-PR-01: the one progress rule lives with the shared production parts (office and portal).
 import { percentOf, progressFigure, type ProgressFigure } from '../../../lib/production/model'
