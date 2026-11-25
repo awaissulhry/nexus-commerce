@@ -179,7 +179,9 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     await changePromise(office(), so1, { version: so1Version, promiseDate: addDays(TODAY, 90), reason: 'Buyer pays late: keep them waiting', lineIds: [line.id] })
 
     const record = await ok(browsers.buyer, `/portal/sales-orders/${so2}`)
-    expect(record.order).toMatchObject({ number: 'SEED-SO-0002', customerRef: 'SEED-PO-78', status: 'PARTLY_SHIPPED', words: { en: 'Partly shipped' }, promiseDate: moved, promiseMoved: true, reconfirmNeeded: false })
+    // pp-s s.1 (O3-W1): no office series in the customer's order (PG-O1 below); its PO and its own number name it.
+    expect(record.order).not.toHaveProperty('number')
+    expect(record.order).toMatchObject({ customerRef: 'SEED-PO-78', status: 'PARTLY_SHIPPED', words: { en: 'Partly shipped' }, promiseDate: moved, promiseMoved: true, reconfirmNeeded: false })
     expect(typeof record.order.netAmount).toBe('number')
     const today = businessDate(new Date())
     expect(record.milestones.map((step: Json) => [step.key, step.state, step.current])).toEqual([
@@ -220,6 +222,29 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect((await browsers.other.get(`/portal/sales-orders/${so2}`)).status).toBe(404)
     expect((await browsers.designer.get(`/portal/sales-orders/${so2}`)).status).toBe(403)
   })
+
+  // ── pp-s s.1 PG-O1 (O3-W1; plan §0.5 "counts do not leak"): the customer's order names itself by its PO and the customer's own number,
+  // never the office's series (a count across every customer of the factory); another customer's order is as unknown as a wrong id ──
+  it('PG-O1: the customer reads its own order with no office series anywhere in the answer; another customer gets 404 and no series', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    const series = (await admin<{ number: string }>('SELECT number FROM "SalesOrder" WHERE "tenantId" = $1 ORDER BY number', [T])).map((row) => row.number)
+    expect(series).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002', 'SEED-SO-0003']))
+    const own = await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [so2])
+    for (const browser of [browsers.buyer, browsers.viewer]) {
+      const record = await ok(browser, `/portal/sales-orders/${so2}`)
+      expect(record.order).not.toHaveProperty('number')
+      expect(record.order).toMatchObject({ id: so2, customerRef: 'SEED-PO-78' })
+      expect(record.order.yourNumber?.seq ?? null).toBe(own.customerSeq)
+      const text = JSON.stringify(record)
+      for (const number of series) expect(text, number).not.toContain(number)
+      // A series of the office's shape (SO-2026-0142) nowhere either.
+      expect(text).not.toMatch(/\b[A-Z]+-\d{4}-\d+/)
+    }
+    const other = await browsers.other.get(`/portal/sales-orders/${so2}`)
+    expect(other.status).toBe(404)
+    for (const number of series) expect(JSON.stringify(other.body), number).not.toContain(number)
+  })
+  // ── end pp-s PG-O1 ──
 
   // ── B-OM-005 (order money tab M3-B6, M1-S4): a part payment shows to the customer, with what is still to pay ──
   it('B-OM-005: a deposit paid in part shows what is paid and the order’s still to pay; a viewer reads neither; another customer gets 404', async () => {

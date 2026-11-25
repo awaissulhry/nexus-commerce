@@ -496,8 +496,11 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     }
     expect(problems).toEqual([])
     expect(keys.filter((key) => !called.has(key) && !NOT_SWEPT[key])).toEqual([])
-    // Brand Alpha's own record answers its own portal (the control: the sweep's ids are real).
-    expect(await asBrand(alpha, seen, 'GET', `/portal/sales-orders/${id('sales:SO1')}`)).toMatchObject({ order: { number: 'SEED-SO-0001' } })
+    // Brand Alpha's own record answers its own portal (the control: the sweep's ids are real). pp-s s.1: by its id and its own
+    // number — the office's series is in no customer's order.
+    const alphaOrder = await asBrand(alpha, seen, 'GET', `/portal/sales-orders/${id('sales:SO1')}`)
+    expect(alphaOrder).toMatchObject({ order: { id: id('sales:SO1') } })
+    expect(alphaOrder.order).not.toHaveProperty('number')
     G.statuses = statuses
   })
 

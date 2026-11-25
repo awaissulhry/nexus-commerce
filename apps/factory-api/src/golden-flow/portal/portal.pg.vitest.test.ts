@@ -397,7 +397,10 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     expect((list.items as Json[]).map((item) => item.id)).toEqual(expect.arrayContaining([id('sales:SO1'), so2]))
     expect((list.items as Json[]).filter((item) => item.kind === 'ORDER').every((item) => item.number === null && item.yourNumber?.seq > 0)).toBe(true)
     const record = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}`)
-    expect(record).toMatchObject({ order: { number: 'SEED-SO-0002' }, productionLevel: 'STATUS' }) // B-PR-40: the level, the old switch dropped
+    expect(record).toMatchObject({ order: { id: so2 }, productionLevel: 'STATUS' }) // B-PR-40: the level, the old switch dropped
+    // pp-s s.1 (O3-W1): the customer's order carries its own number, never the office's series.
+    expect(record.order).not.toHaveProperty('number')
+    expect(record.order.yourNumber?.seq).toBeGreaterThan(0)
     G.so2Line = record.lines[0]
     const off = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`, undefined, 404)
     expect(off.error.message).toMatch(/not shared/)
