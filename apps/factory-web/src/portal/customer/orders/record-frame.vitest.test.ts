@@ -136,7 +136,6 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
     fileHeld: null,
     openLine: null,
     copied: null,
-    historyOpen: false,
     dialog: null,
     frame: { mode: 'docked' },
     madeFrom: { kind: 'request', href: `${PREFIX_BETA}/orders/requests/${BRAND_BETA.ids.thread}`, label: '#2' },
@@ -147,7 +146,8 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
 function betaCase(record: OrderRecord, tab: RecordTab, over: Partial<OrderRecordViewModel> = {}): CustomerCaseBuilder {
   return (locale) => ({
     // pp-w1 (w1.1): the frame's "Messages (2 new)" rides in the band (the design's band carries it: withThreadButton).
-    shell: shellOf(locale, withThreadButton(orderBandOf({ words: orderWords(locale), record, prefix: PREFIX_BETA, facts: FACTS }), betaModel(record, { tab, ...over }).frame), {
+    // pp-w2: "Made from your request #2" is the band's (the Overview draws it no more), from the page's summary read.
+    shell: shellOf(locale, withThreadButton(orderBandOf({ words: orderWords(locale), record, prefix: PREFIX_BETA, facts: { ...FACTS, madeFrom: betaModel(record, { tab, ...over }).madeFrom ?? null } }), betaModel(record, { tab, ...over }).frame), {
       partyName: BRAND_BETA.legalName,
       person: { displayName: BRAND_BETA.portalPerson.name, email: BRAND_BETA.portalPerson.email },
       prefix: PREFIX_BETA,

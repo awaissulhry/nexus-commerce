@@ -411,7 +411,7 @@ describe('SCR-184 design cases', () => {
       const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(listScreen.view, { model: entry.model })))
       expect(html).not.toMatch(/€/)
     }
-    for (const id of ['status-no-prices', 'lines-no-prices']) {
+    for (const id of ['overview-no-prices', 'ov-noprice', 'ov-prod-designer', 'lines-no-prices']) {
       const entry = recordScreen.cases.find((item) => item.id === id)!
       const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell', 'portal']) }, createElement(recordScreen.view, { model: entry.model })))
       expect(html, id).not.toMatch(/€/)
