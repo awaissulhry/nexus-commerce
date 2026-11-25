@@ -28,7 +28,7 @@ import {
 import { withThreadButton } from '../../../shell/fixtures' // pp-fx3: from the shell's fixtures (design-data is no fixture file: check-view-boundaries)
 import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
 // B-TH-275: the customer's own reference in the pop-ups; what the order was made from.
-import { orderRefOf } from '../model'
+import { orderNameOf, orderRefOf } from '../model'
 import { CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { CustomerCase, type CustomerCaseBuilder } from '../view/CustomerCase'
 import type { OrderDialog, OrderRecordViewModel } from '../view/OrderRecordView'
@@ -101,7 +101,9 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
   return (locale) => {
     const record = input.record ?? orderRecord()
     const tab = input.tab ?? 'overview'
-    const model = recordModel(record, { tab, ...(input.model?.(locale) ?? {}) })
+    const built = recordModel(record, { tab, ...(input.model?.(locale) ?? {}) })
+    // pp-fx4 (walk W-17): every pop-up names the order as the band does ("Your order 11"), in the case's language.
+    const model = built.dialog && 'number' in built.dialog.model ? { ...built, dialog: { ...built.dialog, model: { ...built.dialog.model, number: orderNameOf(record.order, locale, orderWords(locale).t) } } as OrderDialog } : built
     const facts: OrderBandFacts = {
       ask: { held: null }, // pp-w1 (w1.2): the ONE "Ask for a change…"
       cancelHeld: null,
@@ -120,7 +122,8 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
   }
 }
 
-/** B-TH-275: a design order's own reference (#11): the pop-ups name the customer's number, never the office's SO- series. */
+/** B-TH-275: a design order's own reference (#11): the pop-ups name the customer's number, never the office's SO- series. pp-fx4
+ * (walk W-17): recordCase names it as the band does ("Your order 11") in the case's language. */
 const own = (record: OrderRecord): string => orderRefOf(record.order, () => '—')
 
 const RECORD = orderRecord()

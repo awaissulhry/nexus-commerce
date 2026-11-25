@@ -245,7 +245,7 @@
     "whatChanged_one": "Cosa cambia (1 modifica)",
     "whatChanged_other": "Cosa cambia ({count} modifiche)",
     "title": "Riconferma l’ordine, versione {version}",
-    "due": "Ordine {number} · rispondete entro il {date}",
+    "due": "{number} · rispondete entro il {date}",
     "why": "Perché è cambiato: {reason}",
     "choose": "La vostra risposta",
     "approve": "Conferma la versione {version}",
@@ -466,7 +466,7 @@
     "colourwayChanged": "Variante colore cambiata"
   },
   "cancel": {
-    "title": "Chiedi di annullare l’ordine {number}",
+    "title": "Chiedete di annullare · {number}",
     "failed": "Non è stato possibile leggere cosa si può annullare",
     "hint": "Controlliamo la richiesta e rispondiamo qui e via e-mail. Nulla è annullato finché non la accettiamo.",
     "what": "Cosa annullare",
@@ -512,7 +512,7 @@
   },
   "pay": {
     "title": "Paga l’acconto",
-    "purpose": "Acconto per l’ordine {number}",
+    "purpose": "Acconto · {number}",
     "fakeProvider": "il fornitore di pagamento di prova",
     "fakeNote": "Solo pagamenti di prova: nessuna carta viene addebitata. Scegliete cosa fa la banca.",
     "method": {
@@ -685,7 +685,7 @@
     }
   },
   "ask": {
-    "title": "Richiesta · {number}",
+    "title": "Chiedete una modifica · {number}",
     "step": {
       "what": "Passo 1 di 3 · Cosa desiderate",
       "details": "Passo 2 di 3 · I dettagli",

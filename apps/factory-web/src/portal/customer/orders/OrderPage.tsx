@@ -72,7 +72,6 @@ import {
   tabOf,
   // B-TH-275
   madeFromOf,
-  orderRefOf,
   type SummaryParent,
   type CancelDraft,
   type ChangeDraft,
@@ -979,7 +978,7 @@ function OrderContainer({ id }: { id: string }) {
           model: {
             state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
             // B-TH-275: the customer's own reference (#12), never the office's SO- series.
-            number: orderRefOf(record.order, t),
+            number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
             rules: rules.read,
             draft: dialog.draft,
             // F-PR-13: Send waits for what it means (read, nothing blocked).
@@ -996,14 +995,14 @@ function OrderContainer({ id }: { id: string }) {
         ? {
             kind: 'cancel',
             // F-PR-13: Send waits for what it means (read, nothing blocked).
-            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
+            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderNameOf(record.order, locale, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
           }
         : dialog.kind === 'ask' // F-PR-13
           ? {
               kind: 'ask',
               model: {
                 state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
-                number: orderRefOf(record.order, t),
+                number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
                 rules: rules.read,
                 step: dialog.step,
                 kind: dialog.ask,
@@ -1040,7 +1039,7 @@ function OrderContainer({ id }: { id: string }) {
         : dialog.kind === 'reconfirm'
           ? {
               kind: 'reconfirm',
-              model: { state: dialog.state, page: dialog.page, number: orderRefOf(record.order, t), decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
+              model: { state: dialog.state, page: dialog.page, number: orderNameOf(record.order, locale, t), decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
             }
           : dialog.kind === 'pay'
             ? (() => {
@@ -1052,7 +1051,7 @@ function OrderContainer({ id }: { id: string }) {
                   kind: 'pay' as const,
                   model: {
                     amount: words.money(item?.open ?? deposit?.amount ?? null, deposit?.currency ?? record.order.currency),
-                    number: orderRefOf(record.order, t),
+                    number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
                     methods: openItems?.card.methods ?? [],
                     method: dialog.method,
                     state: paymentStateOf(dialog.phase, dialog.intent),

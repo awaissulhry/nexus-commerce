@@ -29,6 +29,7 @@ import { rulesSchema } from './api'
 import { linePictureOf } from './view/AskDialog'
 import { ChangeStep } from './view/Dialogs' // pp-fx4 (walk W-05)
 import { EMPTY_CHANGE } from './model' // pp-fx4 (walk W-05)
+import { designScreen as recordScreen } from './record/fixtures' // pp-fx4 (walk W-17)
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3 "Brand asks, we decide", §5; 06-tree B.2 P-ORD-ask; wall PW-P06): step 1
@@ -542,3 +543,22 @@ describe('pp-fx4 W-05: one Ask pop-up — the band and a line’s ⋯ open the s
   })
 })
 // ---- end pp-fx4 W-05
+
+// ---- pp-fx4 (walk W-17; P0-B12 one name): the order is "Your order N" in every pop-up, as in the band ----
+describe('pp-fx4 W-17: every pop-up names the order as the band does; the band’s "Ask for a change…" opens "Ask for a change · Your order N"', () => {
+  it('the page hands every pop-up the band’s name (never "#n"); the titles carry it', () => {
+    const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+    expect(page.match(/number: orderNameOf\(record\.order, locale, t\)/g)?.length).toBe(5)
+    expect(page).not.toMatch(/number: orderRefOf\(/)
+    const en = CATALOGUE.en['portal-orders']!
+    const it = CATALOGUE.it['portal-orders']!
+    expect([en['ask.title'], en['cancel.title'], en['reconfirm.due'], en['pay.purpose']]).toEqual(['Ask for a change · {number}', 'Ask to cancel · {number}', '{number} · please answer by {date}', 'Deposit · {number}'])
+    expect([it['ask.title'], it['cancel.title']]).toEqual(['Chiedete una modifica · {number}', 'Chiedete di annullare · {number}'])
+    for (const locale of ['en', 'it'] as const) {
+      const entry = recordScreen.cases.find((item) => item.id === 'change')!
+      const built = entry.model(locale) as { body: { model: { dialog: { model: { number: string } } } } }
+      expect(built.body.model.dialog.model.number, locale).toBe(locale === 'en' ? 'Your order 11' : 'Il vostro ordine 11')
+    }
+  })
+})
+// ---- end pp-fx4 W-17
