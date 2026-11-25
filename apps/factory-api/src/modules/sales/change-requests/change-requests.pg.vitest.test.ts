@@ -157,7 +157,9 @@ describe('the rules before the click (SAL-078)', { timeout: SLOW_TEST_TIMEOUT_MS
   it('shows per line what may change or be cancelled, and holds the line whose leather was cut', async () => {
     const so2 = await orderOf('SEED-SO-0002')
     const rules = await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests/rules`)
-    expect(rules.order).toMatchObject({ number: 'SEED-SO-0002', status: 'CONFIRMED' })
+    // pp-s s.2 (O3-W1): the order by id, never the office's series (PG-O1 part 2 below).
+    expect(rules.order).not.toHaveProperty('number')
+    expect(rules.order).toMatchObject({ id: so2.id, status: 'CONFIRMED' })
     expect(rules.change.code).toBe('FREE')
     // A cancel after cutting started is refused for the whole order, with the day of the first cut.
     expect(rules.cancel).toMatchObject({ possible: false, code: 'LEATHER_CUT', day: '2026-10-30', words: { en: 'Not possible: the leather was cut on 30 Oct', it: 'Non possibile: la pelle è stata tagliata il 30 ott' } })
@@ -234,7 +236,9 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
     const asked = await browsers.buyer.post(`/portal/sales-orders/${so1.id}/change-requests`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '52', quantity: 6 }, { lineId: red!.id, size: '54', quantity: 0 }], requestedDate: wanted, shipToAddressId: address.id, note: 'Our season starts earlier.' }, { headers: { 'idempotency-key': 'change-request-so1-1' } })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
     const request = asked.body.request
-    expect(request).toMatchObject({ kind: 'CHANGE', status: 'OPEN', words: { en: 'Waiting for our answer' }, orderNumber: 'SEED-SO-0001', requestedDate: wanted, mine: true, wholeOrder: false, note: 'Our season starts earlier.' })
+    // pp-s s.2 (O3-W1): the customer's request names its order by id, never the office's series.
+    expect(request).not.toHaveProperty('orderNumber')
+    expect(request).toMatchObject({ kind: 'CHANGE', status: 'OPEN', words: { en: 'Waiting for our answer' }, orderId: so1.id, requestedDate: wanted, mine: true, wholeOrder: false, note: 'Our season starts earlier.' })
     expect(request.cells.map((cell: Json) => [cell.seq, cell.size, cell.before, cell.asked])).toEqual([
       [10, '52', 4, 6],
       [20, '54', 1, 0],
@@ -633,6 +637,49 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
     expect(waiting(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`)).cancelFee).toBeNull()
     expect(JSON.stringify(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`))).not.toMatch(/"pct"|totalFee|"fee"/)
   })
+
+  // ── pp-s s.2 PG-O1 part 2 (O3-W1; plan §0.5 "counts do not leak"): the order's requests, its rules and an ask's impact name the order
+  // by id and the customer's PO — never the office's series (a count across every customer); another customer reads none (404) ──
+  it('PG-O1 (part 2): the requests, the rules and the impact the customer reads hold no office series; another customer gets 404 and no series', async () => {
+    const so1 = await orderOf('SEED-SO-0001')
+    const so3 = await orderOf('SEED-SO-0003')
+    const [blk] = await linesOf(so1.id)
+    const series = (await admin<{ number: string }>('SELECT number FROM "SalesOrder" WHERE "tenantId" = $1 ORDER BY number', [T])).map((row) => row.number)
+    expect(series).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002', 'SEED-SO-0003']))
+    const noSeries = (answer: unknown, what: string) => {
+      const text = JSON.stringify(answer)
+      for (const number of series) expect(text, `${what}: ${number}`).not.toContain(number)
+      // A series of the office's shape (SO-2026-0142) nowhere either.
+      expect(text, what).not.toMatch(/\b[A-Z]+-\d{4}-\d+/)
+    }
+    const rules = await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)
+    expect(rules.order).not.toHaveProperty('number')
+    expect(rules.order.id).toBe(so1.id)
+    noSeries(rules, 'rules')
+    // SEED-SO-0003's requests (its waiting cancel of the B-PR-23 block among them), as the buyer and the viewer read them.
+    for (const browser of [browsers.buyer, browsers.viewer]) {
+      const requests = await ok(browser, `/portal/sales-orders/${so3.id}/change-requests`)
+      expect((requests.items as Json[]).length).toBeGreaterThan(0)
+      for (const row of requests.items as Json[]) {
+        expect(row).not.toHaveProperty('orderNumber')
+        expect(row.orderId).toBe(so3.id)
+      }
+      noSeries(requests, 'requests')
+    }
+    const impact = await post(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '50', quantity: 3 }], requestedDate: addDays(TODAY(), 40) })
+    expect(impact.status, JSON.stringify(impact.body)).toBe(200)
+    expect(Object.keys(impact.body.order).sort()).toEqual(['customerRef', 'id'])
+    noSeries(impact.body, 'impact')
+    // Another customer: the order's rules, requests and impact are as unknown as a wrong id, and no answer names a series.
+    const refused = [
+      await browsers.other.get(`/portal/sales-orders/${so1.id}/change-requests/rules`),
+      await browsers.other.get(`/portal/sales-orders/${so3.id}/change-requests`),
+      await post(browsers.other, `/portal/sales-orders/${so1.id}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '50', quantity: 3 }], requestedDate: addDays(TODAY(), 40) }),
+    ]
+    expect(refused.map((answer) => answer.status)).toEqual([404, 404, 404])
+    for (const answer of refused) noSeries(answer.body, 'refused')
+  })
+  // ── end pp-s PG-O1 part 2 ──
 })
 // ── end B-PR-25
 

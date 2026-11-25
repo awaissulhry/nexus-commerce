@@ -469,6 +469,8 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
       .filter(([key, entry]) => key.startsWith('GET ') && entry.audiences !== 'public' && (entry.audiences.includes('partner') || entry.audiences.includes('link')))
     // Not vacuous: the registry holds the portal, link, file, thread and field routes the plan names.
     const keys = routes.map(([key]) => key)
+    // pp-s: + the order's requests and their rules (the customer's order page reads them; their partner answers name no series).
+    expect(keys).toEqual(expect.arrayContaining(['GET /portal/sales-orders/:orderId/change-requests', 'GET /portal/sales-orders/:orderId/change-requests/rules']))
     expect(keys).toEqual(expect.arrayContaining(['GET /portal/sales-orders/:orderId', 'GET /files/:fileId', 'GET /files/:fileId/download', 'GET /threads/:recordType/:recordId', 'GET /fields/portal/:recordType/:recordId', 'GET /link/share', 'GET /payments/link/pay']))
     const problems: string[] = []
     const called = new Set<string>()
