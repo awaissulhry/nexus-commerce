@@ -577,3 +577,29 @@
   gap: var(--nds-space-6);
 }
 /* ---- end od-w1.2 */
+
+/* ---- od-w2.6 (10-design § 8): on a phone the host's Send / Confirm sits in a sticky bar at the foot of the page; its card's own
+   button hides there (one button on screen at a time). Tokens only. */
+.fw-od-actionbar {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .fw-od-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: stretch;
+    padding: var(--nds-space-8) 0;
+    border-top: 1px solid var(--nds-border-subtle);
+    background: var(--nds-surface);
+  }
+  .fw-od-actionbar > * {
+    flex: 1 1 auto;
+  }
+  .fw-od-hostgo {
+    display: none;
+  }
+}
+/* ---- end od-w2.6 */
