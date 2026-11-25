@@ -852,7 +852,7 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
     expect(container).toContain('setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))')
     // tw- fx2 (G-3): centred in its LIST only (never scrollIntoView, which also scrolled the office page).
     expect(container).toMatch(/centreInList\(target\) \/\/ tw- fx2 \(G-3\): the list scrolls, never the page\s*target\?\.focus\(\{ preventScroll: true \}\)/)
-    for (const file of ['../../../lib/record-thread/feed/view/Feed.tsx', './DockedOfficeThread.tsx', './use-record-thread.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('scrollIntoView(')
+    for (const file of ['../../../lib/record-thread/feed/view/Feed.tsx', '../../../lib/record-thread/feed/use-feed-shell.ts', '../../../lib/record-thread/feed/view/FeedShell.tsx' /* pt-w1 W1.3 */, './DockedOfficeThread.tsx', './use-record-thread.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('scrollIntoView(')
     expect(container).not.toMatch(/setAnchor\(messageId\)/)
     expect(container).toMatch(/\n\s*flash,\n\s*pins: pinPills,/)
   })

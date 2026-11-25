@@ -1,6 +1,6 @@
 import type { CardMessage } from '../card/model'
 import { dayOf, THREAD_TIME_ZONE } from '../parts/time'
-import { runPlace, type RunPlace } from './runs'
+import { runPlace, type RunMessage, type RunPlace } from './runs'
 
 /**
  * B-TH-204 — the record thread's feed (threads plan T4; picture 1, approved 2026-11-17): the order and rhythm of a record's
@@ -126,12 +126,19 @@ export function whoWords(event: Pick<FeedEvent, 'who' | 'whoHidden' | 'actorAudi
   return { key: `who.${event.actorAudience}` }
 }
 
-export type FeedRow =
+/**
+ * pt-w1 W1.3 (lane pt-, S4): the narrow message the rows need — its id, its time, its sender key, mine, theirs / ours (a run never mixes
+ * an office note with a shared message), and whether it starts with a block (its quote, correction or files). The office card's message
+ * and the portal's partner message (pt-w2) both fit; the rows carry the host's own message back to it.
+ */
+export type FeedRowMessage = RunMessage & { readonly id: string }
+
+export type FeedRow<M extends FeedRowMessage = CardMessage> =
   | { kind: 'day'; key: string; day: string }
   // B-TH-229 / tw- W1.3: "3 unread messages" above the first message new to the reader (T4-F04); `count` the reader's new messages.
   | { kind: 'new'; key: string; count: number }
   // tw- W1.1: a message and its place in a run (runs.ts).
-  | { kind: 'message'; key: string; message: CardMessage; run: RunPlace }
+  | { kind: 'message'; key: string; message: M; run: RunPlace }
   | { kind: 'step'; key: string; event: FeedEvent }
   // F-OP-214: 2+ consecutive record steps of the same actor within an hour, one pill ("5 steps by Nexus Factory · Show").
   | { kind: 'steps'; key: string; events: readonly FeedEvent[] }
@@ -148,8 +155,8 @@ export interface FeedPin {
   readonly by: string
 }
 
-export interface FeedRowsInput {
-  messages: readonly CardMessage[]
+export interface FeedRowsInput<M extends FeedRowMessage = CardMessage> {
+  messages: readonly M[]
   events: readonly FeedEvent[]
   timeZone?: string
   // ---- B-TH-229: the reader's own reading as it was on arrival (the thread's `reading`, B-TH-027)
@@ -167,21 +174,21 @@ export interface FeedRowsInput {
 /** tw- W1.1 (B15): ONE order for the feed's messages and rows — time, then id — the view's J / K and "seen" use it too. */
 export const byTime = <T extends { at: string; id: string }>(a: T, b: T): number => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1)
 
-/** The rows of the feed, oldest first. */
-export function feedRows(input: FeedRowsInput): FeedRow[] {
+/** The rows of the feed, oldest first (pt-w1 W1.3: of the host's own messages, office or partner). */
+export function feedRows<M extends FeedRowMessage = CardMessage>(input: FeedRowsInput<M>): FeedRow<M>[] {
   const timeZone = input.timeZone ?? THREAD_TIME_ZONE
   const firstNewId = input.firstNewId ?? null
   const newCount = input.newCount ?? 0
   const sorted = [...input.messages].sort(byTime)
 
-  type Item = { at: string; id: string; message?: CardMessage; event?: FeedEvent; pin?: FeedPin }
+  type Item = { at: string; id: string; message?: M; event?: FeedEvent; pin?: FeedPin }
   const items: Item[] = [
     ...sorted.map((message) => ({ at: message.at, id: message.id, message })),
     ...input.events.map((event) => ({ at: event.at, id: event.id, event })),
     ...(input.pins ?? []).map((pin) => ({ at: pin.at, id: `pin:${pin.messageId}`, pin })),
   ].sort(byTime)
 
-  const rows: FeedRow[] = []
+  const rows: FeedRow<M>[] = []
   let lastDay: string | null = null
   const dayLine = (at: string) => {
     const day = dayOf(at, timeZone)
