@@ -11,12 +11,13 @@ import { productionOrderSchema, type ProductionGates, type ProductionOrder } fro
 import { holdsOf, stageNoteOf, waitingHrefOf } from '../production/model'
 import { gatesEmpty, gatesWaitOnYou, piecesOf, productionOwnsProgress } from '../production/model' // F-PR-12b
 import type { ChangeRequest, OrderRecord } from './api'
-import { at, dayAt, documentsRead, ORDER_ID, orderRecord, progressRead, requestsOf, shipmentsRead } from './design-data'
+import { at, dayAt, documentsRead, ORDER_ID, orderRecord, orderWords, progressRead, requestsOf, shipmentsRead } from './design-data'
 import type { OrderRecordActions, OrderRecordViewModel } from './view/OrderRecordView'
-import { StatusTab } from './view/StatusTab'
+import { OverviewTab } from './view/OverviewTab' // pp-w2 (t.1): moved from status-production onto the Overview
+import { bandChipsOf, bandProductionOf } from './band'
 
 /**
- * F-PR-12a — the portal order › Status & progress, part 1 (production plan §4, §5; 06-tree B.2; wall PW-P02): while the order is
+ * F-PR-12a — the portal order › Overview (pp-w2; was Status & progress), part 1 (production plan §4, §5; 06-tree B.2; wall PW-P02): while the order is
  * in production and the person sees production, "We are waiting for you on this order" (to Waiting for you, until it exists Home),
  * the hold banner in our curated words at every level (the most serious, the rest counted; "Ask a question"), where it is — the
  * plain stage as the note of the "In production" step with the count from + Progress, the health chip with its reason code and who
@@ -76,7 +77,6 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
     fileHeld: null,
     openLine: null,
     copied: null,
-    historyOpen: false,
     dialog: null,
     production: { state: 'ready', read: production() },
     waitingHref: waitingHrefOf(PREFIX),
@@ -85,11 +85,9 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
 }
 
 const ACTIONS: OrderRecordActions = { onAsk: () => undefined, onRetryProduction: () => undefined }
-const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en', record = betaRecord()) => render(createElement(StatusTab, { model: model(record, over), record, actions: ACTIONS }), locale)
-/** The names of the tables drawn (a DS SummaryTable names itself by `aria-label`, not by a visible caption): read by role and name. */
-const tableNames = (html: string) => [...html.matchAll(/<table\b[^>]*\baria-label="([^"]*)"/g)].map((match) => textOf(match[1]!))
+const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en', record = betaRecord()) => render(createElement(OverviewTab, { model: model(record, over), record, actions: ACTIONS }), locale)
 
-describe('the order’s production on Status & progress, part 1 (every level)', () => {
+describe('the order’s production on the Overview, part 1 (every level): the lead card’s strips and steps', () => {
   it('waiting for you on this order, with the way to what waits (Waiting for you, F-PR-14)', () => {
     const html = draw()
     const text = textOf(html)
@@ -121,8 +119,11 @@ describe('the order’s production on Status & progress, part 1 (every level)', 
   it('where it is: the stage is the note of "In production" with the count from + Progress; health with its reason; who acts next', () => {
     const text = textOf(draw())
     expect(text).toContain('Sewing · 32 of 40 sewn · 1 line ahead')
-    expect(text).toContain('At risk')
-    expect(text).toContain('Waiting on you')
+    // pp-w2 (L6, lead 11-25): the health chip is the band's only; who waits is the lead card's strip.
+    expect(text).not.toContain('At risk')
+    expect(bandChipsOf(orderWords('en'), { production: bandProductionOf(production(), true) })?.health).toEqual({ computed: 'AT_RISK', raised: { reason: 'MATERIAL_LATE' } })
+    expect(text).toContain('We are waiting for you on this order')
+    expect(text).toContain(`${betaRecord().order.words.en} · Sewing`)
     // In Italian, the same facts in Italian words.
     const it = textOf(draw({}, 'it'))
     expect(it).toContain('Confezione · 32 di 40 cuciti · 1 riga avanti')
@@ -203,7 +204,7 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
   it('the words exist in both languages', () => {
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale]['portal-orders']!
-      for (const key of ['production.label', 'production.waitingTitle', 'production.waitingSince', 'production.waitingLink', 'production.ask', 'production.health', 'production.waitingOn', 'production.failed']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['production.waitingTitle', 'production.waitingSince', 'production.waitingLink', 'production.ask', 'production.failed', 'overview.strips', 'strip.deposit']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
   })
 })
@@ -251,11 +252,11 @@ const atGates = (over: Partial<ProductionOrder> = {}) => production({ level: 'GA
 const ready = (read: ProductionOrder): Partial<OrderRecordViewModel> => ({ production: { state: 'ready', read } })
 const TU_FORM = /\b(tu|tuo|tua|tuoi|tue|te|ti)\b/i
 
-describe('the order’s production on Status & progress, part 2 (by level)', () => {
+describe('the order’s production on the Overview, part 2 (by level): Progress by line, Next dates', () => {
   it('+ Progress: per line and size of its own cells — Cut and bundled, "—" where sewing is not counted, never 0; updated on a timer', () => {
     const html = draw(ready(production({ progress: withPieces() })))
     const text = textOf(html)
-    expect(text).toContain('Production progress')
+    expect(text).toContain('Progress by line')
     expect(text).toContain('Line 1 · JKT-DEMO-01 Nero')
     expect(text).toContain('Line 2 · PNT-DEMO-02 Sabbia')
     expect(text).toContain('Cut and bundled')
@@ -271,33 +272,38 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
     expect(textOf(draw({ ...ready(production({ progress: withPieces() })), offlineSince: at(0) }))).toContain('Offline · as of')
   })
 
-  it('today’s progress card is never drawn beside the production read’s; without the production read it stays as it was (C1)', () => {
+  // pp-w2 (w2.1, L7): ONE progress card — the production read's pieces; without that read (no right: Designer and Finance; not in
+  // production; its read failed) the old progress read draws the SAME grid (no second card, no old bars).
+  it('the pieces are drawn once: the production read’s; without it, the old progress read in the same grid; being read, its place', () => {
     const one = textOf(draw(ready(production({ progress: withPieces() }))))
-    expect(one.split('Production progress').length - 1).toBe(1)
+    expect(one.split('Progress by line').length - 1).toBe(1)
     expect(one).not.toContain('Counted from the floor scans')
-    // Being read: neither card yet (no second card that disappears).
-    expect(textOf(draw({ production: { state: 'loading', read: null } }))).not.toContain('Counted from the floor scans')
-    // No production right, not in production, or its read failed: today's card, as before.
-    expect(textOf(draw({ production: { state: 'hidden', read: null } }))).toContain('Counted from the floor scans')
-    expect(textOf(draw({ production: { state: 'error', read: null } }))).toContain('Counted from the floor scans')
+    expect(textOf(draw({ production: { state: 'loading', read: null } }))).toContain('Loading Progress by line')
+    for (const state of ['hidden', 'error'] as const) {
+      const text = textOf(draw({ production: { state, read: null } }))
+      expect(text.split('Progress by line').length - 1, state).toBe(1)
+      expect(text, state).toContain('Line 1 · JKT-DEMO-01 Nero')
+      expect(text, state).toContain('Cut and bundled')
+      expect(text, state).not.toContain('Counted from the floor scans')
+    }
   })
 
   it('a level without + Progress draws no pieces; one without + Gates & dates draws no gates (a section not shared is not drawn)', () => {
     const status = textOf(draw(ready(production({ level: 'STATUS', levelWords: w('Status only'), progress: null, gates: null }))))
-    for (const words of ['Production progress', 'Cut and bundled', 'Gates and dates', 'Cutting starts']) expect(status).not.toContain(words)
+    for (const words of ['Progress by line', 'Cut and bundled', 'PP sample', 'Cutting starts']) expect(status).not.toContain(words)
     const progress = textOf(draw(ready(production({ progress: withPieces(), gates: null }))))
     expect(progress).toContain('Cut and bundled')
-    expect(progress).not.toContain('Gates and dates')
+    expect(progress).not.toContain('PP sample')
   })
 
   it('+ Gates & dates: its real gates with our state words and their days, its swatch answers as approvals, our published days', () => {
     const html = draw(ready(atGates()))
     const text = textOf(html)
-    expect(text).toContain('Gates and dates')
+    expect(text).toContain('Next dates')
     for (const words of ['PP sample', 'Size set', 'Trims in', 'Leather approved']) expect(text).toContain(words)
     for (const words of ['Waiting on you', 'Waiting on us', 'Passed', 'Started before approval']) expect(text).toContain(words)
-    // Swatch answers are approvals, not gates: their own table (named by its aria-label).
-    expect(tableNames(html)).toContain('Your material approvals')
+    // Swatch answers are approvals, not gates: their own rows (sent / answered, never planned / done).
+    expect(text).toContain('Sent ')
     expect(text).toContain('Colour')
     expect(text).toContain('Fabric')
     expect(text).toContain('Approved')
@@ -323,8 +329,8 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
   it('Italian: the same sections in Italian words, and the customer is "voi" (never "tu")', () => {
     const html = draw(ready(atGates()), 'it')
     const text = textOf(html)
-    for (const words of ['Tappe e date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
-    expect(tableNames(html)).toContain('Le vostre approvazioni dei materiali')
+    for (const words of ['Prossime date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
+    expect(html).toContain('Avanzamento per riga')
     const words = CATALOGUE.it['portal-orders']!
     const mine = Object.entries(words).filter(([key]) => /^production\.(gates|approvals|planned|pieces)\./.test(key))
     expect(mine.length).toBeGreaterThan(20)
@@ -387,13 +393,13 @@ describe('the rules behind it (production/model, F-PR-12b block)', () => {
   it('the F-PR-12b words exist in both languages, with the same keys', () => {
     const keys = (locale: 'it' | 'en') => Object.keys(CATALOGUE[locale]['portal-orders']!).filter((key) => /^production\.(gates|approvals|planned|pieces)\./.test(key)).sort()
     expect(keys('it')).toEqual(keys('en'))
-    for (const key of ['production.gates.title', 'production.gates.states.WAITING_YOU', 'production.approvals.states.REFUSED', 'production.planned.hint', 'production.pieces.oneSize']) expect(keys('en')).toContain(key)
+    for (const key of ['production.gates.none', 'production.gates.states.WAITING_YOU', 'production.approvals.states.REFUSED', 'production.planned.hint', 'production.pieces.oneSize']) expect(keys('en')).toContain(key)
   })
 })
 
 // ---- B-SA-046b / B-SA-046c (14-change-flow §2.0 S6, S8; §2.4): a request's row says which pieces a design change is for, and whether
 // an accepted request is still being carried out — a code from the API, never a step, a work order or a name ----
-describe('B-SA-046b, B-SA-046c: the rows of your requests on Status & progress', () => {
+describe('B-SA-046b, B-SA-046c: the rows of Requests & changes on the Overview', () => {
   const base = () => requestsOf()[0]!
   const withRows = (...rows: ChangeRequest[]): Partial<OrderRecordViewModel> => ({ requests: { state: 'ready', items: rows.map((row) => ({ ...row, orderNumber: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef })) } })
   const accepted = (followUp: ChangeRequest['followUp']): ChangeRequest => ({ ...base(), status: 'ACCEPTED', words: w('Accepted', 'Accettata'), answeredAt: at(-1), followUp })
