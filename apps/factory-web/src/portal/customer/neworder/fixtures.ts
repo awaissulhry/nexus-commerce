@@ -20,6 +20,7 @@ import type { UploadRow } from '../../../lib/order-draft/view/files'
 import { describedLine, kindsRecord, mtmLine, RIDERS, SHEET_ON_MTM } from './design-data'
 import { EMPTY_PERSON, personProblems } from './model'
 import { draftViewOf, productRowsOf } from '../../../lib/order-draft/model'
+import { DRAFT_NS } from '../../../lib/order-draft/words'
 import { piecesModesOf } from '../../../lib/order-draft/view/RowWindows'
 import type { PersonDialogModel } from '../../../lib/order-draft/view/PeopleRoster'
 // ---- end F-CP-154
@@ -148,6 +149,9 @@ const UPLOADS = (locale: Locale): UploadRow[] => [
 const many = (count: number) => Array.from({ length: count }, (_, index) => fileOf(10 + (index % 80), `reference-${index + 1}.jpg`, 'image/jpeg'))
 // ---- end F-CP-151
 
+/** od-fx2: the shared draft part's own words (the draft's name). */
+const draftWords = (locale: Locale) => createTranslator(locale, CATALOGUE[locale][DRAFT_NS] ?? {})
+
 function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase = 'draft', beta = false): OrderingCaseBuilder {
   return (locale) => {
     const words = orderingWords(locale)
@@ -164,7 +168,8 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
       template: templateHref(locale),
       customerRef: view.sent?.customerRef ?? view.record?.request.customerRef ?? null,
       discardHeld: view.writeHeld ?? (discardKey ? words.t(discardKey) : null),
-      title: view.record ? draftTitleOf(view.record.request, words.t) : null,
+      // od-fx2: the draft's name is a word of the shared draft part (order-draft), as the page reads it (NewOrderPage).
+      title: view.record ? draftTitleOf(view.record.request, draftWords(locale), locale) : null,
       ask: view.record ? { type: 'PortalOrderRequest', id: view.record.request.id } : null,
     })
     // F-CP-150: the draft's conversation docked beside the draft and beside a draft no longer a draft (never on the start).

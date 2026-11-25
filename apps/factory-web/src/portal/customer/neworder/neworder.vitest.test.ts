@@ -45,7 +45,7 @@ import { orderingWordsFor } from './words'
 import { DRAFT_NS } from '../../../lib/order-draft/words' // od-w1.1
 // od-w1.2 (THE SIMPLE ORDER START R1): the mail, the products table, Still open, saved by — the shared part's model.
 import { choicesTyped, optionHeld, productRowsOf, rowPiecesWords, savedByWords, stillOpenEntries } from '../../../lib/order-draft/model'
-import { piecesModesOf } from '../../../lib/order-draft/view/RowWindows'
+import { PiecesBody, piecesModesOf } from '../../../lib/order-draft/view/RowWindows'
 import type { OrderingCaseBuilder } from './view/OrderingCase'
 // F-CP-154: lines of every kind, the People and sizes roster, "Your price".
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
@@ -325,6 +325,15 @@ const API_UPLOADS_CLOSED = 'Uploads from outside are closed for now: the virus s
 const renderCase = (locale: 'it' | 'en', id: string) => {
   const entry = (newOrderScreen as unknown as DesignScreen<unknown>).cases.find((item) => item.id === id)!
   return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement((newOrderScreen as unknown as DesignScreen<unknown>).view, { model: entry.model })))
+}
+
+/** od-fx2: a case's Pieces window as it holds it — a DS Modal draws only once hydrated, so its body is drawn on its own. */
+const renderPieces = (locale: 'it' | 'en', id: string) => {
+  const entry = (newOrderScreen as unknown as DesignScreen<OrderingCaseBuilder>).cases.find((item) => item.id === id)!
+  const body = entry.model(locale).body
+  const pieces = body.kind === 'neworder' ? body.model.dialogs.pieces : null
+  expect(pieces, `${id}: a Pieces window`).toBeTruthy()
+  return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, [DRAFT_NS, 'ds-words']) }, createElement(PiecesBody, { model: pieces! })))
 }
 
 describe('B-TH-220 — New order as an e-mail', () => {
@@ -1032,7 +1041,7 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     expect(personWhat(tommaso!, td('en'))).toBe('Sending later')
     expect(personWhat({ measureBy: 'SHEET', size: null, sheet: null }, td('en'))).toBe('a sheet no longer on the draft')
     // od-w1.2 (R3): the roster lives in the row's Pieces window (a custom size is by person).
-    const html = renderCase('en', 'od-pieces')
+    const html = renderPieces('en', 'od-pieces')
     for (const rider of RIDERS()) expect(html).toContain(rider.name)
     expect(html.indexOf('Andrea Esempio')).toBeLessThan(html.indexOf('Nico Esempio'))
     expect(html).toContain(`id="person-${andrea!.id}"`)
@@ -1084,7 +1093,7 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     expect(td('en')('draftPage.roster.privacy')).toContain('personal data')
     expect(td('it')('draftPage.roster.privacy')).toContain('dati personali')
     // od-w1.2 (R3): said in the row's Pieces window, where the people are typed.
-    for (const locale of ['it', 'en'] as const) expect(renderCase(locale, 'od-pieces'), locale).toContain(td(locale)('draftPage.roster.privacy'))
+    for (const locale of ['it', 'en'] as const) expect(renderPieces(locale, 'od-pieces'), locale).toContain(td(locale)('draftPage.roster.privacy'))
   })
 
   it('Your price by role: the customer’s Buyer, Finance and Admin type it; Designer, Production and Viewer never see a price (M-CP-2)', () => {
