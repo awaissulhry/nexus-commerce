@@ -196,7 +196,7 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
     const base = rules()
     const beta: ChangeRules = {
       ...base,
-      order: { ...base.order, number: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef },
+      order: { ...base.order, customerRef: BRAND_BETA.customerRef },
       lines: base.lines.map((line) => ({ ...line, style: { code: BRAND_BETA.numbers.style, name: 'Beta jacket' }, colourway: { code: 'BK', name: 'Black' } })),
       addresses: [{ id: 'b2b2b2b2-0000-4000-8000-000000000301', label: `${BRAND_BETA.legalName} — ${BRAND_BETA.address.line1}, ${BRAND_BETA.address.city}` }],
     }

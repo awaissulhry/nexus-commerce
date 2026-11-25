@@ -212,7 +212,7 @@ describe('Approve N: one list, ticked one by one, one typed name, no Undo', () =
 // ---- Ask N ---------------------------------------------------------------------------------------------------------------------
 const betaRules = (over: Partial<ChangeRules> = {}): ChangeRules =>
   rulesOf({
-    order: { ...rulesOf().order, number: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef },
+    order: { ...rulesOf().order, customerRef: BRAND_BETA.customerRef },
     addresses: [],
     openRequestId: null,
     cancel: { possible: true, code: 'FREE', day: null, words: w('Free') },

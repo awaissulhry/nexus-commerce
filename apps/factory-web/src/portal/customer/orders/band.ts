@@ -3,7 +3,7 @@ import type { PortalBand, PortalBandAction, PortalBandChips } from '../../shell/
 import type { ProductionHealth, ProductionOrder } from '../production/api'
 import { healthInputOf } from '../production/model'
 import type { OrderRecord } from './api'
-import { listQuery, recordHref, statusTone, type ListChip, type RecordTab } from './model'
+import { listQuery, recordHref, shownLinesOf, statusTone, type ListChip, type RecordTab } from './model'
 // B-TH-275: the order named by the customer's own number (plan §0.5).
 import { orderNameOf } from './model'
 import type { OrderWords } from './words'
@@ -98,7 +98,7 @@ export function orderTabsOf(input: { words: OrderWords; record: OrderRecord; pre
   const href = (tab: RecordTab) => recordHref(input.prefix, input.record.order.id, tab)
   return [
     { id: 'overview', label: t('tabs.overview'), href: href('overview'), ...(input.toConfirm ? { badge: t('tabs.toConfirm') } : {}) },
-    { id: 'lines', label: t('tabs.lines'), count: input.record.lines.length, href: href('lines') },
+    { id: 'lines', label: t('tabs.lines'), count: shownLinesOf(input.record.lines).length, href: href('lines') }, // w1.4: a charge line is not counted
     { id: 'shipments', label: t('tabs.shipments'), count: input.record.shipments.shown, href: href('shipments') },
     { id: 'files', label: t('tabs.files'), count: input.files, href: href('files') },
   ]

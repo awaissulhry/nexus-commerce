@@ -105,8 +105,7 @@ describe('"Made from your request" (the order’s summary read, B-TH-076)', () =
 // ---- the page as Brand Beta reads it ------------------------------------------------------------------------------------------
 function betaRecord(over: Partial<OrderRecord['order']> = {}): OrderRecord {
   return orderRecord({
-    // The office's number is in the read and must never be drawn.
-    number: BRAND_BETA.numbers.order,
+    // pp-w1 (C-1): the office's number is no longer in the web's read; it must never be drawn either (asserted below).
     yourNumber: customerNumberOf('ORDER', 4),
     customerRef: BRAND_BETA.customerRef,
     shipTo: { name: `${BRAND_BETA.legalName} — Lager`, line1: BRAND_BETA.address.line1, postalCode: BRAND_BETA.address.postalCode, city: BRAND_BETA.address.city, country: BRAND_BETA.address.country },

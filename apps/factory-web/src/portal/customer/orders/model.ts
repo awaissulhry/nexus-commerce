@@ -278,6 +278,12 @@ export function totalsOf(record: Pick<OrderRecord, 'order' | 'deposits'>): { net
 /** A line's own promise when it differs from the order's. */
 export const linePromise = (line: { promiseDate: string | null }, order: { promiseDate: string | null }): string | null => (line.promiseDate && line.promiseDate !== order.promiseDate ? line.promiseDate : null)
 
+/**
+ * pp-w1 (w1.4, O3-B1): the lines Lines and the tab strip draw — every line but a charge (FEE). Round 1 draws no charge line (the
+ * Lines round gives charges their row); the order's totals already count it, and the change rules never list it.
+ */
+export const shownLinesOf = <L extends { readonly kind: string }>(lines: readonly L[]): L[] => lines.filter((line) => line.kind !== 'FEE')
+
 // ── the change request (pop:change-request) ────────────────────────────────────────────────────────────────────────────
 export interface ChangeDraft {
   /** Line → size → pieces wanted (only what the person touched; everything else stays as ordered). */

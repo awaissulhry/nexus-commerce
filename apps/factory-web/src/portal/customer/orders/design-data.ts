@@ -229,7 +229,6 @@ export function orderRecord(over: Partial<OrderRecord['order']> = {}, rest: Part
     order: {
       id: ORDER_ID,
       customerRef: 'BA-PO-771',
-      number: 'SO-2026-0141',
       // B-TH-275: the customer's own number — what the order page shows (the office's number above is read, never drawn).
       yourNumber: customerNumberOf('ORDER', 11),
       status: 'PARTLY_SHIPPED',
@@ -328,7 +327,7 @@ export function withoutPrices(record: OrderRecord): OrderRecord {
 
 /** A made-to-measure order for a rider: no right of withdrawal. */
 export function mtmRecord(): OrderRecord {
-  const base = orderRecord({ id: id(3), number: 'SO-2026-0143', yourNumber: customerNumberOf('ORDER', 13), customerRef: null, status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED, noWithdrawal: true, promiseMoved: false, originalPromiseDate: dayAt(19), promiseDate: dayAt(19), netAmount: 189000, vatAmount: 41580, grossAmount: 230580 })
+  const base = orderRecord({ id: id(3), yourNumber: customerNumberOf('ORDER', 13), customerRef: null, status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED, noWithdrawal: true, promiseMoved: false, originalPromiseDate: dayAt(19), promiseDate: dayAt(19), netAmount: 189000, vatAmount: 41580, grossAmount: 230580 })
   return {
     ...base,
     promiseHistory: [],
@@ -366,7 +365,7 @@ export const FREE = verdict(true, 'FREE', 'Si può cambiare', 'Can change')
 export function rulesOf(over: Partial<ChangeRules> = {}): ChangeRules {
   return {
     asOf: at(0),
-    order: { id: ORDER_ID, number: 'SO-2026-0141', customerRef: 'BA-PO-771', status: 'PARTLY_SHIPPED', requestedDate: dayAt(5), promiseDate: dayAt(12), currency: 'EUR', version: 4 },
+    order: { id: ORDER_ID, customerRef: 'BA-PO-771', status: 'PARTLY_SHIPPED', requestedDate: dayAt(5), promiseDate: dayAt(12), currency: 'EUR', version: 4 },
     change: FREE,
     cancel: verdict(false, 'CUT', `Non possibile: il taglio è iniziato il ${short('it', CUT_DAY)}`, `Not possible: cutting started on ${short('en', CUT_DAY)}`, CUT_DAY),
     lines: [
@@ -415,7 +414,6 @@ export function requestsOf(): ChangeRequest[] {
     {
       id: id(501),
       orderId: ORDER_ID,
-      orderNumber: 'SO-2026-0141',
       customerRef: 'BA-PO-771',
       kind: 'CHANGE',
       kindWords: KIND_WORDS.CHANGE,
@@ -439,7 +437,6 @@ export function requestsOf(): ChangeRequest[] {
     {
       id: id(502),
       orderId: ORDER_ID,
-      orderNumber: 'SO-2026-0141',
       customerRef: 'BA-PO-771',
       kind: 'CANCEL',
       kindWords: KIND_WORDS.CANCEL,
