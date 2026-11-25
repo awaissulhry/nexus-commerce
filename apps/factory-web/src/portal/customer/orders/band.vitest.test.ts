@@ -287,6 +287,17 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(wide.slice(0, wide.indexOf('\n}\n'))).toMatch(/\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-title h1 \{\s*flex-shrink: 0;\s*\}/)
   })
 
+  // pp-fx6 (re-walk N-02): at 375, scrolled, the band folded but kept 156 px with an EMPTY row — the DS fold fades the pills in place and
+  // keeps a phone band's height on purpose (no page jump); since W-07 the status chip has a line of its own. On a phone the folded
+  // band keeps its pills (no empty row, nothing moves); from 720 px the DS fold is untouched.
+  it('N-02: on a phone the folded band keeps its pills — no faded hole, no empty row; wider bands fold as the DS does', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    const at = css.indexOf('.fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta > *,')
+    expect(at).toBeGreaterThan(css.indexOf('@media (max-width: 719px)'))
+    expect(css.slice(at, at + 260)).toMatch(/\.nds-detailhdr-meta \.nds-pill \{\s*opacity: 1;\s*transform: none;\s*pointer-events: auto;\s*\}/)
+    expect(css.slice(0, css.indexOf('@media (max-width: 719px)'))).not.toContain('is-folded')
+  })
+
   // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a
   // wrapping COLUMN, put "Free for suppliers…" in a second column off the screen; the band's tab row sat 6 px past the edge.
   it('W-15: at 375 the foot is one column (no wrap into a second column) and a band’s tab row scrolls inside itself', () => {

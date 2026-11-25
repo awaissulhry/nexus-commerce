@@ -894,4 +894,15 @@
     max-width: 100%;
     overflow-x: auto;
   }
+
+  /* pp-fx6 (re-walk N-02; the DS fold, older than this lane): scrolled, the band folds — the DS fades its pills in place, and on a phone
+     (≤ 760 px) it keeps the band's height on purpose (a band that shrinks while the page scrolls moves the page under the reader and
+     flips the fold). Since the reference stays whole (W-07) the status chip has a line of its own, so the fade left an EMPTY row (156 px,
+     customer and supplier orders). On a phone the folded band keeps its pills: nothing empty, nothing moves. */
+  .fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta > *,
+  .fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta .nds-pill {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 }
