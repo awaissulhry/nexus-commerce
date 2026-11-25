@@ -230,3 +230,19 @@ export function partnerRowOf(message: PartnerFeedMessage, input: { readonly name
     ...(input.pinned ? { pinned: true } : {}),
   }
 }
+
+/**
+ * pt-fx1 F-2 (walk W-01): the reader's OWN messages are never unread. The band goes above the first new message that is not theirs
+ * (none: no band); its count — and the down button's on arrival — leaves out their own messages among the loaded new ones. The
+ * server's reading may count them (a later server job); the face never shows them as new. `messages`: oldest first.
+ */
+export function partnerUnreadOf(messages: readonly Pick<PortalThreadMessage, 'id' | 'author'>[], reading: { readonly firstNewId: string | null; readonly newCount: number } | null | undefined): { readonly firstNewId: string | null; readonly newCount: number } {
+  if (!reading || reading.newCount <= 0 || reading.firstNewId === null) return { firstNewId: null, newCount: 0 }
+  // The first new one may be older than the loaded page: then every loaded message is new (the band sits above the page's first).
+  const at = messages.findIndex((message) => message.id === reading.firstNewId)
+  const fresh = messages.slice(at === -1 ? 0 : at)
+  const theirs = fresh.filter((message) => !message.author.mine)
+  const first = theirs[0]
+  if (!first) return { firstNewId: null, newCount: 0 }
+  return { firstNewId: first.id, newCount: Math.max(0, reading.newCount - (fresh.length - theirs.length)) }
+}

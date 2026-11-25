@@ -240,7 +240,8 @@ describe('pt-t T.1 — the gallery of the portal’s messages (SCR-027-thread)',
     expect(text).toContain('Message removed after a privacy request')
     expect(text).toContain('Bea Esempio Example Works')
     expect(text).toContain('Ugo Test')
-    expect(text).toContain('3 unread messages')
+    // pt-fx1 F-2: m11 · m12 · m13 are new to the reading (3); m13 is the reader's own, never unread: 2.
+    expect(text).toContain('2 unread messages')
     // A reply, the jump's flash, a refused reply, the held lines, the link and the account.
     expect(drawCase('replying', 'en')).toContain('class="fw-rt-cx-bar is-link fw-rt-tone-')
     expect(drawCase('jump-flash', 'en')).toMatch(/<article class="fw-rt-msg [^"]*" id="message-m01" data-message-id="m01"[^>]* data-flash=""/)

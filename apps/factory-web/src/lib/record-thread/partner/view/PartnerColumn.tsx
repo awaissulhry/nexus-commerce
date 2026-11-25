@@ -14,7 +14,7 @@ import { PinnedBar } from '../../head/view/PinnedBar'
 import { THREAD_NAMESPACES } from '../../parts/ThreadMessages'
 import { dayOf, timeOf } from '../../parts/time'
 import { tonesFor } from '../../parts/tones'
-import { partnerFeedOf, partnerMenuOf, partnerPinsOf, partnerRowOf, partnerWho, type PartnerFeedMessage, type PartnerKind, type PartnerNames, type PortalPin, type PortalThreadMessage } from '../model'
+import { partnerFeedOf, partnerMenuOf, partnerPinsOf, partnerRowOf, partnerUnreadOf, partnerWho, type PartnerFeedMessage, type PartnerKind, type PartnerNames, type PortalPin, type PortalThreadMessage } from '../model'
 import { PartnerComposer, type PartnerComposerActions, type PartnerComposerModel } from './PartnerComposer'
 import { PartnerHead, type PartnerWidth } from './PartnerHead'
 import '../../record-thread.css'
@@ -112,12 +112,16 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
   const feed = useMemo(() => partnerFeedOf(model.messages, names, { quotes }), [model.messages, names, quotes])
   // tw- fx2 (G-7): one colour per person inside this list (side + name: the read has no person id).
   const tones = useMemo(() => tonesFor(feed.map((message) => message.senderKey)), [feed])
-  const firstNewId = model.reading?.firstNewId ?? null
-  const newSince = model.reading?.newCount ?? 0
+  // pt-fx1 F-2: the reader's own messages are never unread — the band above the first new one that is not theirs, counted without them.
+  const unread = useMemo(() => partnerUnreadOf(model.messages, model.reading), [model.messages, model.reading])
+  const firstNewId = unread.firstNewId
+  const newSince = unread.newCount
+  // …and one of their own that arrives always shows (the list follows it; it never adds to the down button's count).
+  const shellMessages = useMemo(() => feed.map((message) => (message.mine ? { ...message, outbox: true } : message)), [feed])
   const rows = useMemo(() => (model.state === 'ready' ? feedRows({ messages: feed, events: [], firstNewId, newCount: newSince }) : []), [model.state, feed, firstNewId, newSince])
   const today = dayOf(model.now ?? new Date().toISOString())
   const shell = useFeedShell(
-    { state: model.state, messages: feed, context: {}, more: model.more === true, older: model.older ?? 'idle', newSince, flash: model.flash ?? null },
+    { state: model.state, messages: shellMessages, context: {}, more: model.more === true, older: model.older ?? 'idle', newSince, flash: model.flash ?? null },
     rows,
     { onOlder: actions?.onOlder, onReply: actions?.onReply ? (id) => reply(id) : undefined },
     () => canReply,

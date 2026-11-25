@@ -211,3 +211,38 @@ describe('pt-w2 W2.2 — the partner face', () => {
   })
 })
 // ---- end W2.2
+
+// ---- pt-fx1 F-2 (walk W-01): the reader's own messages are never unread --------------------------------------------------------------
+import { partnerUnreadOf } from './model'
+
+describe('pt-fx1 F-2 — the reader’s own messages are never unread', () => {
+  const own = (id: string, minute: number) => msg(id, { side: 'partner', author: { name: 'Lia Modello', mine: true }, at: at(minute) })
+  const ours = (id: string, minute: number) => msg(id, { at: at(minute) })
+  const list = [ours('m1', 1), own('m2', 2), own('m3', 3), ours('m4', 4), own('m5', 5)]
+
+  it('a portal reader’s own message is never under the unread band nor counted', () => {
+    // m2…m5 are new to the server's reading (4); three are her own: the band goes above m4 and says 1.
+    expect(partnerUnreadOf(list, { firstNewId: 'm2', newCount: 4 })).toEqual({ firstNewId: 'm4', newCount: 1 })
+    // Only her own are new: no band at all.
+    expect(partnerUnreadOf(list, { firstNewId: 'm5', newCount: 1 })).toEqual({ firstNewId: null, newCount: 0 })
+    // The first new one is older than the loaded page: every loaded one is new; her own three leave the count.
+    expect(partnerUnreadOf(list, { firstNewId: 'm0', newCount: 7 })).toEqual({ firstNewId: 'm1', newCount: 4 })
+    expect(partnerUnreadOf(list, null)).toEqual({ firstNewId: null, newCount: 0 })
+    expect(partnerUnreadOf(list, { firstNewId: 'm2', newCount: 0 })).toEqual({ firstNewId: null, newCount: 0 })
+    // Drawn: the band sits above our m4 with her own count left out; with only her own new, no band.
+    const face = (reading: { firstNewId: string | null; newCount: number }) =>
+      render(createElement(PartnerColumn, { model: { kind: 'record', state: 'ready', title: 'Messages', recordName: 'Your order 142', companyName: 'Example Works', messages: list, reading, composer: null } }))
+    const html = face({ firstNewId: 'm2', newCount: 4 })
+    expect(html.match(/data-feed-new=""/g)?.length).toBe(1)
+    expect(html.indexOf('data-feed-new=""')).toBeGreaterThan(html.indexOf('data-message-id="m3"'))
+    expect(html.indexOf('data-feed-new=""')).toBeLessThan(html.indexOf('data-message-id="m4"'))
+    expect(textOf(html)).toContain('1 unread message')
+    expect(face({ firstNewId: 'm5', newCount: 1 })).not.toContain('data-feed-new')
+    // Her own new message arriving live always shows (the list follows it): it never adds to the down button's count.
+    const column = readFileSync(new URL('./view/PartnerColumn.tsx', import.meta.url), 'utf8')
+    expect(column).toContain('const unread = useMemo(() => partnerUnreadOf(model.messages, model.reading), [model.messages, model.reading])')
+    expect(column).toContain('feed.map((message) => (message.mine ? { ...message, outbox: true } : message))')
+    expect(column).toContain('messages: shellMessages,')
+  })
+})
+// ---- end pt-fx1 F-2
