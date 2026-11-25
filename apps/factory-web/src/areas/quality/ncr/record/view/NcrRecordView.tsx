@@ -22,7 +22,7 @@ import { NcrRecordMessages, RecordNotice, useRecordWords } from './words'
 import '../record.css'
 // ---- B-TH-266: the NCR on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { NcrRecordActions, NcrRecordModel } from '../view-model'
 

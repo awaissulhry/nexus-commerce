@@ -32,7 +32,7 @@ import { PartState } from '../OrderRecordView'
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's (after ./progress.css)
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's (after ./progress.css)
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Progress by line", moved out of OverviewTab.tsx unchanged (F-SA-232: the

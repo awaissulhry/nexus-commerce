@@ -1,3 +1,6 @@
+import { DOCK_COLUMNS, DOCK_FROM, frameMode, isThreadKey, type FrameMode } from '../../../lib/record-frame/model' // pp-k1 k1.3: the frame's core
+import { DOCK_WIDTHS, type DockWidth } from '../../../lib/record-thread/head/model' // pp-k1 k1.3: the dock's widths
+
 /**
  * B-TH-273 — the portal record frame (threads plan PL3; design kit §2; tree E "Portal record pages"; feature PL3-F03): the pure
  * part, held by record-frame.vitest.test.ts. Every portal record page (a customer's order, return, complaint, repair; a supplier's
@@ -10,34 +13,37 @@
  * - No Messages tab and no Ask modal: the frame's ⋯ "Ask a question" focuses the docked box (it opens the full-width view first
  *   when the page is narrower); an old `?tab=messages` address opens the record's first tab with the conversation shown (R-8).
  * - ONE conversation per page; notices stay in the body column, never above the conversation.
+ *
+ * pp-k1 k1.3 (O2-B3): this file held a declared copy of the office frame's numbers (where it docks, the columns, ⌘J) and nothing
+ * kept them equal. It reads the shared core now (lib/record-frame/model.ts, which also holds PHONE_BELOW, threadPixels and the
+ * office's first-width rule defaultWidthAt). The portal names below stay, each the core's own value, so no host is renamed; the
+ * portal keeps its three widths (no `full`: a portal record page keeps its body). record-frame-core.vitest.test.ts pins them equal.
  */
 
-/** From this width the conversation docks beside the body. */
-export const PORTAL_DOCK_FROM = 1280
-/** Below this width the portal page is the phone's (PL4). */
-export const PORTAL_PHONE_BELOW = 720
+/** From this width the conversation docks beside the body (the core's DOCK_FROM). */
+export const PORTAL_DOCK_FROM = DOCK_FROM
 
 /** How the page shows the conversation at a width: docked beside the body, or behind the "Messages" button (full width). */
-export type PortalFrameMode = 'docked' | 'stacked'
+export type PortalFrameMode = FrameMode
 
-export function portalFrameMode(viewport: number): PortalFrameMode {
-  return viewport >= PORTAL_DOCK_FROM ? 'docked' : 'stacked'
-}
+/** The core's frameMode: docked from PORTAL_DOCK_FROM, else stacked. */
+export const portalFrameMode: (viewport: number) => PortalFrameMode = frameMode
 
-/** The body : conversation columns (the gap is the grid's): 3 : 2, so ~40 % at every width. */
-export const PORTAL_DOCK_COLUMNS = 'minmax(0, 3fr) minmax(0, 2fr)'
+/** The body : conversation columns (the gap is the grid's): 3 : 2, so ~40 % at every width (the core's 40 %). */
+export const PORTAL_DOCK_COLUMNS: string = DOCK_COLUMNS.forty
 
 // ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the office's width menu (a third · 40 % · half) and Hide /
 // Show (⌘J), remembered on this device per person (a private window keeps nothing). Factory code only: PartnerThread is untouched.
-export type PortalDockWidth = 'third' | 'forty' | 'half'
-export const PORTAL_DOCK_WIDTHS: readonly PortalDockWidth[] = ['third', 'forty', 'half']
+/** pp-k1: the office dock's widths but `full`, in the office's order. */
+export type PortalDockWidth = Exclude<DockWidth, 'full'>
+export const PORTAL_DOCK_WIDTHS: readonly PortalDockWidth[] = DOCK_WIDTHS.filter((width): width is PortalDockWidth => width !== 'full')
 export const DEFAULT_PORTAL_DOCK_WIDTH: PortalDockWidth = 'forty'
 
-/** The body : conversation columns of each width (the gap is the grid's), as the office's dock. */
+/** The body : conversation columns of each width (the gap is the grid's): the office dock's own (the core's DOCK_COLUMNS). */
 export const PORTAL_DOCK_COLUMNS_OF: Readonly<Record<PortalDockWidth, string>> = {
-  third: 'minmax(0, 2fr) minmax(0, 1fr)',
-  forty: 'minmax(0, 3fr) minmax(0, 2fr)',
-  half: 'minmax(0, 1fr) minmax(0, 1fr)',
+  third: DOCK_COLUMNS.third,
+  forty: DOCK_COLUMNS.forty,
+  half: DOCK_COLUMNS.half,
 }
 
 export const isPortalDockWidth = (value: unknown): value is PortalDockWidth => typeof value === 'string' && (PORTAL_DOCK_WIDTHS as readonly string[]).includes(value)
@@ -72,10 +78,8 @@ export function writePortalDock(storage: Pick<Storage, 'setItem' | 'removeItem'>
   }
 }
 
-/** ⌘J (Ctrl J on other systems): hide or show the docked conversation, open or close the full-width one. Never with Alt or Shift. */
-export function isPortalThreadKey(event: { readonly key: string; readonly metaKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly shiftKey: boolean }): boolean {
-  return (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j'
-}
+/** ⌘J (Ctrl J on other systems): hide or show the docked conversation, open or close the full-width one. Never with Alt or Shift. The core's isThreadKey. */
+export const isPortalThreadKey: typeof isThreadKey = isThreadKey
 
 /** "Show the conversation", or "Show the conversation (2 new)" with the person's own new messages (99+ above 99). */
 export function showButtonWords(count: number): { readonly key: 'record.frame.show' | 'record.frame.showNew' | 'record.frame.showMany'; readonly count?: number } {
@@ -83,11 +87,6 @@ export function showButtonWords(count: number): { readonly key: 'record.frame.sh
   return count > 99 ? { key: 'record.frame.showMany', count: 99 } : { key: 'record.frame.showNew', count }
 }
 // ---- end F-SA-264
-
-/** The conversation's share of the portal's main area (for the design numbers: 40 % of ~1140 px is ~450 px with the gap). */
-export function portalThreadPixels(main: number, gap = 16): number {
-  return Math.round(((main - gap) * 2) / 5)
-}
 
 /** The portal's main area at a window width: the window less the rail (240) and the main's padding (2 × 30), as PL3 measures it. */
 export function portalMainPixels(viewport: number): number {

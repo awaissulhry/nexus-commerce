@@ -36,7 +36,7 @@ import { CloseBanners, CloseParts } from '../../close/view/CloseParts'
 import { VarianceAtClose } from '../../labour/variance/view/VarianceAtClose'
 // ---- B-TH-265: the work order on RecordFrame (the band in the shell's row, the docked thread, one notice) and "Order files (n)" ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { hasOrderFiles } from '../order-files/model'
 import { OrderFilesButton, OrderFilesDialog, OrderThreadButton } from '../order-files/view/OrderFiles'
 // ---- end B-TH-265

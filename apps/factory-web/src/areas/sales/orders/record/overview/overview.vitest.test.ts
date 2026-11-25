@@ -42,7 +42,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 const overviewViews = () => [read('../view/OverviewTab.tsx'), ...CARDS.map((card) => read(`../view/overview/${card}.tsx`))].join('\n')
 const overviewRules = () => [read('./model.ts'), ...SECTIONS.map((section) => read(`./${section}.ts`))].join('\n')
 // F-CO-K1 (the shared overview kit): the Overview's grid, its shared row and the lead card's rules moved to the kit's ONE stylesheet.
-const KIT_CSS = '../../../../_shared/record-overview/record-overview.css'
+const KIT_CSS = '../../../../../lib/record-overview/record-overview.css'
 
 describe('the production read on the page: a re-read keeps the other parts', () => {
   it('a re-read of some parts keeps the others (and their withheld keys); the newest time wins', () => {
@@ -704,9 +704,9 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     const tab = read('../view/OverviewTab.tsx')
     // F-CO-K1 (K1.3): the tab draws the kit's parts and the kit brings its stylesheet (a part owns it): the parts' file imports it,
     // the tab imports the parts — after its cards, where overview.css was — and no stylesheet of its own.
-    expect(read('../../../../_shared/record-overview/Overview.tsx')).toContain("import './record-overview.css'")
-    expect(tab).toContain("import { Overview, OverviewPair } from '../../../../_shared/record-overview/Overview'")
-    expect(tab.indexOf("from '../../../../_shared/record-overview/Overview'")).toBeGreaterThan(tab.indexOf("import { FactsCard } from './overview/FactsCard'"))
+    expect(read('../../../../../lib/record-overview/Overview.tsx')).toContain("import './record-overview.css'")
+    expect(tab).toContain("import { Overview, OverviewPair } from '../../../../../lib/record-overview/Overview'")
+    expect(tab.indexOf("from '../../../../../lib/record-overview/Overview'")).toBeGreaterThan(tab.indexOf("import { FactsCard } from './overview/FactsCard'"))
     expect(tab).not.toMatch(/import '[^']*\.css'/)
     expect(tab).not.toContain('fw-so-overview-cards')
     // orders.css lost the old grid rule and (F-CO-K1, settle S1) the Overview's column, which went to the kit: a record page that draws
@@ -715,7 +715,7 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
     expect(orders).toContain('.fw-so-datelist {')
     expect(orders).not.toContain('.fw-so-overview {')
-    expect(orders).toContain('areas/_shared/record-overview/record-overview.css')
+    expect(orders).toContain('lib/record-overview/record-overview.css')
     expect(css).toMatch(/\.fw-so-overview \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-16\);\s*min-width: 0;\s*\}/)
     // F-OO-207: Linked records' count chips left with their card's rows (F-CO-K2: now the shared overview kit's ONE list).
     for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
@@ -1232,7 +1232,7 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
     const card = read('../view/overview/RequestsCard.tsx')
     expect(card).not.toContain("import './requests.css'")
     expect(card).not.toMatch(/import '[^']*\.css'/)
-    expect(card).toContain("import { Group, GroupRow, Groups } from '../../../../../_shared/record-overview/Overview'")
+    expect(card).toContain("import { Group, GroupRow, Groups } from '../../../../../../lib/record-overview/Overview'")
     expect(card).not.toMatch(/function Group\(|className="fw-so-rq-groups"|className="fw-so-h3"/)
     expect(card).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
     expect(card).toContain('changesBadgeOf(card)')
@@ -1480,7 +1480,7 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     expect(tab).not.toMatch(/className="fw-so-overview"|className="fw-so-ov-pair"/)
     for (const card of CARDS) {
       const text = read(`../view/overview/${card}.tsx`)
-      expect(text, card).toContain("from '../../../../../_shared/record-overview/Overview'")
+      expect(text, card).toContain("from '../../../../../../lib/record-overview/Overview'")
       expect(text.match(/<OverviewCard[ \n]/g)?.length ?? 0, card).toBeGreaterThan(0)
       expect(text, card).not.toMatch(/<Card[ >]/)
       expect(text, card).not.toMatch(/className="fw-so-card-head"|className="fw-so-h2"/)
@@ -1580,7 +1580,7 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const css of [read(KIT_CSS), read('../view/overview/where.css')]) expect(css.split("/* No align-items here: the row's baseline wins (measured 2026-11-23). */")).toHaveLength(2)
     // The shared row says baseline; a strip and the hand row ARE that row (so no other rule can give them another alignment).
     expect(read(KIT_CSS)).toMatch(/\.fw-so-ov-row \{[^}]*align-items: baseline;/)
-    expect(read('../../../../_shared/record-overview/Overview.tsx')).toContain('<li className="fw-so-ov-row fw-so-strip" data-tone={tone} ')
+    expect(read('../../../../../lib/record-overview/Overview.tsx')).toContain('<li className="fw-so-ov-row fw-so-strip" data-tone={tone} ')
     expect(read('../view/overview/WhereCard.tsx')).toContain('<div className="fw-so-ov-row fw-so-hand" data-tone={row.tone}>')
     // No order file draws a strip by hand any more: StripRow, the failed read's row and the gate rows are the kit's Strip.
     for (const file of ['../view/overview/WhereCard.tsx', '../view/overview/StripRow.tsx', '../links/view/OrderLinks.tsx']) expect(read(file), file).not.toContain('fw-so-strip')

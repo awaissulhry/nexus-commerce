@@ -19,7 +19,7 @@ import { FactsCard } from './overview/FactsCard'
 // ---- end F-OO-100
 // ---- F-CO-K1 (the shared overview kit): the tab's column and its pairs are the kit's parts; the kit brings its ONE stylesheet (the
 // old overview.css moved there: F-OO-201's pairs and the shared card row). Imported after the cards, where overview.css was. ----
-import { Overview, OverviewPair } from '../../../../_shared/record-overview/Overview'
+import { Overview, OverviewPair } from '../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K1
 
 /**
@@ -35,7 +35,7 @@ import { Overview, OverviewPair } from '../../../../_shared/record-overview/Over
  * before (who acts next, the ex-factory date, the health, Urgent, the bundles) lives in one other place each (WhereCard.tsx says where).
  * F-OO-211 (11-design §8.1): `customFields` — the order's custom fields (the container's, built once) are the 7 + 8 pair's second card,
  * beside Order facts; when no field applies (or the reader may not see them) they draw nothing and Order facts takes the row.
- * F-CO-K1: the column, the pairs and each card's frame are the shared overview kit's parts (areas/_shared/record-overview) — the same
+ * F-CO-K1: the column, the pairs and each card's frame are the shared overview kit's parts (lib/record-overview) — the same
  * markup as before, now drawn by `Overview`, `OverviewPair` and `OverviewCard`.
  */
 export function OverviewTab({ order, model, actions, customFields }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /* F-OO-211 */ customFields?: ReactNode }) {

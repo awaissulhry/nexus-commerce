@@ -1,6 +1,6 @@
 /* ── F-OO-131 (order overview lane; 10-design §3.1) — People: one aligned list, the label | the value | one door ─────────────────
    F-CO-K2: the list is the shared overview kit's ONE list (RowList and Row: .fw-so-ov-list, .fw-so-ov-label in
-   areas/_shared/record-overview/record-overview.css; Linked records' identical rules merged into it). Here only the supervisor's own
+   lib/record-overview/record-overview.css; Linked records' identical rules merged into it). Here only the supervisor's own
    doors: SupervisorFact's row face draws them itself. Layout only, tokens only. */
 
 @container fw-so-ov-card (max-width: 479px) {

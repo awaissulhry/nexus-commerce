@@ -127,7 +127,7 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
   // F-CO-K2 (settle S3): People's list rules and Linked records' identical ones are the kit's ONE list now (record-overview.css,
   // .fw-so-ov-list); people.css keeps only the supervisor's own doors. The same four rules, read on the kit's list block.
   it('375: below a 360 px card a row stacks (label, value, doors); the rows line up on the list’s columns; tokens only', () => {
-    const kit = source('../../../../_shared/record-overview/record-overview.css')
+    const kit = source('../../../../../lib/record-overview/record-overview.css')
     const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the ONE list"), kit.indexOf('/* ── end F-CO-K2 (the ONE list) ── */'))
     expect(css.length).toBeGreaterThan(100)
     expect(css).toMatch(/\.fw-so-ov-list \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;/)
