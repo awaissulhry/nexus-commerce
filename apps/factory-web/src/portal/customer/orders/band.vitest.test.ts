@@ -222,6 +222,11 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    flex-basis: 100%;\n  }')
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title:has(> .back) h1 {\n    flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));')
     expect(phone).not.toMatch(/\.nds-detailhdr-title h1 \{\s*flex-basis: calc\(/)
+    // pp-fx5 (walk W-07): the reference never breaks inside its number — whole, and row 2 wraps between its items (the meta takes its
+    // content's width, Pages goes under it when both do not fit; before, a zero basis squeezed the ref beside Pages).
+    expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {\n    order: 1;\n    flex: 1 1 auto;\n    min-width: 0;\n  }')
+    expect(phone).toContain('.fw-pband .nds-ref-value {\n    overflow-wrap: normal;\n    white-space: nowrap;\n  }')
+    expect(phone).not.toMatch(/\.nds-detailhdr-meta \{\s*order: 1;\s*flex: 1 1 0;/)
   })
 })
 

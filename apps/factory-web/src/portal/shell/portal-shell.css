@@ -830,10 +830,17 @@
     flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));
   }
 
+  /* pp-fx5 (walk W-07): the reference never breaks inside its number ("SEED- / PO- / 78" beside Pages): it stays whole, and row 2 wraps
+     between its items — the meta takes its content's width (at most the row), Pages goes under it when both do not fit. */
   .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
     order: 1;
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
+  }
+
+  .fw-pband .nds-ref-value {
+    overflow-wrap: normal;
+    white-space: nowrap;
   }
 
   .fw-pband .nds-detailhdr.dense .fw-ppages {
