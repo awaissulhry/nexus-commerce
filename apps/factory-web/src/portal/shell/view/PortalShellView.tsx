@@ -295,7 +295,8 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
                 </span>
               }
             />
-            {band.tabs ? <Tabs className="fw-ptabs" ariaLabel={band.tabs.label} tabs={band.tabs.items} active={band.tabs.active} /> : null}
+            {/* pp-fx6 (re-walk W-15): a tab row longer than its room scrolls with the DS arrows, as the order's body tabs (no tab left at the edge). */}
+            {band.tabs ? <Tabs className="fw-ptabs" ariaLabel={band.tabs.label} tabs={band.tabs.items} active={band.tabs.active} overflow="scroll" /> : null}
           </div>
           <main id="main-content" tabIndex={-1} className="fw-pmain">
             {children}

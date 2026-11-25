@@ -17,6 +17,7 @@ import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './desig
 import { RECORD_TABS, tabOf } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { keyJoinOf } from '../../shell/view/FrameDialogs' // pp-fx5 (walk W-18)
+import { designScreen as supplierRecord } from '../../supplier/orders/record/fixtures' // pp-fx6 (re-walk W-15)
 import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 
 /**
@@ -305,7 +306,14 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
     expect(phone).toMatch(/\.fw-pfoot \{[^}]*flex-direction: column;[^}]*flex-wrap: nowrap;/)
     expect(phone).toContain('.fw-pfoot-free {\n    flex: 0 0 auto;\n  }')
-    expect(phone).toContain('.fw-ptabs {\n    min-width: 0;\n    max-width: 100%;\n    overflow-x: auto;\n  }')
+    // pp-fx6 (re-walk W-15): the band's tab row is the DS scrolling strip with its arrows ("Ship notices 2" sat at the edge, no ›) — the
+    // shell hands the band's Tabs `overflow="scroll"` (packages/ui frozen); the strip keeps the band's 16 px gutter.
+    const view = readFileSync(new URL('../../shell/view/PortalShellView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<Tabs className="fw-ptabs" ariaLabel={band.tabs.label} tabs={band.tabs.items} active={band.tabs.active} overflow="scroll" />')
+    expect(css).toContain('.fw-pband .fw-ptabs.nds-tabs.scrollable {\n  padding-inline: var(--nds-space-16);\n}')
+    expect(phone).not.toMatch(/\.fw-ptabs \{\s*min-width: 0;/)
+    const html = render(createElement(supplierRecord.view, { model: supplierRecord.cases.find((item) => item.id === 'phone')!.model }), 'en')
+    expect(html).toMatch(/<div class="nds-tabs-scroller"[^>]*>\s*<(nav|div)[^>]*class="nds-tabs[^"]*scrollable[^"]*fw-ptabs/)
   })
 })
 
