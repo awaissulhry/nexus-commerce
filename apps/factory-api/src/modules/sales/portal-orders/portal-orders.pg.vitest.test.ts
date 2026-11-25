@@ -437,13 +437,8 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     expect((await browsers.other.get(`/portal/sales-orders/${so2}/shipments`)).status).toBe(404)
   })
 
-  it('lists what is on the way across the orders, and counts it on Home', async () => {
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.map((row: Json) => [row.number, row.order.customerRef, row.status])).toEqual([['SEED-SH-0001', 'SEED-PO-78', 'IN_TRANSIT']])
-    // fix-portal-numbers-1 (B-TH-303): its order by the customer's own number, never the office's series.
-    expect(transit.items[0].order).toEqual({ id: await orderId('SEED-SO-0002'), customerRef: 'SEED-PO-78', yourNumber: { seq: expect.any(Number), words: expect.any(Object) } })
-    expect(transit.items[0].trackingNumbers).toHaveLength(2)
-    expect((await ok(browsers.other, '/portal/sales-orders/in-transit')).items).toEqual([])
+  // pg-s3 (Owner D7): "On the way" left the list, and its read GET …/in-transit is gone; what is on the way is still counted on Home.
+  it('counts what is on the way on Home (orders.in_transit)', async () => {
     // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
     const own = ['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'orders.in_transit']
     const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => own.includes(count.key)).map((count: Json) => [count.key, count.value]))
@@ -472,8 +467,6 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
       { url: `https://tracking.example.com/${parcels[0]!.trackingNumber}`, words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } },
       null,
     ])
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items[0]).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta, trackingLinks: [{ trackingNumber: parcels[0]!.trackingNumber, url: `https://tracking.example.com/${parcels[0]!.trackingNumber}` }] })
     const list = await ok(browsers.buyer, '/portal/sales-orders?chip=ALL')
     expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: null, parcel: 1, expectedDeliveryAt: eta }) // pg-s1 S1.3 (D6)
     // The database never keeps an http page (Parcel_tracking_url_check, every login): there is none to show.
@@ -493,7 +486,7 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
 
 // ---- B-OP-031 (order page plan N5): the number typed for a carrier booked by hand, on the customer's own shipments only ------------
 describe('B-OP-031: the customer sees the number typed for a carrier booked by hand ("No live tracking")', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('its own shipment carries the typed number (the labelled one none); "On the way" too; another customer sees nothing of it', async () => {
+  it('its own shipment carries the typed number (the labelled one none); another customer sees nothing of it', async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     // SEED-SH-0002 left with a carrier booked by hand, its number typed (written around the guards: the read is what is tested).
@@ -507,18 +500,14 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
     expect(own.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0002', typedTrackingNumber: 'T-OP031-BRT-0001' })])
     const so2 = await ok(browsers.viewer, `/portal/sales-orders/${await orderId('SEED-SO-0002')}/shipments`)
     expect(so2.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', typedTrackingNumber: null })
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001' })
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0001')).toMatchObject({ typedTrackingNumber: null })
     // The wall: another customer finds neither the order nor the number.
-    expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
-    const theirs = await ok(browsers.other, '/portal/sales-orders/in-transit')
-    expect(theirs.items).toEqual([])
-    expect(JSON.stringify(theirs)).not.toContain('T-OP031')
+    const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+    expect(theirs.status).toBe(404)
+    expect(JSON.stringify(theirs.body)).not.toContain('T-OP031')
   })
 
   // B-OP-034 (set C): the tracking link typed beside it — "Track ›" in the portal, https only; another customer never.
-  it('B-OP-034: its typed tracking link shows beside the number (order and On the way); another customer sees none', async () => {
+  it('B-OP-034: its typed tracking link shows beside the number on the order\'s shipments; another customer sees none', async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     await admin('SET session_replication_role = replica')
@@ -529,9 +518,9 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
     }
     const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
     expect(own.shipments.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001', typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
-    expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('track.example.com')
+    const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+    expect(theirs.status).toBe(404)
+    expect(JSON.stringify(theirs.body)).not.toContain('track.example.com')
   })
 })
 // ---- end B-OP-031
@@ -583,7 +572,7 @@ describe('B-OP-044: a shared shipment in the portal', { timeout: SLOW_TEST_TIMEO
 // ---- B-OS-006 (order shipments tab; X2-B1): a TEST label's number never reaches the customer. SEED-SH-0001's second parcel is given
 // a TEST label (test mode) past the guards: the read is what is tested.
 describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('its parcel is listed untracked (no number, no link); On the way lists the carrier labels only', async () => {
+  it('its parcel is listed untracked (no number, no link)', async () => {
     const so2 = await orderId('SEED-SO-0002')
     const shipment = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0001'])
     const parcels = await admin<{ id: string; seq: number; trackingNumber: string; carrierParcelId: string | null }>('SELECT id, seq, "trackingNumber", "carrierParcelId" FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq', [shipment.id])
@@ -604,11 +593,6 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === test.seq)).toMatchObject({ trackingNumber: null, trackingLink: null })
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === real.seq)).toMatchObject({ trackingNumber: real.trackingNumber })
       expect(JSON.stringify(answer)).not.toContain('TEST-OS006')
-      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0001')!
-      expect(item.trackingNumbers).toEqual([real.trackingNumber])
-      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).not.toContain('TEST-OS006-0002')
-      expect(JSON.stringify(transit)).not.toContain('TEST-OS006')
     } finally {
       await relabel(test.carrierParcelId, test.trackingNumber)
     }
@@ -617,10 +601,10 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
 // ---- end B-OS-006
 
 // ---- B-OS-022 (order shipments 1/1; Owner D4): a parcel's number typed by hand reaches its own customer's portal (the order's
-// shipments and On the way), never another customer's. SEED-SH-0002 (left with a carrier booked by hand, B-OP-031 above) gets its
+// shipments), never another customer's. SEED-SH-0002 (left with a carrier booked by hand, B-OP-031 above) gets its
 // parcel's number typed past the guards: the read is what is tested.
 describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it("A's buyer reads it with its typed link on the parcel and On the way; B's buyer never", async () => {
+  it("A's buyer reads it with its typed link on the parcel; B's buyer never", async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     const type = async (number: string | null, url: string | null) => {
@@ -636,13 +620,10 @@ describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLO
       const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
       const row = (own.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === 1)).toMatchObject({ trackingNumber: 'AWB-OS022-P001', trackingLink: { url: 'https://track.example.com/AWB-OS022-P001' } })
-      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
-      expect(item.trackingNumbers).toContain('AWB-OS022-P001')
-      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).toContain('AWB-OS022-P001')
       // The wall: another customer finds neither the order nor the number.
-      expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
-      expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('AWB-OS022')
+      const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+      expect(theirs.status).toBe(404)
+      expect(JSON.stringify(theirs.body)).not.toContain('AWB-OS022')
       // Another customer's scope reads no row of these parcels at all (row-level security), so none of their typed numbers.
       const read = (partyId: string) => h.database.withScope({ audience: 'partner', tenantId: T, actorId: newId(), partyId }, (client) => client.parcel.findMany({ where: { shipmentId: sh2.id }, select: { manualTrackingNumber: true } }))
       expect(await read(newId())).toEqual([])

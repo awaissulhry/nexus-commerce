@@ -3,7 +3,6 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   customerEtaOf,
   customerShipmentStatusOf,
-  isOnTheWay,
   SHIPMENT_STATUS_WORDS,
   shipmentMilestonesOf,
   SHOWN_SHIPMENT_STATUSES,
@@ -13,7 +12,7 @@ import {
 } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { partnerOrder, portalReader } from './access'
 import { latestByShipment, progressOfLines } from './orders'
-import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
+import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
 import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking' // B-OP-034: a typed link, https only
@@ -21,14 +20,13 @@ import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules' // 
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
- * tracking, "On the way"):
+ * tracking):
  *
  *   GET /portal/sales-orders/:orderId/shipments   each shipment that was packed or left: its DDT (number, date), carrier,
  *                                                 parcels with their tracking number and latest status, the four steps
  *                                                 (Packed, Collected, In transit, Delivered), the carrier's events, what it
  *                                                 carries, the papers shared with the portal; and what is still to ship per
  *                                                 line and size with the day expected (backorders after a partial shipment)
- *   GET /portal/sales-orders/in-transit           every shipment of the party on the way, across its orders
  * B-W2b-F14: each shipment's expected delivery as the carrier says it (while packed or on the way) and each parcel's "Track
  * on the carrier's site" link (an https tracking page only). B-OP-031: the number typed for a carrier booked by hand (no carrier
  * feeds it: "No live tracking").
@@ -197,48 +195,4 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
     firstExpected: shipments.length === 0 && expected.length > 0 ? expected.sort()[0]! : null,
     live: LIVE,
   }
-}
-
-export async function inTransit(app: FastifyInstance, request: FastifyRequest, now: Date) {
-  const reader = portalReader(app, request)
-  const read = await request.withClient(async (client) => {
-    const orders = await readOrders(client, reader.session.company.id)
-    const shipments = (await readShipments(client, orders.map((order) => order.id))).filter((row) => isOnTheWay(row.status))
-    const ids = shipments.map((row) => row.id)
-    return { orders, shipments, parcels: await readParcels(client, ids), tracking: await readTracking(client, ids) }
-  })
-  const orderOf = new Map(read.orders.map((order) => [order.id, order]))
-  const latest = latestByShipment(read.tracking)
-  const parcelSeq = new Map(read.parcels.map((parcel) => [parcel.id, parcel.seq]))
-  const items = read.shipments
-    // B-OP-044 (order page N6): a shipment found through its lines names its first order the customer reads (one row each).
-    .filter((shipment) => shipment.salesOrderIds.some((id) => orderOf.has(id)))
-    .sort((a, b) => (a.shippedAt?.getTime() ?? 0) - (b.shippedAt?.getTime() ?? 0))
-    .map((shipment) => {
-      const order = orderOf.get(shipment.salesOrderIds.find((id) => orderOf.has(id))!)!
-      const status = customerShipmentStatusOf(shipment.status, latest.get(shipment.id) ?? [])
-      const last = read.tracking.filter((event) => event.shipmentId === shipment.id).at(-1) ?? null
-      return {
-        shipmentId: shipment.id,
-        number: shipment.number,
-        // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's SO-….
-        order: { id: order.id, customerRef: order.customerRef, yourNumber: customerNumberOf('ORDER', order.customerSeq) },
-        status,
-        words: SHIPMENT_STATUS_WORDS[status],
-        carrierName: shipment.carrierName,
-        shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
-        expectedDeliveryAt: etaOf(shipment),
-        typedTrackingNumber: shipment.manualTrackingNumber, // B-OP-031
-        typedTrackingUrl: trackingPageOf(shipment.manualTrackingUrl), // B-OP-034
-        // B-OS-006: carrier labels only (a TEST label's number never reaches the customer); B-OS-022: and the parcels' typed numbers.
-        trackingNumbers: read.parcels.flatMap((parcel) => (parcel.shipmentId === shipment.id && customerNumberOfParcel(parcel) !== null ? [customerNumberOfParcel(parcel)!] : [])),
-        trackingLinks: read.parcels.flatMap((parcel) => {
-          const number = parcel.shipmentId === shipment.id ? customerNumberOfParcel(parcel) : null
-          const link = number !== null ? trackingLinkOf(customerUrlOfParcel(parcel)) : null // B-OS-022
-          return number !== null && link ? [{ trackingNumber: number, ...link }] : []
-        }),
-        lastEvent: last ? eventView(last, last.parcelId ? (parcelSeq.get(last.parcelId) ?? null) : null) : null,
-      }
-    })
-  return { asOf: toUtcIso(now), items, live: LIVE }
 }

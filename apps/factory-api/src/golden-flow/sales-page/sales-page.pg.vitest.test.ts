@@ -1161,8 +1161,6 @@ async function pageWall(step: string): Promise<void> {
     const text = JSON.stringify(await asBeta('GET', url))
     for (const id of ids) expect(text.includes(id), `${step}: ${url} lists ${id}`).toBe(false)
   }
-  const transit = JSON.stringify(await ok(buyerB, 'GET', '/portal/sales-orders/in-transit'))
-  for (const id of ids) expect(transit.includes(id), `${step}: Beta's On the way lists ${id}`).toBe(false)
   await betaGetsNothing(step)
 }
 
@@ -1431,10 +1429,9 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     const office = await systemLinesOn(P.so2, TRACKING[0])
     expect(office).toHaveLength(1)
     expect(office[0]).toMatchObject({ audience: 'OFFICE', direction: 'INTERNAL_NOTE' })
-    // The customer's own shipment and "On the way" carry the number and its link (no live tracking: the carrier was booked by hand).
+    // The customer's own shipment carries the number and its link (no live tracking: the carrier was booked by hand). pg-s3 (D7):
+    // "On the way" and its read GET …/in-transit are gone.
     expect(await portalRow()).toMatchObject({ typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
-    const transit = await ok(buyerA, 'GET', '/portal/sales-orders/in-transit')
-    expect((transit.items as Json[]).find((row) => row.number === P.elsewhere.number)).toMatchObject({ typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
     // The tracking page of a link made for it (not mailed here).
     const made = await ok(wanda, 'POST', `/shipping/shipments/${P.elsewhere.id}/tracking-links`, { send: false }, 201)
     const token = tokenOf(made.url as string)

@@ -272,37 +272,6 @@ export const shipmentsContract = defineContract({
   },
 })
 
-export const inTransitContract = defineContract({
-  response: {
-    200: output({
-      asOf: instant(),
-      items: z.array(
-        output({
-          shipmentId: id(),
-          number: z.string(),
-          // fix-portal-numbers-1 (B-TH-303): its PO and the customer's own number, never the office's series.
-          order: output({ id: id(), customerRef: z.string().nullable(), yourNumber }),
-          status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
-          words,
-          carrierName: z.string().nullable(),
-          shippedAt: instant().nullable(),
-          /** B-W2b-F14: when the carrier expects to deliver it; null: not said. */
-          expectedDeliveryAt: instant().nullable(),
-          /** B-OP-031: the number typed for a carrier booked by hand ("No live tracking"); null: none. */
-          typedTrackingNumber: z.string().nullable(),
-          /** B-OP-034: the tracking link typed beside it (https only); null: none. */
-          typedTrackingUrl: z.string().nullable(),
-          trackingNumbers: z.array(z.string()),
-          /** B-W2b-F14: "Track on the carrier's site" per tracking number (https pages only). */
-          trackingLinks: z.array(output({ trackingNumber: z.string(), url: z.string(), words })),
-          lastEvent: trackingEvent.nullable(),
-        }),
-      ),
-      live,
-    }),
-  },
-})
-
 // ---- B-TH-061 (SHEET-G10, Owner decision 13; wall W39 / T39): the customer's own sheet — the list's rows with the columns the office
 // ticked for the portal, and "Download all" written by the server in the partner scope (never the export job).
 const portalColumn = output({
