@@ -1002,8 +1002,19 @@ function NewOrderContainer() {
         }
       })
       .catch(() => undefined)
-  }, [api, apply, startFrom, dirty])
-  usePortalLive({ onReconnect: recheck }, allowed && phase === 'draft')
+  }, [port, apply, startFrom, dirty])
+  // od-w1.3 (W3): the office writes this draft too — its live `draft_changed` (ids only) reads the draft again; this page's own save
+  // comes back as an echo and is skipped by version (a version the page already holds changes nothing; typed work is never overwritten).
+  const onLiveChange = useCallback(
+    (change: { type: string; fields: Record<string, unknown> }) => {
+      const current = recordRef.current
+      if (change.type !== 'portal_order_request.draft_changed' || !current || change.fields.requestId !== current.request.id) return
+      if (typeof change.fields.version === 'number' && change.fields.version <= current.request.version) return
+      recheck()
+    },
+    [recheck],
+  )
+  usePortalLive({ onChange: onLiveChange, onReconnect: recheck }, allowed && phase === 'draft')
   useEffect(() => {
     const onVisible = () => (document.visibilityState === 'visible' ? recheck() : undefined)
     document.addEventListener('visibilitychange', onVisible)

@@ -243,30 +243,3 @@ export function shipToOf(addresses: readonly PartyAddressRead[]): ShipToChoice[]
       isDefault: address.isDefaultShipTo,
     }))
 }
-
-// ---- the compose in the office's voice -----------------------------------------------------------------------------------------
-
-/**
- * The compose's labels that speak to the customer in the portal ("Your message", "Your PO") and have the office's words here
- * ("What they asked", "Their PO"): `sales-incoming-new` `voice.<key>`.
- */
-export const OFFICE_VOICE: ReadonlySet<string> = new Set([
-  'compose.label',
-  'subject.hint',
-  'subject.used',
-  'message.label',
-  'message.hint',
-  'problem.tooLong',
-  'problem.refLong',
-  'problem.datePast',
-  'problem.shipTo',
-  'details.none',
-  'details.ref',
-  'details.refHint',
-  'details.dateHint',
-  'details.shipToHint',
-  'details.shipToWaiting',
-  'details.shipToFailed',
-  'details.sumRef',
-  'kept.offline',
-])

@@ -6,7 +6,7 @@ import { Banner, Card, Disclosure, Field } from '@nexus/ui/components'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { DateField, Textarea } from '../../i18n/ds-parts'
 import { useT } from '../../i18n/provider'
-import { COMPOSE_LIMITS, COMPOSE_NS, counterLimit, detailsSummary, subjectUsed, type ComposeDraft, type ComposeField, type ShipToChoice } from '../model'
+import { COMPOSE_LIMITS, COMPOSE_NS, counterLimit, detailsSummary, OFFICE_VOICE, subjectUsed, type ComposeDraft, type ComposeField, type ComposeKind, type ShipToChoice } from '../model'
 import '../request-compose.css'
 
 /**
@@ -71,11 +71,6 @@ export interface RequestComposeActions {
 export interface RequestComposeWords {
   /** A calendar day (`YYYY-MM-DD`) in the page's language. */
   day: (iso: string) => string
-  /**
-   * B-TH-221: the office's voice — a label of `request-compose` in other words ("Your message" → "What they asked"), or null for
-   * the compose's own. The portal passes none.
-   */
-  label?: (key: string, params?: Readonly<Record<string, string | number>>) => string | null
 }
 
 /**
@@ -90,9 +85,13 @@ export interface RequestComposeSlots {
   details?: ReactNode
 }
 
-export function RequestCompose({ model, actions, words, to, aside, below, slots }: { model: RequestComposeModel; actions?: RequestComposeActions; words: RequestComposeWords; to?: ReactNode; aside?: ReactNode; below?: ReactNode; slots?: RequestComposeSlots }) {
+/**
+ * od-w1.3 (S1-B10, B-TH-221): `kind` — the door that draws it; the office reads its own voice for the labels that speak to the customer
+ * ("Your message" → "What they asked": `office.<key>`), the portal (the default) the compose's own words. No words override.
+ */
+export function RequestCompose({ model, actions, words, kind = 'portal', to, aside, below, slots }: { model: RequestComposeModel; actions?: RequestComposeActions; words: RequestComposeWords; kind?: ComposeKind; to?: ReactNode; aside?: ReactNode; below?: ReactNode; slots?: RequestComposeSlots }) {
   const own = useT(COMPOSE_NS)
-  const t = (key: string, params?: Readonly<Record<string, string | number>>): string => words.label?.(key, params) ?? own(key, params)
+  const t = (key: string, params?: Readonly<Record<string, string | number>>): string => own(kind === 'office' && OFFICE_VOICE.has(key) ? `office.${key}` : key, params)
   const plain = slots?.plain === true
   const draft = model.draft
   const held = model.readOnly

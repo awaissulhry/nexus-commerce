@@ -34,38 +34,6 @@
     "matchBody": "Use the customer: a second record of the same company would split its requests and mail.",
     "matchUse": "Use {name}"
   },
-  "voice": {
-    "compose": {
-      "label": "The request"
-    },
-    "subject": {
-      "hint": "Empty: the first line of the message is used.",
-      "used": "Empty: “{subject}” is used."
-    },
-    "message": {
-      "label": "What they asked",
-      "hint": "Their words as they said or wrote them: the call's notes, the letter's text. The request's first card shows it as written."
-    },
-    "problem": {
-      "tooLong": "The subject and the message are 20 000 characters at most together.",
-      "refLong": "Their PO is {max} characters at most.",
-      "datePast": "The day wanted is today or later.",
-      "shipTo": "That is not one of this customer's delivery addresses: choose another one."
-    },
-    "details": {
-      "none": "Nothing here is needed to create the request.",
-      "ref": "Their PO",
-      "refHint": "The customer's own order number, if they gave one.",
-      "dateHint": "The day they would like the goods. Our answer says what we can do.",
-      "shipToHint": "One of the customer's delivery addresses.",
-      "shipToWaiting": "An address the customer added in its portal: it is checked before the first delivery.",
-      "shipToFailed": "The customer's delivery addresses could not be read.",
-      "sumRef": "Their PO {ref}"
-    },
-    "kept": {
-      "offline": "Offline: what you typed stays in this window."
-    }
-  },
   "office": {
     "title": "For the office",
     "linesHint": "Optional: turn what they asked into lines (a style, its colourway, pieces by size). Only the open range and this customer's own labels are offered."

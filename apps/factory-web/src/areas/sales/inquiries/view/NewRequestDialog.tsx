@@ -12,7 +12,7 @@ import { RequestCompose, type RequestComposeModel } from '../../../../lib/reques
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { ContactOption, MailDraft, RequestCustomer, StyleOption } from '../api'
 import { CURRENCIES, recordHref, type InquiriesCan, type Loaded, type Notice, type Phrase } from '../model'
-import { composeProblems, LAWFUL_BASES, n, NEW_NS, newRequestHeld, OFFICE_VOICE, prospectMatch, stylesFor, TYPED_SOURCES, type NewRequestDraft, type Who } from '../new-request'
+import { composeProblems, LAWFUL_BASES, n, NEW_NS, newRequestHeld, prospectMatch, stylesFor, TYPED_SOURCES, type NewRequestDraft, type Who } from '../new-request'
 import { NoticeLine, useWords } from '../parts'
 import { LinesEditor, type StyleRead } from './LinesEditor'
 import './new-request.css'
@@ -140,7 +140,6 @@ function Dialog({ model, me, can, prefix, actions }: { model: NewRequestModel; m
     filesHeld: '',
     notice: null,
   }
-  const voice = (key: string, params?: Readonly<Record<string, string | number>>): string | null => (OFFICE_VOICE.has(key) ? tn(`voice.${key}`, params) : null)
 
   return (
     <Modal
@@ -210,7 +209,8 @@ function Dialog({ model, me, can, prefix, actions }: { model: NewRequestModel; m
         {showMail && (
           <RequestCompose
             model={compose}
-            words={{ day, label: voice }}
+            words={{ day }}
+            kind="office" // od-w1.3: the office's voice is the compose's own word set (request-compose office.*)
             actions={{
               onChange: (field, value) => actions?.onCompose?.(field, value),
               onLeave: (field) => actions?.onLeaveField?.(field),
