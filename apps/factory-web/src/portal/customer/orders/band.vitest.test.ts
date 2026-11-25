@@ -221,11 +221,18 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('W-13: the tab you are on is brought whole into view, sideways only, whenever the strip or a tab changes size', () => {
     const html = render(createElement(recordScreen.view, { model: recordScreen.cases.find((item) => item.id === 'files')!.model }), 'en')
     expect(html.search(/<div class="fw-pord-tabs">[\s\S]*?<nav[^>]*aria-label="Order"/)).toBeGreaterThanOrEqual(0)
+    // pp-fx7 (re-walk R2-01): ONE part (shell/view/active-tab.ts) for the order's body tabs and a band's tab row ("Ship notices 2" sat
+    // under the band strip's › arrow at 375).
+    const part = readFileSync(new URL('../../shell/view/active-tab.ts', import.meta.url), 'utf8')
+    expect(part).toContain("const tab = strip.querySelector<HTMLElement>('[aria-current=\"page\"]')")
+    expect(part).toContain('strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)')
+    expect(part).toContain('observer.observe(strip)')
+    expect(part).not.toMatch(/scrollIntoView\(/)
     const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("const tab = strip.querySelector<HTMLElement>('[aria-current=\"page\"]')")
-    expect(view).toContain('strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)')
-    expect(view).toContain('observer.observe(strip)')
-    expect(view).not.toMatch(/scrollIntoView\(/)
+    expect(view).toContain('useActiveTabInView(root, `${active}:${tabs.length}`)')
+    const shell = readFileSync(new URL('../../shell/view/PortalShellView.tsx', import.meta.url), 'utf8')
+    expect(shell).toContain('useActiveTabInView(bandRef, band.tabs ? `${band.tabs.active}:${band.tabs.items.length}` : null)')
+    expect(shell).toContain("<div ref={bandRef} className={['fw-pband',")
   })
 
   it('G10: on a phone the band’s row 1 holds ‹ · the title · ⋯; the reference, the pills and Pages go to row 2 (one shell rule)', () => {
@@ -237,6 +244,8 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    flex-basis: 100%;\n  }')
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title:has(> .back) h1 {\n    flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));')
     expect(phone).not.toMatch(/\.nds-detailhdr-title h1 \{\s*flex-basis: calc\(/)
+    // pp-fx7 (re-walk R2-02): no cut word — on a phone the title wraps (a claim's "Quality claim SEED-CMP…" was cut by the ellipsis).
+    expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    overflow: visible;\n    text-overflow: clip;\n    white-space: normal;\n    overflow-wrap: break-word;\n  }')
     // pp-fx5 (walk W-07): the reference never breaks inside its number — whole, and row 2 wraps between its items (the meta takes its
     // content's width, Pages goes under it when both do not fit; before, a zero basis squeezed the ref beside Pages).
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {\n    order: 1;\n    flex: 1 1 auto;\n    min-width: 0;\n  }')

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { useActiveTabInView } from '../../../shell/view/active-tab' // pp-fx7 (re-walk R2-01): one part for the body's and the band's tabs
 import { AlertCircle, WifiOff } from 'lucide-react'
 import { Banner, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
@@ -173,31 +174,10 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   }
 }
 
-/**
- * pp-fx5 (walk W-13): the tab strip keeps the tab you are on whole in view — at 375 "Files 1" sat under the › arrow with "‹ ew" at the
- * left. The DS strip reveals the active tab once its tabs change size; the strip's own width also moves (the frame settles, a count
- * arrives), so the portal brings the active tab to the strip's middle again whenever the strip or a tab changes size — sideways only,
- * never the page.
- */
+/** pp-fx5 (walk W-13): the order's tab strip keeps the tab you are on whole in view (the shell's one part, shared with a band's tabs). */
 function OrderTabs({ label, tabs, active }: { label: string; tabs: TabItem[]; active: string }) {
   const root = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const strip = root.current?.querySelector<HTMLElement>('.nds-tabs')
-    if (!strip) return
-    const reveal = () => {
-      const tab = strip.querySelector<HTMLElement>('[aria-current="page"]')
-      if (!tab) return
-      const box = strip.getBoundingClientRect()
-      const own = tab.getBoundingClientRect()
-      strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)
-    }
-    reveal()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(reveal)
-    observer.observe(strip)
-    strip.querySelectorAll<HTMLElement>('[data-tab-id]').forEach((tab) => observer.observe(tab))
-    return () => observer.disconnect()
-  }, [active, tabs.length])
+  useActiveTabInView(root, `${active}:${tabs.length}`)
   return (
     <div ref={root} className="fw-pord-tabs">
       <Tabs ariaLabel={label} tabs={tabs} active={active} size="sm" overflow="scroll" linkAs={TabLink} />
