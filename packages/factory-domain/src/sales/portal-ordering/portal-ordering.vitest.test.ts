@@ -5,7 +5,7 @@ import { FACTORY_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { partnerTemplateOf } from '../../auth/roles/templates'
 import { EVENT_DEFINITIONS } from '../../events/catalogue'
 import { ATTENTION_KINDS, KIND_RULES } from '../../insights/attention'
-import { decisionProblem, draftReadiness, refuseReasonProblem, withdrawProblem, type DraftFacts } from './office'
+import { decisionProblem, PROBLEM_PARTS, refuseReasonProblem, withdrawProblem } from './office'
 import { PORTAL_ADDRESSES_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_DRAFTS_EDIT, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDERING_PERMISSIONS } from './permissions'
 import { reorderPlan, type ReorderFacts } from './reorder'
 import { PPE_CATEGORIES } from '../../product/styles/rules'
@@ -16,7 +16,7 @@ import { DRAFT_FILE_CATEGORY, DRAFT_FILES_MAX, draftFilePartOf, draftFilesByPart
 // B-CP-075: every kind of draft line, the people on it, problems per part, the 409 that names the colleague.
 import { MEASURE_BY, MEASURE_BY_WORDS, PEOPLE_IN_SHEET, personRow, personShapeProblems } from './people'
 import { customLineProblems, customLineShapeProblems, draftStaleWords, lineHasPieces, linePieces, MTM_CLOSED_WORDS, PROBLEM_CODES, type CustomLineFacts } from './rules'
-import { problemPartOf, problemsByPartOf } from './office'
+import { problemPartOf } from './office'
 import { ACCEPT_MAP_LIMITS, ACCEPT_WORDS, acceptPlanOf, lineMapOf, mappedLineNote, type AcceptLineFacts } from './office' // B-CP-077
 import { brandPricesOfAccept, draftValueOf } from './office' // B-CP-076
 // od-s s.4: Send holds only on an invalid value; Still open; a row's choices; a complete row at Confirm.
@@ -145,40 +145,6 @@ describe('the office decision', () => {
   })
 })
 
-// ---- B-CP-071 (customer page plan D10, review B4): the draft's checklist as the office and the portal read it.
-describe('a draft\'s checklist (B-CP-071)', () => {
-  const facts = (more: Partial<DraftFacts> = {}): DraftFacts => ({ lines: 0, linesWithoutPieces: 0, logos: 0, references: 0, requestedDate: false, headerProblems: 0, note: false, later: [], pricedLines: null, problems: 1, ...more })
-
-  it('starts with what is needed missing and the rest optional; six parts for a reader without the price grain', () => {
-    const empty = draftReadiness(facts())
-    expect(empty.parts).toEqual([
-      { part: 'NEED', state: 'MISSING' },
-      { part: 'LOGOS', state: 'OPTIONAL' },
-      { part: 'REFERENCES', state: 'OPTIONAL' },
-      { part: 'PEOPLE', state: 'MISSING' },
-      { part: 'DATE', state: 'OPTIONAL' },
-      { part: 'NOTES', state: 'OPTIONAL' },
-    ])
-    expect(empty).toMatchObject({ done: 0, of: 6, problems: 1 })
-  })
-
-  it('counts part 6 "Your price" for a price holder only, ready once every line carries the customer\'s price', () => {
-    expect(draftReadiness(facts({ lines: 2, pricedLines: 1 })).of).toBe(7)
-    expect(draftReadiness(facts({ lines: 2, pricedLines: 1 })).parts.find((entry) => entry.part === 'PRICE')?.state).toBe('OPTIONAL')
-    expect(draftReadiness(facts({ lines: 2, pricedLines: 2 })).parts.find((entry) => entry.part === 'PRICE')?.state).toBe('READY')
-    expect(draftReadiness(facts({ lines: 2 })).parts.map((entry) => entry.part)).not.toContain('PRICE')
-  })
-
-  it('reads lines, files, people, the date and the note; "sending later" for logos, references and people; a past date is missing', () => {
-    const full = draftReadiness(facts({ lines: 2, logos: 1, references: 3, requestedDate: true, note: true, problems: 0 }))
-    expect(full).toMatchObject({ done: 6, of: 6, problems: 0 })
-    const later = draftReadiness(facts({ lines: 1, linesWithoutPieces: 1, later: ['LOGOS', 'PEOPLE'] }))
-    expect(later.parts.filter((entry) => entry.state === 'LATER').map((entry) => entry.part)).toEqual(['LOGOS', 'PEOPLE'])
-    expect(draftReadiness(facts({ lines: 1, requestedDate: true, headerProblems: 1 })).parts.find((entry) => entry.part === 'DATE')?.state).toBe('MISSING')
-  })
-})
-// ---- end B-CP-071
-
 // ---- B-CP-072 (customer page plan C5): a draft's files by part.
 describe('a draft\'s files (B-CP-072)', () => {
   it('files a logo as ARTWORK, a sheet as MEASUREMENTS, a reference with no category, and reads them back the same way', () => {
@@ -269,18 +235,8 @@ describe('B-CP-075: described and made-to-measure lines, and the people on them'
     expect(problemPartOf({ code: 'NO_PEOPLE', personId: null })).toBe('PEOPLE')
     expect(problemPartOf({ code: 'DATE_PAST', personId: null })).toBe('DATE')
     expect(problemPartOf({ code: 'NO_TOTAL', personId: null })).toBe('NEED')
-    expect(problemsByPartOf([...roster, { code: 'NO_TOTAL', personId: null }, { code: 'NO_TOTAL', personId: null }])).toEqual({ PEOPLE: 1, NEED: 2 })
-  })
-
-  it('a part with a problem is not ready; the people part says "sending later" when marked so', () => {
-    const base: DraftFacts = { lines: 2, linesWithoutPieces: 0, logos: 0, references: 0, requestedDate: false, headerProblems: 0, note: false, later: [], pricedLines: null, problems: 1 }
-    const state = (facts: DraftFacts, part: string) => draftReadiness(facts).parts.find((entry) => entry.part === part)!.state
-    expect(state(base, 'NEED')).toBe('READY')
-    expect(state({ ...base, problemsByPart: { NEED: 1 } }, 'NEED')).toBe('MISSING')
-    expect(state({ ...base, problemsByPart: { PEOPLE: 1 } }, 'PEOPLE')).toBe('MISSING')
-    expect(state({ ...base, linesWithoutPieces: 1, later: ['PEOPLE'] }, 'PEOPLE')).toBe('LATER')
-    // Absent (an older reader): as before.
-    expect(state({ ...base, problems: 3 }, 'NEED')).toBe('READY')
+    // od-fx3: a problem names one of the three parts it can be on (the checklist's seven parts went).
+    expect([...PROBLEM_PARTS]).toEqual(['NEED', 'PEOPLE', 'DATE'])
   })
 
   it('holds a person to one way of being measured — a size, a sheet of the draft, or later — and writes it trimmed', () => {

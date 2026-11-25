@@ -311,7 +311,7 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     const noSheets = officeWith(['orders.view', 'threads.read', 'files.read'])
     const row = (await listOfficeRequests(noSheets, { status: 'DRAFT', partyId: partyA })).requests.find((entry) => entry.id === G.mixed)!
     expect(row.draft).toMatchObject({ people: 2, later: ['LOGOS', 'PEOPLE'], lastEditedBy: names.aBuyer })
-    expect(row.draft!.readiness.parts.find((part) => part.part === 'LOGOS')?.state).toBe('LATER')
+    expect(row.draft).not.toHaveProperty('readiness') // od-fx3: the parts sent later are `later` above (the checklist went)
     expect(row.pieces).toBe(42)
     const view = await officeRequestView(noSheets, G.mixed)
     expect(view.request.customLines.map((line) => [line.seq, line.kind])).toEqual([[1, 'DESCRIBED'], [2, 'MADE_TO_MEASURE']])

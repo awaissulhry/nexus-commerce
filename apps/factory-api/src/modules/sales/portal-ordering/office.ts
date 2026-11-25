@@ -8,7 +8,7 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 // od-s s.3: Make style draft on a draft or a sent request (the style library's right; at most 50 per request).
 import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
 import { STYLE_DRAFTS_MAX } from '@nexus/factory-domain/sales/inquiries/rules'
-import { decisionProblem, draftReadiness, refuseReasonProblem, type AcceptAs, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { decisionProblem, refuseReasonProblem, type AcceptAs, type DraftLaterPart } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
@@ -30,10 +30,9 @@ import { mayOnThread } from '../../../platform/threads/records'
 // B-CP-072: a draft's files by part; a measurement sheet is named only with sales.measurements.view.
 import { draftFilesByPart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
-// B-CP-075: the lines of the customer's own kinds, their people, the parts it sends later, who saved it last; problems per part.
-import { problemsByPartOf } from '@nexus/factory-domain/sales/portal-ordering/office'
+// B-CP-075: the lines of the customer's own kinds, their people, the parts it sends later, who saved it last.
 import { customLineFactsOf, customLineView, isCustomLine, madeToMeasureOf, piecesOfLine, problemView, sheetLinesOf, type MadeToMeasure, type SheetOf } from './people'
-import { customLineProblems, lineHasPieces } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { customLineProblems } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { readPeople, type PersonRow } from './store'
 // B-CP-077: the accept's line map (a described or made-to-measure line made into style lines), its checks, the logos' carry.
 import { DomainError, type Issue } from '@nexus/factory-domain/core/errors'
@@ -169,7 +168,6 @@ interface DraftView {
   readonly title: string | null
   /** The people of its roster (B-CP-075). */
   readonly people: number
-  readonly readiness: { readonly parts: { readonly part: DraftPart; readonly state: DraftPartState }[]; readonly done: number; readonly of: number; readonly problems: number }
   readonly later: DraftLaterPart[]
   /** Its conversation, for a reader of its thread (null: not one). */
   readonly thread: { readonly messages: number; readonly lastAt: string | null; readonly designerAsked: boolean } | null
@@ -287,21 +285,6 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
     const sheetsLocked = !can(actor, SALES_MEASUREMENTS_VIEW, scope)
     const later = [...row.laterParts] as DraftLaterPart[] // B-CP-075
     const seesPrice = can(actor, grainPermission('price'), scope) // B-CP-076 (review B4)
-    const readiness = draftReadiness({
-      lines: own.length,
-      // B-CP-075: a line's pieces by its kind (sizes; a described total; a by-person line's people, or a sheet on it).
-      linesWithoutPieces: own.filter((line) => !lineHasPieces({ kind: line.kind, quantity: line.quantity, sizes: line.sizes, byPerson: line.byPerson, people: roster.filter((person) => person.lineId === line.id).length, sheetOnLine: sheetLines.has(line.id) })).length,
-      logos: files.logos.length,
-      references: files.references.length,
-      requestedDate: row.requestedDate !== null,
-      headerProblems: header.filter((entry) => entry.code !== 'NO_LINES' && entry.code !== 'TOO_MANY_LINES').length,
-      note: row.note !== null,
-      later,
-      // Part 6 "Your price" only for a price holder (review B4). B-CP-076: the lines that carry the customer's own price.
-      pricedLines: seesPrice ? own.filter((line) => line.brandUnitPrice !== null).length : null,
-      problems: problems.length,
-      problemsByPart: problemsByPartOf(problems), // B-CP-075
-    })
     // B-CP-075: who saved it last — the draft's own column, else (a draft saved before it) its newest portal audit row, else who started it.
     const editorId = row.lastEditedById ?? edited?.actorId ?? row.createdById
     out.set(row.id, {
@@ -311,7 +294,6 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       lastEditedAt: iso(row.lastEditedAt ?? row.updatedAt)!,
       title: row.subject ?? (first ? `${first.code} ${first.name}`.trim() : ownWords), // B-CP-005: else the line's own words; od-s s.3: the subject first
       people: roster.length, // B-CP-075
-      readiness: { ...readiness, parts: [...readiness.parts] },
       later, // B-CP-075
       thread: mayOnThread(actor, THREADS_READ, 'PortalOrderRequest', scope) ? { messages: thread?._count.messages ?? 0, lastAt: iso(thread?.lastMessageAt ?? null), designerAsked: false } : null,
       problems: problems.map(problemView), // B-CP-075: + the part and the person

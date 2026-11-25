@@ -333,8 +333,10 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     const row = drafts.requests.find((entry) => entry.id === draft)!
     expect(row).toMatchObject({ status: 'DRAFT', number: null, customerRef: 'PO-SEED-7004', lines: expect.any(Number) })
     expect(row.draft).toMatchObject({ title: expect.stringMatching(/^SEED-JKT/), people: 0, later: [], thread: { messages: 2, designerAsked: false } })
-    expect(row.draft!.readiness.parts.map((part) => part.part)).toEqual(expect.arrayContaining(['NEED', 'LOGOS', 'REFERENCES', 'PEOPLE', 'DATE', 'NOTES']))
-    expect(row.draft!.readiness.parts.find((part) => part.part === 'NOTES')?.state).toBe('READY')
+    // od-fx3: the seven-part checklist went; the row says what is still open (Still open, information only) and the parts sent later.
+    expect(row.draft).not.toHaveProperty('readiness')
+    expect(row.draft).toMatchObject({ openCount: expect.any(Number), confirmHeld: expect.any(Boolean), later: [] })
+    expect(row.draft!.openCount).toBeGreaterThan(0)
     expect(row.draft!.lastEditedAt).toEqual(expect.any(String))
     // OPEN and ALL never hold a draft.
     for (const status of ['OPEN', 'ALL'] as const) expect((await listOfficeRequests(persona('sales'), { status })).requests.map((entry) => entry.id)).not.toContain(draft)
@@ -417,13 +419,15 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
       const list = filterForGrains(officeListContract.response[200], await listOfficeRequests(caller, { status: 'DRAFT', partyId: world.p1 }), held)
       expect(JSON.stringify(list), key).not.toMatch(PRICE_KEYS)
       const row = (list as Json).requests.find((entry: Json) => entry.id === draft)
-      expect(row.draft.readiness.of, key).toBe(6)
-      expect(row.draft.readiness.parts.map((part: Json) => part.part), key).not.toContain('PRICE')
+      // od-fx3: no money fact on the row for a no-price reader — not its value, and (the checklist gone) no price part to count.
+      expect(row.draft, key).not.toHaveProperty('draftValueAmount')
+      expect(row.draft, key).not.toHaveProperty('readiness')
     }
-    // A price holder counts part 6 "Your price" (seven parts).
+    // A price holder reads the draft's value (the money grain; the checklist's part 6 went with od-fx3).
     const owner = office(['orders.view', 'threads.read', 'money.price'])
     const priced = (await listOfficeRequests(owner, { status: 'DRAFT', partyId: world.p1 })).requests.find((entry) => entry.id === draft)!
-    expect(priced.draft!.readiness.of).toBe(7)
+    expect(priced.draft).toHaveProperty('draftValueAmount')
+    expect(priced.draft).not.toHaveProperty('readiness')
   })
 
   it('every change of a draft is portal_order_request.draft_changed with ids only: the party routes, never a live field (review C2)', async () => {
