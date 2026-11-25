@@ -211,6 +211,31 @@ export function headerProblems(facts: DraftHeaderFacts, today: BusinessDate): Pr
   return out
 }
 
+/**
+ * od-s s.4 (order start; the Owner's change of 2026-11-25 10:12, addendum R1: "we should not keep any requirements at all"): whether a
+ * problem holds the Send. Only an INVALID value does (a date in the past, an archived address, a style no longer sold, a colour
+ * discontinued, a size not offered, sizes that do not add up to the total, made to measure switched off, a garment type gone, too
+ * many lines, a price shown that is no longer today's — the customer takes today's price first: what is sent is what was shown); a
+ * MISSING one never does (no line, no sizes, no total, no people — the office's Confirm window asks them).
+ */
+export const SEND_HOLDING: Readonly<Record<ProblemCode, boolean>> = Object.freeze({
+  NO_LINES: false,
+  TOO_MANY_LINES: true,
+  DATE_PAST: true,
+  SHIP_TO_ARCHIVED: true,
+  STYLE_NOT_SOLD: true,
+  COLOUR_DISCONTINUED: true,
+  SIZE_NOT_OFFERED: true,
+  NO_SIZES: false,
+  PRICE_CHANGED: true,
+  NO_TOTAL: false,
+  SIZES_NOT_TOTAL: true,
+  NO_PEOPLE: false,
+  MTM_CLOSED: true,
+  GARMENT_TYPE_GONE: true,
+})
+export const holdsSend = (code: ProblemCode): boolean => SEND_HOLDING[code]
+
 /** "2 problems — Show me": the send's held reason in words. */
 export function heldWords(count: number): Words | null {
   if (count === 0) return null
@@ -290,9 +315,15 @@ export type CustomLineKind = (typeof CUSTOM_LINE_KINDS)[number]
 
 export const CUSTOM_LINE_LIMITS = Object.freeze({ description: 2000, colourText: 200, garmentType: 40, total: 100_000 })
 
-/** What a described or made-to-measure line holds (a new one, or one as it would be after a change). */
+/**
+ * What a described or made-to-measure line holds (a new one, or one as it would be after a change). od-s s.4 (addendum R3, the
+ * products table): every cell is optional — the words, the garment type, the colour; `sizing` (null: not decided yet) says the
+ * kind (custom size = MADE_TO_MEASURE); the row's open `choices` (names only, ./choices.ts).
+ */
 export interface CustomLineInput {
   readonly kind: CustomLineKind
+  readonly sizing?: 'STANDARD' | 'MADE_TO_MEASURE' | null | undefined
+  readonly choices?: readonly { readonly topic: string; readonly options: readonly string[]; readonly picked: string | null }[] | null | undefined
   readonly description?: string | null | undefined
   readonly colourText?: string | null | undefined
   readonly styleId?: string | null | undefined
@@ -311,11 +342,11 @@ export function customLineShapeProblems(line: CustomLineInput): string[] {
   const out: string[] = []
   const sizes = line.sizes ?? []
   const byPerson = line.kind === 'MADE_TO_MEASURE' ? true : line.byPerson === true
-  if (line.kind === 'DESCRIBED' && !filled(line.description)) out.push('Say in your words what you need (1 to 2000 characters).')
+  // od-s s.4 (addendum R3): a described row may have no words yet; a made-to-measure row no garment type yet.
   if (filled(line.description) && line.description!.trim().length > CUSTOM_LINE_LIMITS.description) out.push(`A description is at most ${CUSTOM_LINE_LIMITS.description} characters.`)
   if (filled(line.colourText) && line.colourText!.trim().length > CUSTOM_LINE_LIMITS.colourText) out.push(`The colours in words are at most ${CUSTOM_LINE_LIMITS.colourText} characters.`)
   if (line.kind === 'MADE_TO_MEASURE') {
-    if (!filled(line.garmentType) || line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push('Choose the garment type to make to measure.')
+    if (filled(line.garmentType) && line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push(`A garment type is at most ${CUSTOM_LINE_LIMITS.garmentType} characters.`)
     if (line.byPerson === false) out.push('A made-to-measure line is always by person.')
     if (line.quantity !== undefined && line.quantity !== null) out.push('A made-to-measure line counts its people, not a total.')
   } else if (line.quantity !== undefined && line.quantity !== null && (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CUSTOM_LINE_LIMITS.total)) {
@@ -399,10 +430,46 @@ export function customLineProblems(line: CustomLineFacts): Problem[] {
   return out
 }
 
-/** B-CP-075: the 409 of a draft a colleague changed meanwhile — it names them (the party's own person; never an office name). */
-export function draftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number }): Words {
+/**
+ * B-CP-075: the 409 of a draft a colleague changed meanwhile — it names them (the party's own person; never an office name).
+ * od-s s.2 (W2): `factory` — an office person saved it last: "the factory", never a worker's name.
+ */
+export function draftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number; readonly factory?: boolean | undefined }): Words {
   if (input.self) return { it: `Avete modificato questa bozza in un'altra finestra (ora versione ${input.version}): rileggetela.`, en: `You changed this draft in another window (now version ${input.version}): read it again.` }
+  if (input.factory === true) return { it: `La fabbrica ha modificato questa bozza dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `The factory changed this draft since you read it (now version ${input.version}): read it again.` }
   if (input.name !== null) return { it: `${input.name} ha modificato questa bozza dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `${input.name} changed this draft since you read it (now version ${input.version}): read it again.` }
   return { it: `Questa bozza è cambiata dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `This draft changed since you read it (now version ${input.version}): read it again.` }
 }
 // ---- end B-CP-075
+
+// ---- od-s s.2 (order start, 13-backend § 2; Owner yes 1a): the office writes a customer's draft --------------------------------
+/** The office's 409 of a draft changed meanwhile (the office voice, "tu"): it names whoever saved it (the customer's person or a colleague). */
+export function officeDraftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number }): Words {
+  if (input.self) return { it: `Hai modificato questa bozza in un'altra finestra (ora versione ${input.version}): rileggila.`, en: `You changed this draft in another window (now version ${input.version}): read it again.` }
+  if (input.name !== null) return { it: `${input.name} ha modificato questa bozza dopo che l'hai letta (ora versione ${input.version}): rileggila.`, en: `${input.name} changed this draft since you read it (now version ${input.version}): read it again.` }
+  return { it: `Questa bozza è cambiata dopo che l'hai letta (ora versione ${input.version}): rileggila.`, en: `This draft changed since you read it (now version ${input.version}): read it again.` }
+}
+
+/** The office's refusals on a customer's draft, in words (the API sends the English; the office page has both). */
+export const OFFICE_DRAFT_WORDS = Object.freeze({
+  /** A sent request: the customer reads it only; a late detail goes in the Confirm window or on the order. */
+  SENT: { it: 'Questa richiesta è stata inviata: scrivi un dettaglio tardivo nella finestra di conferma o sull’ordine.', en: 'This request was sent: type a late detail in the Confirm window or on the order.' },
+  /** Files on a draft that is no longer one. */
+  FILES_CLOSED: { it: 'Questa richiesta non è più una bozza: i file vanno sull’ordine.', en: 'This request is no longer a draft: files go on the order.' },
+  /** No files.upload over the customer. */
+  NO_UPLOAD: { it: 'Caricare file per questo cliente richiede il permesso sui file.', en: 'Uploading files for this customer needs the files right.' },
+  /** Discard: only a draft an office person started (Owner yes 1a). */
+  DISCARD_HELD: { it: 'Qui elimini solo una bozza iniziata in ufficio; il cliente elimina le proprie.', en: 'Only a draft started in the office is discarded here; the customer discards its own.' },
+  /** A measurement sheet named without sales.measurements.view (body data). */
+  SHEET_HELD: { it: 'Indicare una scheda misure richiede il permesso sulle misure.', en: 'Naming a measurement sheet needs the measurements right.' },
+  /** The customer's own price ("Your price") typed from the office (money wall: the customer types it). */
+  OWN_PRICE: { it: 'Il prezzo del cliente lo scrive il cliente.', en: "The customer's own price is typed by the customer." },
+})
+// ---- end od-s s.2
+
+// ---- od-s s.3 (L5): "Make style draft" on a draft order (409 refusal/<CODE>, in words) ----------------------------------------
+export const STYLE_DRAFT_WORDS = Object.freeze({
+  CLOSED: { it: 'Questa richiesta è già decisa: una bozza di modello si crea mentre è una bozza o è inviata.', en: 'This request is already decided: a style draft is made while it is a draft or sent.' },
+  STYLE_DRAFTS_FULL: { it: 'Questa richiesta indica già 50 bozze di modello, il massimo per una richiesta.', en: 'This request already names 50 style drafts, the most one request names.' },
+})
+// ---- end od-s s.3

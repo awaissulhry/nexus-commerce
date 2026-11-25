@@ -45,8 +45,8 @@ export function listQuery(chip: ProductionChip | null, q: string): string {
   return text ? `?${text}` : ''
 }
 
-/** Where a row opens: the order's own page on Status & progress (the order's production is drawn there). */
-export const rowHref = (prefix: string, row: Pick<ProductionRow, 'id'>): string => recordHref(prefix, row.id, 'status')
+/** Where a row opens: the order's own page on Overview (the order's production is drawn there; pp-w1 w1.3). */
+export const rowHref = (prefix: string, row: Pick<ProductionRow, 'id'>): string => recordHref(prefix, row.id, 'overview')
 
 // ── the customer's own name of an order (B-TH-303: never the office's SO- series) ──────────────────────────────────────
 /** RefPair's two sides: their PO first, then the customer's own number ("Your order" · "12"). */

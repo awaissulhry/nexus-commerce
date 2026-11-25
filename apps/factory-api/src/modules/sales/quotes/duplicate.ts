@@ -44,6 +44,11 @@ export interface DuplicateBody {
   readonly partyId?: string | undefined
   readonly contactId?: string | null | undefined
   readonly customerRef?: string | null | undefined
+  /**
+   * od-s s.4 (order start, S4-B2): the new quote's internal note (office only) — a portal request accepted as a quote keeps the
+   * customer's note and the date they want there (the quote's promise date stays the office's). None: no note, as before.
+   */
+  readonly internalNote?: string | null | undefined
 }
 
 /** What the copy left out, and why (in words). */
@@ -144,7 +149,7 @@ export async function duplicateInto(tools: CommandTools, source: Source, body: D
   const id = newId()
   const issued = await allocateNumber(tools, { companyId: company.id, kind: 'QUOTE' }, { type: 'Quote', id })
   const actorId = actorIdOf(tools)
-  await tx.quote.create({ data: { id, companyId: company.id, number: issued.formatted, partyId: party.row.id, contactId, customerRef: blankToNull(body.customerRef), createdById: actorId }, select: { id: true } })
+  await tx.quote.create({ data: { id, companyId: company.id, number: issued.formatted, partyId: party.row.id, contactId, customerRef: blankToNull(body.customerRef), internalNote: blankToNull(body.internalNote) /* od-s s.4 (S4-B2) */, createdById: actorId }, select: { id: true } })
   const versionId = newId()
   await tx.quoteVersion.create({
     data: {

@@ -16,8 +16,9 @@ import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' futu
  *   - grants: a portal session reads and writes its own party's drafts, reads its requests, change requests and payment
  *     intents, never another party's, never who in the office decided or answered, never the provider account; the floor
  *     reads none of it; a MEASUREMENTS link session adds the revision it sent; the office moves only the photos' deletion;
- *   - order requests: a DRAFT kept by the customer, sent with its number and its pieces, decided by the office (one order or
- *     quote, words to refuse) or withdrawn; its lines only while DRAFT; only a draft is deleted;
+ *   - order requests: a DRAFT kept by the customer (OD s.1, …_order_start_guards: and by the office), sent with its number (OD
+ *     s.1, addendum R1: nothing else required — no line, no pieces), decided by the office (one order or quote, words to refuse)
+ *     or withdrawn; its lines only while DRAFT; only a draft is deleted;
  *   - change requests: asked OPEN of an order still open to amendments, a cancel with its reason code; the office answers,
  *     the customer withdraws; an accepted change names its amendment once; the cells it asks are written once;
  *   - payment intents: CREATED on a payment provider account, paying one open deposit request or issued invoice, moved
@@ -47,7 +48,8 @@ const sql = (scope: FactoryScope, text: string, ...values: unknown[]) => as(scop
 const admin = async (text: string, values: unknown[] = []) => (await db.admin.query(text, values)).rows as Record<string, unknown>[]
 /** The columns the partner role may not read or write, of the tables a partner copies here (ownership/*.json). */
 const PARTNER_HIDDEN: Readonly<Record<string, readonly string[]>> = {
-  PortalOrderRequest: ['decidedById'],
+  // OD s.1 (schema wave "order start 1/1"): nor the style drafts the office made for it.
+  PortalOrderRequest: ['decidedById', 'styleIds'],
   // B-PR-23: nor who countered it.
   OrderChangeRequest: ['answeredById', 'counteredById'],
   // W2b-5 (wave 44/44, B-W2b-297): nor who reviewed it or which office person measured it.
@@ -145,7 +147,10 @@ describe('grants and the seed', () => {
     expect(personalDataOf(loadSchema(), ownership).filter((entry) => names.has(entry.model))).toEqual([])
     const byName = (name: string) => models.find(({ model }) => model.name === name)!.ownership.access
     expect(byName('PaymentIntent').factory_partner_runtime).toMatchObject({ privileges: ['select'], hiddenColumns: ['providerAccountId', 'createdById'] })
-    expect(byName('PortalOrderRequest').factory_runtime!.privileges).toEqual(['select', 'update'])
+    // OD s.1 (Owner's yes 1a): the office starts, fills and discards a customer's draft too (was select, update).
+    expect(byName('PortalOrderRequest').factory_runtime!.privileges).toEqual(['select', 'insert', 'update', 'delete'])
+    expect(byName('PortalOrderRequest').factory_partner_runtime).toMatchObject({ hiddenColumns: ['decidedById', 'styleIds'] })
+    for (const name of ['PortalOrderRequestLine', 'PortalOrderRequestSize', 'PortalOrderRequestPerson']) expect(byName(name).factory_runtime!.privileges, name).toEqual(['select', 'insert', 'update', 'delete'])
     const profile = classifiedModels(loadSchema(), ownership).find(({ model }) => model.name === 'MeasurementProfile')!.ownership.access
     expect(profile.factory_runtime!.privileges).toEqual(['select', 'insert', 'update'])
     expect(profile.factory_partner_runtime).toMatchObject({ privileges: ['select', 'insert'], hiddenColumns: ['internalNote', 'createdById', 'measuredByUserId', 'reviewedById'] })
@@ -201,15 +206,20 @@ describe('grants and the seed', () => {
     await expect(sql(partner(), 'SELECT "answeredById" FROM "OrderChangeRequest"')).rejects.toThrow(DENIED)
     await expect(sql(partner(), 'SELECT "providerAccountId" FROM "PaymentIntent"')).rejects.toThrow(DENIED)
     await expect(run(partner(), `UPDATE "PaymentIntent" SET version = version WHERE false`)).rejects.toThrow(DENIED)
-    await expect(run(office(), `INSERT INTO "PortalOrderRequestLine" (id) VALUES (NULL)`)).rejects.toThrow(DENIED)
+    // OD s.1: the office writes a draft's lines now (was permission denied); a line still needs its columns.
+    await expect(run(office(), `INSERT INTO "PortalOrderRequestLine" (id) VALUES (NULL)`)).rejects.toThrow(/null value in column/)
+    await expect(run(floor(), `INSERT INTO "PortalOrderRequestLine" (id) VALUES (NULL)`)).rejects.toThrow(DENIED)
   })
 })
 
 describe('order requests', () => {
-  it('the customer edits its draft; the office never does; a draft is discarded whole', async () => {
+  // OD s.1 (…_order_start_guards; Owner's yes 1a): the office edits a customer's draft too. Was "the office never does".
+  it('the customer and the office edit its draft, its draft columns only; a draft is discarded whole', async () => {
     const draft = await newDraft()
     expect(await update(partner(), 'PortalOrderRequest', draft, `"customerRef" = 'PO-T-1', note = 'Two more styles', version = version + 1`)).toBe(1)
-    await expect(update(office(), 'PortalOrderRequest', draft, `note = 'office words'`)).rejects.toThrow(/is the customer's; the office only sends it/)
+    expect(await update(office(), 'PortalOrderRequest', draft, `note = 'office words', version = version + 1`)).toBe(1)
+    expect(await sql(office(), `SELECT note, version FROM "PortalOrderRequest" WHERE id = $1::uuid`, draft)).toEqual([{ note: 'office words', version: 3 }])
+    await expect(update(office(), 'PortalOrderRequest', draft, `"decidedAt" = now()`)).rejects.toThrow(/changes only source, customerRef/)
     await expect(update(partner(), 'PortalOrderRequest', draft, `"decidedAt" = now()`)).rejects.toThrow(/changes only source, customerRef/)
     await expect(update(partner(), 'PortalOrderRequest', draft, `currency = 'euro'`)).rejects.toThrow(/an ISO currency/)
     const line = await newLine(draft, { '50': 1 })
@@ -226,13 +236,15 @@ describe('order requests', () => {
     )
   })
 
-  it('sending: a number, when and who; at least one line, each with its pieces; a date not before the day it is sent', async () => {
+  // OD s.1 (…_order_start_guards; addendum R1): Send needs no line and no pieces (was "at least one line, each with its pieces").
+  it('sending: a number, when and who; no line or pieces needed; a date not before the day it is sent', async () => {
     const empty = await newDraft()
-    await expect(send(empty)).rejects.toThrow(/at least one line, each with its pieces \(0 lines/)
+    expect(await send(empty)).toBe(1)
     const bare = await newDraft()
     const line = randomUUID()
     await copyRow('PortalOrderRequestLine', seeded.draftLines[0], { id: line, requestId: bare }, partner())
-    await expect(send(bare)).rejects.toThrow(/\(1 lines, 1 without pieces\)/)
+    expect(await send(bare)).toBe(1)
+    expect(await sql(office(), `SELECT status::text FROM "PortalOrderRequest" WHERE id = $1::uuid`, bare)).toEqual([{ status: 'SENT' }])
     const early = await newDraft({ requestedDate: '2020-01-02' })
     await newLine(early, { '52': 2 })
     await expect(send(early)).rejects.toThrow(/before the day it is sent/)
@@ -246,7 +258,9 @@ describe('order requests', () => {
 
   it('a sent request is frozen but for its decision or withdrawal; its lines and sizes change only while DRAFT', async () => {
     const id = seeded.requests.sent
-    await expect(update(partner(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/moves DRAFT → SENT → ACCEPTED, REFUSED or WITHDRAWN, not SENT → SENT/)
+    // OD s.1: SENT → SENT is the office's move for the style drafts only (was "not SENT → SENT" for everyone).
+    await expect(update(partner(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/was sent; only the office names the style drafts it made for it/)
+    await expect(update(office(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/\(SENT → SENT\) changes only styleIds, version, updatedAt/)
     await expect(update(office(), 'PortalOrderRequest', id, `status = 'DRAFT', number = NULL, "sentAt" = NULL, "sentById" = NULL`)).rejects.toThrow(/not SENT → DRAFT/)
     const sentLine = (await admin(`SELECT id FROM "PortalOrderRequestLine" WHERE "requestId" = $1::uuid`, [id]))[0]!.id as string
     await expect(update(partner(), 'PortalOrderRequestLine', sentLine, `note = 'more'`)).rejects.toThrow(/change only while it is a DRAFT \(it is SENT\)/)

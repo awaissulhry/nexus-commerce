@@ -269,8 +269,7 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
   return {
     asOf: toUtcIso(now),
     order: {
-      id: facts.order.id,
-      number: facts.order.number,
+      id: facts.order.id, // pp-s s.2 (O3-W1): no office series
       customerRef: facts.order.customerRef,
       status: facts.order.status,
       requestedDate: dayOrNull(facts.order.requestedDate),
@@ -800,7 +799,7 @@ export async function askImpact(app: FastifyInstance, request: FastifyRequest, o
   const fee = body.kind === 'CANCEL' && reader.seesPrices ? feeView(cancelFeeFor(feeLinesOf(facts.lines), prepared.cells.map((cell) => cell.orderLineId), facts.cancelFeePct, facts.order.currency)) : null
   return {
     asOf: toUtcIso(now),
-    order: { id: facts.order.id, number: facts.order.number, customerRef: facts.order.customerRef },
+    order: { id: facts.order.id, customerRef: facts.order.customerRef }, // pp-s s.2 (O3-W1): no office series
     impact: impactOut(impact),
     ...(fee ? { cancelFee: fee } : {}),
   }
@@ -832,6 +831,7 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   return {
     cells,
     facts: {
+      // The shared request view names the order's series for the office; the partner contract leaves it out (pp-s s.2).
       orderNumber: order.number,
       customerRef: order.customerRef,
       lines: new Map(lines.map((line) => [line.id, line])),

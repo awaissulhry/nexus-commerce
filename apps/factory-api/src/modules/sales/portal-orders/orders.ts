@@ -390,7 +390,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     order: {
       id: order.id,
       customerRef: order.customerRef,
-      number: order.number,
+      // pp-s s.1 (O3-W1, plan §0.5 "counts do not leak"): no office series — the customer reads its own number only.
       yourNumber: customerNumberOf('ORDER', order.customerSeq),
       status,
       words: CUSTOMER_STATUS_WORDS[status],

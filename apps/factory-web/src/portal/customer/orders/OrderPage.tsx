@@ -43,7 +43,7 @@ import {
   type PaymentIntent,
   type ShipmentsRead,
 } from './api'
-import { orderBandOf } from './band'
+import { bandProductionOf, orderBandOf } from './band'
 import { openLater, saveBytes, useOffline, usePortalOrderFiles } from './hooks'
 import { downloadLink } from '../../../record-panels/api' // F-SA-238: a shared order file opens through the files route (the content wall)
 import {
@@ -58,7 +58,6 @@ import {
   EMPTY_CANCEL,
   EMPTY_CHANGE,
   isFinal,
-  movesOf,
   NAV_KEY,
   neighbourOf,
   NS,
@@ -115,9 +114,9 @@ import { useProductionPageWords } from '../production/words'
 // ---- end F-PR-24
 
 /**
- * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents&line=` for a customer (B-W2b-191; design portal.customer.orders rec
- * "Order"; B-TH-275: the conversation docks beside the four tabs — an old `?tab=messages` opens Status & progress with it shown and
- * focused; "Made from your request" from the order's summary): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
+ * `/p/<party>/orders/<id>?tab=overview|lines|shipments|files&line=` for a customer (B-W2b-191; design portal.customer.orders rec
+ * "Order"; pp-w1: the old `status` / `documents` open Overview / Files; B-TH-275: the conversation docks beside the four tabs — an
+ * old `?tab=messages` opens Overview with it shown and focused; "Made from your request" from the order's summary): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
  * revised version that waits (B-W2b-184), progress while shared (polled every `refreshSeconds`), the change and cancel
  * requests and their rules (B-W2b-183), shipments, documents (B-W2b-178), the deposit's open item (B-W2b-185) — fills the
  * band, runs the pop-ups (each write one Idempotency-Key per body), guards a typed change, reads again on the live
@@ -226,6 +225,8 @@ function OrderContainer({ id }: { id: string }) {
 
   const loadRevision = useCallback(async (numbers: readonly string[]) => {
     if (!readsApprovals) return setRevision({ state: 'noAccess', page: null })
+    // pp-w1: an order without a number of its own yet cannot be named by a revised order (nothing to read).
+    if (numbers.length === 0) return setRevision({ state: 'ready', page: null })
     try {
       setRevision({ state: 'ready', page: await findRevision(api, numbers) })
     } catch (error) {
@@ -349,7 +350,7 @@ function OrderContainer({ id }: { id: string }) {
   }
   const productionReady = production.state === 'ready'
   useEffect(() => {
-    if (tab === 'status' && productionReady && readsDocuments) void loadDocuments()
+    if (tab === 'overview' && productionReady && readsDocuments) void loadDocuments()
   }, [tab, productionReady, readsDocuments, loadDocuments])
   // ---- end F-PR-24
 
@@ -391,13 +392,13 @@ function OrderContainer({ id }: { id: string }) {
   }, [api, id, frame.prefix])
   // ---- end B-TH-275
 
-  const number = record?.order.number ?? null
   const reconfirmNeeded = record?.order.reconfirmNeeded ?? false
-  // F-OC fx4: the revised order names this order by the party's own number ("#12"), else (an older answer) the office's.
+  // F-OC fx4: the revised order names this order by the party's own number ("#12"). pp-w1 (13-backend C-1): the only one — the
+  // order read carries no office series (`yourNumber.seq` where the page used `number`).
   const ownSeq = record?.order.yourNumber?.seq ?? null
-  const revisionNumbers = useMemo(() => (number ? orderNumbersOf(number, ownSeq) : null), [number, ownSeq])
+  const revisionNumbers = useMemo(() => orderNumbersOf(ownSeq), [ownSeq])
   useEffect(() => {
-    if (revisionNumbers && reconfirmNeeded) void loadRevision(revisionNumbers)
+    if (reconfirmNeeded) void loadRevision(revisionNumbers)
   }, [revisionNumbers, reconfirmNeeded, loadRevision])
 
   // F-PR-12b: today's progress read only where the order's production read does not draw the pieces (by level).
@@ -421,10 +422,11 @@ function OrderContainer({ id }: { id: string }) {
 
   useEffect(() => {
     if (tab === 'shipments') void loadShipments()
-    if (tab === 'documents') void loadDocuments()
+    if (tab === 'files') void loadDocuments()
   }, [tab, loadShipments, loadDocuments])
-  // ---- F-SA-238: the order's shared files on Documents, grouped like the office's Files tab (read again on the live channel's news) ----
-  const orderFiles = usePortalOrderFiles(api, id, tab === 'documents', record ? orderNameOf(record.order, locale, t) : '')
+  // ---- F-SA-238: the order's shared files on Files, grouped like the office's Files tab (read again on the live channel's news) ----
+  // pp-w1 (w1.3, P0-B15): read on arrival on every tab — the tab strip counts them ("Files 3", 0 too) — and again on every hint.
+  const orderFiles = usePortalOrderFiles(api, id, true, record ? orderNameOf(record.order, locale, t) : '')
   // ---- end F-SA-238
 
   useEffect(() => setOpenLine(lineParam), [lineParam])
@@ -444,8 +446,8 @@ function OrderContainer({ id }: { id: string }) {
       void loadRequests()
       void loadRules()
       if (tab === 'shipments') void loadShipments()
-      if (tab === 'documents') void loadDocuments()
-      if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created
+      if (tab === 'files') void loadDocuments()
+      orderFiles.reload() // F-SA-238: live on partner_notification.created; pp-w1 (w1.3): the Files count on every tab
     },
     onReconnect: () => {
       void load()
@@ -533,9 +535,12 @@ function OrderContainer({ id }: { id: string }) {
       .catch(() => setDialog((current) => (current?.kind === 'ask' ? { ...current, orderFiles: { state: 'error', read: current.orderFiles?.read ?? null } } : current)))
   }
   // ---- end F-SA-246
-  /** Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. */
-  const openAsk = (kind: AskKind | null = null) => {
-    if (kind === 'CHANGE') return openChange()
+  /**
+   * Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. pp-w1 (w1.2):
+   * the line ⋯ "Ask for a change on this line" opens the same dialog at Change, at that line (`line`).
+   */
+  const openAsk = (kind: AskKind | null = null, line: string | null = null) => {
+    if (kind === 'CHANGE') return openChange(line)
     if (kind === 'CANCEL') return openCancel()
     writeKey.current = null
     setDialog({ kind: 'ask', step: kind ? 'details' : 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
@@ -935,30 +940,25 @@ function OrderContainer({ id }: { id: string }) {
       ? orderBandOf({
           words,
           record,
-          tab,
           prefix: frame.prefix,
           facts: {
-            changeHeld: changeHeldWords,
+            // pp-w1 (w1.2): the ONE "Ask for a change…" opens the Ask dialog (held: a preview, no right to ask, offline).
+            ask: { held: askHeldWords(null) },
             cancelHeld: cancelHeldWords,
             reconfirm: revisionShown !== null ? { revision: revisionShown, held: reconfirmHeldKey ? t(reconfirmHeldKey) : null } : null,
-            shipments: record.shipments.shown,
-            moves: movesOf(record.promiseHistory),
             confirmation: readsDocuments,
             pay: firstPay ? { held: firstPay[1].held } : null,
-            // F-PR-13: "Ask us…" opens the Ask dialog (held like a change: a preview, no right to ask, offline).
-            ask: { held: askHeldWords(null) },
             problem: reportFacts, // F-PR-24
+            // pp-w1 (w1.2): the health and urgency chips from the order's production read — only for a person who sees production
+            // (PW-O02); "Made from your request #7" from the summary read.
+            production: bandProductionOf(production.read, seesProduction),
+            madeFrom,
           },
-          onChange: () => openChange(),
+          onAsk: () => openAsk(),
           onCancel: openCancel,
           onReconfirm: () => void openReconfirm(),
-          onHistory: () => {
-            if (tab !== 'status') router.push(recordHref(frame.prefix, id, 'status'))
-            setHistoryOpen(true)
-          },
           onConfirmation: () => void openConfirmation(),
           onPay: () => (firstPay ? openPay(firstPay[0]) : undefined),
-          onAsk: () => openAsk(), // F-PR-13
           onProblem: openProblem, // F-PR-24
         })
       : { title: state === 'missing' ? t('record.missing') : t('list.title'), back: { href: `${frame.prefix}/orders`, label: t('list.title') } },
@@ -1087,8 +1087,6 @@ function OrderContainer({ id }: { id: string }) {
         shipments,
         documents,
         files: orderFiles.model, // F-SA-238
-        // F-SA-246: "Ask for a change" above the order's conversation, held like "Ask us…" (a preview, no right to ask, offline).
-        askDoor: mayAsk || preview ? { held: askHeldWords(null) } : null,
         fileHeld,
         // B-W2b-374 (XF3:04): the lines' options and the artwork the office shows here.
         options: record ? createElement(PortalLineOptions, { api, orderId: id, fileHeld, refreshKey: loadedAt ?? '' }) : null,
@@ -1114,7 +1112,7 @@ function OrderContainer({ id }: { id: string }) {
           setState('loading')
           void load()
         },
-        onRetryRevision: () => (revisionNumbers ? void loadRevision(revisionNumbers) : undefined),
+        onRetryRevision: () => void loadRevision(revisionNumbers),
         onRetryProgress: () => void loadProgress(),
         onRetryRequests: () => void loadRequests(),
         onRetryShipments: () => {
@@ -1128,7 +1126,7 @@ function OrderContainer({ id }: { id: string }) {
         onReconfirm: () => void openReconfirm(),
         onPay: openPay,
         onWithdraw: withdraw,
-        onChangeLine: (lineId) => openChange(lineId),
+        onChangeLine: (lineId) => openAsk('CHANGE', lineId), // pp-w1 (w1.2): the ONE Ask, at this line
         onLine: (lineId) => setOpenLine(lineId),
         onHistory: setHistoryOpen,
         onCopy: copy,
@@ -1146,7 +1144,6 @@ function OrderContainer({ id }: { id: string }) {
         },
         onRetryFiles: orderFiles.reload,
         // ---- end F-SA-238
-        onAskChange: () => openAsk(), // F-SA-246: the conversation's "Ask for a change"
         onDownload: download,
         onDismissNotice: () => setNotice(null),
         // ---- F-PR-12a
@@ -1247,7 +1244,7 @@ function OrderContainer({ id }: { id: string }) {
             onSign: sign,
             onClose: () => {
               setDialog((current) => (current?.kind === 'reconfirm' && current.busy ? current : null))
-              if (revisionNumbers) void loadRevision(revisionNumbers)
+              void loadRevision(revisionNumbers)
             },
             onRetry: () => void openReconfirm(),
           },

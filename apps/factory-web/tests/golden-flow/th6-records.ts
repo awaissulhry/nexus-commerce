@@ -193,15 +193,15 @@ export default defineStage({
       await seen(dock, 60_000)
       await expect(dock).toHaveAttribute('aria-label', new RegExp(`^${escape(PO('messages.label', { name: '§' })).replace('§', ownOrderName().source.slice(1, -1))}$`))
       await expect(page.getByRole('tab', { name: startsWith(PO('row.messages')) })).toHaveCount(0)
-      await expect(page.locator('.fw-prf-bar')).toHaveCount(0)
+      await expect(page.locator('.fw-pband-thread')).toHaveCount(0) // pp-w1 (w1.1): the band's "Messages" only while it is off screen
       // The customer's own number only (plan §0.5): never the office's SO- series, never its id in words.
       expect(await pageWords(page), 'A’s order page names the office number').not.toContain(run.order.number)
       await flow.shot(page, 'alpha-order-docked')
 
-      // Below 1280 px: the body leads, "Messages" opens the conversation full width, Back returns to the same tab.
+      // Below 1280 px: the body leads, the band's "Messages" (pp-w1 w1.1) opens the conversation full width, Back returns to the same tab.
       await page.setViewportSize({ width: 1024, height: 900 })
       await seen(page.locator('.fw-prf[data-mode="stacked"]'), 30_000)
-      const open = page.locator('.fw-prf-bar').getByRole('button', { name: startsWith(PORTAL('record.frame.messages')) })
+      const open = page.locator('.fw-pband').getByRole('button', { name: startsWith(PORTAL('record.frame.messages')) })
       await seen(open)
       await open.click()
       await page.waitForURL(/[?&]thread=open/, { timeout: 30_000 })

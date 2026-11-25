@@ -66,7 +66,8 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
 import { REQUESTS, requestRow } from '../requests/design-data'
 // B-TH-223 (fix-portal-1): Brand Beta's own rows; the Alpha world's codes no Beta case may carry.
-import { BETA_ROWS, inTransitRead } from './design-data'
+import { BETA_ROWS } from './design-data'
+import { listRowsOf } from './list-view-model' // pg-w2: the rows of a group (the list on the shared parts)
 import type { OrdersListViewModel } from './view/OrdersListView'
 import type { CustomerCaseBuilder } from './view/CustomerCase'
 // B-TH-238: the tiles (their chips, the customer's own reads).
@@ -113,12 +114,15 @@ describe('addresses and tabs', () => {
     expect(listQuery(null, '')).toBe('')
     expect(listQuery('OPEN', '  ')).toBe('')
     expect(listQuery('DATE_MOVED', ' BA-PO ', { print: '1' })).toBe('?chip=DATE_MOVED&q=BA-PO&print=1')
-    expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=status')
+    expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=overview')
     // B-TH-275: no Messages tab — the list's "Messages" opens the order with its docked conversation shown (the frame's arrival term).
     expect(recordHref('/p/X', 'o1', 'lines')).toBe('/p/X/orders/o1?tab=lines')
     expect(tabOf('shipments')).toBe('shipments')
-    expect(tabOf('nope')).toBe('status')
-    expect(tabOf('messages')).toBe('status')
+    expect(tabOf('nope')).toBe('overview')
+    expect(tabOf('messages')).toBe('overview')
+    // pp-w1 (w1.3): the old ids of links in mails land on their new tabs.
+    expect(tabOf('status')).toBe('overview')
+    expect(tabOf('documents')).toBe('files')
   })
 
   it('a request not decided yet opens nothing (it is not an order yet)', () => {
@@ -250,18 +254,20 @@ describe('Re-confirm version N', () => {
 
   // F-OC fx4 (end check 1, th9 step 13): the approval page names the order by the party's own number (F-PR-16): the order page
   // looks for its revision by that number too — it found none by the office's SO-… alone, and waited for ever.
-  it('a revised order is this order’s by the party’s own number ("#12") or, in an older answer, the office’s', async () => {
+  // pp-w1 (13-backend C-1): the order read carries no office series any more — the party's own number is the only one.
+  it('a revised order is this order’s by the party’s own number ("#12"); the office’s series is never read', async () => {
     const { findRevision, orderNumbersOf } = await import('./api')
-    expect(orderNumbersOf('SO-2026-0042', 12)).toEqual(['SO-2026-0042', '#12'])
-    expect(orderNumbersOf('SO-2026-0042', null)).toEqual(['SO-2026-0042'])
+    expect(orderNumbersOf(12)).toEqual(['#12'])
+    expect(orderNumbersOf(null)).toEqual([])
     const own = { ...approvalPage({ id: 'r-own' }), content: { revisedOrder: { ...approvalPage().content.revisedOrder!, orderNumber: '#12' } } }
     const other = { ...approvalPage({ id: 'r-other' }), content: { revisedOrder: { ...approvalPage().content.revisedOrder!, orderNumber: '#13' } } }
     const pages: Record<string, unknown> = { 'r-own': own, 'r-other': other }
     const api = { get: async (path: string) => (path === '/portal/approvals' ? { state: 'OPEN', items: [{ id: 'r-own', kind: 'REVISED_ORDER', dueAt: '2026-11-30T16:00:00Z', status: 'OPEN' }, { id: 'r-other', kind: 'REVISED_ORDER', dueAt: '2026-11-30T16:00:00Z', status: 'OPEN' }] } : pages[decodeURIComponent(path.split('/').pop()!)]) } as never
-    expect((await findRevision(api, orderNumbersOf('SO-2026-0042', 12)))?.request.id).toBe('r-own')
+    expect((await findRevision(api, orderNumbersOf(12)))?.request.id).toBe('r-own')
     expect(await findRevision(api, ['SO-2026-0042'])).toBeNull()
     const view = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('const revisionNumbers = useMemo(() => (number ? orderNumbersOf(number, ownSeq) : null), [number, ownSeq])')
+    expect(view).toContain('const revisionNumbers = useMemo(() => orderNumbersOf(ownSeq), [ownSeq])')
+    expect(view).not.toContain('order.number')
   })
 
   it('held: a preview, not open, may not approve, the request closed, offline', () => {
@@ -353,7 +359,7 @@ describe('documents and the CSV', () => {
     expect(ownRef(catalogue, 'en')).toBeNull()
     expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.catalogue'])
     expect(rowHref('/p/B', request)).toBe(`/p/B/orders/requests/${REQUESTS[0]!.id}`)
-    expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=status`)
+    expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=overview`)
     expect(rowHref('/p/B', catalogue)).toBeNull()
   })
 })
@@ -437,7 +443,7 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
       const body = (entry.model as (locale: 'en') => { body: { kind: string; model: OrdersListViewModel } })('en').body
       if (body.kind !== 'list') continue
       const view = body.model
-      const rows = listRows(view.chip ?? view.read?.chip ?? 'OPEN', view.q, view.requests.state === 'ready' ? view.requests.rows : [], view.rows, 'en')
+      const rows = listRowsOf(view.group, view.q, view.requests.state === 'ready' ? view.requests.rows : [], view.rows, 'en')
       const file = listCsv(rows, t, 'en', true, day)
       expect(scanText(file, BRAND_ALPHA), entry.id).toEqual([])
       expect(file.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, entry.id).toBeNull()
@@ -452,7 +458,6 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
   it('no row of a Brand Beta case carries a code of the Alpha world (its PO codes, ids, order and parcel numbers)', () => {
     const alphaCodes = [
       ...ROWS.flatMap((row) => [row.id, row.customerRef, row.number, row.nextShipment?.id, row.nextShipment?.number]),
-      ...inTransitRead().items.flatMap((item) => [item.shipmentId, item.number, item.order.id, ...item.trackingNumbers]),
     ].filter((code): code is string => typeof code === 'string' && code !== '')
     const betaCases = screen.cases.filter((item) => /^th-(?:223|230|238|246)-/.test(item.id))
     expect(betaCases.length).toBeGreaterThanOrEqual(14)
@@ -460,8 +465,8 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
       for (const locale of ['it', 'en'] as const) {
         const body = (entry.model as CustomerCaseBuilder)(locale).body
         if (body.kind !== 'list') continue
-        const { read, rows, transit, unread } = body.model
-        const data = JSON.stringify({ read, rows, transit, unread })
+        const { read, rows, unread } = body.model
+        const data = JSON.stringify({ read, rows, unread })
         expect(alphaCodes.filter((code) => data.includes(code)), `${entry.id} (${locale})`).toEqual([])
         expect(data.match(/\bBA-PO-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
         expect(scanText(data, BRAND_ALPHA), `${entry.id} (${locale})`).toEqual([])
@@ -540,7 +545,7 @@ describe('B-TH-238 — the tiles of Orders & requests', () => {
       const built = (screen.cases.find((item) => item.id === id)!.model as CustomerCaseBuilder)('en')
       if (built.body.kind !== 'list') return []
       const model = built.body.model
-      return listRows(model.chip ?? model.read!.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, 'en')
+      return listRowsOf(model.group, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, 'en')
     }
     const subjects = tileRows('th-238-needs-you').map((row) => (row.kind === 'request' ? row.request.subject : null))
     expect(subjects).toContain('Rain jackets like last spring, 40 pieces')
@@ -637,10 +642,10 @@ describe('B-TH-246 — the customer\'s own sheet in its portal', () => {
   })
   it('the band\'s ⋯ offers Download all (and says while the file is prepared)', () => {
     const words = { t, locale: 'en', time: (value: string) => value, day } as unknown as Parameters<typeof listBandOf>[0]['words']
-    const band = listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA', onDownloadAll: () => undefined })
-    expect(band.more?.find((item) => item.id === 'download-all')?.label).toBe('Download all (Excel)')
-    expect(listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA', onDownloadAll: () => undefined, downloading: true }).more?.find((item) => item.id === 'download-all')?.disabled).toBe(true)
-    expect(listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA' }).more?.some((item) => item.id === 'download-all')).toBe(false)
+    const band = listBandOf({ words, asOf: null, onDownloadAll: () => undefined })
+    expect(band.more?.find((item) => item.id === 'download-all')?.label).toBe('Download (Excel)') // pg-w2 (Z8): one export, the group shown
+    expect(listBandOf({ words, asOf: null, onDownloadAll: () => undefined, downloading: true }).more?.find((item) => item.id === 'download-all')?.disabled).toBe(true)
+    expect(listBandOf({ words, asOf: null }).more?.some((item) => item.id === 'download-all')).toBe(false)
   })
   it('W10 / W17 / W39: Brand Beta\'s sheet holds nothing of Brand Alpha and no office series, in both languages; each cell opens Beta\'s own page', () => {
     const screen = listScreen as unknown as DesignScreen<unknown>
@@ -697,10 +702,11 @@ describe('F-SA-238 — the portal Documents tab: the customer’s own shared fil
     expect(draw('en', { read: null, problem: 'read', selected: [], canShare: false, face: 'customer' })).toMatch(/Try again|Retry/)
   })
 
-  it('the page reads it on Documents and again on the live channel’s news; another customer’s order: the neutral "not found"', () => {
+  // pp-w1 (w1.3): read on arrival on every tab (the tab strip counts the files) and again on every hint of the live channel.
+  it('the page reads it on arrival and again on the live channel’s news; another customer’s order: the neutral "not found"', () => {
     const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("const orderFiles = usePortalOrderFiles(api, id, tab === 'documents'")
-    expect(page).toContain("if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created")
+    expect(page).toContain("const orderFiles = usePortalOrderFiles(api, id, true, ")
+    expect(page).toContain('      orderFiles.reload() // F-SA-238: live on partner_notification.created; pp-w1 (w1.3): the Files count on every tab')
     const tab = readFileSync(new URL('./view/DocumentsTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("t('docs.filesNotFound')")
     for (const locale of ['en', 'it'] as const) {

@@ -138,7 +138,8 @@ export const recordContract = defineContract({
       order: output({
         id: id(),
         customerRef: z.string().nullable(),
-        number: z.string(),
+        // pp-s s.1 (O3-W1): the office's series (a count across every customer) is never in the customer's order: its own
+        // number (`yourNumber`) and its PO name it. A key left out here is stripped from the answer.
         // B-TH-105
         yourNumber,
         status,

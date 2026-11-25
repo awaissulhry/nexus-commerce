@@ -30,17 +30,16 @@
     "updated": "Aggiornato alle {time}",
     "export": "Esporta questa vista (CSV)",
     "print": "Stampa questo elenco",
-    "change": "Chiedi una modifica",
+    "change": "Chiedi una modifica…",
     "reconfirm": "Riconferma la versione {version}",
     "cancel": "Chiedi di annullare…",
     "pay": "Paga l’acconto",
-    "history": "Storia della data promessa",
     "confirmation": "PDF della conferma d’ordine",
     "newOrder": "Nuovo ordine",
-    "downloadAll": "Scarica tutto (Excel)",
+    "downloadAll": "Scarica (Excel)",
     "downloading": "Preparazione del file…",
-    "downloadAllHint": "Tutti gli ordini di questa vista con le vostre colonne, in un unico file Excel.",
-    "ask": "Fateci una richiesta…"
+    "downloadAllHint": "Gli ordini del gruppo mostrato, con le vostre colonne, in un unico file Excel.",
+    "urgent": "Urgente"
   },
   "keys": {
     "search": "Cerca nei vostri ordini",
@@ -48,6 +47,8 @@
     "rows": "Ordine successivo / precedente",
     "orders": "Ordine successivo / precedente dell’elenco",
     "tabs": "Tra le schede",
+    "thread": "Mostra o nascondi la conversazione",
+    "send": "Invia il messaggio (dal riquadro del messaggio)",
     "close": "Chiudi la finestra"
   },
   "chips": {
@@ -61,7 +62,7 @@
     "label": "I vostri ordini e richieste",
     "fileName": "ordini",
     "search": "Cerca nei vostri ordini",
-    "searchHint": "Il vostro numero, il nostro ordine, un codice modello o l’oggetto della richiesta…",
+    "searchHint": "Vs. ordine, numero, modello o richiesta…",
     "count_one": "{count} ordine o richiesta",
     "count_other": "{count} ordini e richieste",
     "countOf": "{shown} di {count} ordini e richieste",
@@ -73,7 +74,7 @@
     "noMatch": "Nulla corrisponde a questi filtri",
     "noMatchSearch": "Nessun risultato per «{q}».",
     "noMatchChip": "Al momento in questo gruppo non c’è nulla.",
-    "clear": "Togli i filtri",
+    "clear": "Mostra tutto ciò che è aperto",
     "requestWaits": "Da confermare da noi",
     "asked": "data richiesta",
     "moved": "era il {date}",
@@ -86,7 +87,10 @@
     "wanted": "desiderata",
     "updated": "aggiornata il {date}",
     "piecesAsked": "{count} chiesti",
-    "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini."
+    "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini.",
+    "yourPo": "Vs. ordine {ref}",
+    "emptyBodyView": "I vostri ordini appaiono qui appena li facciamo.",
+    "clearSearch": "Togli la ricerca"
   },
   "col": {
     "yourPo": "Vostro ordine",
@@ -104,7 +108,11 @@
     "yours": "Vostro numero",
     "subject": "Oggetto",
     "date": "Data",
-    "wanted": "Desiderata o promessa"
+    "wanted": "Desiderata o promessa",
+    "picture": "Foto",
+    "whereItIs": "A che punto è",
+    "promised": "Promessa",
+    "orderedOn": "Data ordine"
   },
   "row": {
     "open": "Apri l’ordine",
@@ -161,10 +169,10 @@
   },
   "tabs": {
     "label": "Ordine",
-    "status": "Stato e avanzamento",
+    "overview": "Panoramica",
     "lines": "Righe",
-    "shipments": "Spedizioni e tracciamento",
-    "documents": "Documenti",
+    "shipments": "Spedizioni",
+    "files": "File",
     "toConfirm": "da confermare"
   },
   "messages": {

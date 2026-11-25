@@ -157,7 +157,9 @@ describe('the rules before the click (SAL-078)', { timeout: SLOW_TEST_TIMEOUT_MS
   it('shows per line what may change or be cancelled, and holds the line whose leather was cut', async () => {
     const so2 = await orderOf('SEED-SO-0002')
     const rules = await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests/rules`)
-    expect(rules.order).toMatchObject({ number: 'SEED-SO-0002', status: 'CONFIRMED' })
+    // pp-s s.2 (O3-W1): the order by id, never the office's series (PG-O1 part 2 below).
+    expect(rules.order).not.toHaveProperty('number')
+    expect(rules.order).toMatchObject({ id: so2.id, status: 'CONFIRMED' })
     expect(rules.change.code).toBe('FREE')
     // A cancel after cutting started is refused for the whole order, with the day of the first cut.
     expect(rules.cancel).toMatchObject({ possible: false, code: 'LEATHER_CUT', day: '2026-10-30', words: { en: 'Not possible: the leather was cut on 30 Oct', it: 'Non possibile: la pelle è stata tagliata il 30 ott' } })
@@ -234,7 +236,9 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
     const asked = await browsers.buyer.post(`/portal/sales-orders/${so1.id}/change-requests`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '52', quantity: 6 }, { lineId: red!.id, size: '54', quantity: 0 }], requestedDate: wanted, shipToAddressId: address.id, note: 'Our season starts earlier.' }, { headers: { 'idempotency-key': 'change-request-so1-1' } })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
     const request = asked.body.request
-    expect(request).toMatchObject({ kind: 'CHANGE', status: 'OPEN', words: { en: 'Waiting for our answer' }, orderNumber: 'SEED-SO-0001', requestedDate: wanted, mine: true, wholeOrder: false, note: 'Our season starts earlier.' })
+    // pp-s s.2 (O3-W1): the customer's request names its order by id, never the office's series.
+    expect(request).not.toHaveProperty('orderNumber')
+    expect(request).toMatchObject({ kind: 'CHANGE', status: 'OPEN', words: { en: 'Waiting for our answer' }, orderId: so1.id, requestedDate: wanted, mine: true, wholeOrder: false, note: 'Our season starts earlier.' })
     expect(request.cells.map((cell: Json) => [cell.seq, cell.size, cell.before, cell.asked])).toEqual([
       [10, '52', 4, 6],
       [20, '54', 1, 0],
@@ -633,6 +637,49 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
     expect(waiting(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`)).cancelFee).toBeNull()
     expect(JSON.stringify(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`))).not.toMatch(/"pct"|totalFee|"fee"/)
   })
+
+  // ── pp-s s.2 PG-O1 part 2 (O3-W1; plan §0.5 "counts do not leak"): the order's requests, its rules and an ask's impact name the order
+  // by id and the customer's PO — never the office's series (a count across every customer); another customer reads none (404) ──
+  it('PG-O1 (part 2): the requests, the rules and the impact the customer reads hold no office series; another customer gets 404 and no series', async () => {
+    const so1 = await orderOf('SEED-SO-0001')
+    const so3 = await orderOf('SEED-SO-0003')
+    const [blk] = await linesOf(so1.id)
+    const series = (await admin<{ number: string }>('SELECT number FROM "SalesOrder" WHERE "tenantId" = $1 ORDER BY number', [T])).map((row) => row.number)
+    expect(series).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002', 'SEED-SO-0003']))
+    const noSeries = (answer: unknown, what: string) => {
+      const text = JSON.stringify(answer)
+      for (const number of series) expect(text, `${what}: ${number}`).not.toContain(number)
+      // A series of the office's shape (SO-2026-0142) nowhere either.
+      expect(text, what).not.toMatch(/\b[A-Z]+-\d{4}-\d+/)
+    }
+    const rules = await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`)
+    expect(rules.order).not.toHaveProperty('number')
+    expect(rules.order.id).toBe(so1.id)
+    noSeries(rules, 'rules')
+    // SEED-SO-0003's requests (its waiting cancel of the B-PR-23 block among them), as the buyer and the viewer read them.
+    for (const browser of [browsers.buyer, browsers.viewer]) {
+      const requests = await ok(browser, `/portal/sales-orders/${so3.id}/change-requests`)
+      expect((requests.items as Json[]).length).toBeGreaterThan(0)
+      for (const row of requests.items as Json[]) {
+        expect(row).not.toHaveProperty('orderNumber')
+        expect(row.orderId).toBe(so3.id)
+      }
+      noSeries(requests, 'requests')
+    }
+    const impact = await post(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '50', quantity: 3 }], requestedDate: addDays(TODAY(), 40) })
+    expect(impact.status, JSON.stringify(impact.body)).toBe(200)
+    expect(Object.keys(impact.body.order).sort()).toEqual(['customerRef', 'id'])
+    noSeries(impact.body, 'impact')
+    // Another customer: the order's rules, requests and impact are as unknown as a wrong id, and no answer names a series.
+    const refused = [
+      await browsers.other.get(`/portal/sales-orders/${so1.id}/change-requests/rules`),
+      await browsers.other.get(`/portal/sales-orders/${so3.id}/change-requests`),
+      await post(browsers.other, `/portal/sales-orders/${so1.id}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '50', quantity: 3 }], requestedDate: addDays(TODAY(), 40) }),
+    ]
+    expect(refused.map((answer) => answer.status)).toEqual([404, 404, 404])
+    for (const answer of refused) noSeries(answer.body, 'refused')
+  })
+  // ── end pp-s PG-O1 part 2 ──
 })
 // ── end B-PR-25
 
@@ -1250,3 +1297,59 @@ describe('B-OP-015: the office amends the delivery address — an ACTIVE one of 
   // ── end B-OL-020 ──
 })
 // ── end B-OP-015 ──
+
+// ── pp-s s.3 PG-O2, the rules half (O3-W2): a line's floor note ("For the floor — no prices", office only) and its close-short reason
+// never reach the customer's change pop-ups (GET …/change-requests/rules) nor its requests; another customer reads neither. The order,
+// the sheet and its file are pinned the same way in portal-orders.pg.vitest.test.ts. ──
+describe('PG-O2: the rules before the click hold no floor note and no close-short reason', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a line with a floor note, closed short with a reason: the rules and the requests hold neither; another customer reads none', async () => {
+    const so2 = await orderOf('SEED-SO-0002')
+    const line = await one<{ id: string; quantity: number; note: string | null; closeShortReason: string | null; closedShortQuantity: number | null; closedShortAt: Date | null }>(
+      'SELECT id, quantity, note, "closeShortReason", "closedShortQuantity", "closedShortAt" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1',
+      [so2.id],
+    )
+    const note = 'PGO2 floor note: stitch the cuffs twice, ask Lia Modello'
+    const reason = 'PGO2 close-short reason: the leather lot came short'
+    const markers = ['PGO2', 'stitch the cuffs', 'Lia Modello', 'leather lot came short']
+    // Written around the guards (a line closes short through the office's command): the reads are what is tested.
+    const planted = async (sql: string, values: unknown[]) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+        await h.db.admin.query(sql, values)
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    await planted('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = now() WHERE id = $1', [line.id, note, reason, line.quantity])
+    try {
+      // Not vacuous: the line holds both, and the rules read names that line.
+      expect(await one('SELECT note, "closeShortReason" FROM "SalesOrderLine" WHERE id = $1', [line.id])).toEqual({ note, closeShortReason: reason })
+      const rules = await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests/rules`)
+      const named = (rules.lines as Json[]).find((entry) => entry.lineId === line.id)!
+      expect(named).toBeDefined()
+      expect(named).not.toHaveProperty('note')
+      expect(named).not.toHaveProperty('closeShortReason')
+      const answers: [string, unknown][] = [
+        ['the rules (buyer)', rules],
+        ['the requests (buyer)', await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests`)],
+        ['the requests (viewer)', await ok(browsers.viewer, `/portal/sales-orders/${so2.id}/change-requests`)],
+      ]
+      for (const [what, answer] of answers) {
+        const text = JSON.stringify(answer)
+        for (const marker of markers) expect(text, `${what}: ${marker}`).not.toContain(marker)
+        expect(text, what).not.toContain('closeShortReason')
+      }
+      // Another customer: the order's rules and requests are as unknown as a wrong id.
+      const refused = [await browsers.other.get(`/portal/sales-orders/${so2.id}/change-requests/rules`), await browsers.other.get(`/portal/sales-orders/${so2.id}/change-requests`)]
+      expect(refused.map((answer) => answer.status)).toEqual([404, 404])
+      for (const answer of refused) for (const marker of markers) expect(JSON.stringify(answer.body), marker).not.toContain(marker)
+    } finally {
+      // The line as it was (no test leaves a planted fact behind).
+      await planted('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = $5 WHERE id = $1', [line.id, line.note, line.closeShortReason, line.closedShortQuantity, line.closedShortAt])
+    }
+  })
+})
+// ── end pp-s PG-O2 ──

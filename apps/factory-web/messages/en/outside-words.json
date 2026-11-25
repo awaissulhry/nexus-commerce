@@ -12,10 +12,10 @@
   },
   "last-message": {
     "cell": {
-      "label_one": "{count} new message on {record}: open the thread at the first new one",
-      "label_other": "{count} new messages on {record}: open the thread at the first new one"
+      "label_one": "{count} new message on {record}: open the conversation at the first new one",
+      "label_other": "{count} new messages on {record}: open the conversation at the first new one"
     },
-    "columnHint": "Your own new messages on the record since you last read its thread. A click opens the thread at the first new one."
+    "columnHint": "Your new messages on the order since you last read its conversation. A click opens the conversation at the first new one."
   },
   "photo-kit": {
     "photo": {
@@ -39,6 +39,12 @@
     "priced": {
       "lockedCount_one": "Priced document — you cannot open it",
       "lockedCount_other": "{count} priced documents — you cannot open them"
+    }
+  },
+  "record-frame": {
+    "notices": {
+      "fewer_one": "Hide 1 notice",
+      "fewer_other": "Hide {count} notices"
     }
   },
   "record-thread-card": {
