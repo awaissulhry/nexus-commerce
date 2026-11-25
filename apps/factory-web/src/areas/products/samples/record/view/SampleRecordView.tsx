@@ -19,7 +19,7 @@ import { SampleTab } from './SampleTab'
 import { ShipmentsTab } from './ShipmentsTab'
 // ---- B-TH-262: the round on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { SampleRecordActions, SampleRecordModel } from '../view-model'
 

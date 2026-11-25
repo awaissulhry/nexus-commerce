@@ -1,13 +1,13 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { LOCALES, type Locale } from '../../../lib/i18n/locales'
-import { CATALOGUE } from '../../../lib/i18n/messages'
-import { I18nProvider } from '../../../lib/i18n/provider'
-import { everyCase, leftKeys, render, textOf } from '../../../lib/record-thread/parts/testing'
+import { LOCALES, type Locale } from '../i18n/locales'
+import { CATALOGUE } from '../i18n/messages'
+import { I18nProvider } from '../i18n/provider'
+import { everyCase, leftKeys, render, textOf } from '../record-thread/parts/testing'
 import { designScreen } from './fixtures'
 import { GROUP_ROWS_SHOWN, OVERVIEW_NS, STRIPS_SHOWN } from './model'
 import { CardState, Headline, Overview, OverviewCard, OverviewPair, useOverviewWords } from './Overview'
@@ -28,6 +28,10 @@ import { LAB_WIDTHS } from './view/OverviewLab'
  */
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
+/** pp-k1: the app's src/ (the kit is src/lib/record-overview). */
+const SRC = join(HERE, '..', '..')
+/** pp-k1: a relative import as a path from src/ (as written, no extension added); a package stays as written. */
+const fromSrc = (file: string, path: string): string => (path.startsWith('.') ? relative(SRC, resolve(dirname(join(HERE, file)), path)).split('\\').join('/') : path)
 /** Every file of the kit's folder but its tests, as a path from the folder. */
 const FILES = (readdirSync(HERE, { recursive: true, withFileTypes: false }) as string[]).map((file) => file.split('\\').join('/')).filter((file) => /\.(tsx?|css)$/.test(file) && !file.includes('.vitest.'))
 const CODE = FILES.filter((file) => /\.tsx?$/.test(file))
@@ -48,11 +52,23 @@ describe('the kit knows no page: it imports no order, no party and no purchasing
     expect(source('view/overview-lab.css')).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
   })
 
-  it('no file imports from areas/sales, areas/parties or areas/purchasing; none reaches the API client or fetches', () => {
+  // pp-k1 k1.1 (O2-B1: the view-boundary guard does not see lib → areas): the kit lives in src/lib now, so the customer portal may draw
+  // it too. Its wall WIDENS: every relative import is resolved from its file, and none lands in a view's folder — areas/ (the office)
+  // or portal/ (the portal), nor app/, shell/, links/ or floor/ — nor in the API client or the session loader; no re-export stays
+  // at the old address.
+  it('the kit lives in src/lib, nothing is left at its old address in areas/_shared', () => {
+    expect(relative(SRC, HERE).split('\\').join('/').replace(/\/$/, '')).toBe('lib/record-overview')
+    expect(existsSync(join(SRC, 'areas', '_shared', 'record-overview'))).toBe(false)
+  })
+
+  it('no file imports from areas/ or portal/ (nor any other view, nor sales, parties or purchasing); none reaches the API client or fetches', () => {
     expect(CODE.length).toBeGreaterThan(3)
     for (const file of CODE) {
       const text = source(file)
       for (const path of importsOf(text)) {
+        const target = fromSrc(file, path)
+        expect(target, `${file} imports ${path}`).not.toMatch(/^(?:areas|portal|app|shell|links|floor)(?:\/|$)/)
+        expect(target, `${file} imports ${path}`).not.toMatch(/^lib\/(?:api|session)(?:\/|$)/)
         expect(path, `${file} imports ${path}`).not.toMatch(/(?:^|\/)(?:sales|parties|purchasing)(?:\/|$)/)
         expect(path, `${file} imports ${path}`).not.toMatch(/\/lib\/api(?:\/|$)|\/use-[a-z-]+$/)
       }
@@ -60,7 +76,7 @@ describe('the kit knows no page: it imports no order, no party and no purchasing
     }
     // The parts' file itself: the DS, the i18n plumbing, its own model and stylesheet — nothing else.
     // F-CO-K2: + the failed strip's mark (the DS's icon set).
-    expect(importsOf(source('Overview.tsx')).sort()).toEqual(['../../../lib/i18n/messages', '../../../lib/i18n/provider', '../../../record-panels/i18n', './model', './record-overview.css', '@nexus/ui/components', '@nexus/ui/primitives', 'lucide-react', 'react'].sort())
+    expect(importsOf(source('Overview.tsx')).sort()).toEqual(['../i18n/messages', '../i18n/provider', '../../record-panels/i18n', './model', './record-overview.css', '@nexus/ui/components', '@nexus/ui/primitives', 'lucide-react', 'react'].sort())
     expect(importsOf(source('model.ts'))).toEqual([])
   })
 
@@ -379,7 +395,7 @@ describe('F-CO-K2: the groups — Groups, Group, GroupRow and RowAge draw the ma
 describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {
     expect(designScreen.screen).toBe('record-overview')
-    expect(readFileSync(fileURLToPath(new URL('../../../lib/design/design-screen.ts', import.meta.url)), 'utf8')).toContain("| 'record-overview'")
+    expect(readFileSync(fileURLToPath(new URL('../design/design-screen.ts', import.meta.url)), 'utf8')).toContain("| 'record-overview'")
     expect(designScreen.cases.map((item) => item.id)).toEqual([
       ...['card', 'card-aside', 'card-aside-none', 'card-lead', 'card-busy', 'state-loading', 'state-failed', 'state-failed-no-retry', 'headline', 'headline-quiet', 'headline-reading', 'pair-two', 'pair-one', 'overview'],
       // F-CO-K2: the rows' cases

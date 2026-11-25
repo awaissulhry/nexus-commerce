@@ -9,7 +9,7 @@ import { Textarea } from '../../../../../lib/i18n/ds-parts'
 import { Freshness, Section, StepUpDialog } from '../../../../quality/_shared/parts'
 // ---- B-TH-259: the repair on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { POINT_RESULTS, REPAIR_KINDS, type PointResult, type Repair, type RepairAction, type RepairKind } from '../../api'
 import { CHECK_POINTS, checklistProblems, checklistResult, isScrapped, ownerName, repairHref, repairStep, returnHref, type CheckPoint, type Words } from '../../model'
 import type { IntakeDraft, RepairActions, RepairModel, RepairTab } from '../../view-model'

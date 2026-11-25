@@ -13,7 +13,7 @@ import { AdminMessages, dash, NoticeBanner, RecordProblem } from '../../shared/v
 import { batteryOf, bindingOf, bindingProblem, DEVICE_TABS, deviceTileMatch, isOutdated, networkKey, showsLine, type BindingDraft, type DeviceRecordModel } from '../model'
 // ---- B-TH-269: the device on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
 import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../lib/record-frame/RecordNotices'
 import { inUseSinceWords } from './columns'
 import { EnrolWizard, RevokeConfirm } from './DeviceDialogs'
 

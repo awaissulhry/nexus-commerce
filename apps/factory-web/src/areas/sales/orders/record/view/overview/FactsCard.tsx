@@ -13,9 +13,9 @@ import { dayInstant, readOnlyOnPage, type Phrase } from '../../../model'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { factsDoorsOf, incotermOf, languageOf, madeOf, shipToOf } from '../../overview/facts'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 // F-CO-K2: the facts' list, each fact and its door are the kit's parts (their look comes with them); "Could not be read" is its word
-import { Door, Fact, FactCols, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
+import { Door, Fact, FactCols, useOverviewWords } from '../../../../../../lib/record-overview/Overview'
 
 /** The quote's delivery terms words (the Incoterm's name, ship complete / as ready): the words the quote showed (one word per meaning). */
 const QUOTE_TERMS = 'sales-quotes-depth'

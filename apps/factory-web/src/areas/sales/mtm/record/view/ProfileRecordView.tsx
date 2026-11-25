@@ -8,7 +8,7 @@ import { Button, Skeleton } from '@nexus/ui/primitives'
 import { Freshness, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
 // ---- B-TH-258: the rider profile on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import type { ProfileRecord } from '../../api'
 import { customerHref, fittingsHeld, listHref, offPhrase, RECORD_TABS, recordHref, reviewDraftFor, reviewHeld, rightHeld, templatesHref, worksheetHref, type Phrase } from '../../model'
 import { MtmMessages, NoticeLine, ReviewPill, useWords } from '../../parts'

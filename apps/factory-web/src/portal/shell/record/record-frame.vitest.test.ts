@@ -16,16 +16,15 @@ import {
   parentHref,
   PORTAL_DOCK_COLUMNS,
   PORTAL_DOCK_FROM,
-  PORTAL_PHONE_BELOW,
   portalArrivalCleaned,
   portalArrivalOf,
   portalFrameMode,
   portalMainPixels,
-  portalThreadPixels,
   summaryTone,
   tabOrFirst,
 } from './model'
 import { PORTAL_ASK_EVENT, PortalRecordFrame } from './PortalRecordFrame'
+import { PHONE_BELOW, threadPixels } from '../../../lib/record-frame/model' // pp-k1 k1.3: the portal's copies of these went; the core's
 
 /**
  * B-TH-273 — the portal record frame (PL3): the conversation docked ~40 % from 1280 px, "Messages (2 new)" below, no Messages tab
@@ -67,7 +66,7 @@ const frame = (mode: 'docked' | 'stacked', over: { viewOpen?: boolean; newCount?
 describe('B-TH-273 — where the conversation sits, and how wide', () => {
   it('docked from 1280 px; below, behind the "Messages" button (full width); the phone from 720 px down', () => {
     expect(PORTAL_DOCK_FROM).toBe(1280)
-    expect(PORTAL_PHONE_BELOW).toBe(720)
+    expect(PHONE_BELOW).toBe(720) // pp-k1 k1.3: the core's (the portal kept no copy)
     expect(portalFrameMode(1920)).toBe('docked')
     expect(portalFrameMode(1280)).toBe('docked')
     expect(portalFrameMode(1279)).toBe('stacked')
@@ -78,8 +77,9 @@ describe('B-TH-273 — where the conversation sits, and how wide', () => {
     expect(PORTAL_DOCK_COLUMNS).toBe('minmax(0, 3fr) minmax(0, 2fr)')
     expect(portalMainPixels(1440)).toBe(1140)
     expect(portalMainPixels(1920)).toBe(1620)
-    expect(portalThreadPixels(portalMainPixels(1440))).toBe(450)
-    expect(portalThreadPixels(portalMainPixels(1920))).toBe(642)
+    // pp-k1 k1.3: the core's threadPixels at 40 % (the portal's own copy went).
+    expect(threadPixels(portalMainPixels(1440), 'forty')).toBe(450)
+    expect(threadPixels(portalMainPixels(1920), 'forty')).toBe(642)
   })
 
   it('"Messages", "Messages (2 new)", "Messages (99+ new)"; the screen reader hears the count; words in both languages', () => {

@@ -3,9 +3,9 @@
 import type { ReactNode } from 'react'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { Banknote, CircleAlert, Hourglass, Pause, Ruler } from 'lucide-react' // F-CO-K2: the strips' marks
-import type { Translate } from '../../../../lib/i18n/messages'
-import { useT } from '../../../../lib/i18n/provider'
-import { WithMessages } from '../../../../record-panels/i18n'
+import type { Translate } from '../../i18n/messages'
+import { useT } from '../../i18n/provider'
+import { WithMessages } from '../../../record-panels/i18n'
 import { OVERVIEW_NS } from '../model'
 import { CardState, Headline, Overview, OverviewCard, OverviewPair } from '../Overview'
 // ---- F-CO-K2: the rows' parts ----

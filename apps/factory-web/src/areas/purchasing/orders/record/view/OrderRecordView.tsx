@@ -29,7 +29,7 @@ import '../../depth/depth.css'
 import '../../../../_shared/buying/buying.css'
 // ---- B-TH-263: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 const JOURNEY = ['drafted', 'sent', 'confirmed', 'receiving', 'received'] as const
 

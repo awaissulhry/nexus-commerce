@@ -14,8 +14,10 @@ import { useBandSlot } from '../../../shell/office/band-slot'
 import type { DockWidth } from '../../../lib/record-thread/head/model'
 import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width'
 import { usePrintMode } from '../../../shell/print/print-mode'
-import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
-import { showsOnArrival, type DockDefault } from './model' // F-SA-263
+import { arrivalOf, dockWidth } from './model'
+import { DOCK_COLUMNS, DOCK_FROM, FRAME_NS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from '../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core
+import { showsOnArrival } from './model' // F-SA-263
+import type { DockDefault } from '../../../lib/record-frame/model' // F-SA-263 (pp-k1 k1.2: the core's)
 import { viewOpenOf } from './model' // F-SA-262
 import type { DiscussAsk, FrameDoor, ShowInThreadAsk } from './model' // F-SA-265
 import type { FrameAnswer } from './model' // F-SA-244
@@ -27,8 +29,9 @@ import { currentAddress, keptScopeOf, withThread, writeSearch } from './address'
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
 import './record-frame.css'
-
-export const FRAME_NS = 'record-frame'
+// pp-k1 k1.2: the one notice's rules moved with RecordNotices to the lib; loaded right after the frame's, where they stood in
+// record-frame.css (the same cascade on every office record page; RecordNotices loads them itself where no office frame is).
+import '../../../lib/record-frame/record-notices.css'
 
 /** The record band's parts (one row: the shell's dense DetailHeader where the shell has a band row). */
 export interface RecordBand {

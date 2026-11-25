@@ -9,7 +9,7 @@ import { ageOf } from '../../../../../../lib/production/model'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 // The shared overview kit: every card, row, strip, fact and group below is ITS part — this file hands them data and doors only.
-import { CardState, Door, Fact, FactCols, Group, GroupRow, Groups, Headline, Overview, OverviewCard, OverviewPair, QuietLine, Row, RowAge, RowList, Strip, Strips, StripSaid, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
+import { CardState, Door, Fact, FactCols, Group, GroupRow, Groups, Headline, Overview, OverviewCard, OverviewPair, QuietLine, Row, RowAge, RowList, Strip, Strips, StripSaid, useOverviewWords } from '../../../../../../lib/record-overview/Overview'
 import type { BeforeLinePart } from '../../before-order'
 import {
   OVERVIEW_NAMESPACES,
@@ -32,7 +32,7 @@ import { WorkBand, type WorkBandActions, type WorkBandModel } from '../WorkBand'
 
 /**
  * F-CO-103 (customer page › Overview; plan §1; 10-design; picture 20; lead settles S5, S6, S9, S10, S23, S24) — the customer's
- * Overview, drawn ONLY with the shared overview kit's parts (areas/_shared/record-overview), in the order's reading order:
+ * Overview, drawn ONLY with the shared overview kit's parts (lib/record-overview), in the order's reading order:
  *
  *   1  Where <customer> stands      the headline (one sentence) · its quiet note · the strips (what stops the customer)
  *   2  All orders of <customer>     the Work tab's own band (WorkBand, no chips, no group pressed) INSIDE a card (S6) — a press is a

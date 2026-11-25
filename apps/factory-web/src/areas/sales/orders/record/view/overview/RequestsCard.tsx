@@ -15,10 +15,10 @@ import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-r
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 // ---- F-CO-K2: the groups and their rows are the kit's parts (their look comes with them: the card has no stylesheet of its own) ----
-import { Group, GroupRow, Groups } from '../../../../../_shared/record-overview/Overview'
-import { GROUP_ROWS_SHOWN } from '../../../../../_shared/record-overview/model'
+import { Group, GroupRow, Groups } from '../../../../../../lib/record-overview/Overview'
+import { GROUP_ROWS_SHOWN } from '../../../../../../lib/record-overview/model'
 // ---- end F-CO-K2
 
 /** F-OO-205 (11-design §5.2, Q10): the rows a customer's or a Still to do group shows before "N more on Changes ›"; every row waiting on us shows. F-CO-K2: the kit's cap. */
