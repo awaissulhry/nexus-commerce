@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useSyncExter
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { TabItem } from '@nexus/ui/components'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
+import type { CustomerOrderStatus } from '@nexus/factory-domain/sales/portal-orders/status' // pp-w1 (L4)
 import { browserApi } from '../../lib/api/browser'
 import type { HealthState } from '../../lib/production/model'
 import type { ApiClient } from '../../lib/api/client'
@@ -94,7 +95,11 @@ export interface PortalBand {
   back?: { href: string; label: string } | null
   /** Their reference first, ours second (RefPair). */
   refs?: { theirs?: string | null; ours?: string | null } | null
-  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' } | null
+  /**
+   * The lifecycle pill. pp-w1 (L4): a customer's order also names its status (`order`): the shell draws the SHARED status chip
+   * (lib/order-cells StateChip: the office's tone, its group's mark — the same chip as the orders list); absent: the pill as before.
+   */
+  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'; order?: CustomerOrderStatus } | null
   /** At most two; the primary last (on a phone it moves to the action bar above the bottom bar). */
   actions?: readonly PortalBandAction[]
   /** The ⋯ items; the frame ends them with "Ask a question" (about `ask`, else the account). */

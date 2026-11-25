@@ -16,6 +16,8 @@ import '@nexus/ui/styles/branding.css'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import { HealthPill } from '../../../lib/production/view/HealthPill'
+import { customerStateChipOf } from '../../../lib/order-cells/model' // pp-w1 (L4): the shared status chip
+import { StateChip } from '../../../lib/order-cells/view/StateChip'
 import type { LiveState } from '../../../shell/live/bus'
 import type { PortalBand } from '../frame'
 import type { BadgeWords, PortalNotice } from '../model'
@@ -251,7 +253,7 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
                 band.refs || band.status || band.chips ? (
                   <span className="fw-pband-meta">
                     {band.refs ? <RefPair theirs={band.refs.theirs ?? null} ours={band.refs.ours ?? null} size="sm" labels={ds.refPair} /> : null}
-                    {band.status ? <Pill tone={band.status.tone}>{band.status.label}</Pill> : null}
+                    {band.status ? band.status.order ? <StateChip chip={customerStateChipOf(band.status.order, band.status.label)} /> : <Pill tone={band.status.tone}>{band.status.label}</Pill> : null}
                     {/* pp-w1 (w1.2): the office band's twins after the status — health (Late / At risk), urgency, made from. */}
                     {band.chips?.health ? <HealthPill face="customer" computed={band.chips.health.computed} raised={band.chips.health.raised ?? null} /> : null}
                     {band.chips?.urgent ? <Tag tone="warning">{band.chips.urgent}</Tag> : null}

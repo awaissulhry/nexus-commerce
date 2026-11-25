@@ -3,6 +3,8 @@ import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { MONEY_NAME } from '@nexus/factory-domain/money/marked'
+import { CUSTOMER_ORDER_STATUSES } from '@nexus/factory-domain/sales/portal-orders/status'
+import { customerStatusTone } from '../../../lib/order-cells/model'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import type { Locale } from '../../../lib/i18n/locales'
 import { render, textOf } from '../../../lib/record-thread/parts/testing'
@@ -199,5 +201,17 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
     for (const rule of ['.fw-pband .nds-detailhdr.dense .back {', '.fw-pband .nds-detailhdr.dense .fw-ppages {\n    order: 2;', 'flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));']) expect(phone, rule).toContain(rule)
+  })
+})
+
+describe('L4 — the band’s status is the shared status chip (lib/order-cells StateChip: the orders list’s chip, the office’s tone)', () => {
+  it('the band names the order’s status; the shell draws the shared chip with its group’s mark; another page keeps its pill', () => {
+    expect(bandOf({}, 'IN_PRODUCTION').status).toMatchObject({ order: 'IN_PRODUCTION', tone: customerStatusTone('IN_PRODUCTION') })
+    for (const status of CUSTOMER_ORDER_STATUSES) expect(bandOf({}, status).status?.tone, status).toBe(customerStatusTone(status))
+    const html = drawBand(bandOf(), 'en')
+    expect(html).toContain('fw-sheet-st')
+    const other = drawBand({ ...bandOf(), status: { label: 'Open', tone: 'info' } }, 'en')
+    expect(other).not.toContain('fw-sheet-st')
+    expect(textOf(other)).toContain('Open')
   })
 })

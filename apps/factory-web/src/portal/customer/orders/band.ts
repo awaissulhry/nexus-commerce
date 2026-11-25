@@ -3,7 +3,8 @@ import type { PortalBand, PortalBandAction, PortalBandChips } from '../../shell/
 import type { ProductionHealth, ProductionOrder } from '../production/api'
 import { healthInputOf } from '../production/model'
 import type { OrderRecord } from './api'
-import { listQuery, recordHref, shownLinesOf, statusTone, type ListChip, type RecordTab } from './model'
+import { customerStatusTone } from '../../../lib/order-cells/model' // pp-w1 (L4)
+import { listQuery, recordHref, shownLinesOf, type ListChip, type RecordTab } from './model'
 // B-TH-275: the order named by the customer's own number (plan §0.5).
 import { orderNameOf } from './model'
 import type { OrderWords } from './words'
@@ -140,7 +141,8 @@ export function orderBandOf(input: {
     title: name,
     back: { href: `${input.prefix}/orders`, label: t('list.title') },
     refs: order.customerRef ? { theirs: order.customerRef, ours: null } : null,
-    status: { label: order.words[locale], tone: statusTone(order.status) },
+    // pp-w1 (L4): the shared status chip (the shell draws lib/order-cells StateChip from `order`: the list's chip, the office's tone).
+    status: { label: order.words[locale], tone: customerStatusTone(order.status), order: order.status },
     actions,
     more,
     ask: { type: 'SalesOrder', id: order.id, label: name },
