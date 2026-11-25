@@ -8,7 +8,7 @@ import type { RequestRow, SendAnswer } from '../requests/api'
 import { requestHref, requestOrder, stateTone, yourNumberText } from '../requests/model'
 import type { OpenRequestItem, RequestReceipt } from './view/RequestPageView'
 // B-TH-304: the catalogue door's ways and addresses.
-import { newOrderHref, WAYS, type Way } from './model'
+import { newOrderHref } from './model'
 
 /**
  * Portal › New order as an e-mail (B-TH-220, B-TH-303), pure: whether the catalogue door shows, the fixed recipient line, the
@@ -57,15 +57,6 @@ export function newOrderDoorOf(search: Pick<URLSearchParams, 'get'> | null, fact
 
 // ── B-TH-304: the catalogue door on New order ────────────────────────────────────────────────────────────────────────────
 /** The door's three ways in (B-W2b-194's start), each its page's address; null while the door is closed. */
-export interface CatalogueDoor {
-  readonly ways: readonly { readonly way: Way; readonly href: string }[]
-}
-
-export function catalogueDoorOf(prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): CatalogueDoor | null {
-  if (!open) return null
-  return { ways: WAYS.map((way) => ({ way, href: newOrderHref(prefix, { way }) })) }
-}
-
 /** Where the catalogue's "Start an order" leads: the door's style picker while it is open, else the request like an e-mail. */
 export const catalogueStartHref = (prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): string => (open ? newOrderHref(prefix, { way: 'pick' }) : newOrderHref(prefix))
 
@@ -105,8 +96,10 @@ export function reorderLineText(line: OrderRecord['lines'][number], t: Translate
 /** The subject and message lines for "Reorder this line" (one line) or a whole past order. */
 export function reorderText(record: Pick<OrderRecord, 'order' | 'lines'> & { order: { yourNumber?: OrderRecord['order']['yourNumber'] } }, lineId: string | null, locale: Locale, t: Translate): { subject: string; lines: string[]; yours: string } {
   const yours = yourNumberText(record.order.yourNumber ?? null, locale) ?? t('request.theOrder')
-  const chosen = lineId ? record.lines.filter((line) => line.id === lineId) : record.lines
-  const lines = (chosen.length > 0 ? chosen : record.lines).map((line) => reorderLineText(line, t))
+  // A charge line (FEE, pp-w1) is no product to make again: never copied into the message.
+  const products = record.lines.filter((line) => line.kind !== 'FEE')
+  const chosen = lineId ? products.filter((line) => line.id === lineId) : products
+  const lines = (chosen.length > 0 ? chosen : products).map((line) => reorderLineText(line, t))
   return { subject: t('request.reorderSubject', { yours }), lines: [t('request.reorderIntro'), ...lines], yours }
 }
 

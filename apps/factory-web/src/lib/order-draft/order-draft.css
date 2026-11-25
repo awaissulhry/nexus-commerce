@@ -1,0 +1,579 @@
+/*
+ * The ONE draft order (THE SIMPLE ORDER START, od-w1.1): layout only, semantic tokens only. Both doors draw it (the portal inside its
+ * record frame, the office inside its own): moved out of the portal's New order (`portal/customer/neworder/neworder.css`, SCR-185 and
+ * the customer page's F-CP-150…154), its class prefix `fw-pno-` → `fw-od-`. The part fills the main area its host leaves (no page
+ * max-width: Owner rule 2026-10-29).
+ */
+
+.fw-od,
+.fw-od-section,
+.fw-od-dialog,
+.fw-od-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-od {
+  gap: var(--nds-space-16);
+}
+
+.fw-od-section,
+.fw-od-stack {
+  gap: var(--nds-space-8);
+}
+
+.fw-od-dialog {
+  gap: var(--nds-space-16);
+}
+
+.fw-od-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-od-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-od-quiet {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+@media (max-width: 719px) {
+  .fw-od-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-od-shipto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-od-shipto > :first-child {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.fw-od-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-od-note.is-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-od-note.is-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-od-note.is-info {
+  color: var(--nds-text-2);
+}
+
+.fw-od-held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-od .fw-od-quiet {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-od .fw-od-quiet > svg {
+  flex: 0 0 auto;
+}
+
+.fw-od-draft {
+  gap: var(--nds-space-16);
+}
+
+.fw-od-draftmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-od-shared {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-parthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-od-parthead .fw-od-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-od-draftfoot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-od-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-od-filelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-mailway {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border-left: 3px solid var(--nds-info);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-mailway > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-od-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-od-privacy > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-od-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-od-rosterhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-od-insheet,
+.fw-od-measure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-od-quiet.is-missing {
+  color: var(--nds-danger-text);
+}
+
+.fw-od-personname {
+  font-weight: 600;
+}
+
+/* ---- od-w1.2 (THE SIMPLE ORDER START R1; 10-design-r1 § 2–§ 4): the mail, the products table, Still open, the host cards. Tokens only;
+   no dead space: the table's tracks are fr with minimums (rows reach the right edge), the host cards auto-fit ONE row. */
+.fw-od-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-od-design {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-left: var(--nds-space-12);
+  color: var(--nds-text-strong);
+}
+
+/* The products table: one grid per row (a container query gives the two-line form below 800 px and a stacked card on a phone). */
+.fw-od-tablewrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.fw-od-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-od-trow {
+  display: grid;
+  grid-template-columns: 32px minmax(160px, 2fr) minmax(140px, 1.3fr) minmax(120px, 1.1fr) minmax(110px, 1fr) minmax(130px, 1.4fr) 56px 40px;
+  grid-template-areas: 'n product sizing colour pieces options files more';
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-od-trow + .fw-od-trow {
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-od-trow.is-saving {
+  opacity: 0.7;
+}
+
+.fw-od-thead {
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-od-tempty {
+  display: block;
+}
+
+.fw-od-c-n {
+  grid-area: n;
+  padding-top: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-od-c-product { grid-area: product; min-width: 0; }
+.fw-od-c-sizing { grid-area: sizing; min-width: 0; }
+.fw-od-c-colour { grid-area: colour; min-width: 0; }
+.fw-od-c-pieces { grid-area: pieces; min-width: 0; }
+.fw-od-c-options { grid-area: options; min-width: 0; }
+.fw-od-c-files { grid-area: files; min-width: 0; }
+.fw-od-c-more { grid-area: more; justify-self: end; }
+
+.fw-od-celllabel {
+  display: none;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-od-product {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding-top: var(--nds-space-6);
+  overflow-wrap: anywhere;
+}
+
+.fw-od-productmeta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-od-sizing {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-od-sizing > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-od-cellbtn {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-4);
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-od-cellbtn:hover {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-od-cellbtn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+.fw-od-cellbtn[aria-disabled='true'] {
+  cursor: default;
+}
+
+.fw-od-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+
+.fw-od-pieces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-od-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-od-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.fw-od-chip.is-open {
+  color: var(--nds-text-2);
+}
+
+.fw-od-tablefoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+/* Below 800 px: line 1 = # · Product · Sizing · Colour · Pieces · ⋯; line 2 = Options (under Product → Colour) and Files (under Pieces). */
+@container (max-width: 799px) {
+  .fw-od-trow {
+    grid-template-columns: 28px minmax(140px, 2fr) minmax(120px, 1.3fr) minmax(100px, 1fr) minmax(100px, 1fr) 40px;
+    grid-template-areas:
+      'n product sizing colour pieces more'
+      '. options options options files .';
+  }
+  .fw-od-thead .fw-od-c-options,
+  .fw-od-thead .fw-od-c-files {
+    display: none;
+  }
+  .fw-od-c-options .fw-od-celllabel,
+  .fw-od-c-files .fw-od-celllabel {
+    display: block;
+  }
+}
+
+/* A phone: one stacked card per row — head # · Product · ⋯, then labelled cells in two columns. */
+@container (max-width: 519px) {
+  .fw-od-thead {
+    display: none;
+  }
+  .fw-od-trow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'product more'
+      'sizing colour'
+      'pieces options'
+      'files files';
+  }
+  .fw-od-c-n {
+    display: none;
+  }
+  .fw-od-celllabel {
+    display: block;
+  }
+}
+
+/* Still open: items in auto-fill columns; an item is a button that moves the focus to its row. */
+.fw-od-still {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-stillitem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+  margin: 0;
+  padding: var(--nds-space-4);
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-od-stillitem:hover {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-od-stillitem:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+.fw-od-stillname {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+/* The host's own cards: ONE row under Still open (auto-fit collapses empty tracks, so 1, 2 or 3 cards fill it). */
+.fw-od-hostrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-16);
+  align-items: stretch;
+}
+
+/* The Options window. */
+.fw-od-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-option {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .fw-od-option {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fw-od-option > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-od-addoption {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* Continue a draft: its rows side by side (auto-fit ≥ 280 px). */
+.fw-od-continue {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-rowtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  text-align: left;
+}
+
+.fw-od-continuefoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-od-mail .fw-od-files {
+  gap: var(--nds-space-6);
+}
+/* ---- end od-w1.2 */

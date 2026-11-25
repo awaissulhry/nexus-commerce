@@ -19,20 +19,7 @@
     "close": "Close"
   },
   "start": {
-    "title": "How do you want to order?",
-    "intro": "Three ways in, one draft: you can mix them before you send.",
     "keeps": "Choosing a way keeps what is already in the draft.",
-    "way": {
-      "pick": "Pick styles",
-      "reorder": "Reorder a past order",
-      "upload": "Upload a sheet"
-    },
-    "wayHint": {
-      "pick": "From your catalogue, with the whole size run in one grid.",
-      "reorder": "Copy a past order at today's prices; every difference is spelled out.",
-      "upload": "A spreadsheet for big size runs, checked row by row before anything is added."
-    },
-    "drafts": "Your drafts",
     "draftsFailed": "We could not read your drafts.",
     "draft_one": "Continue your draft from {day} · {count} line",
     "draft_other": "Continue your draft from {day} · {count} lines",
@@ -42,68 +29,14 @@
   "head": {
     "title": "Order details",
     "intro": "What we need to process the request. Each field is saved when you leave it.",
-    "ref": "Your PO number",
-    "refHint": "Your own number for this order: we print it on every document.",
-    "shipTo": "Ship to",
-    "shipToChoose": "Choose a delivery address",
-    "shipToHint": "Addresses checked by us. A new one can be added here.",
-    "shipToWaiting": "We check this new address before the first delivery. You can still send the request: we check it when we confirm.",
-    "shipToGone": "This address is no longer in use: choose another one.",
-    "shipToNone": "You have no delivery address yet: add one.",
-    "default": "default",
-    "waiting": "waits for our check",
-    "archived": "no longer in use",
-    "addAddress": "Add a new address",
     "addAddressAdmin": "Only your admin adds delivery addresses: ask {names}.",
-    "addAddressAdminNone": "Only your admin adds delivery addresses.",
-    "date": "Requested delivery date",
-    "dateHint": "We confirm the date when we confirm the request.",
-    "note": "Note to us",
-    "noteHint": "Anything we should know about this order.",
-    "problem": {
-      "refLong": "At most 100 characters.",
-      "noteLong": "At most 4,000 characters.",
-      "datePast": "Choose today or a later day."
-    }
+    "addAddressAdminNone": "Only your admin adds delivery addresses."
   },
   "lines": {
     "title_one": "Lines ({count})",
     "title_other": "Lines ({count})",
     "addStyles": "Add styles",
-    "empty": "No lines yet.",
-    "emptyBody": "Add a style, reorder a past order or upload a sheet.",
-    "lineTitle": "Line {seq}: {title}",
-    "fromOwn": "from your order {seq}",
-    "fromOwnRef": "from your order {seq} (your PO {ref})",
-    "fromDay": "from your order of {day}",
-    "fromDayRef": "from your order of {day} (your PO {ref})",
-    "colour": "Colour",
-    "colourGone": "{colour} (discontinued)",
-    "menu": "More for line {seq}",
-    "remove": "Remove line",
-    "gridCaption": "Pieces by size for {title}, {colour}",
-    "note": "Your code or a note",
-    "noteHint": "Saved with the line; we see it on the request.",
-    "pieces": "Pieces",
-    "unitPrice": "Unit price",
-    "amount": "Line amount",
-    "held": {
-      "empty": "A line asks at least one piece: type the sizes, or remove the line."
-    },
-    "dropSize": "Leave size {size} out"
-  },
-  "size": {
-    "caption": "Pieces by size",
-    "colour": "Colour",
-    "total": "Total",
-    "cellName": "{colour}, size {size}",
-    "notOffered": "not offered",
-    "empty": "No sizes.",
-    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
-    "notWhole": "{cell}: whole pieces only, 0 to {max}.",
-    "cutToMax": "{cell}: cut to {max}.",
-    "pasted": "{applied} pasted, {skipped} left out.",
-    "issues": "Check these sizes"
+    "amount": "Line amount"
   },
   "reorder": {
     "title": "Reorder a past order",
@@ -196,44 +129,17 @@
     "lines": "Lines",
     "pieces": "Pieces",
     "net": "Net total",
-    "netHint": "At the prices of your price list shown on each line; VAT and shipping come with our confirmation.",
     "notice": "This is a request: our answer confirms price, quantities and date; you will see it under Orders.",
     "pricesChanged_one": "Prices changed since you started — {count} line",
     "pricesChanged_other": "Prices changed since you started — {count} lines",
     "takePrices": "Take today's prices",
     "problems_one": "{count} problem",
     "problems_other": "{count} problems",
-    "showMe": "Show me",
     "sendKeys": "⌘ Enter sends from here when nothing holds it."
   },
-  "problem": {
-    "thisStyle": "This style",
-    "NO_LINES": "Add at least one line.",
-    "TOO_MANY_LINES": "At most {max} lines per request.",
-    "DATE_PAST": "The requested delivery date has passed: choose today or a later day.",
-    "SHIP_TO_ARCHIVED": "The delivery address is no longer in use: choose another one.",
-    "STYLE_NOT_SOLD": "{style} is no longer sold to you: remove the line.",
-    "COLOUR_DISCONTINUED": "{colour} is discontinued: choose another colour.",
-    "SIZE_NOT_OFFERED": "Size {size} is not offered for {style}.",
-    "NO_SIZES": "The line asks no size.",
-    "PRICE_CHANGED": "Price now {now} (was {was}).",
-    "PRICE_NEW": "Price now {now}: take today's prices.",
-    "PRICE_ANY": "The price changed: take today's prices."
-  },
   "notice": {
-    "PRICE_CHANGED": "Price now {now} (was {was})",
-    "PRICE_ANY": "The price changed since that order",
-    "REVISION_CHANGED": "Now made to a newer revision of the style",
-    "SIZES_DROPPED": "Sizes no longer offered, left out: {sizes}",
-    "SIZES_DROPPED_SOME": "Some sizes are no longer offered and were left out",
-    "COLOUR_DISCONTINUED": "{colour} is discontinued — choose another colour",
-    "STYLE_NOT_SOLD": "{style} is no longer sold",
-    "MADE_TO_MEASURE": "A made-to-measure unit is not reordered here: ask us",
-    "NO_SIZES_LEFT": "None of its sizes is offered any more",
     "removed": "Line {seq} removed: {style}, {colour}.",
-    "back": "{style}, {colour} is back in the draft at today's price.",
-    "undo": "Undo",
-    "hide": "Hide"
+    "back": "{style}, {colour} is back in the draft at today's price."
   },
   "done": {
     "added_one": "{count} line added to the draft.",
@@ -262,9 +168,7 @@
     "body": "It was sent or discarded, perhaps by a colleague. Start a new order or look under Orders."
   },
   "draft": {
-    "failed": "We could not read this draft.",
-    "stale": "This draft changed elsewhere (a colleague, another tab). What you typed is still here.",
-    "reload": "Read it again"
+    "failed": "We could not read this draft."
   },
   "address": {
     "title": "New delivery address",
@@ -531,56 +435,15 @@
   "draftPage": {
     "title": "Draft order",
     "titleOf": "Draft order · {title}",
-    "untitled": "Untitled draft",
     "back": "New order",
-    "shared": "The factory can read this draft. Work starts only when you send it.",
-    "saved": "Saved {time}",
-    "savedBy": "Saved {time} by {name}",
-    "version": "v{n}",
-    "changedBy": "Changed by {name} a moment ago.",
-    "send": "Send to the factory",
     "sendHeld": "Only colleagues who may order send it: {names}.",
     "sendHeldNone": "Only colleagues who may order send it: ask your admin.",
     "discard": "Discard…",
     "discardHeld": "Only the colleague who started this draft, or one who may send orders, discards it.",
-    "checklist": "What the draft holds",
-    "part": {
-      "NEED": "What you need",
-      "LOGOS": "Logos",
-      "REFERENCES": "References",
-      "PEOPLE": "People and sizes",
-      "DATE": "Date and delivery",
-      "PRICE": "Your price",
-      "NOTES": "Notes"
-    },
-    "state": {
-      "READY": "Ready",
-      "LATER": "Sending later",
-      "MISSING": "Missing",
-      "OPTIONAL": "Optional"
-    },
-    "chip": "{n}. {part}: {state}",
-    "addLine": "Add a line",
     "reorderHeld": "Your access does not show orders.",
-    "people": {
-      "grid": "Line {seq}: size grid, {pieces} pieces",
-      "none": "Line {seq}: no pieces yet",
-      "empty": "Add a line first: its sizes show here.",
-      "total": "Line {seq}: {pieces} pieces · sizes later",
-      "totalSizes": "Line {seq}: {pieces} pieces in sizes",
-      "noTotal": "Line {seq}: no total yet",
-      "byPerson_one": "Line {seq}, by person: {count} person",
-      "byPerson_other": "Line {seq}, by person: {count} people",
-      "inSheet": "Line {seq}, by person: in the attached sheet",
-      "noOne": "Line {seq}, by person: no one named yet"
-    },
     "price": {
-      "line": "Line",
-      "ours": "Our list price",
-      "yours": "Your price (without VAT)",
       "cell": "Your price for line {seq}",
       "total": "Total",
-      "frozen": "Frozen when you send. The factory checks it against its own price (Price check on the order).",
       "missing_one": "{count} line still without your price",
       "missing_other": "{count} lines still without your price",
       "problem": "A price of 0 or more, with up to 6 decimals."
@@ -591,162 +454,13 @@
     "acceptedNoOrders": "The factory made it an order: your buyer follows it.",
     "refusedNoOrders": "The factory did not accept this request: your buyer has the reason.",
     "sentNoOrders": "This draft was sent to the factory: your buyer follows it.",
-    "problems_one": "{count} problem to fix before you send",
-    "problems_other": "{count} problems to fix before you send",
     "keySend": "Send to the factory",
     "keyThread": "Show or hide the conversation",
     "files": {
-      "logoHint": "Vector files (AI, EPS, PDF) print best; a picture is fine to start.",
-      "addLogos": "Add logos: drop them here or choose them",
-      "addReferences": "Add pictures or PDFs: drop them here or choose them",
-      "addSheets": "Add a measurement sheet: drop it here or choose it",
-      "onDraft": "on the draft",
-      "onLine": "on line {seq}",
-      "kind": {
-        "vector": "vector",
-        "picture": "picture",
-        "document": "document"
-      },
-      "scanning": "held for the virus scan: it reaches the factory once it is clean",
-      "uploading": "Uploading…",
-      "failed": "Not uploaded: {reason}",
-      "full": "This draft already holds 50 files: remove one, or write to us in the messages for the rest.",
-      "closed": "Files cannot be uploaded here yet: e-mail them to your contact at the factory, naming «{draft}». We add them to the request when you send it.",
-      "sheetsClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}».",
-      "notNow": "Files cannot be uploaded here right now: e-mail them to your contact at the factory.",
-      "later": "We send these later",
-      "noLogos": "No logos yet.",
-      "noReferences": "No references yet.",
-      "noSheets": "No measurement sheets yet.",
-      "sheetsTitle": "Measurement sheets",
-      "sheetsPrivacy": "Measurement sheets are personal data: at the factory only the people who handle measurements open them."
+      "notNow": "Files cannot be uploaded here right now: e-mail them to your contact at the factory."
     },
-    "start": {
-      "words": "Just write it in words",
-      "describe": "Describe it",
-      "describeHint": "In your own words: what you need, the colours, how many — or one row per person. The factory reads it from the first save."
-    },
-    "kind": {
-      "CATALOGUE": "From the catalogue",
-      "DESCRIBED": "Described by you",
-      "MADE_TO_MEASURE": "Made to measure"
-    },
-    "addDescribed": "Describe it",
-    "addMtm": "Made to measure",
-    "mtmOff": "Made to measure is not open for you yet: ask us in the messages.",
     "line": {
-      "untitled": "Untitled line",
-      "byPerson": "By person",
-      "people_one": "{count} person",
-      "people_other": "{count} people",
-      "inSheet": "People: in the attached sheet",
-      "noPeople": "no one named yet",
-      "total": "{pieces} pieces",
-      "sizesLater": "sizes later",
-      "inSizes": "in sizes: {sizes}",
-      "noTotal": "No total yet",
-      "colours": "Colours: {colours}",
-      "ownStyle": "Your style {style}",
-      "madeFrom": "Made from {style}",
-      "change": "Change…",
-      "removed": "Line {seq} removed.",
-      "menu": "More for line {seq}"
-    },
-    "customLine": {
-      "titleDescribed": "Describe what you need",
-      "titleMtm": "A made-to-measure line",
-      "titleChange": "Line {seq} · {kind}",
-      "description": "What you need",
-      "descriptionHint": "In your own words: the garment, the fabric, the logos, anything we should know (up to 2000 characters).",
-      "descriptionMtm": "What you need (optional)",
-      "colours": "Colours in words (optional)",
-      "coloursHint": "Like “red and white, as the reference”.",
-      "style": "Your own style (optional)",
-      "styleHint": "One of your own label’s styles, if it is made from one.",
-      "styleMtm": "Style (optional)",
-      "styleMtmHint": "The style it is made from, if you know it.",
-      "noStyle": "None",
-      "stylesLoading": "Reading your styles…",
-      "stylesFailed": "Your styles could not be read: you can save the line without one.",
-      "how": "How many",
-      "howTotal": "A total (sizes may follow)",
-      "howPeople": "One row per person",
-      "total": "Pieces in all",
-      "totalHint": "Leave it empty if you do not know yet: we ask before you send.",
-      "garment": "Garment type",
-      "garmentChoose": "Choose a garment type",
-      "mtmPeople": "Made to measure is always one row per person: name the people, or attach their measurement sheet, in People and sizes.",
-      "peopleHint": "Name the people, or attach their measurement sheet, in People and sizes.",
-      "note": "Note on the line (optional)",
-      "add": "Add the line",
-      "save": "Save the line",
-      "problem": {
-        "description": "Say in your words what you need.",
-        "descriptionLong": "At most 2000 characters.",
-        "coloursLong": "At most 200 characters.",
-        "total": "A whole number of pieces, 1 to 100000.",
-        "garment": "Choose the garment type.",
-        "noteLong": "At most 1000 characters."
-      }
-    },
-    "roster": {
-      "privacy": "The names and measures of your riders and team are personal data: we use them only to make this order, and at the factory only the people who handle measurements open the measurement sheets.",
-      "title": "Line {seq} · {kind} · {title} — one row per person",
-      "add": "Add a person",
-      "col": {
-        "name": "Name",
-        "number": "Number",
-        "how": "How we get the size",
-        "what": "What is there",
-        "more": "More"
-      },
-      "empty": "No one named yet: add the people, or attach their measurement sheet to this line.",
-      "inSheet": "People: in the attached sheet",
-      "sheetOnLine": "Measurement sheet on this line: {names}",
-      "attach": "Attach their measurement sheet to this line: drop it here or choose it",
-      "attachClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}» and line {seq}.",
-      "sheetGone": "a sheet no longer on the draft",
-      "personMenu": "More for {name}",
-      "change": "Change…",
-      "remove": "Remove"
-    },
-    "measure": {
-      "SIZE": "Size",
-      "SHEET": "Measurement sheet",
-      "LATER": "Sending later"
-    },
-    "person": {
-      "titleAdd": "Add a person to line {seq}",
-      "titleChange": "{name} · line {seq}",
-      "name": "Name",
-      "nameHint": "The name we tell their garments apart by.",
-      "number": "Number (optional)",
-      "numberHint": "A race or shirt number, up to 10 characters.",
-      "how": "How we get the size",
-      "size": "Size",
-      "sizeHint": "As on the size chart of the garment.",
-      "sheet": "Measurement sheet",
-      "sheetChoose": "Choose a sheet of this draft",
-      "noSheets": "No measurement sheet on this draft yet: add it in People and sizes first, or choose another way.",
-      "later": "We send the measures later.",
-      "note": "Note (optional)",
-      "add": "Add the person",
-      "save": "Save",
-      "problem": {
-        "name": "A name is 1 to 120 characters.",
-        "number": "At most 10 characters.",
-        "size": "Give the size (up to 40 characters).",
-        "sheet": "Choose the measurement sheet that holds the measures.",
-        "note": "At most 1000 characters."
-      }
-    },
-    "problem": {
-      "NO_TOTAL": "Say how many pieces in all (the sizes may follow).",
-      "SIZES_NOT_TOTAL": "The sizes add up to {sum} pieces, the total says {total}.",
-      "SIZES_NOT_TOTAL_ANY": "The sizes and the total do not match.",
-      "NO_PEOPLE": "Name the people, or attach their measurement sheet.",
-      "GARMENT_TYPE_GONE": "Made to measure {type} is no longer offered: choose another garment type.",
-      "GARMENT_TYPE_GONE_ANY": "This garment type is no longer made to measure: choose another one."
+      "removed": "Line {seq} removed."
     }
   }
 }

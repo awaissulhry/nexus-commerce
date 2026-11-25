@@ -1,27 +1,26 @@
 'use client'
 
-import { Clock, FileText, Mail, MoreHorizontal, Shirt, ShieldCheck, UserPlus } from 'lucide-react'
+import { Clock, FileText, Mail, MoreHorizontal, Shirt, UserPlus } from 'lucide-react'
 import { Banner, Field, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
-import { FileDropzone, Modal } from '../../../../lib/i18n/ds-parts'
-import type { CustomLine, DraftFile, DraftPerson, DraftRecord, MeasureBy } from '../api'
+import { FileDropzone, Modal } from '../../i18n/ds-parts'
+import type { DraftFile, DraftFilePart, DraftPerson, MeasureBy } from '../schema'
 import {
   customTitleOf,
-  entriesInOrder,
-  entryPeopleOf,
   kindKey,
   MEASURES,
   measureKey,
   peopleInOrder,
   personWhat,
   problemWords,
-  rosterLinesOf,
   sheetsOfLine,
+  type DraftView,
+  type DraftViewCustomLine,
   type PersonDraft,
   type PersonField,
 } from '../model'
-import { useOrderingWords } from '../words'
-import { ACCEPT, DraftSheets, type DraftFilesActions, type DraftFilesModel } from './DraftFiles'
+import { useDraftWords } from '../words'
+import { ACCEPT } from './files'
 
 /**
  * F-CP-154 (customer page plan C5; 12 §2 part 4 "People & sizes"; review A5, G6; lead pick: no "Saved measurements" in v1): the
@@ -36,14 +35,21 @@ import { ACCEPT, DraftSheets, type DraftFilesActions, type DraftFilesModel } fro
  */
 
 export interface PeopleRosterModel {
-  record: DraftRecord
+  /** The draft without a single price (`draftViewOf`). */
+  draft: DraftView
   /** Why nothing can be written now (words), or null. */
   writeHeld: string | null
-  /** The draft's measurement sheets block (its files, the drop area or the e-mail way, "Sending later"). */
-  sheets: DraftFilesModel
+  /** Files go up here now (else the e-mail way, naming the draft). */
+  uploadsOpen: boolean
+  /** Why a sheet cannot be added now (words: the cap), or null. */
+  addHeld: string | null
+  /** How the e-mail way names the draft (their PO, else its title). */
+  draftName: string
 }
 
-export interface PeopleRosterActions extends DraftFilesActions {
+export interface PeopleRosterActions {
+  /** A measurement sheet onto the row (it stands for its roster while no one is named). */
+  onFiles?: (part: DraftFilePart, files: File[], lineId?: string | null) => void
   onAddPerson?: (lineId: string) => void
   onChangePerson?: (lineId: string, personId: string) => void
   onRemovePerson?: (lineId: string, personId: string) => void
@@ -51,46 +57,11 @@ export interface PeopleRosterActions extends DraftFilesActions {
 
 const MEASURE_ICON: Readonly<Record<MeasureBy, typeof Shirt>> = { SIZE: Shirt, SHEET: FileText, LATER: Clock }
 
-export function PeopleRoster({ model, actions }: { model: PeopleRosterModel; actions?: PeopleRosterActions }) {
-  const words = useOrderingWords()
-  const { t } = words
-  const request = model.record.request
-  const entries = entriesInOrder(request)
-  const rosters = rosterLinesOf(request)
-  return (
-    <>
-      {entries.length === 0 ? (
-        <p className="fw-pno-quiet">{t('draftPage.people.empty')}</p>
-      ) : (
-        <ul className="fw-pno-peoplelines">
-          {entries.map((entry) => {
-            const people = entryPeopleOf(entry, t, words.pieces)
-            return (
-              <li key={entry.line.id} className={people.missing ? 'is-missing' : undefined}>
-                <a href={`#${people.target}`}>{people.words}</a>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      {/* Review G6: the people's names and measures are personal data — said where they are typed. */}
-      <p className="fw-pno-quiet fw-pno-privacy">
-        <ShieldCheck size={14} aria-hidden /> {t('draftPage.roster.privacy')}
-      </p>
-      {rosters.map((line) => (
-        <LineRoster key={line.id} line={line} model={model} actions={actions} />
-      ))}
-      {/* F-CP-151: the draft's measurement sheets (body data) and who opens them. */}
-      <DraftSheets model={model.sheets} actions={actions} />
-    </>
-  )
-}
-
 /** One by-person line's roster: its people, "Add a person", its own measurement sheet ("People: in the attached sheet"). */
-function LineRoster({ line, model, actions }: { line: CustomLine; model: PeopleRosterModel; actions?: PeopleRosterActions }) {
-  const words = useOrderingWords()
+export function LineRoster({ line, model, actions }: { line: DraftViewCustomLine; model: PeopleRosterModel; actions?: PeopleRosterActions }) {
+  const words = useDraftWords()
   const { t, locale } = words
-  const request = model.record.request
+  const request = model.draft.request
   const held = model.writeHeld
   const people = peopleInOrder(line.people)
   const onLine = sheetsOfLine(request, line.id)
@@ -99,9 +70,9 @@ function LineRoster({ line, model, actions }: { line: CustomLine; model: PeopleR
   const title = t('draftPage.roster.title', { seq: line.seq, kind: t(kindKey(line.kind)), title: customTitleOf(line, t, locale) })
   const headingId = `people-${line.id}-title`
   return (
-    <section className="fw-pno-roster" id={`people-${line.id}`} tabIndex={-1} aria-labelledby={headingId}>
-      <div className="fw-pno-rosterhead">
-        <h3 id={headingId} className="fw-pno-h3">
+    <section className="fw-od-roster" id={`people-${line.id}`} tabIndex={-1} aria-labelledby={headingId}>
+      <div className="fw-od-rosterhead">
+        <h3 id={headingId} className="fw-od-h3">
           {title}
         </h3>
         <Button size="sm" variant="secondary" heldReason={held} onClick={() => actions?.onAddPerson?.(line.id)}>
@@ -119,16 +90,16 @@ function LineRoster({ line, model, actions }: { line: CustomLine; model: PeopleR
           rows={people.map((person) => ({ id: person.id, cells: personCells(person, line, held, t, actions) }))}
         />
       ) : line.peopleInSheet || onLine.length > 0 ? (
-        <p className="fw-pno-insheet">
+        <p className="fw-od-insheet">
           <FileText size={14} aria-hidden /> {t('draftPage.roster.inSheet')}
         </p>
       ) : (
-        <p className="fw-pno-quiet is-missing">{t('draftPage.roster.empty')}</p>
+        <p className="fw-od-quiet is-missing">{t('draftPage.roster.empty')}</p>
       )}
       {personProblems.length > 0 ? (
-        <ul className="fw-pno-notes">
+        <ul className="fw-od-notes">
           {personProblems.map((problem, index) => (
-            <li key={index} className="fw-pno-note is-danger">
+            <li key={index} className="fw-od-note is-danger">
               <a href={`#person-${problem.personId}`}>
                 {people.find((person) => person.id === problem.personId)?.name ?? ''}: {problemWords(problem, request.lines, kit, request.customLines ?? [])}
               </a>
@@ -136,24 +107,24 @@ function LineRoster({ line, model, actions }: { line: CustomLine; model: PeopleR
           ))}
         </ul>
       ) : null}
-      {onLine.length > 0 ? <p className="fw-pno-quiet">{t('draftPage.roster.sheetOnLine', { names: onLine.map((file) => file.originalName).join(', ') })}</p> : null}
-      {model.sheets.open ? (
-        (held ?? model.sheets.addHeld) ? (
-          <p className="fw-pno-held">{held ?? model.sheets.addHeld}</p>
+      {onLine.length > 0 ? <p className="fw-od-quiet">{t('draftPage.roster.sheetOnLine', { names: onLine.map((file) => file.originalName ?? '—').join(', ') })}</p> : null}
+      {model.uploadsOpen ? (
+        (held ?? model.addHeld) ? (
+          <p className="fw-od-held">{held ?? model.addHeld}</p>
         ) : (
           <FileDropzone multiple accept={ACCEPT.SHEET} hint={t('draftPage.roster.attach')} onFiles={(files) => actions?.onFiles?.('SHEET', files, line.id)} />
         )
       ) : (
         // D14: on live, until the virus scanner runs — the e-mail way, naming the draft and the line.
-        <p className="fw-pno-mailway" role="note">
-          <Mail size={16} aria-hidden /> <span>{t('draftPage.roster.attachClosed', { draft: model.sheets.draftName, seq: line.seq })}</span>
+        <p className="fw-od-mailway" role="note">
+          <Mail size={16} aria-hidden /> <span>{t('draftPage.roster.attachClosed', { draft: model.draftName, seq: line.seq })}</span>
         </p>
       )}
     </section>
   )
 }
 
-function personCells(person: DraftPerson, line: CustomLine, held: string | null, t: (key: string, params?: Readonly<Record<string, string | number>>) => string, actions?: PeopleRosterActions) {
+function personCells(person: DraftPerson, line: DraftViewCustomLine, held: string | null, t: (key: string, params?: Readonly<Record<string, string | number>>) => string, actions?: PeopleRosterActions) {
   const Icon = MEASURE_ICON[person.measureBy]
   const more: MenuItemDef[] = [
     { id: 'change', label: t('draftPage.roster.change'), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onChangePerson?.(line.id, person.id) },
@@ -161,11 +132,11 @@ function personCells(person: DraftPerson, line: CustomLine, held: string | null,
   ]
   return [
     // "Show me" on a person's problem lands here (problemPlace: person-<id>).
-    <span key="name" id={`person-${person.id}`} tabIndex={-1} className="fw-pno-personname">
+    <span key="name" id={`person-${person.id}`} tabIndex={-1} className="fw-od-personname">
       {person.name}
     </span>,
     person.number ?? '—',
-    <span key="how" className="fw-pno-measure">
+    <span key="how" className="fw-od-measure">
       <Icon size={14} aria-hidden /> {t(measureKey(person.measureBy))}
     </span>,
     person.measureBy === 'LATER' ? (
@@ -193,7 +164,7 @@ export interface PersonDialogModel {
   /** The draft's measurement sheets (its own and its lines'): a person measured by a sheet names one of them. */
   sheets: readonly DraftFile[]
   busy: boolean
-  /** A refusal in our words (a key), or null. */
+  /** A refusal in the host's words (od-w1.1: the host says it in its own catalogue), or null. */
   failed: string | null
 }
 
@@ -208,7 +179,7 @@ export interface PersonDialogActions {
  * Measurement sheet (one of this draft's sheets; none yet: said, with the other ways still open) · Sending later —, a note.
  */
 export function PersonDialog({ model, actions }: { model: PersonDialogModel; actions?: PersonDialogActions }) {
-  const { t } = useOrderingWords()
+  const { t } = useDraftWords()
   const error = (field: PersonField) => (model.showProblems && model.problems[field] ? t(model.problems[field]!) : undefined)
   const title = model.mode === 'change' && model.name ? t('draftPage.person.titleChange', { name: model.name, seq: model.seq }) : t('draftPage.person.titleAdd', { seq: model.seq })
   return (
@@ -230,21 +201,21 @@ export function PersonDialog({ model, actions }: { model: PersonDialogModel; act
       }
     >
       <form
-        className="fw-pno-dialog"
+        className="fw-od-dialog"
         onSubmit={(event) => {
           event.preventDefault()
           actions?.onSave?.()
         }}
       >
-        {model.failed ? <Banner tone="danger" title={t(model.failed)} /> : null}
+        {model.failed ? <Banner tone="danger" title={model.failed} /> : null}
         <Field label={t('draftPage.person.name')} required hint={t('draftPage.person.nameHint')} error={error('name')}>
           <Input value={model.draft.name} maxLength={120} autoComplete="off" data-autofocus onChange={(event) => actions?.onField?.('name', event.target.value)} />
         </Field>
         <Field label={t('draftPage.person.number')} hint={t('draftPage.person.numberHint')} error={error('number')}>
           <Input value={model.draft.number} maxLength={10} autoComplete="off" onChange={(event) => actions?.onField?.('number', event.target.value)} />
         </Field>
-        <div className="fw-pno-stack">
-          <span className="fw-pno-h3">{t('draftPage.person.how')}</span>
+        <div className="fw-od-stack">
+          <span className="fw-od-h3">{t('draftPage.person.how')}</span>
           <SegmentedControl
             ariaLabel={t('draftPage.person.how')}
             wrap
@@ -260,7 +231,7 @@ export function PersonDialog({ model, actions }: { model: PersonDialogModel; act
         ) : null}
         {model.draft.measureBy === 'SHEET' ? (
           model.sheets.length === 0 ? (
-            <p className="fw-pno-held">{t('draftPage.person.noSheets')}</p>
+            <p className="fw-od-held">{t('draftPage.person.noSheets')}</p>
           ) : (
             <Field label={t('draftPage.person.sheet')} required error={error('sheet')}>
               <Select value={model.draft.sheetId} onChange={(event) => actions?.onField?.('sheetId', event.target.value)}>
@@ -274,7 +245,7 @@ export function PersonDialog({ model, actions }: { model: PersonDialogModel; act
             </Field>
           )
         ) : null}
-        {model.draft.measureBy === 'LATER' ? <p className="fw-pno-quiet">{t('draftPage.person.later')}</p> : null}
+        {model.draft.measureBy === 'LATER' ? <p className="fw-od-quiet">{t('draftPage.person.later')}</p> : null}
         <Field label={t('draftPage.person.note')} error={error('note')}>
           <Input value={model.draft.note} maxLength={1000} onChange={(event) => actions?.onField?.('note', event.target.value)} />
         </Field>

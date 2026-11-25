@@ -122,5 +122,37 @@
   "state": {
     "retry": "Riprova",
     "loading": "Caricamento…"
+  },
+  "office": {
+    "compose": {
+      "label": "La richiesta"
+    },
+    "subject": {
+      "hint": "Vuoto: si usa la prima riga del messaggio.",
+      "used": "Vuoto: si usa “{subject}”."
+    },
+    "message": {
+      "label": "Cosa hanno chiesto",
+      "hint": "Le loro parole come le hanno dette o scritte: gli appunti della telefonata, il testo della lettera. La prima scheda della richiesta la mostra così com’è scritta."
+    },
+    "problem": {
+      "tooLong": "Oggetto e messaggio insieme hanno al massimo 20 000 caratteri.",
+      "refLong": "Il loro numero d’ordine ha al massimo {max} caratteri.",
+      "datePast": "Il giorno desiderato è oggi o più avanti.",
+      "shipTo": "Non è uno degli indirizzi di consegna di questo cliente: scegline un altro."
+    },
+    "details": {
+      "none": "Niente qui serve per creare la richiesta.",
+      "ref": "Il loro numero d’ordine",
+      "refHint": "Il numero d’ordine del cliente, se l’ha dato.",
+      "dateHint": "Il giorno in cui vorrebbero la merce. Nella risposta diciamo cosa possiamo fare.",
+      "shipToHint": "Uno degli indirizzi di consegna del cliente.",
+      "shipToWaiting": "Un indirizzo aggiunto dal cliente nel suo portale: si verifica prima della prima consegna.",
+      "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna del cliente.",
+      "sumRef": "Loro numero {ref}"
+    },
+    "kept": {
+      "offline": "Offline: ciò che hai scritto resta in questa finestra."
+    }
   }
 }

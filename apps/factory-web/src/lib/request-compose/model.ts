@@ -219,3 +219,33 @@ export function writeLastSent(storage: Pick<Storage, 'setItem'> | null, key: str
     // A closed storage: the guard simply has nothing to compare with.
   }
 }
+
+// ---- od-w1.3 (S1-B10): the compose in the office's voice — a `kind`, never a words override ------------------------------------
+/** Which door draws the compose: it picks a whole word set (the office's voice for the labels that speak to the customer). */
+export type ComposeKind = 'portal' | 'office'
+
+/**
+ * The compose's labels that speak to the customer in the portal ("Your message", "Your PO") and have the office's words in the office
+ * ("What they asked", "Their PO"): `request-compose` `office.<key>` (moved from `sales-incoming-new` `voice.*`, B-TH-221).
+ */
+export const OFFICE_VOICE: ReadonlySet<string> = new Set([
+  'compose.label',
+  'subject.hint',
+  'subject.used',
+  'message.label',
+  'message.hint',
+  'problem.tooLong',
+  'problem.refLong',
+  'problem.datePast',
+  'problem.shipTo',
+  'details.none',
+  'details.ref',
+  'details.refHint',
+  'details.dateHint',
+  'details.shipToHint',
+  'details.shipToWaiting',
+  'details.shipToFailed',
+  'details.sumRef',
+  'kept.offline',
+])
+// ---- end od-w1.3
