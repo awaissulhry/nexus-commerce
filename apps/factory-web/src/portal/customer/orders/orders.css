@@ -47,7 +47,6 @@
 .fw-pord-quiet,
 .fw-pord-strong,
 .fw-pord-total-move,
-.fw-pord-answer,
 .fw-pord-held,
 .fw-pord-error {
   margin: 0;
@@ -179,19 +178,6 @@
   gap: var(--nds-space-2);
 }
 
-.fw-pord-request {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  padding-bottom: var(--nds-space-8);
-  border-bottom: 1px solid var(--nds-border);
-}
-
-.fw-pord-request:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
 .fw-pord-request-head,
 .fw-pord-parcel,
 .fw-pord-tracking,
@@ -207,56 +193,6 @@
   font-family: var(--nds-font-mono);
   font-size: var(--nds-font-size-sm);
   overflow-wrap: anywhere;
-}
-
-.fw-pord-progress-line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-}
-
-/* Four stages side by side on a wide screen, two on a tablet, one on a phone. */
-.fw-pord-bars {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--nds-space-8) var(--nds-space-16);
-}
-
-@media (max-width: 1023px) {
-  .fw-pord-bars {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 519px) {
-  .fw-pord-bars {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.fw-pord-bar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  font-size: var(--nds-font-size-sm);
-}
-
-.fw-pord-deposit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--nds-space-12);
-}
-
-.fw-pord-deposit > :first-child {
-  flex: 1 1 360px;
-  min-width: 0;
-}
-
-.fw-pord-address {
-  display: flex;
-  flex-direction: column;
 }
 
 .fw-pord-old {
@@ -325,42 +261,7 @@
 
 /* pg-t (Z8): the list's print view (tab:print) left with Print this list. */
 
-/* ---- B-TH-275 (P-CUS-ORD.body): the one state line above the tracker and "Made from your request". */
-.fw-pord-stateline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  min-width: 0;
-}
-
-.fw-pord-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  margin: 0;
-  color: var(--nds-text-2);
-}
-
-.fw-pord-state.is-confirmed {
-  color: var(--nds-success-text);
-}
-
-.fw-pord-made {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  overflow-wrap: anywhere;
-}
-/* ---- end B-TH-275 */
-
-/* F-PR-12a: the order's health and who acts next, under where it is (Status & progress). */
-.fw-pord-production {
-  margin-top: var(--nds-space-12);
-}
-
-/* ---- F-PR-12c: Quality and photos (Status & progress, level Quality & photos). Its parts a little apart; each final inspection
+/* ---- F-PR-12c: Quality and photos (the Overview's pair B, level Quality & photos). Its parts a little apart; each final inspection
    under a rule; the shared photos as rows; one photo full size in its dialog. */
 .fw-pord-quality {
   display: flex;

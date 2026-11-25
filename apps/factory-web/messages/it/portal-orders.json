@@ -207,7 +207,6 @@
     "title": "Dati dell’ordine",
     "orderedOn": "Ordinato il",
     "requested": "Data richiesta",
-    "promise": "Data promessa",
     "shipTo": "Indirizzo di consegna",
     "paymentTerms": "Termini di pagamento",
     "withdrawal": "Diritto di recesso",
@@ -576,22 +575,14 @@
     "madeFromQuoteNone": "Nato dal vostro preventivo"
   },
   "production": {
-    "label": "Produzione di questo ordine",
     "waitingTitle": "Su questo ordine aspettiamo una vostra risposta",
     "waitingSince": "Dal {date}",
     "waitingLink": "Vedete cosa vi aspetta",
     "ask": "Fai una domanda",
-    "health": "Andamento",
-    "waitingOn": "Tocca a",
     "failed": "Impossibile caricare la produzione di questo ordine",
     "gates": {
-      "title": "Tappe e date",
-      "label": "Tappe di questo ordine",
-      "step": "Tappa",
-      "state": "Stato",
       "planned": "Prevista",
       "done": "Fatta il",
-      "review": "Vedete cosa vi aspetta",
       "none": "Per questo ordine non ci sono ancora tappe né date pianificate.",
       "states": {
         "WAITING_YOU": "Tocca a voi",
@@ -601,8 +592,6 @@
       }
     },
     "approvals": {
-      "label": "Le vostre approvazioni dei materiali",
-      "material": "Materiale",
       "sent": "Inviato",
       "answered": "Risposta il",
       "states": {
@@ -912,16 +901,6 @@
       "sent": "Richiesta inviata. Vi rispondiamo qui e nella conversazione dell'ordine."
     }
   },
-  "orderFiles": {
-    "title": "File dell'ordine ({count})",
-    "label": "I file più recenti che vi abbiamo condiviso su questo ordine e sulle sue righe",
-    "all": "Tutti in Documenti ({count})",
-    "open": "Apri",
-    "openOf": "Apri {name}",
-    "download": "Scarica",
-    "downloadOf": "Scarica {name}",
-    "failed": "Impossibile leggere i file dell'ordine."
-  },
   "reported": {
     "label": "I problemi che avete segnalato su questo ordine",
     "report": "Segnala un problema"
@@ -970,5 +949,24 @@
     "refused": "Questi prezzi non si possono salvare così: controllate le righe segnate.",
     "notSaved": "I vostri prezzi non sono stati salvati: riprovate.",
     "failed": "Non siamo riusciti a leggere i prezzi."
+  },
+  "overview": {
+    "strips": "Cosa aspetta voi e cosa ferma l’ordine",
+    "progress": "Avanzamento per riga",
+    "piecesAsOf": "Pezzi alle {time}",
+    "dates": "Prossime date",
+    "requests": "Richieste e modifiche",
+    "nothing": "Nessuna richiesta o modifica in attesa",
+    "groupYou": "Tocca a voi · {count}",
+    "groupUs": "Tocca a noi · {count}",
+    "groupAnswered": "Con risposta · {count}",
+    "pay": "Cosa pagate",
+    "partPaid": "{paid} su {amount} pagati",
+    "total": "Totale ordine · IVA inclusa",
+    "paid": "Pagato",
+    "still": "Ancora da pagare"
+  },
+  "strip": {
+    "deposit": "Acconto da pagare entro il {date}"
   }
 }

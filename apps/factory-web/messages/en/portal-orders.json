@@ -207,7 +207,6 @@
     "title": "Order facts",
     "orderedOn": "Ordered on",
     "requested": "Requested date",
-    "promise": "Promise date",
     "shipTo": "Delivery address",
     "paymentTerms": "Payment terms",
     "withdrawal": "Right of withdrawal",
@@ -576,22 +575,14 @@
     "madeFromQuoteNone": "Made from your quote"
   },
   "production": {
-    "label": "Production of this order",
     "waitingTitle": "We are waiting for you on this order",
     "waitingSince": "Since {date}",
     "waitingLink": "See what waits for you",
     "ask": "Ask a question",
-    "health": "Health",
-    "waitingOn": "Waiting on",
     "failed": "Could not load the production of this order",
     "gates": {
-      "title": "Gates and dates",
-      "label": "Gates of this order",
-      "step": "Gate",
-      "state": "State",
       "planned": "Planned",
       "done": "Done on",
-      "review": "See what waits for you",
       "none": "No gates or dates planned for this order yet.",
       "states": {
         "WAITING_YOU": "Waiting on you",
@@ -601,8 +592,6 @@
       }
     },
     "approvals": {
-      "label": "Your material approvals",
-      "material": "Material",
       "sent": "Sent",
       "answered": "Answered on",
       "states": {
@@ -912,16 +901,6 @@
       "sent": "Request sent. We answer here and in the order's conversation."
     }
   },
-  "orderFiles": {
-    "title": "Order files ({count})",
-    "label": "The newest files we shared on this order and its lines",
-    "all": "All in Documents ({count})",
-    "open": "Open",
-    "openOf": "Open {name}",
-    "download": "Download",
-    "downloadOf": "Download {name}",
-    "failed": "The order's files could not be read."
-  },
   "reported": {
     "label": "Problems you reported on this order",
     "report": "Report a problem"
@@ -970,5 +949,24 @@
     "refused": "These prices cannot be saved as they are: check the lines marked.",
     "notSaved": "Your prices were not saved: try again.",
     "failed": "The prices could not be read."
+  },
+  "overview": {
+    "strips": "What waits for you, and what holds the order",
+    "progress": "Progress by line",
+    "piecesAsOf": "Pieces as of {time}",
+    "dates": "Next dates",
+    "requests": "Requests & changes",
+    "nothing": "No request or change waits",
+    "groupYou": "Waiting on you · {count}",
+    "groupUs": "Waiting on us · {count}",
+    "groupAnswered": "Answered · {count}",
+    "pay": "What you pay",
+    "partPaid": "{paid} of {amount} paid",
+    "total": "Order total · VAT incl.",
+    "paid": "Paid",
+    "still": "Still to pay"
+  },
+  "strip": {
+    "deposit": "Deposit to pay by {date}"
   }
 }

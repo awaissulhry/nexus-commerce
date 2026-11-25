@@ -29,6 +29,7 @@ import type {
   Verdict,
 } from './api'
 import { NS } from './model'
+import type { ProductionOrder } from '../production/api' // pp-w2 (w2.4): the design's production read
 import { orderWordsFor, type OrderWords } from './words'
 
 /**
@@ -298,6 +299,44 @@ export function orderRecord(over: Partial<OrderRecord['order']> = {}, rest: Part
 }
 
 /** A record as a role without the price grain reads it: every price key left out. */
+/**
+ * pp-w2 (w2.4): the order's production read as the design's Overview cases draw it (made up; Brand Alpha's own order): sewing, its
+ * pieces from the progress fixture, its gates and approvals, Late with a curated reason, its own urgency, waiting on the customer.
+ * The office's series in `order.number` is the read's (a later job takes it out of this read): the Overview never draws it.
+ */
+export function productionReadOf(over: Partial<ProductionOrder> = {}): ProductionOrder {
+  const pieces = progressRead()
+  const w = (en: string, it: string) => ({ en, it })
+  return {
+    asOf: at(0),
+    level: 'GATES',
+    levelWords: w('+ Gates & dates', '+ Tappe e date'),
+    urgencyOn: true,
+    urgentUse: null,
+    order: { id: ORDER_ID, customerRef: 'BA-PO-771', number: 'SO-2026-0141', yourNumber: customerNumberOf('ORDER', 11), orderedOn: dayAt(-20), promiseDate: dayAt(12), originalPromiseDate: dayAt(5), promiseMoved: true },
+    inProduction: true,
+    stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: dayAt(-3), next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, ahead: 0, aheadWords: null, sewingNotCounted: false, sewingNotCountedWords: null },
+    health: { code: 'LATE', words: w('Late', 'In ritardo'), reason: { code: 'MATERIAL_LATE', words: w('Material delivery late', 'Consegna dei materiali in ritardo') } },
+    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a voi'), since: dayAt(-2) },
+    marks: { onHold: false, paused: false, partlyShipped: false, changePending: false, words: [] },
+    holds: [],
+    urgency: { code: 'URGENT', words: w('Urgent', 'Urgente'), urgentRank: 1, asked: false, askedWords: null, byUs: false, byUsWords: null, locked: false, lockWords: null },
+    promiseHistory: [],
+    progress: { asOf: pieces.asOf, refreshSeconds: pieces.refreshSeconds, lines: pieces.lines, whole: pieces.whole, percent: pieces.percent },
+    gates: {
+      gates: [
+        { kind: 'PP_SAMPLE', words: w('Pre-production sample', 'Campione di pre-produzione'), state: 'WAITING_YOU', targetDate: dayAt(3), doneOn: null },
+        { kind: 'SIZE_SET', words: w('Size set', 'Set taglie'), state: 'PASSED', targetDate: dayAt(-6), doneOn: dayAt(-5) },
+      ],
+      approvals: [{ kind: 'LEATHER', words: w('Black leather swatch', 'Campione di pelle nera'), state: 'WAITING_YOU', sentOn: dayAt(-4), answeredOn: null }],
+      planned: { cutStart: dayAt(-8), sewStart: dayAt(-3), finish: dayAt(9) },
+    },
+    problem: { state: 'WAITING_ON_US', since: dayAt(-1), on: null, inOrder: null },
+    live: { events: ['brand_production.stage_changed'] },
+    ...over,
+  }
+}
+
 export function withoutPrices(record: OrderRecord): OrderRecord {
   const { netAmount: _n, vatAmount: _v, grossAmount: _g, ...order } = record.order
   return {
