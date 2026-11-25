@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -44,7 +45,7 @@ import { orderLinesLabel, ownOrderRef } from './model'
 import { orderingWordsFor } from './words'
 import { DRAFT_NS } from '../../../lib/order-draft/words' // od-w1.1
 // od-w1.2 (THE SIMPLE ORDER START R1): the mail, the products table, Still open, saved by — the shared part's model.
-import { choicesTyped, optionHeld, productRowsOf, rowPiecesWords, savedByWords, stillOpenEntries } from '../../../lib/order-draft/model'
+import { choicesTyped, optionHeld, productRowsOf, rowPiecesWords, rowProductOf, savedByWords, stillOpenEntries } from '../../../lib/order-draft/model'
 import { PiecesBody, piecesModesOf } from '../../../lib/order-draft/view/RowWindows'
 import type { OrderingCaseBuilder } from './view/OrderingCase'
 // F-CP-154: lines of every kind, the People and sizes roster, "Your price".
@@ -1036,7 +1037,7 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
     const [andrea, luca, tommaso] = RIDERS()
     expect(personWhat(andrea!, td('en'))).toBe(SHEET_ON_MTM.originalName)
     expect(personWhat(luca!, td('en'))).toBe('50')
-    expect(personWhat(tommaso!, td('en'))).toBe('We send the measures later.')
+    expect(personWhat(tommaso!, td('en'))).toBe('Not yet') // od-fx10 W-29: "How we get the size" says the sentence once
     expect(personWhat({ measureBy: 'SHEET', size: null, sheet: null }, td('en'))).toBe('a sheet no longer on the draft')
     // od-w1.2 (R3): the roster lives in the row's Pieces window (a custom size is by person).
     const html = renderPieces('en', 'od-pieces')
@@ -1239,3 +1240,18 @@ describe('follow-up 22 / od-w1.2 — the start acts only on a press: no radios; 
     }
   })
 })
+
+describe('od-fx10 (re-walk 1): one name for one product in the price card and the table; "Add from" kept together', () => {
+  it('W-17: the Your price row names the style as the table does (its name, never "<code> <colour>")', () => {
+    const record = kindsRecord()
+    const rows = priceRowsOf(record.request, td('en'), 'en')
+    const products = productRowsOf(record.request)
+    for (const row of rows.filter((entry) => entry.kind === 'CATALOGUE')) expect(row.label).toBe(rowProductOf(products.find((entry) => entry.id === row.id)!))
+  })
+
+  it('W-19: the three ways of "Add from" sit in one group that never wraps', () => {
+    expect(readFileSync(new URL('./view/NewOrderView.tsx', import.meta.url), 'utf8')).toContain('<span className="fw-pno-addways">')
+    expect(readFileSync(new URL('./neworder.css', import.meta.url), 'utf8')).toMatch(/\.fw-pno-addways \{\n  display: inline-flex;\n  flex-wrap: nowrap;/)
+  })
+})
+
