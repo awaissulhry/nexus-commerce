@@ -8,6 +8,7 @@ import { CatalogueView, type CatalogueViewModel } from '../../catalogue/view/Cat
 import { StyleSheetView, type StyleSheetModel } from '../../catalogue/view/StyleSheetView'
 import { COMPOSE_NS } from '../../../../lib/request-compose/model'
 import { NS } from '../model'
+import { DRAFT_NS } from '../../../../lib/order-draft/words'
 import { useOrderingWords } from '../words'
 import { NewOrderView, type NewOrderViewModel } from './NewOrderView'
 import { NotInAccess } from './parts'
@@ -41,7 +42,7 @@ export function OrderingCase({ model: build }: { model: OrderingCaseBuilder }) {
   const model = build(locale)
   const body = model.body
   return (
-    <WithMessages namespaces={[NS, COMPOSE_NS, 'ds-words', 'portal', 'shell', 'lists', 'portal-account']}>
+    <WithMessages namespaces={[NS, DRAFT_NS /* od-w1.1 */, COMPOSE_NS, 'ds-words', 'portal', 'shell', 'lists', 'portal-account']}>
       <PortalShellView model={model.shell}>
         {body.kind === 'request' ? (
           <RequestCaseBody model={body.model} />

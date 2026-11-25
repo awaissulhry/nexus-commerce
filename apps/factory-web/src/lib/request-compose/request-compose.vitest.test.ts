@@ -26,6 +26,7 @@ import {
   writeKeptCompose,
   writeLastSent,
   type ComposeDraft,
+  type ComposeKind,
 } from './model'
 import { RequestCompose, type RequestComposeModel } from './view/RequestCompose'
 // B-TH-287: the New order draft on the server.
@@ -217,12 +218,12 @@ describe('the compose view', () => {
 
 // ── B-TH-221: the office's New request draws the same compose in its own place and voice ──
 describe('the compose in the office (B-TH-221)', () => {
-  const office = (view: RequestComposeModel, slots: Parameters<typeof RequestCompose>[0]['slots'], label?: (key: string) => string | null) =>
+  const office = (view: RequestComposeModel, slots: Parameters<typeof RequestCompose>[0]['slots'], kind?: ComposeKind) =>
     renderToStaticMarkup(
       createElement(
         I18nProvider,
         { locale: 'en', messages: messagesFor('en', [COMPOSE_NS, 'ds-words']) },
-        createElement(RequestCompose, { model: view, words: { day: (iso: string) => iso, ...(label ? { label } : {}) }, to: createElement('fieldset', { 'data-office-from': true }, 'From: a customer'), slots }),
+        createElement(RequestCompose, { model: view, words: { day: (iso: string) => iso }, ...(kind ? { kind } : {}), to: createElement('fieldset', { 'data-office-from': true }, 'From: a customer'), slots }),
       ),
     )
 
@@ -246,8 +247,8 @@ describe('the compose in the office (B-TH-221)', () => {
   })
 
   it('the office’s voice replaces the labels that speak to the customer, and only those', () => {
-    const voice = (key: string) => (key === 'message.label' ? 'What they asked' : key === 'details.ref' ? 'Their PO' : null)
-    const html = office(model('en', { goesTo: null }), { plain: true }, voice)
+    // od-w1.3 (S1-B10): the office's voice is a kind of the compose (its own words, `office.*`), never a words override.
+    const html = office(model('en', { goesTo: null }), { plain: true }, 'office')
     expect(html).toContain('What they asked')
     expect(html).toContain('Their PO')
     expect(html).not.toContain('Your message')

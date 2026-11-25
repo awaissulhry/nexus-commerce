@@ -13,14 +13,15 @@ import { draftDiscardHeld, draftSendHeld, draftTitleOf } from './model'
 // ---- end F-CP-150
 // ---- F-CP-151 (B-CP-072; D14): the draft's files (made-up names; a line's file names its line by seq on the page).
 import type { DraftFile } from './api'
-import type { UploadRow } from './view/DraftFiles'
+import type { UploadRow } from '../../../lib/order-draft/view/files'
 
 // ---- end F-CP-151
 // ---- F-CP-154 (B-CP-075, B-CP-076; picture 22): lines of every kind, the roster, "Your price", their windows (made-up riders).
-import { describedLine, kindsRecord, mtmLine, MTM_TYPES, RIDERS, SHEET_ON_MTM } from './design-data'
-import { customLineDraftOf, customLineProblems, EMPTY_PERSON, personProblems } from './model'
-import type { CustomLineDialogModel } from './view/LinesSection'
-import type { PersonDialogModel } from './view/PeopleRoster'
+import { describedLine, kindsRecord, mtmLine, RIDERS, SHEET_ON_MTM } from './design-data'
+import { EMPTY_PERSON, personProblems } from './model'
+import { draftViewOf, productRowsOf } from '../../../lib/order-draft/model'
+import { piecesModesOf } from '../../../lib/order-draft/view/RowWindows'
+import type { PersonDialogModel } from '../../../lib/order-draft/view/PeopleRoster'
 // ---- end F-CP-154
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
@@ -35,7 +36,6 @@ import { at as requestAt, betaShellOf, PREFIX as BETA, REQUESTS, requestView } f
 import { requestBandOf } from './band'
 import { goesToOf, openItems } from './request-model'
 // B-TH-304: the catalogue door, open again, read by Brand Beta (the customer's own order numbers, never the office's series).
-import { catalogueDoorOf } from './request-model'
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { RequestPageModel } from './view/RequestPageView'
 
@@ -57,14 +57,12 @@ function model(over: Over = {}): NewOrderViewModel {
     phase: 'draft',
     prefix: PREFIX,
     today: TODAY,
-    start: { state: 'ready', drafts: [], choosing: null, held: null },
+    start: { state: 'ready', drafts: [] },
     way: null,
     record,
     header: headerDraftOf(record?.request ?? null),
     headerErrors: {},
     save: { kind: 'saved', at: at(-1) },
-    cells: {},
-    notes: {},
     saving: [],
     writeHeld: null,
     addAddressHeld: null,
@@ -74,10 +72,11 @@ function model(over: Over = {}): NewOrderViewModel {
     stale: false,
     notice: null,
     sendHeld: null,
-    showProblems: false,
     sent: null,
     closed: null,
     offlineSince: null,
+    pending: false,
+    styles: [],
     dialogs: { picker: null, address: null, discard: null },
     frame: { mode: 'docked' }, // F-CP-150: the record frame's docked layout whatever the window (the design review)
     ...over,
@@ -90,7 +89,7 @@ const ORDERERS = ['Dora Esempio', 'Marta Esempio']
 function held(locale: Locale, view: NewOrderViewModel): string | null {
   if (!view.record) return null
   const t = orderingWords(locale).t
-  const reason = draftSendHeld(view.record.request, { preview: false, offline: view.offlineSince !== null, busy: false, emptyLine: false }, ORDERERS)
+  const reason = draftSendHeld(view.record.request, { preview: false, offline: view.offlineSince !== null, busy: false }, ORDERERS)
   return reason ? t(reason.key, reason.count !== undefined ? { count: reason.count } : reason.names !== undefined ? { names: reason.names } : undefined) : null
 }
 
@@ -164,7 +163,6 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
       prefix: beta ? BETA : PREFIX,
       template: templateHref(locale),
       customerRef: view.sent?.customerRef ?? view.record?.request.customerRef ?? null,
-      sendHeld: view.sendHeld,
       discardHeld: view.writeHeld ?? (discardKey ? words.t(discardKey) : null),
       title: view.record ? draftTitleOf(view.record.request, words.t) : null,
       ask: view.record ? { type: 'PortalOrderRequest', id: view.record.request.id } : null,
@@ -175,7 +173,7 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
   }
 }
 
-const start = (over: (locale: Locale) => Partial<NewOrderViewModel['start']> = () => ({})) => page((locale) => ({ record: null, start: { state: 'ready', drafts: [], choosing: null, held: null, ...over(locale) } }), 'start')
+const start = (over: (locale: Locale) => Partial<NewOrderViewModel['start']> = () => ({})) => page((locale) => ({ record: null, start: { state: 'ready', drafts: [], ...over(locale) } }), 'start')
 
 const problems = () => {
   const jacket = lineOf(1, {
@@ -282,7 +280,7 @@ function requestPage(phase: RequestPageModel['phase'], build: (locale: Locale) =
       admins: [BRAND_BETA.portalPerson.name],
       openCheckFailed: false,
       compose: phase === 'compose' ? composeOf(locale, compose) : null,
-      aside: { open: { state: 'ready', items: openItems(REQUESTS, BETA, locale, (iso) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(iso))) }, allHref: `${BETA}/orders?chip=REQUESTED`, returnsHref: `${BETA}/returns`, catalogue: catalogueDoorOf(BETA) /* B-TH-304 */ },
+      aside: { open: { state: 'ready', items: openItems(REQUESTS, BETA, locale, (iso) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }).format(new Date(iso))) }, allHref: `${BETA}/orders?chip=REQUESTED`, returnsHref: `${BETA}/returns` /* B-TH-304 */ },
       receipt: null,
       discardOpen: false,
       ...over,
@@ -362,8 +360,8 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'start-loading', label: 'The drafts loading', model: start(() => ({ state: 'loading' })) },
     { id: 'start-error', label: 'The drafts could not be read', model: start(() => ({ state: 'error' })), note: 'Never drawn as no drafts: the problem in our words + Try again.' },
     { id: 'draft', label: 'A draft: the checklist, the lines with their size grids, date and delivery, notes, your price — its conversation docked', model: page(), note: 'F-CP-150: saved on leaving a field (“Saved 10:42 · v7”); one size grid per line (stacked on a phone); Send to the factory and Discard… in the band; “The factory can read this draft. Work starts only when you send it.”' },
-    { id: 'draft-typed', label: 'Sizes typed, not saved yet', model: page(() => ({ cells: { '0194f0e2-1940-7000-8000-000000000301': { '48': 4, '50': 10, '52': 6, '54': 2 } }, save: { kind: 'saving' }, saving: ['0194f0e2-1940-7000-8000-000000000301'] })), note: 'Leaving the line saves it (PUT with the version).' },
-    { id: 'draft-problems', label: 'Send held: problems — Show me', model: page(() => ({ record: problems(), showProblems: true })), note: 'A size not offered (on its cell), a discontinued colour (choose another), a price that changed; Send held with the count; Show me lists them.' },
+    { id: 'draft-typed', label: 'Sizes typed, not saved yet', model: page(() => ({ save: { kind: 'saving' }, saving: ['0194f0e2-1940-7000-8000-000000000301'] })), note: 'Leaving the line saves it (PUT with the version).' },
+    { id: 'draft-problems', label: 'Send held: problems — Show me', model: page(() => ({ record: problems() })), note: 'A size not offered (on its cell), a discontinued colour (choose another), a price that changed; Send held with the count; Show me lists them.' },
     { id: 'draft-prices', label: 'Prices changed since you started', model: page(() => ({ record: draftRecord({ lines: [lineOf(1, { unitPriceShown: '400.00', priceNow: '410.00', problems: [{ code: 'PRICE_CHANGED', lineId: '0194f0e2-1940-7000-8000-000000000301', size: null }] }), LINE_TROUSERS()] }) })), note: 'Banner with “Take today’s prices”; the line says “Price now … (was …)”.' },
     { id: 'draft-empty', label: 'No lines yet', model: page(() => ({ record: draftRecord({ lines: [], request: { problems: [{ code: 'NO_LINES', lineId: null, size: null }] } }) })) },
     { id: 'draft-no-prices', label: 'A colleague without prices', model: page(() => ({ record: draftRecord({ seesPrices: false }) })), note: 'No unit price, amount or net anywhere; one quiet line “Prices are not part of your access”.' },
@@ -380,7 +378,7 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       note: 'portal.orderDrafts.edit without portal.orderRequests.manage (D11): every part can be filled, Send is held with “Only colleagues who may order send it: …”, Reorder a past order is held (“Your access does not show orders”), Your price says prices are not part of the access — no amount anywhere (M-CP-2).',
     },
     { id: 'cp150-saved-by', label: 'Saved by a colleague: who changed it last (once the API names them, B-CP-075)', model: page(() => ({ record: draftRecord({ request: { lastEditedBy: 'Marta Esempio', lastEditedAt: at(-1), note: 'Numbers on the left sleeve too.' } }) })), note: '“Saved 10:42 by Marta Esempio · v7”; without the name (before B-CP-075) “Saved 10:42 · v7”.' },
-    { id: 'cp150-stale', label: 'Changed by a colleague while you typed: what you typed stays', model: page(() => ({ stale: true, staleBy: 'Marta Esempio' })), note: 'A 409 on a write: the ONE banner says the draft changed and who changed it; “Read it again” takes their version; rows keep their order (by seq).' },
+    { id: 'cp150-stale', label: 'Changed by a colleague while you typed: what you typed stays', model: page(() => ({ stale: true, staleBy: { who: 'COLLEAGUE' as const, name: 'Marta Esempio' } })), note: 'A 409 on a write: the ONE banner says the draft changed and who changed it; “Read it again” takes their version; rows keep their order (by seq).' },
     { id: 'cp150-later', label: 'People and sizes marked “Sending later”', model: page(() => ({ record: draftRecord({ lines: [lineOf(1, { sizes: [], pieces: 0 })], request: { laterParts: ['PEOPLE'] } }) })), note: 'The chip and the card say “Sending later” (B-CP-075 keeps the mark; the roster comes with F-CP-154).' },
     { id: 'cp150-discard-held', label: 'Discard… held: neither one who orders nor the colleague who started it', model: page(() => ({ record: draftRecord({ seesPrices: false, request: { may: { send: false, withdraw: false, discard: false } } }), mayOrder: false, seesOrders: false })) },
     { id: 'cp150-narrow', label: 'A phone: the conversation behind “Messages (2 new)”', model: page(() => ({ frame: { mode: 'stacked', newCount: 2 } })), note: 'Below 1280 px the draft leads; the chips scroll sideways inside their strip, never the page.' },
@@ -435,7 +433,7 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       label: 'Made to measure switched off by the office: “not open for you yet”, the line holds Send',
       model: page(() => {
         const closed = mtmLine({ problems: [{ code: 'MTM_CLOSED', lineId: mtmLine().id, size: null, part: 'NEED', personId: null }] })
-        return { record: kindsRecord({ custom: [describedLine(), closed], request: { madeToMeasure: { open: false, words: { it: 'chiuso', en: 'closed' }, garmentTypes: [] }, problems: closed.problems } }), showProblems: true }
+        return { record: kindsRecord({ custom: [describedLine(), closed], request: { madeToMeasure: { open: false, words: { it: 'chiuso', en: 'closed' }, garmentTypes: [] }, problems: closed.problems } }) }
       }),
       note: 'Made to measure is open for every customer by default; only where the office switched it off “Add a line ▾ › Made to measure” is held with these words.',
     },
@@ -446,22 +444,36 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       note: 'Saved on leaving the cell, with the draft’s version; “18,50” and “18.50” both read; a cell that is not a price says so and sends nothing.',
     },
     {
-      id: 'cp154-describe',
-      label: 'Describe what you need (the window)',
+      id: 'od-pieces',
+      label: 'A row’s Pieces (a centred window): by person — the roster',
       model: page(() => {
-        const draft = { ...customLineDraftOf('DESCRIBED'), description: 'Felpa con cappuccio, il nostro logo sul petto.', total: '40' }
-        const customLine: CustomLineDialogModel = { mode: 'add', kind: 'DESCRIBED', seq: null, draft, problems: customLineProblems(draft), showProblems: false, styles: { state: 'ready', rows: [{ id: '0194f0e2-1940-7000-8000-000000000001', code: 'JKT-100', name: 'Giacca Corsa Esempio' }] }, garmentTypes: [], busy: false, failed: null }
-        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, customLine } }
+        const record = kindsRecord()
+        const view = draftViewOf(record)
+        const row = productRowsOf(record.request).find((entry) => entry.sizing === 'MADE_TO_MEASURE')!
+        const rosterLine = view.request.customLines?.find((line) => line.id === row.id) ?? null
+        const pieces = { row, mode: piecesModesOf(row)[0]!, total: '', cells: {}, roster: { draft: view, writeHeld: null, uploadsOpen: true, addHeld: null, draftName: '' }, rosterLine, busy: false, failed: null, writeHeld: null }
+        return { record, dialogs: { picker: null, address: null, discard: null, pieces } }
       }),
-      note: 'Their words (required), colours in words, their own label’s style (optional), a total — sizes may follow — or one row per person.',
+      note: 'od-w1.2 (R3): a custom size is made for each person — the row’s roster (Size · Measurement sheet · Sending later), its sheet, the privacy line.',
     },
     {
-      id: 'cp154-mtm-window',
-      label: 'A made-to-measure line (the window): garment type required',
+      id: 'od-pieces-sizes',
+      label: 'A row’s Pieces (a centred window): by size',
       model: page(() => {
-        const draft = customLineDraftOf('MADE_TO_MEASURE')
-        const customLine: CustomLineDialogModel = { mode: 'add', kind: 'MADE_TO_MEASURE', seq: null, draft, problems: customLineProblems(draft), showProblems: true, styles: { state: 'ready', rows: [] }, garmentTypes: MTM_TYPES.map((type) => ({ ...type })), busy: false, failed: null }
-        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, customLine } }
+        const record = kindsRecord()
+        const row = productRowsOf(record.request)[0]!
+        const pieces = { row, mode: piecesModesOf(row)[0]!, total: '', cells: { '48': 2, '50': 3 }, roster: { draft: draftViewOf(record), writeHeld: null, uploadsOpen: true, addHeld: null, draftName: '' }, rosterLine: null, busy: false, failed: null, writeHeld: null }
+        return { record, dialogs: { picker: null, address: null, discard: null, pieces } }
+      }),
+      note: 'od-w1.2 (R3): A total · By size · By person · Not decided yet; ONE save of the row at the draft’s version.',
+    },
+    {
+      id: 'od-options',
+      label: 'A row’s Options (a centred window): “Not decided yet” is an answer',
+      model: page(() => {
+        const record = kindsRecord()
+        const row = productRowsOf(record.request)[0]!
+        return { record, dialogs: { picker: null, address: null, discard: null, options: { row, topic: 'Leather', typed: 'Cowhide\nKangaroo', addHeld: null, busy: false, failed: null, writeHeld: null } } }
       }),
     },
     {
@@ -506,7 +518,7 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       note: 'M-CP-2: no net and no price; the factory answers in the same conversation.',
     },
     // ---- end F-CP-158
-    { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS, choosing: null, held: null }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
+    { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
     // ---- end F-CP-152
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },
     {

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, FileSpreadsheet, History, Inbox, Lock, RotateCcw, ShieldAlert, Shirt } from 'lucide-react'
+import { AlertTriangle, Inbox, Lock, RotateCcw, ShieldAlert } from 'lucide-react'
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
@@ -11,8 +11,6 @@ import { ComposeFiles, ComposeFilesOutcome, type ComposeFilesActions, type Compo
 import type { HeldFile } from '../../../../lib/request-compose/files'
 import { useOrderingWords } from '../words'
 // B-TH-304: the catalogue door in the side column.
-import type { CatalogueDoor } from '../request-model'
-import type { Way } from '../model'
 import '../neworder.css'
 
 /**
@@ -64,8 +62,6 @@ export interface RequestPageModel {
     open: { state: 'loading' | 'error' | 'ready' | 'none'; items: readonly OpenRequestItem[] }
     allHref: string | null
     returnsHref: string | null
-    /** B-TH-304: "Order from the catalogue" — the door's three ways (null: closed). */
-    catalogue?: CatalogueDoor | null
   }
   receipt: RequestReceipt | null
   discardOpen: boolean
@@ -271,7 +267,6 @@ function Aside({ model, onRetry }: { model: RequestPageModel; onRetry?: () => vo
           {model.aside.allHref && open.state === 'ready' && open.items.length > 0 ? <a href={model.aside.allHref}>{t('request.openAll')}</a> : null}
         </Card>
       ) : null}
-      {model.aside.catalogue ? <CatalogueDoorCard door={model.aside.catalogue} /> : null}
       <Card padded className="fw-pno-aside">
         <h2 className="fw-pno-h3">{t('request.returnsTitle')}</h2>
         <p className="fw-pno-quiet">{t('request.returnsBody')}</p>
@@ -284,31 +279,3 @@ function Aside({ model, onRetry }: { model: RequestPageModel; onRetry?: () => vo
   )
 }
 
-// ── B-TH-304: "Order from the catalogue" (the catalogue door, open again now that catalogue orders land in Incoming) ──────
-const WAY_ICON: Readonly<Record<Way, typeof Shirt>> = { pick: Shirt, reorder: History, upload: FileSpreadsheet }
-
-/** The door's three ways, each a real link to its page; one honest line on where it goes, never an answer-time promise. */
-function CatalogueDoorCard({ door }: { door: CatalogueDoor }) {
-  const { t } = useOrderingWords()
-  return (
-    <Card padded className="fw-pno-aside">
-      <h2 className="fw-pno-h3">{t('request.catalogueTitle')}</h2>
-      <p className="fw-pno-quiet">{t('request.catalogueBody')}</p>
-      <ul className="fw-pno-openlist" aria-label={t('request.catalogueTitle')}>
-        {door.ways.map(({ way, href }) => {
-          const Icon = WAY_ICON[way]
-          return (
-            <li key={way}>
-              <a className="fw-pno-openrow" href={href}>
-                <span className="fw-pno-openhead">
-                  <Icon size={16} aria-hidden /> <span className="fw-pno-opensubject">{t(`start.way.${way}`)}</span>
-                </span>
-                <span className="fw-pno-quiet">{t(`start.wayHint.${way}`)}</span>
-              </a>
-            </li>
-          )
-        })}
-      </ul>
-    </Card>
-  )
-}

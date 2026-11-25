@@ -25,7 +25,6 @@ import {
   newRequestFromMail,
   newRequestHeld,
   newRequestTyped,
-  OFFICE_VOICE,
   prospectMatch,
   requestWords,
   shipToOf,
@@ -34,6 +33,7 @@ import {
   type NewRequestDraft,
 } from '../new-request'
 import { designScreen as newScreen } from './new/fixtures'
+import { COMPOSE_NS, OFFICE_VOICE } from '../../../../lib/request-compose/model' // od-w1.3
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -233,12 +233,14 @@ describe('the words', () => {
   it('every office voice key of the compose and every held key exists in both languages', () => {
     for (const locale of LOCALES) {
       const words = CATALOGUE[locale][NEW_NS]!
-      for (const key of OFFICE_VOICE) expect(words[`voice.${key}`], `${locale} voice.${key}`).toBeTruthy()
+      // od-w1.3: the compose's office voice is its own word set (request-compose office.*), moved from this catalogue's voice.*.
+      for (const key of OFFICE_VOICE) expect(CATALOGUE[locale][COMPOSE_NS]![`office.${key}`], `${locale} office.${key}`).toBeTruthy()
+      expect(Object.keys(words).some((key) => key.startsWith('voice.')), `${locale}: no voice.* left`).toBe(false)
       for (const key of ['busy', 'unnumbered', 'customer', 'basis', 'message', 'problems', 'mail']) expect(words[`held.${key}`], `${locale} held.${key}`).toBeTruthy()
       for (const basis of LAWFUL_BASES) expect(CATALOGUE[locale]['sales-inquiries']![`basis.${basis}`], `${locale} basis.${basis}`).toBeTruthy()
     }
-    expect(CATALOGUE.en[NEW_NS]!['voice.message.label']).toBe('What they asked')
-    expect(CATALOGUE.en[NEW_NS]!['voice.details.ref']).toBe('Their PO')
+    expect(CATALOGUE.en[COMPOSE_NS]!['office.message.label']).toBe('What they asked')
+    expect(CATALOGUE.en[COMPOSE_NS]!['office.details.ref']).toBe('Their PO')
   })
 })
 

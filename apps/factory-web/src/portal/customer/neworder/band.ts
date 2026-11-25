@@ -18,11 +18,8 @@ export function newOrderBandOf(input: {
   prefix: string
   template: string
   customerRef?: string | null
-  /** Send's held reason in words (null: it may go). */
-  sendHeld?: string | null
   /** Discard's held reason in words (null: it may go). */
   discardHeld?: string | null
-  onSend?: () => void
   onDiscard?: () => void
   // ---- F-CP-150 (12 §2): the draft's name ("Draft order · <title>") and its conversation (the ⋯ "Ask a question" focuses the dock).
   title?: string | null
@@ -44,16 +41,13 @@ export function newOrderBandOf(input: {
     }
   }
   if (input.phase === 'draft') {
-    // ---- F-CP-150 (12 §2; picture 22): "‹ New order" (the start, with the drafts), "Draft order · <title>", Discard… and Send to the
-    // factory — both held with words, never hidden (a Designer reads who may send it). Their PO is a field of Date and delivery.
+    // ---- F-CP-150 (12 §2; picture 22): "‹ New order" (the start, with the drafts), "Draft order · <title>". od-w1.2 (THE SIMPLE ORDER
+    // START R1): Send lives in its own card under Still open (beside what is open); Discard… is in ⋯, held with words, never hidden.
     return {
       title: input.title ? t('draftPage.titleOf', { title: input.title }) : t('draftPage.title'),
       back: { href: newOrderHref(input.prefix), label: t('draftPage.back') },
-      actions: [
-        { id: 'discard', label: t('draftPage.discard'), variant: 'secondary', heldReason: input.discardHeld ?? null, onClick: () => input.onDiscard?.() },
-        { id: 'send', label: t('draftPage.send'), variant: 'primary', heldReason: input.sendHeld ?? null, onClick: () => input.onSend?.() },
-      ],
-      more: [template],
+      actions: [],
+      more: [{ id: 'discard', label: t('draftPage.discard'), disabled: (input.discardHeld ?? null) !== null, description: input.discardHeld ?? undefined, onSelect: () => input.onDiscard?.() }, template],
       ask: input.ask ?? null,
       keys: draftKeys(input.words),
     }

@@ -1,0 +1,337 @@
+{
+  "dialog": {
+    "cancel": "Annulla"
+  },
+  "draft": {
+    "reload": "Rileggila",
+    "stale": "Questa bozza è cambiata altrove (un collega, un'altra scheda). Quello che avete scritto è ancora qui."
+  },
+  "draftPage": {
+    "changedBy": "Modificata da {name} poco fa.",
+    "customLine": {
+      "peopleHint": "Indicate le persone, o allegate la loro scheda misure, in Persone e taglie.",
+      "problem": {
+        "total": "Un numero intero di pezzi, da 1 a 100000."
+      }
+    },
+    "files": {
+      "closed": "Per ora qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica citando «{draft}». Li aggiungiamo alla richiesta quando la inviate.",
+      "failed": "Non caricato: {reason}",
+      "full": "Questa bozza ha già 50 file: toglietene uno o scriveteci nei messaggi per il resto.",
+      "scanning": "in attesa del controllo antivirus: arriva alla fabbrica quando è pulito",
+      "sheetsPrivacy": "Le schede misure sono dati personali: in fabbrica le aprono solo le persone che gestiscono le misure.",
+      "uploading": "Caricamento…",
+      "kind": {
+        "vector": "vettoriale",
+        "picture": "foto",
+        "document": "documento"
+      }
+    },
+    "kind": {
+      "CATALOGUE": "Dal catalogo",
+      "DESCRIBED": "Descritto da voi",
+      "MADE_TO_MEASURE": "Su misura"
+    },
+    "line": {
+      "inSheet": "Persone: nella scheda allegata"
+    },
+    "measure": {
+      "LATER": "Le mandiamo dopo",
+      "SHEET": "Scheda misure",
+      "SIZE": "Taglia"
+    },
+    "mtmOff": "Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.",
+    "person": {
+      "add": "Aggiungi la persona",
+      "how": "Come riceviamo la taglia",
+      "later": "Le misure ve le mandiamo dopo.",
+      "name": "Nome",
+      "nameHint": "Il nome con cui distinguiamo i suoi capi.",
+      "noSheets": "Su questa bozza non c'è ancora una scheda misure: aggiungetela prima in Persone e taglie, o scegliete un altro modo.",
+      "note": "Nota (facoltativa)",
+      "number": "Numero (facoltativo)",
+      "numberHint": "Un numero di gara o di maglia, fino a 10 caratteri.",
+      "problem": {
+        "name": "Un nome va da 1 a 120 caratteri.",
+        "note": "Al massimo 1000 caratteri.",
+        "number": "Al massimo 10 caratteri.",
+        "sheet": "Scegliete la scheda misure con le misure.",
+        "size": "Indicate la taglia (fino a 40 caratteri)."
+      },
+      "save": "Salva",
+      "sheet": "Scheda misure",
+      "sheetChoose": "Scegliete una scheda di questa bozza",
+      "size": "Taglia",
+      "sizeHint": "Come nella tabella taglie del capo.",
+      "titleAdd": "Aggiungete una persona alla riga {seq}",
+      "titleChange": "{name} · riga {seq}"
+    },
+    "problem": {
+      "GARMENT_TYPE_GONE": "Il su misura {type} non è più offerto: scegliete un altro tipo di capo.",
+      "GARMENT_TYPE_GONE_ANY": "Questo tipo di capo non si fa più su misura: sceglietene un altro.",
+      "NO_PEOPLE": "Indicate le persone, o allegate la loro scheda misure.",
+      "NO_TOTAL": "Indicate quanti pezzi in tutto (le taglie possono seguire).",
+      "SIZES_NOT_TOTAL": "Le taglie fanno {sum} pezzi, il totale dice {total}.",
+      "SIZES_NOT_TOTAL_ANY": "Le taglie e il totale non coincidono."
+    },
+    "roster": {
+      "add": "Aggiungi una persona",
+      "attach": "Allegate la loro scheda misure a questa riga: trascinatela qui o sceglietela",
+      "attachClosed": "Schede misure: inviatele per e-mail al vostro contatto in fabbrica, citando «{draft}» e la riga {seq}.",
+      "change": "Modifica…",
+      "col": {
+        "how": "Come riceviamo la taglia",
+        "more": "Altro",
+        "name": "Nome",
+        "number": "Numero",
+        "what": "Cosa c'è"
+      },
+      "empty": "Ancora nessuno indicato: aggiungete le persone, o allegate la loro scheda misure a questa riga.",
+      "inSheet": "Persone: nella scheda allegata",
+      "personMenu": "Altro per {name}",
+      "privacy": "Nomi e misure dei vostri piloti e del vostro team sono dati personali: li usiamo solo per realizzare questo ordine, e in fabbrica le schede misure le aprono solo le persone che si occupano delle misure.",
+      "remove": "Togli",
+      "sheetGone": "una scheda non più sulla bozza",
+      "sheetOnLine": "Scheda misure su questa riga: {names}",
+      "title": "Riga {seq} · {kind} · {title} — una riga per persona"
+    }
+  },
+  "head": {
+    "addAddress": "Aggiungi un nuovo indirizzo",
+    "archived": "non più in uso",
+    "date": "Data di consegna richiesta",
+    "dateHint": "Confermiamo la data quando confermiamo la richiesta.",
+    "default": "predefinito",
+    "note": "Nota per noi",
+    "noteHint": "Quello che dobbiamo sapere su questo ordine.",
+    "problem": {
+      "datePast": "Scegliete oggi o un giorno successivo.",
+      "noteLong": "Al massimo 4.000 caratteri.",
+      "refLong": "Al massimo 100 caratteri."
+    },
+    "ref": "Il vostro numero d'ordine",
+    "refHint": "Il vostro numero per questo ordine: lo stampiamo su ogni documento.",
+    "shipTo": "Consegna a",
+    "shipToChoose": "Scegli un indirizzo di consegna",
+    "shipToGone": "Questo indirizzo non è più in uso: sceglietene un altro.",
+    "shipToHint": "Indirizzi verificati da noi. Qui potete aggiungerne uno nuovo.",
+    "shipToNone": "Non avete ancora un indirizzo di consegna: aggiungetene uno.",
+    "shipToWaiting": "Verifichiamo questo nuovo indirizzo prima della prima consegna. Potete comunque inviare la richiesta: lo verifichiamo quando confermiamo.",
+    "waiting": "in attesa della nostra verifica",
+    "design": "La fabbrica sta lavorando al design.",
+    "savedBy": "Salvata alle {time} da {name}",
+    "savedByFactory": "Salvata alle {time} dalla fabbrica",
+    "shared": "La fabbrica legge questa bozza dal primo salvataggio.",
+    "untitled": "Bozza d’ordine del {date}"
+  },
+  "lines": {
+    "colour": "Colore",
+    "empty": "Ancora nessuna riga.",
+    "emptyBody": "Aggiungete un modello, riordinate un ordine passato o caricate un foglio.",
+    "gridCaption": "Pezzi per taglia di {title}, {colour}",
+    "held": {
+      "empty": "Una riga chiede almeno un pezzo: scrivete le taglie o togliete la riga."
+    },
+    "menu": "Altro per la riga {seq}",
+    "note": "Il vostro codice o una nota",
+    "pieces": "Pezzi",
+    "remove": "Togli la riga"
+  },
+  "notice": {
+    "COLOUR_DISCONTINUED": "{colour} è fuori produzione — scegliete un altro colore",
+    "MADE_TO_MEASURE": "Un capo su misura non si riordina da qui: chiedetecelo",
+    "NO_SIZES_LEFT": "Nessuna delle sue taglie è ancora offerta",
+    "PRICE_ANY": "Il prezzo è cambiato da quell'ordine",
+    "PRICE_CHANGED": "Prezzo ora {now} (era {was})",
+    "REVISION_CHANGED": "Ora prodotto a una revisione più recente del modello",
+    "SIZES_DROPPED": "Taglie non più offerte, lasciate fuori: {sizes}",
+    "SIZES_DROPPED_SOME": "Alcune taglie non sono più offerte e sono state lasciate fuori",
+    "STYLE_NOT_SOLD": "{style} non è più in vendita",
+    "hide": "Nascondi",
+    "undo": "Annulla"
+  },
+  "offline": {
+    "title": "Nessuna connessione — vedete quanto caricato alle {time}"
+  },
+  "problem": {
+    "COLOUR_DISCONTINUED": "{colour} è fuori produzione: scegliete un altro colore.",
+    "DATE_PAST": "La data di consegna richiesta è passata: scegliete oggi o un giorno successivo.",
+    "NO_LINES": "Aggiungete almeno una riga.",
+    "NO_SIZES": "La riga non chiede nessuna taglia.",
+    "PRICE_ANY": "Il prezzo è cambiato: prendete i prezzi di oggi.",
+    "PRICE_CHANGED": "Prezzo ora {now} (era {was}).",
+    "PRICE_NEW": "Prezzo ora {now}: prendete i prezzi di oggi.",
+    "SHIP_TO_ARCHIVED": "L'indirizzo di consegna non è più in uso: sceglietene un altro.",
+    "SIZE_NOT_OFFERED": "La taglia {size} non è offerta per {style}.",
+    "STYLE_NOT_SOLD": "{style} non è più in vendita per voi: togliete la riga.",
+    "TOO_MANY_LINES": "Al massimo {max} righe per richiesta.",
+    "thisStyle": "Questo modello"
+  },
+  "refusal": {
+    "other": "Qualcosa non è andato da parte nostra: non si è perso nulla, riprovate."
+  },
+  "size": {
+    "caption": "Pezzi per taglia",
+    "cellName": "{colour}, taglia {size}",
+    "colour": "Colore",
+    "cutToMax": "{cell}: ridotto a {max}.",
+    "empty": "Nessuna taglia.",
+    "issues": "Controllate queste taglie",
+    "notOffered": "non offerta",
+    "notWhole": "{cell}: solo pezzi interi, da 0 a {max}.",
+    "pasted": "{applied} incollati, {skipped} lasciati fuori.",
+    "total": "Totale",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}."
+  },
+  "state": {
+    "saving": "Salvataggio…",
+    "OPEN": "Non ancora deciso"
+  },
+  "add": {
+    "from": "Aggiungi da:",
+    "product": "Aggiungi un prodotto"
+  },
+  "cell": {
+    "catalogue": "Catalogo",
+    "files_other": "{count} file",
+    "files_one": "{count} file",
+    "people_other": "{count} persone",
+    "productPh": "Scrivete un prodotto o sceglietelo dal catalogo",
+    "sizeRun": "{size} × {quantity}",
+    "total": "{pieces} pezzi",
+    "people_one": "{count} persona"
+  },
+  "office": {
+    "cell": {
+      "productPh": "Scrivi un prodotto o sceglilo dal catalogo"
+    },
+    "date": {
+      "ref": "Il loro numero d’ordine"
+    },
+    "mail": {
+      "attHint": "Segna un logo come Logo. Una scheda misure va sulla riga del suo prodotto.",
+      "drop": "Trascina qui i file, incollali o sfoglia (25 MB a file, 15 MB a foto)",
+      "message": "Il messaggio del cliente",
+      "nothing": "Niente è obbligatorio. Scrivi quello che sai: la bozza si salva mentre scrivi."
+    },
+    "opt": {
+      "alwaysOpen": "«Non ancora deciso» c’è sempre: lo scegli tu.",
+      "namesOnly": "Solo nomi: il prezzo arriva alla conferma, sull’ordine.",
+      "needTopic": "Prima dai un nome all’opzione.",
+      "needChoices": "Scrivi almeno due scelte, una per riga."
+    },
+    "save": {
+      "notYet": "Si salva quando scrivi"
+    },
+    "siz": {
+      "peopleFirst": "Questa riga ha delle persone: toglile prima, poi scegli Taglie standard."
+    },
+    "start": {
+      "continue": "Continua una bozza di {customer}"
+    },
+    "still": {
+      "info": "Solo informazione: la finestra di conferma chiede quello che serve all’ordine (modello, colore, pezzi per taglia, prezzo)."
+    }
+  },
+  "col": {
+    "colour": "Colore",
+    "files": "File",
+    "more": "Altro per la riga {seq}",
+    "options": "Opzioni",
+    "pieces": "Pezzi",
+    "product": "Prodotto",
+    "sizing": "Taglie"
+  },
+  "date": {
+    "ref": "Il vostro numero d’ordine",
+    "title": "Data e consegna"
+  },
+  "mail": {
+    "attHint": "Segnate un logo come Logo. Una scheda misure va sulla riga del suo prodotto.",
+    "attachments": "Allegati",
+    "drop": "Trascinate qui i file, incollateli o sfogliate (25 MB a file, 15 MB a foto)",
+    "logo": "Logo",
+    "logoAria": "{name} è un logo",
+    "message": "Messaggio",
+    "messageHint": "Il cliente lo legge. Le note d’ufficio vanno nella conversazione.",
+    "nothing": "Niente è obbligatorio. Scrivete quello che sapete: la bozza si salva mentre scrivete.",
+    "subject": "Oggetto"
+  },
+  "opt": {
+    "add": "Aggiungi un’opzione",
+    "alwaysOpen": "«Non ancora deciso» c’è sempre: lo scegliete voi.",
+    "choices": "Le scelte, una per riga (fino a 6)",
+    "close": "Chiudi",
+    "namesOnly": "Solo nomi: il prezzo lo fa la fabbrica quando conferma.",
+    "none": "Ancora nessuna opzione su questa riga.",
+    "remove": "Togli l’opzione",
+    "save": "Aggiungi l’opzione",
+    "title": "Opzioni · riga {seq} · {product}",
+    "topic": "Opzione",
+    "topicHint": "Per esempio «Pelle» o «Classe di protezione».",
+    "needTopic": "Prima date un nome all’opzione.",
+    "needChoices": "Scrivete almeno due scelte, una per riga.",
+    "twice": "Questa riga ha già un’opzione con quel nome.",
+    "full": "Una riga ha al massimo 10 opzioni."
+  },
+  "pc": {
+    "byPerson": "Per persona",
+    "bySize": "Per taglia",
+    "cancel": "Annulla",
+    "how": "Quanti",
+    "mtmLocked": "Il su misura si fa per ogni persona: una riga per persona.",
+    "save": "Salva",
+    "sizesCaption": "Pezzi per taglia",
+    "sizesOf": "Taglie di {style}",
+    "title": "Pezzi · riga {seq} · {product}",
+    "total": "Un totale",
+    "totalField": "Pezzi in tutto",
+    "totalHint": "Le taglie possono seguire."
+  },
+  "price": {
+    "frozen": "Si blocca quando inviate. La fabbrica lo confronta con il proprio prezzo (Verifica prezzi sull’ordine).",
+    "title": "Il vostro prezzo",
+    "yours": "Il vostro prezzo (IVA esclusa)"
+  },
+  "row": {
+    "date": "Data di consegna richiesta",
+    "label": "Riga {seq}",
+    "remove": "Togli il prodotto",
+    "shipTo": "Consegna a"
+  },
+  "save": {
+    "changedByFactory": "Modificata dalla fabbrica poco fa.",
+    "draftSaved": "Bozza salvata alle {time}",
+    "notYet": "Si salva quando scrivete"
+  },
+  "send": {
+    "body": "Vuol dire: questo è il nostro ordine — fateci il prezzo e confermate. Niente è obbligatorio: quello che è ancora aperto ve lo chiede la fabbrica.",
+    "later": "Un dettaglio che decidete dopo passa dai messaggi.",
+    "title": "Invia alla fabbrica"
+  },
+  "siz": {
+    "MADE_TO_MEASURE": "Su misura",
+    "STANDARD": "Taglie standard",
+    "peopleFirst": "Questa riga ha delle persone: toglietele prima, poi scegliete Taglie standard."
+  },
+  "start": {
+    "continue": "Continuate una bozza",
+    "draftRow": "{open} ancora aperti · salvata {when} da {name}",
+    "draftRowFactory": "{open} ancora aperti · salvata {when} dalla fabbrica"
+  },
+  "still": {
+    "count_other": "{n} ancora aperti",
+    "count_one": "{n} ancora aperto",
+    "info": "Solo informazione: potete inviare quando volete. Il resto ve lo chiede la fabbrica prima di confermare.",
+    "noProducts": "Prodotti: ancora nessuno",
+    "none": "Niente è ancora aperto.",
+    "row": "{product} · riga {seq}",
+    "title": "Ancora aperto"
+  },
+  "tbl": {
+    "count_other": "{n} prodotti",
+    "count_one": "{n} prodotto",
+    "empty": "Ancora nessun prodotto.",
+    "title": "Prodotti"
+  }
+}

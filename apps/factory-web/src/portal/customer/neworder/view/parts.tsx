@@ -5,10 +5,8 @@ import { AlertCircle, Lock } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useOrderingWords } from '../words'
-// F-CP-154: a line's kind, the ONE "Your price" cell.
-import { Ruler } from 'lucide-react'
-import { Input, Tag } from '@nexus/ui/primitives'
-import { kindKey, type DraftEntry } from '../model'
+// F-CP-154: the ONE "Your price" cell.
+import { Input } from '@nexus/ui/primitives'
 import '../neworder.css'
 
 /**
@@ -74,18 +72,8 @@ export function PricesNote() {
   return <p className="fw-pno-quiet">{t('prices.none')}</p>
 }
 
-// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1 and 6; review E4; 11 §1.3 D3): a line's kind, and the ONE "Your price" cell ----
-/** A line's kind as a DS Tag: "From the catalogue" · "Described by you" · "Made to measure" (words, never colour alone). */
-export function KindTag({ kind }: { kind: DraftEntry['kind'] }) {
-  const { t } = useOrderingWords()
-  return (
-    <Tag tone={kind === 'CATALOGUE' ? 'neutral' : 'info'} className="fw-pno-kind">
-      {kind === 'MADE_TO_MEASURE' ? <Ruler size={12} aria-hidden /> : null}
-      {t(kindKey(kind))}
-    </Tag>
-  )
-}
-
+// ---- F-CP-154 (customer page plan C5; 12 §2 part 6; review E4; 11 §1.3 D3): the ONE "Your price" cell (od-w1.1: a line's kind tag
+// moved with the draft's lines to src/lib/order-draft/view/parts.tsx) ----
 /**
  * The ONE "Your price (without VAT)" cell of a line (review E4: one owner, this step), for a price holder only — the customer's
  * Buyer, Finance or Admin: typed while the draft may be written ("18,50" or "18.50"; saved on leaving the cell, with the draft's

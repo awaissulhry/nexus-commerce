@@ -11,6 +11,7 @@ import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { PastLine, PastOrder, PastOrderRow } from '../api'
 import { droppedOf, noticeTone, noticeWords, orderLinesLabel, ownOrderRef, reorderLineHeld } from '../model'
 import { useOrderingWords } from '../words'
+import { useDraftWords } from '../../../../lib/order-draft/words'
 import { Loading, ReadFailed } from './parts'
 
 /**
@@ -131,7 +132,9 @@ function OrderLines({ model, actions }: { model: ReorderModel; actions?: Reorder
   latest.current = { model, actions }
   const seesPrices = read?.seesPrices ?? false
   const currency = model.currency
-  const kit = useMemo(() => ({ t, price: (value: string | null | undefined) => words.price(value, currency) }), [t, words, currency])
+  // od-w1.1: a line's differences are the draft part's words (noticeWords moved with the draft's lines to src/lib/order-draft).
+  const dw = useDraftWords()
+  const kit = useMemo(() => ({ t: dw.t, price: (value: string | null | undefined) => words.price(value, currency) }), [dw, words, currency])
 
   const columns = useMemo((): ColDef<PastLine>[] => {
     const StyleCell = ({ data }: ICellRendererParams<PastLine>) =>
