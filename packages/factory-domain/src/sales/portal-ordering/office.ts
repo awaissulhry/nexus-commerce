@@ -24,8 +24,8 @@ import { withChoicesWords, type DraftChoice } from './choices'
  * Only a SENT request is decided, once; the customer may withdraw it before that. A DRAFT is the customer's to write (the
  * database refuses an office edit of it). B-CP-071 (customer page plan D10, K9 reversed): the office READS a draft from its
  * first save — per customer, read-only, its thread too — and decides nothing on it until it is sent; a draft is never in
- * Incoming, Home › Approvals or any count. `draftReadiness` is the draft's checklist (12 §2: seven parts) as the office's
- * Drafts view and the portal's page read it.
+ * Incoming, Home › Approvals or any count. (od-s: the office also fills a draft; od-fx3: the seven-part checklist went, the draft
+ * reads its Still open — ./still-open.ts.)
  */
 
 export const ACCEPT_AS = ['ORDER', 'QUOTE'] as const
@@ -55,85 +55,27 @@ export function refuseReasonProblem(reason: string): string | null {
   return null
 }
 
-// ---- B-CP-071 (D10): a draft's checklist -----------------------------------------------------------------------------------
-
-/** The seven parts of a draft order, in the page's order (customer page plan 12 §2). */
-export const DRAFT_PARTS = ['NEED', 'LOGOS', 'REFERENCES', 'PEOPLE', 'DATE', 'PRICE', 'NOTES'] as const
-export type DraftPart = (typeof DRAFT_PARTS)[number]
-
-/** A part's state: Ready, Sending later, Missing (a required part left empty), Optional (an optional part left empty). */
-export const DRAFT_PART_STATES = ['READY', 'LATER', 'MISSING', 'OPTIONAL'] as const
-export type DraftPartState = (typeof DRAFT_PART_STATES)[number]
-
 /** The parts the customer may mark "we send it later" (PortalOrderRequest.laterParts, B-CP-075). */
 export const DRAFT_LATER_PARTS = ['LOGOS', 'REFERENCES', 'PEOPLE'] as const
 export type DraftLaterPart = (typeof DRAFT_LATER_PARTS)[number]
 
-export interface DraftFacts {
-  readonly lines: number
-  /** Lines that ask no piece yet (a line is ready with a size grid above zero). */
-  readonly linesWithoutPieces: number
-  readonly logos: number
-  readonly references: number
-  readonly requestedDate: boolean
-  /** The header's own problems (a date that passed, an address no longer active): the date part is missing while one is left. */
-  readonly headerProblems: number
-  readonly note: boolean
-  readonly later: readonly DraftLaterPart[]
-  /**
-   * Part 6 "Your price": null for a reader WITHOUT the price grain — the part is not counted for them at all (review B4: no
-   * money fact reaches a no-price reader, not even "priced: yes"); else how many lines carry the customer's own price.
-   */
-  readonly pricedLines: number | null
-  /** Every problem that holds the send (the header's and the lines'). */
-  readonly problems: number
-  /** B-CP-075: the problems by the part they are on (problemPartOf); a part with one is not READY. Absent: none counted per part. */
-  readonly problemsByPart?: Partial<Record<DraftPart, number>> | undefined
-}
+// ---- B-CP-075 (customer page plan 12 §2: "send problems per part"): the part of a draft a problem is on ---------------------------
+// od-fx3 (order start): the seven-part checklist (draftReadiness, its states and facts) went with the face that drew it (od-w2: the
+// draft's Still open, factory-domain still-open.ts); a problem still names the part it is on, for the web's problem schema.
+/** The parts of a draft a problem is on: NEED (a line's own), PEOPLE (a roster's), DATE (the header's date and address). */
+export const PROBLEM_PARTS = ['NEED', 'PEOPLE', 'DATE'] as const
+export type ProblemPart = (typeof PROBLEM_PARTS)[number]
+/**
+ * od-fx3: the name the web's problem schema (apps/factory-web lib/order-draft/schema.ts) still imports — the same three values;
+ * goes once the web imports PROBLEM_PARTS.
+ */
+export const DRAFT_PARTS = PROBLEM_PARTS
 
-export interface DraftReadiness {
-  readonly parts: readonly { readonly part: DraftPart; readonly state: DraftPartState }[]
-  /** Parts READY. */
-  readonly done: number
-  /** Parts counted: 7, or 6 for a reader without the price grain. */
-  readonly of: number
-  readonly problems: number
-}
-
-/** The draft's checklist: each part's state, how many are ready of how many, and the problems that hold the send. */
-export function draftReadiness(facts: DraftFacts): DraftReadiness {
-  const optional = (present: boolean, part: DraftLaterPart | null): DraftPartState => (present ? 'READY' : part !== null && facts.later.includes(part) ? 'LATER' : 'OPTIONAL')
-  const held = (part: DraftPart): boolean => (facts.problemsByPart?.[part] ?? 0) > 0 // B-CP-075
-  const people: DraftPartState = facts.lines > 0 && facts.linesWithoutPieces === 0 && !held('PEOPLE') ? 'READY' : facts.later.includes('PEOPLE') ? 'LATER' : 'MISSING'
-  const parts: { part: DraftPart; state: DraftPartState }[] = [
-    { part: 'NEED', state: facts.lines > 0 && !held('NEED') ? 'READY' : 'MISSING' },
-    { part: 'LOGOS', state: optional(facts.logos > 0, 'LOGOS') },
-    { part: 'REFERENCES', state: optional(facts.references > 0, 'REFERENCES') },
-    { part: 'PEOPLE', state: people },
-    { part: 'DATE', state: facts.headerProblems > 0 ? 'MISSING' : facts.requestedDate ? 'READY' : 'OPTIONAL' },
-    ...(facts.pricedLines === null ? [] : [{ part: 'PRICE' as const, state: facts.lines > 0 && facts.pricedLines >= facts.lines ? ('READY' as const) : ('OPTIONAL' as const) }]),
-    { part: 'NOTES', state: facts.note ? 'READY' : 'OPTIONAL' },
-  ]
-  return { parts, done: parts.filter((entry) => entry.state === 'READY').length, of: parts.length, problems: facts.problems }
-}
-// ---- end B-CP-071
-
-// ---- B-CP-075 (customer page plan 12 §2: "send problems per part"): the part of the checklist a problem holds ----------------------
 /** NEED: a line's own (what it is, its total, its sizes, a price changed); PEOPLE: a roster's (no one named, a person's size); DATE: the header's date and address. */
-export function problemPartOf(problem: Pick<Problem, 'code' | 'personId'>): DraftPart {
+export function problemPartOf(problem: Pick<Problem, 'code' | 'personId'>): ProblemPart {
   if (problem.code === 'DATE_PAST' || problem.code === 'SHIP_TO_ARCHIVED') return 'DATE'
   if (problem.code === 'NO_PEOPLE' || (problem.personId !== undefined && problem.personId !== null)) return 'PEOPLE'
   return 'NEED'
-}
-
-/** How many problems each part holds (for draftReadiness' `problemsByPart`). */
-export function problemsByPartOf(problems: readonly Pick<Problem, 'code' | 'personId'>[]): Partial<Record<DraftPart, number>> {
-  const out: Partial<Record<DraftPart, number>> = {}
-  for (const entry of problems) {
-    const part = problemPartOf(entry)
-    out[part] = (out[part] ?? 0) + 1
-  }
-  return out
 }
 // ---- end B-CP-075
 

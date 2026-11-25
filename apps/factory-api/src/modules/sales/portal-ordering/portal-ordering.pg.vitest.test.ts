@@ -352,7 +352,7 @@ describe('withdraw and discard', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // yes 2a): its door on a draft is Confirm (send + accept in one command), never accept.
     const kept = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
     const read = await officeRequestView(office(), kept.request.id)
-    expect(read.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ readiness: expect.objectContaining({ of: 7 }) }) })
+    expect(read.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ openCount: expect.any(Number), confirmHeld: expect.any(Boolean) }) }) // od-fx3: Still open, no checklist
     expect(read.may).toEqual({ order: false, quote: false, refuse: false, confirm: true, styleDraft: false })
     await expect(acceptRequest(office(), kept.request.id, { version: read.request.version, as: 'ORDER' })).rejects.toThrow(/still the customer's draft/)
   })
@@ -670,15 +670,16 @@ describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the 
     const draft = await pricedRequest('PO-T-076M', { black: '400', red: '405' }, false)
     const holder = (await listOfficeRequests(office(), { status: 'DRAFT', partyId: P1 })).requests.find((row) => row.id === draft.id)!
     // 410.00 × 3 and 410.00 × 1 at the price shown, the described line at its own 395.50 × 4: 1230.00 + 410.00 + 1582.00.
-    expect(holder.draft).toMatchObject({ draftValueAmount: 322_200, readiness: { of: 7 } })
-    expect(holder.draft!.readiness.parts.find((part) => part.part === 'PRICE')?.state).toBe('READY')
+    expect(holder.draft).toMatchObject({ draftValueAmount: 322_200 })
+    expect(holder.draft).not.toHaveProperty('readiness') // od-fx3: the checklist (and its part 6) went
     const record = await officeRequestView(office(), draft.id)
     expect(record.request.lines.map((line) => line.brandUnitPrice)).toEqual(['400.00', '405.00'])
     expect(record.request.draft).toMatchObject({ draftValueAmount: 322_200 })
     const list = await salesDesk.send('GET', `/sales/order-requests?status=DRAFT&partyId=${P1}`)
     expect(list.status, JSON.stringify(list.body)).toBe(200)
     expect(JSON.stringify(list.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
-    expect((list.body.requests as Json[]).find((row) => row.id === draft.id)!.draft.readiness.of).toBe(6)
+    // od-fx3: no money fact on a Sales worker's row — no value, and no checklist part to count.
+    expect((list.body.requests as Json[]).find((row) => row.id === draft.id)!.draft).not.toHaveProperty('draftValueAmount')
     const one076 = await salesDesk.send('GET', `/sales/order-requests/${draft.id}`)
     expect(one076.status).toBe(200)
     expect(JSON.stringify(one076.body)).not.toMatch(CUSTOMER_PRICE_KEYS)

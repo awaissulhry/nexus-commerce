@@ -197,8 +197,9 @@ describe('B-CP-072: a draft order’s files', { timeout: SLOW_TEST_TIMEOUT_MS },
     expect(listed.draft!.files.logos).toEqual([expect.objectContaining({ id: G.logo.id, originalName: 'made-up-alpha-logo.png', locked: false })])
     expect(listed.draft!.files.sheets).toEqual([expect.objectContaining({ id: G.sheet.id, lineId: G.draft.lineId, originalName: null, locked: true })])
     expect(JSON.stringify(listed)).not.toContain('made-up-alpha-sizes.pdf')
-    const parts = Object.fromEntries(listed.draft!.readiness.parts.map((part) => [part.part, part.state]))
-    expect(parts).toMatchObject({ LOGOS: 'READY', REFERENCES: 'READY' })
+    // od-fx3: the checklist went; the logos and references are the row's own files.
+    expect(listed.draft!.files.logos.length).toBeGreaterThan(0)
+    expect(listed.draft!.files.references.length).toBeGreaterThan(0)
     const withSheets = officeWith(['orders.view', 'threads.read', 'files.read', 'sales.measurements.view'])
     const view = await officeRequestView(withSheets, G.draft.id)
     expect(view.request.draft!.files.sheets).toEqual([expect.objectContaining({ id: G.sheet.id, originalName: 'made-up-alpha-sizes.pdf', locked: false })])
