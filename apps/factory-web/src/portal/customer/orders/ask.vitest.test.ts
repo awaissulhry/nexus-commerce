@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
@@ -196,7 +197,7 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
     const base = rules()
     const beta: ChangeRules = {
       ...base,
-      order: { ...base.order, number: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef },
+      order: { ...base.order, customerRef: BRAND_BETA.customerRef },
       lines: base.lines.map((line) => ({ ...line, style: { code: BRAND_BETA.numbers.style, name: 'Beta jacket' }, colourway: { code: 'BK', name: 'Black' } })),
       addresses: [{ id: 'b2b2b2b2-0000-4000-8000-000000000301', label: `${BRAND_BETA.legalName} — ${BRAND_BETA.address.line1}, ${BRAND_BETA.address.city}` }],
     }
@@ -209,7 +210,7 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
   })
 
   it('every word in both languages, and the Italian speaks to the customer as "voi"', () => {
-    const flat = (locale: 'en' | 'it') => Object.entries(CATALOGUE[locale]['portal-orders'] ?? {}).filter(([key]) => key.startsWith('ask.') || key === 'band.ask')
+    const flat = (locale: 'en' | 'it') => Object.entries(CATALOGUE[locale]['portal-orders'] ?? {}).filter(([key]) => key.startsWith('ask.') || key === 'band.change')
     const en = flat('en')
     const it = flat('it')
     expect(en.length).toBeGreaterThan(80)
@@ -217,14 +218,17 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
     for (const [key, text] of it) expect(text, key).not.toMatch(/\b(tu|tuo|tua|tuoi|tue|ti|hai|puoi|vuoi|scegli|scrivici|chiedici)\b/i)
   })
 
-  it('the band: "Ask us…" opens the dialog; "Ask for a change" stays in the ⋯; without the dialog the band is as before', () => {
-    const facts: OrderBandFacts = { changeHeld: null, cancelHeld: null, reconfirm: null, shipments: 1, moves: 0, confirmation: true, pay: null }
+  // pp-w1 (w1.2; O1-B1): ONE ask door — the band's "Ask for a change…" opens this dialog; the ⋯ holds no second "Ask for a change".
+  it('the band: its ONE "Ask for a change…" opens the dialog at its first step; the ⋯ holds no second ask', () => {
+    const facts: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
     const record = orderRecord({ status: 'IN_PRODUCTION' })
     const words = orderWords('en')
-    const withAsk = orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts: { ...facts, ask: { held: null } } })
-    expect(withAsk.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask us…']])
-    expect(withAsk.more?.[0]).toMatchObject({ id: 'change', label: words.t('band.change') })
-    expect(orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts }).actions?.map((action) => action.id)).toEqual(['change'])
+    let opened = 0
+    const band = orderBandOf({ words, record, prefix: PREFIX, facts, onAsk: () => void (opened += 1) })
+    expect(band.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask for a change…']])
+    band.actions?.[0]?.onClick?.()
+    expect(opened).toBe(1)
+    expect(band.more?.some((item) => item.id === 'change' || item.id === 'ask')).toBe(false)
   })
 })
 
@@ -369,15 +373,15 @@ describe('F-SA-246: step 3 — what it means, never a guessed date', () => {
 })
 
 describe('F-SA-246: the doors, the request card and the words', () => {
-  it('"Ask for a change" above the order’s conversation (the frame; PartnerThread untouched), held with why', () => {
-    const draw = (held: string | null) => render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, door: { label: 'Ask for a change', held, onOpen: () => undefined }, children: createElement('div', null, 'body') }))
-    const html = draw(null)
-    expect(textOf(html)).toContain('Ask for a change')
-    // F-SA-264 gave the dock "Hide the conversation" above both: the door is measured against the conversation itself.
-    expect(html.indexOf('<p>the conversation</p>')).toBeGreaterThan(0)
-    expect(html.indexOf('Ask for a change')).toBeLessThan(html.indexOf('<p>the conversation</p>'))
-    expect(textOf(draw('You are looking at a preview.'))).toContain('Ask for a change')
-    expect(render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'x'), threadLabel: 'Messages', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))).not.toContain('Ask for a change')
+  // pp-w1 (w1.1; reverses F-SA-246's door, plan § 7): the order's ask is the band's ONE "Ask for a change…" (O1-B1, O1-B2).
+  it('no "Ask for a change" above the order’s conversation any more: the band’s ONE ask opens this dialog', () => {
+    const html = render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))
+    expect(html).toContain('<p>the conversation</p>')
+    expect(textOf(html)).not.toContain('Ask for a change')
+    expect(html).not.toContain('fw-prf-door')
+    expect(readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')).not.toMatch(/\bdoor\??:/)
+    const band = orderBandOf({ words: orderWords('en'), record: orderRecord({ status: 'IN_PRODUCTION' }), prefix: PREFIX, facts: { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null } })
+    expect(band.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask for a change…']])
   })
 
   it('the request card knows the design change (the domain’s kinds, its word in both languages)', () => {

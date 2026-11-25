@@ -13,6 +13,7 @@ import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
+import { SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes' // pp-w1 (w1.4, O3-B1): + FEE, a charge line
 
 /**
  * Every call of the customer's Orders & tracking (B-W2b-191, SCR-184; design portal.customer.orders), each answer checked
@@ -190,7 +191,9 @@ const sizeRow = z.object({ size: z.string().nullable(), ordered: z.number(), shi
 export const orderLineSchema = z.object({
   id: z.string(),
   seq: z.number(),
-  kind: z.enum(['SIZE_GRID', 'MADE_TO_MEASURE']),
+  // pp-w1 (w1.4, O3-B1): every kind the API sends — a charge line (FEE) no longer fails the whole page; Lines and the tab strip skip
+  // it (shownLinesOf), the order's totals count it, the change rules never list it.
+  kind: z.enum(SALES_LINE_KINDS),
   style: named.nullable(),
   colourway: named.nullable(),
   description: z.string().nullable(),
@@ -222,10 +225,11 @@ export type OrderMilestone = z.infer<typeof milestoneSchema>
 export const orderRecordSchema = z.object({
   asOf: z.string(),
   seesPrices: z.boolean(),
+  // pp-w1 (13-backend C-1, O3-W1): no `number` — the office's shared series is never read here; the order is the customer's own
+  // number (`yourNumber`), the revised order is found by it too (orderNumbersOf).
   order: z.object({
     id: z.string(),
     customerRef: z.string().nullable(),
-    number: z.string(),
     // B-TH-303 (read for New order's "Reorder this line"; the order page shows it with B-TH-275)
     yourNumber,
     status: z.enum(CUSTOMER_ORDER_STATUSES),
@@ -336,7 +340,8 @@ const freeze = z.object({ state: z.enum(FREEZE_STATES).catch('OPEN'), words })
 
 export const rulesSchema = z.object({
   asOf: z.string(),
-  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), requestedDate: z.string().nullable(), promiseDate: z.string().nullable(), currency: z.string(), version: z.number() }),
+  // pp-w1 (13-backend C-1b): no office `number` (the web never read it).
+  order: z.object({ id: z.string(), customerRef: z.string().nullable(), status: z.string(), requestedDate: z.string().nullable(), promiseDate: z.string().nullable(), currency: z.string(), version: z.number() }),
   change: verdict,
   cancel: verdict,
   lines: z.array(
@@ -390,7 +395,7 @@ export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'RES
 export const changeRequestSchema = z.object({
   id: z.string(),
   orderId: z.string(),
-  orderNumber: z.string(),
+  // pp-w1 (13-backend C-1b): no office `orderNumber` (the web never read it); the order is the page's own.
   customerRef: z.string().nullable(),
   kind: z.enum(REQUEST_KINDS),
   kindWords: words,
@@ -578,12 +583,12 @@ export type ApprovalPage = z.infer<typeof approvalPageSchema>
 
 /**
  * F-OC fx4 (end check 1, th9 step 13): the numbers a revised order may name THIS order by. The approval page says the party's own
- * number ("#12", F-PR-16: never the office's SO-… series) — an older answer the office's; matching the office's number alone never
- * found it, and the order page said "We will ask you to confirm" for ever while the ask waited.
+ * number ("#12", F-PR-16: never the office's SO-… series; it rewrites every office number into the party's own). pp-w1 (13-backend
+ * C-1): the order read no longer carries the office's series, so the party's own number is the only one (none yet: none).
  */
-export function orderNumbersOf(number: string, ownSeq: number | null | undefined): string[] {
+export function orderNumbersOf(ownSeq: number | null | undefined): string[] {
   const own = customerRefOf('ORDER', ownSeq)
-  return own ? [number, own] : [number]
+  return own ? [own] : []
 }
 
 /**
