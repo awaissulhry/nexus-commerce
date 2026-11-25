@@ -186,6 +186,17 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
     expect(shell).not.toMatch(/<Modal\b/)
     expect(shell).not.toContain('<PortalThread')
   })
+
+  // pp-fx4 (walk W-03): `?tab=messages` arrives before the conversation has loaded — the box is not drawn yet. The asked focus waits for
+  // it (the frame watches the dock until a box that is not disabled appears), unless the person moved the focus meanwhile; then gives up.
+  it('an asked focus waits for the box the thread draws later (arrival, a loading conversation); never steals a focus moved meanwhile', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("dock?.querySelector<HTMLTextAreaElement>('textarea:not([disabled])')")
+    expect(frame).toContain("observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] })")
+    expect(frame).toContain('if (active !== waitingFrom && active && active !== document.body && !element.contains(active)) return done()')
+    expect(frame).toContain('const giveUp = setTimeout(done, BOX_WAIT_MS)')
+    expect(frame).toContain('if (asked.focus) setFocusAsked(true)')
+  })
   // pt-w2 W2.3: the docked conversation's own tests (its count, read only while on screen, a removed message) live with the thread now:
   // portal/shell/thread/thread.vitest.test.ts.
 })
