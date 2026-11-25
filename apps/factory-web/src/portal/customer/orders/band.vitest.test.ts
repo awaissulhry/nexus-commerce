@@ -281,6 +281,10 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('W-14: from 1280 px the band’s pills take the room they need (no half-room cap), down to their widest one — the band keeps one row', () => {
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-meta \{\s*flex: 0 1 auto;\s*min-width: min-content;\s*max-width: none;\s*\}/)
+    // pp-fx6 (re-walk N-01): never the title's room — at 1440 with the conversation hidden the title was cut ("Your orde…"). In the same
+    // block the title keeps its whole width; the pills wrap inside their own place when both cannot fit.
+    const wide = css.slice(css.indexOf('@media (min-width: 1280px) {\n  .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {'))
+    expect(wide.slice(0, wide.indexOf('\n}\n'))).toMatch(/\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-title h1 \{\s*flex-shrink: 0;\s*\}/)
   })
 
   // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a

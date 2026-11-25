@@ -241,12 +241,19 @@
 
 /* pp-fx5 (walk W-14): at 1440 the band is ONE row — "Messages (2 new)" (the conversation hidden) pushed "Made from your request #1 ›"
    under the reference although 196 px stood free: the DS caps a dense band's identity pills at half the title's room. From 1280 px
-   the portal band's pills take the room they need, down to their widest one, before the title shrinks. */
+   the portal band's pills take the room they need, down to their widest one.
+   pp-fx6 (re-walk N-01): never the title's room — the title is NEVER cut ("Your orde…" at 1440 with the conversation hidden: the pills
+   kept their width and the title shrank). The title keeps its whole width; when both cannot fit on one row, the pills wrap inside
+   their own place (a second line), as before W-14. */
 @media (min-width: 1280px) {
   .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
     flex: 0 1 auto;
     min-width: min-content;
     max-width: none;
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    flex-shrink: 0;
   }
 }
 
