@@ -34,14 +34,23 @@ export const PICTURE_ROUTES: Readonly<Record<PictureSource, { readonly path: str
   // F-CQ-103 (B-CQ-030, customer page › Quotes & incoming): a portal order's (a draft's too) first style, walled as the drafts and
   // Incoming read it (orders.view over its company and customer) — never again a cart icon for a garment.
   portalOrder: { path: '/sales/order-requests/pictures', key: 'requestIds' },
+  // pg-w2 (D4, Z12): the customer's portal list — the partner read finds the party's OWN orders among the ids, then their first style's
+  // small picture (walled as the order page's lines); an order the party does not own is absent. The answer names no file (fileId null).
+  customerOrder: { path: '/portal/sales-orders/pictures', key: 'orderIds' },
 })
+
+/**
+ * pg-w2 (D4): the customer's answer never names a file (`fileId: null`), but the cache keeps a small address by its file: the
+ * customer's picture is kept under its order instead — a key of this browser's cache only, never sent anywhere, never opened.
+ */
+const keyedOf = (source: PictureSource, picture: PictureAnswer): PictureAnswer => (source === 'customerOrder' && picture.fileId === null && picture.small ? { ...picture, fileId: `${source}:${picture.id}` } : picture)
 
 /** One batch read (the page's own API client). */
 export async function readPictures(api: ApiClient, source: PictureSource, ids: readonly string[], signal?: AbortSignal): Promise<PictureAnswer[]> {
   const route = PICTURE_ROUTES[source]
   const answer = await api.post(route.path, { body: { [route.key]: [...ids] }, schema: answerSchema, signal })
   // end check (#1649): the local store's path through /api.
-  return answer.pictures.map((picture) => (picture.small ? { ...picture, small: { url: browserAddress(picture.small.url), expiresAt: picture.small.expiresAt } } : picture))
+  return answer.pictures.map((picture) => keyedOf(source, picture.small ? { ...picture, small: { url: browserAddress(picture.small.url), expiresAt: picture.small.expiresAt } } : picture))
 }
 
 /** The reader a page gives the part (its own API client): `const read = useMemo(() => pictureReader(api), [api])`. */
