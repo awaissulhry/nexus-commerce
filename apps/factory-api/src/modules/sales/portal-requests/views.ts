@@ -160,6 +160,20 @@ export async function listRequests(app: FastifyInstance, request: FastifyRequest
   }
 }
 
+// ---- pg-s1 S1.2 (portal grid Z3, H4): the party's requests' states for the band of Portal › Orders ----------------------------
+/**
+ * The state of each of the party's requests in the portal's company (at most REQUESTS_MAX, newest first), as the customer reads it:
+ * the same partner read as GET /portal/inquiries (the party's row-level security), then what each became, keyed by the ids that
+ * read found (madeOf, the party checked again). Never a tenant read "by party": another customer's request is never counted.
+ */
+export async function requestStatesOf(app: FastifyInstance, request: FastifyRequest): Promise<PortalRequestState[]> {
+  const reader = portalReader(app, request)
+  const rows = (await request.withClient((client) => partnerInquiries(client, reader.session.company.id))).slice(0, REQUESTS_MAX)
+  const made = await madeOf(reader, rows)
+  return rows.map((row) => stateOfRow(row, made.get(row.id)).code)
+}
+// ---- end pg-s1 S1.2
+
 /** The party's own request in the portal's company (partner scope), or 404: another party's request is never found (W37). */
 export async function partnerRequest(request: FastifyRequest, companyId: string, inquiryId: string): Promise<InquiryRow> {
   if (!isUuid(inquiryId)) throw new NotFoundError('Request not found.')

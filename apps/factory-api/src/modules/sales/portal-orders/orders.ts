@@ -120,7 +120,22 @@ export interface ListQuery {
   readonly offset: number
 }
 
-export async function listOrders(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
+/** GET /portal/sales-orders: the page of the chip and search (see the module's head). */
+export async function listOrders(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date): Promise<PortalOrderList['answer']> {
+  return (await readList(app, request, query, now)).answer
+}
+
+// ---- pg-s1 S1.2 (portal grid Z3, H4): the sheet's band counts every row of the party, read BEFORE the search and the chip ----
+/** The list's answer, and every row of the party (its orders and its catalogue requests waiting) before the search and the chip. */
+export type PortalOrderList = Awaited<ReturnType<typeof readList>>
+
+/** The list's answer and every row of the party (the partner's own reads only), for the sheet's band. */
+export async function listOrdersWithRows(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date): Promise<PortalOrderList> {
+  return readList(app, request, query, now)
+}
+// ---- end pg-s1 S1.2
+
+async function readList(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
   const reader = portalReader(app, request)
   const companyId = reader.session.company.id
   const read = await request.withClient(async (client) => {
@@ -180,6 +195,8 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
         currency: order.currency,
         nextShipment: nextShipmentOf(shipments, latest),
         progressPercent: null as number | null,
+        // pg-s1 S1.2/S1.3 (Z4): the row's one mark, "Needs your answer": a revised order waits for the customer's re-confirmation.
+        needsYou: order.reapprovalNeededAt !== null,
       },
     }
   })
@@ -206,6 +223,7 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
       currency: request.currency,
       nextShipment: null,
       progressPercent: null as number | null,
+      needsYou: false, // pg-s1 S1.3 (P3): a request's own state chip already says it
     },
   }))
   const searched = [...orderRows, ...requestRows].filter((entry) => found([entry.row.customerRef, entry.officeNumber /* fix-portal-numbers-1 */], entry.styles))
@@ -220,13 +238,17 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
     }
   }
   return {
-    asOf: toUtcIso(now),
-    seesPrices: reader.seesPrices,
-    chip: query.chip,
-    chips: chipCounts(searched.map((entry) => entry.row)),
-    count: inChipRows.length,
-    items: page,
-    live: LIVE,
+    answer: {
+      asOf: toUtcIso(now),
+      seesPrices: reader.seesPrices,
+      chip: query.chip,
+      chips: chipCounts(searched.map((entry) => entry.row)),
+      count: inChipRows.length,
+      items: page,
+      live: LIVE,
+    },
+    // pg-s1 S1.2: every row of the party, before the search and the chip (the sheet's band: a search never moves it).
+    everyRow: [...orderRows, ...requestRows].map((entry) => entry.row),
   }
 }
 

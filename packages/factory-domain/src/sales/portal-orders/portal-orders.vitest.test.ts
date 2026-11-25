@@ -8,7 +8,8 @@ import { customerPromiseHistory, PROMISE_REASON_CODES, promiseReasonOf, promiseR
 import { AUTOMATIC_REASONS } from '../amendments/reasons' // B-OL-004
 import { customerShipmentStatusOf, shipmentMilestonesOf, stillToShipOf } from './shipments'
 import { chipCounts, customerStatusOf, inChip, isStillToShip, milestonesOf, weekOf, type MilestoneFacts } from './status'
-import { CHIP_WORDS, ORDER_CHIPS } from './status' // pg-s1 S1.1
+import { bandCounts, CHIP_WORDS, groupOf, ORDER_CHIPS, ORDER_GROUPS, type BandRow, type CustomerOrderStatus } from './status' // pg-s1 S1.1, S1.2
+import type { PortalRequestState } from '../portal-requests/state' // pg-s1 S1.2
 
 const facts = (overrides: Partial<MilestoneFacts>): MilestoneFacts => ({
   status: 'CONFIRMED',
@@ -102,6 +103,68 @@ describe('the status in customer words (SAL-075)', () => {
     expect(cancelled.find((view) => view.current)?.key).toBe('CONFIRMED')
   })
 })
+
+// ---- pg-s1 S1.2 (portal grid Z3, H4): the band's numbers, counted by the server over the party's own rows ----------------------
+describe('the band of Portal › Orders (pg-s1 S1.2)', () => {
+  const row = (status: CustomerOrderStatus, needsYou = false): BandRow => ({ kind: 'ROW', status, needsYou })
+  const inquiry = (state: PortalRequestState): BandRow => ({ kind: 'INQUIRY', state })
+  const countsOf = (rows: readonly BandRow[]) => Object.fromEntries(bandCounts(rows).groups.map((entry) => [entry.group, entry.count]))
+
+  it('puts every row in one group: orders by their customer status, requests by their state; Cancelled and Closed requests apart', () => {
+    expect(ORDER_GROUPS).toEqual(['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'CLOSED_REQUESTS'])
+    expect((['REQUESTED', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const).map((status) => groupOf(row(status)))).toEqual(['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'SHIPPED', 'DELIVERED', 'CANCELLED'])
+    expect((['SENT', 'BEING_REVIEWED', 'NEED_INFO', 'QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'QUOTE_ACCEPTED'] as const).map((state) => groupOf(inquiry(state)))).toEqual(Array(6).fill('REQUESTS'))
+    // Closed requests keep a place (never vanished); an ORDER_CONFIRMED request carries on as its order (counted there).
+    expect((['DECLINED', 'CLOSED', 'WITHDRAWN', 'ORDER_CONFIRMED'] as const).map((state) => groupOf(inquiry(state)))).toEqual(['CLOSED_REQUESTS', 'CLOSED_REQUESTS', 'CLOSED_REQUESTS', null])
+  })
+
+  it('counts an ORDER_WAITING pair once: the request waiting for our yes is its REQUESTED order row', () => {
+    // The request made into an order that waits for our yes (ORDER_WAITING) and that order (PENDING_APPROVAL: REQUESTED).
+    const pair = [inquiry('ORDER_WAITING'), row('REQUESTED')]
+    expect(countsOf(pair)).toMatchObject({ REQUESTS: 1 })
+    expect(bandCounts(pair).open).toBe(1)
+  })
+
+  it('counts everything open once and what needs the customer: NEED_INFO requests and orders to re-confirm', () => {
+    const rows = [
+      row('REQUESTED'), // a catalogue order request waiting
+      inquiry('SENT'),
+      inquiry('NEED_INFO'),
+      inquiry('ORDER_WAITING'),
+      row('REQUESTED'), // … and its order
+      row('CONFIRMED', true), // a revised order to re-confirm
+      row('IN_PRODUCTION'),
+      row('READY'),
+      row('PARTLY_SHIPPED'),
+      row('SHIPPED'),
+      row('DELIVERED'),
+      row('CANCELLED', true), // a cancelled order never counts as open, but its mark still says it waits for them
+      inquiry('DECLINED'),
+      inquiry('WITHDRAWN'),
+      inquiry('ORDER_CONFIRMED'),
+    ]
+    expect(countsOf(rows)).toEqual({ REQUESTS: 4, CONFIRMED: 1, IN_PRODUCTION: 1, READY: 1, SHIPPED: 2, DELIVERED: 1, CANCELLED: 1, CLOSED_REQUESTS: 2 })
+    expect(bandCounts(rows)).toMatchObject({ open: 9, needsYou: 3 })
+    expect(bandCounts([])).toEqual({ groups: ORDER_GROUPS.map((group) => ({ group, count: 0 })), open: 0, needsYou: 0 })
+  })
+
+  it('counts the rows it is given, so a search never moves it: the chips follow the search, the band does not', () => {
+    // The API gives the band EVERY row of the party, read before the search; the chips count only the rows the search kept.
+    const every = [
+      { band: row('CONFIRMED'), chip: { status: 'CONFIRMED' as const, movedLately: false }, found: true },
+      { band: row('READY'), chip: { status: 'READY' as const, movedLately: false }, found: false },
+      { band: row('DELIVERED'), chip: { status: 'DELIVERED' as const, movedLately: false }, found: false },
+    ]
+    const searched = every.filter((entry) => entry.found)
+    const chips = (entries: typeof every) => Object.fromEntries(chipCounts(entries.map((entry) => entry.chip)).map((entry) => [entry.chip, entry.count]))
+    expect(chips(searched)).toMatchObject({ ALL: 1, READY: 0 })
+    expect(chips(every)).toMatchObject({ ALL: 3, READY: 1 })
+    const band = bandCounts(every.map((entry) => entry.band))
+    expect(countsOf(every.map((entry) => entry.band))).toMatchObject({ CONFIRMED: 1, READY: 1, DELIVERED: 1 })
+    expect(band.open).toBe(2)
+  })
+})
+// ---- end pg-s1 S1.2
 
 describe('the promise in customer words (PLN-178)', () => {
   it('shows a curated reason, never the office text', () => {

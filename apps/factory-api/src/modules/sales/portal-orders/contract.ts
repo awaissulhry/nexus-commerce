@@ -7,6 +7,7 @@ import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progr
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
+import { ORDER_GROUPS } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1 S1.2
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 
 /**
@@ -65,6 +66,8 @@ const row = output({
   nextShipment: nextShipment.nullable(),
   /** With progress=true, for the first 10 rows of the page when the customer shares progress (C1); else null. */
   progressPercent: z.number().int().nullable(),
+  /** pg-s1 (Z4): the row's one mark "Needs your answer" — an order whose revision waits for their re-confirmation; a request: false. */
+  needsYou: z.boolean(),
 })
 
 export const listContract = defineContract({
@@ -316,6 +319,15 @@ export const sheetContract = defineContract({
       chip: z.enum(ORDER_CHIPS),
       chips: z.array(output({ chip: z.enum(ORDER_CHIPS), count: z.number().int(), words })),
       count: z.number().int(),
+      // ---- pg-s1 S1.2 (portal grid Z3, H4): the band's numbers, counted by the server over the party's own rows BEFORE the search
+      // (a search never moves them) — its orders, catalogue requests and requests; never another customer's.
+      /** Each group of the band, in the groups' order (factory-domain ORDER_GROUPS). */
+      groups: z.array(output({ group: z.enum(ORDER_GROUPS), count: z.number().int() })),
+      /** Every open order and request (Requests … Shipped), each once. */
+      open: z.number().int(),
+      /** The requests we asked something about (NEED_INFO) and the orders waiting for their re-confirmation. */
+      needsYou: z.number().int(),
+      // ---- end pg-s1 S1.2
       /** The portal columns: every customer's fields shown in the portal and this customer's own. */
       columns: z.array(portalColumn),
       /** The list's rows (an order's `number` is null: the customer reads its own `yourNumber`), each with its cells by column id. */

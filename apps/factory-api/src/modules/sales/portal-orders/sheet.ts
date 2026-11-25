@@ -2,11 +2,14 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { isMarkedJson } from '@nexus/factory-domain/money/marked'
 import type { OrderChip } from '@nexus/factory-domain/sales/portal-orders/status'
+import { bandCounts, type BandRow } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1 S1.2
 import type { ExportCell, ExportLocale } from '@nexus/factory-domain/views/exports'
 import { writeExport } from '../../../platform/exports/writer'
 import { portalRowValues, type PortalCell, type PortalColumn } from '../../../platform/fields/portal-rows'
 import { portalReader } from './access'
 import { listOrders, type ListQuery } from './orders'
+import { listOrdersWithRows } from './orders' // pg-s1 S1.2
+import { requestStatesOf } from '../portal-requests/views' // pg-s1 S1.2: the party's own requests, by the partner read
 
 /**
  * The customer's own sheet in its portal (B-TH-061; threads plan TH-4, SHEET-G10, Owner decision 13; design SHEET.portal-sheet,
@@ -15,7 +18,9 @@ import { listOrders, type ListQuery } from './orders'
  *   GET /portal/sales-orders/sheet            the rows of Portal › Orders (the same chips, search and page as GET
  *                                             /portal/sales-orders) with the columns the office ticked for the portal: the
  *                                             portal-shown custom values of each order (platform/fields/portal-rows: every
- *                                             customer's fields and this customer's own, never another's)
+ *                                             customer's fields and this customer's own, never another's); pg-s1: and the
+ *                                             band's numbers (`groups`, `open`, `needsYou`: factory-domain bandCounts over
+ *                                             the party's own orders, catalogue requests and requests, before the search)
  *   GET /portal/sales-orders/sheet/download   "Download all (Excel)": EVERY row of the chip and search (not only the loaded page),
  *                                             written by the server here, in the partner's own scope, as Excel or CSV in the
  *                                             customer's language — never through the export job (Owner decision 13: no job, no
@@ -55,10 +60,17 @@ const ROWS_WORDS = (count: number): Words => ({ it: `${count} ${count === 1 ? 'r
 /** GET /portal/sales-orders/sheet: the page of Portal › Orders with its portal columns (see the module's head). */
 export async function orderSheet(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
   const reader = portalReader(app, request)
-  const list = await listOrders(app, request, query, now)
+  const { answer: list, everyRow } = await listOrdersWithRows(app, request, query, now)
   const { columns, rows } = await portalRowValues(request, 'ORDER', list.items.filter((item) => item.kind === 'ORDER').map((item) => item.id), reader.session.company.id)
+  // ---- pg-s1 S1.2 (portal grid Z3, H4): the band's numbers, made here over the party's OWN rows — its orders and catalogue
+  // requests (the partner read above) and its requests (the partner read of GET /portal/inquiries) — before the search and the
+  // chip, so a search never moves them. Never a tenant read "by party", never a count summed in the browser.
+  const states = await requestStatesOf(app, request)
+  const band = bandCounts([...everyRow.map((row): BandRow => ({ kind: 'ROW', status: row.status, needsYou: row.needsYou })), ...states.map((state): BandRow => ({ kind: 'INQUIRY', state }))])
+  // ---- end pg-s1 S1.2
   return {
     ...list,
+    ...band, // pg-s1 S1.2: groups, open, needsYou
     // The contract's arrays are mutable; the shared read's are readonly (copied at this boundary).
     columns: columns.map((column) => ({ ...column, options: column.options && [...column.options] })),
     // Plan §0.5: an order shows the customer's own number only (`yourNumber`), never the office's series.
