@@ -36,9 +36,9 @@
     "pay": "Pay the deposit",
     "confirmation": "Order confirmation PDF",
     "newOrder": "New order",
-    "downloadAll": "Download all (Excel)",
+    "downloadAll": "Download (Excel)",
     "downloading": "Preparing the file…",
-    "downloadAllHint": "Every order of this view with your columns, in one Excel file.",
+    "downloadAllHint": "The orders of the group shown, with your columns, in one Excel file.",
     "urgent": "Urgent"
   },
   "keys": {
@@ -62,7 +62,7 @@
     "label": "Your orders and requests",
     "fileName": "orders",
     "search": "Search your orders",
-    "searchHint": "Your PO, our order, a style code or your request’s subject…",
+    "searchHint": "Your PO, order number, style or request…",
     "count_one": "{count} order or request",
     "count_other": "{count} orders and requests",
     "countOf": "{shown} of {count} orders and requests",
@@ -74,7 +74,7 @@
     "noMatch": "Nothing matches these filters",
     "noMatchSearch": "Nothing found for “{q}”.",
     "noMatchChip": "Nothing is in this group right now.",
-    "clear": "Clear filters",
+    "clear": "Show everything open",
     "requestWaits": "To be confirmed by us",
     "asked": "date asked",
     "moved": "was {date}",
@@ -87,7 +87,10 @@
     "wanted": "wanted",
     "updated": "updated {date}",
     "piecesAsked": "{count} asked",
-    "requestsFailed": "Your requests could not be read: only your orders are shown."
+    "requestsFailed": "Your requests could not be read: only your orders are shown.",
+    "yourPo": "Your PO {ref}",
+    "emptyBodyView": "Your orders show here as soon as we make them.",
+    "clearSearch": "Clear the search"
   },
   "col": {
     "yourPo": "Your PO",
@@ -105,7 +108,11 @@
     "yours": "Your number",
     "subject": "Subject",
     "date": "Date",
-    "wanted": "Wanted or promised"
+    "wanted": "Wanted or promised",
+    "picture": "Picture",
+    "whereItIs": "Where it is",
+    "promised": "Promised",
+    "orderedOn": "Ordered"
   },
   "row": {
     "open": "Open the order",

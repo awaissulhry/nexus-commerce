@@ -6,6 +6,8 @@ import { MAX_TEXT } from '../quotes/quotes'
 import { lineShapeProblems } from './rules'
 // B-CP-076: the customer's amount of a price (the price check's own rounding).
 import { brandAmountOf } from '../brand-prices/match'
+// od-s s.4: a row's open choices travel to the order line as words.
+import { withChoicesWords, type DraftChoice } from './choices'
 
 /**
  * The office's side of a portal order request (B-W2b-190, SAL-074 "portal orders arrive as requests"; design
@@ -168,6 +170,8 @@ export const ACCEPT_WORDS = Object.freeze({
     `${seqs.length === 1 ? `Line ${seqs[0]} is` : `Lines ${seqs.join(', ')} are`} made to measure: accept the request as a quote. While made-to-measure has not started (GATE-MTM), a made-to-measure request becomes a quote first; its people stay on the request.`,
   notALine: 'Not a line of this request.',
   fromCatalogue: (seq: number) => `Line ${seq} is from the catalogue: it becomes a line as it is (map only described or made-to-measure lines).`,
+  /** od-s s.4 (addendum R3): a catalogue row whose colour or pieces by size are not decided yet: the Confirm window types them. */
+  incomplete: (seqs: readonly number[]) => `${seqs.length === 1 ? `Line ${seqs[0]} has` : `Lines ${seqs.join(', ')} have`} no colour or no pieces by size yet: type ${seqs.length === 1 ? 'them' : 'them for each'} in the Confirm window.`,
   mappedTwice: (seq: number) => `Line ${seq} is mapped twice: send it once.`,
   priceOnMap: (seq: number) => `Line ${seq} is described or made to measure: type its price on the style line it is made into.`,
   noInto: (seq: number) => `Name the style line ${seq} is made into.`,
@@ -189,7 +193,10 @@ export interface AcceptLineFacts {
   readonly id: string
   readonly seq: number
   readonly kind: 'CATALOGUE' | 'DESCRIBED' | 'MADE_TO_MEASURE'
-  /** A catalogue line's style and colourway (a custom line's own style, if it names one, is only a hint). */
+  /**
+   * A line's style and colourway. od-s s.4: of every kind — a described or made-to-measure row that names a style, a colourway and
+   * its pieces by size becomes a line as it is (no map needed); else the office maps it.
+   */
   readonly styleId: string | null
   readonly colourwayId: string | null
   readonly sizes: readonly SizeRowLike[]
@@ -202,6 +209,8 @@ export interface AcceptLineFacts {
   /** The customer's own words: its description, else the garment type. */
   readonly ownWords: string | null
   readonly colourText: string | null
+  /** od-s s.4: the row's open choices (names only): they go to the order line's note as words. */
+  readonly choices?: readonly DraftChoice[] | null | undefined
 }
 
 /** One style line a described or made-to-measure line is made into (the office's map). */
@@ -248,9 +257,16 @@ export function mappedLineNote(number: string | null, line: AcceptLineFacts): st
   if (line.colourText) parts.push(`Colours: ${line.colourText}`)
   if (line.byPerson) parts.push(line.peopleSizes.length > 0 ? `People: ${line.peopleSizes.length} on the request (their names stay there)` : 'People: in the measurement sheet on the request')
   if (line.note) parts.push(`Customer's note: ${line.note}`)
-  const text = parts.join(' · ')
-  return text.length <= ACCEPT_MAP_LIMITS.note ? text : `${text.slice(0, ACCEPT_MAP_LIMITS.note - 1)}…`
+  // od-s s.4: the open choices as words ("Leather: Cowhide or Kangaroo — not decided yet"), trimmed with the rest.
+  return withChoicesWords(parts.join(' · '), line.choices ?? null, ACCEPT_MAP_LIMITS.note)!
 }
+
+/** od-s s.4: a catalogue line's own note on the order line, with its open choices as words (null: neither). */
+export const catalogueLineNote = (line: Pick<AcceptLineFacts, 'note' | 'choices'>): string | null => withChoicesWords(line.note, line.choices ?? null, ACCEPT_MAP_LIMITS.note)
+
+/** od-s s.4: a row that names its style, its colourway and its pieces by size becomes a line as it is (no map needed). */
+export const completeLine = (line: Pick<AcceptLineFacts, 'styleId' | 'colourwayId' | 'sizes' | 'byPerson' | 'peopleSizes'>): boolean =>
+  line.styleId !== null && line.colourwayId !== null && (line.sizes.length > 0 || (line.byPerson && line.peopleSizes.length > 0 && line.peopleSizes.every((size) => size !== null)))
 
 /** The pieces a request line asked (null: not known — people only in a measurement sheet). */
 function askedPieces(line: AcceptLineFacts): number | null {
@@ -276,12 +292,14 @@ export function acceptPlanOf(input: { readonly number: string | null; readonly a
   const issues: Issue[] = []
   const byId = new Map(input.lines.map((line) => [line.id, line]))
   const isCustom = (line: AcceptLineFacts): boolean => line.kind !== 'CATALOGUE'
+  // od-s s.4 (addendum R3): a catalogue row may be left without its colour or pieces; the office maps it then.
+  const mappable = (line: AcceptLineFacts): boolean => isCustom(line) || !completeLine(line)
   const mapped = new Map<string, { readonly entry: AcceptMapEntry; readonly index: number }>()
   input.map.forEach((entry, index) => {
     const at = `body/map/${index}`
     const line = byId.get(entry.lineId)
     if (!line) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.notALine })
-    if (!isCustom(line)) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.fromCatalogue(line.seq) })
+    if (!mappable(line)) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.fromCatalogue(line.seq) })
     if (mapped.has(line.id)) return void issues.push({ path: `${at}/lineId`, message: ACCEPT_WORDS.mappedTwice(line.seq) })
     mapped.set(line.id, { entry, index })
     if (entry.into.length === 0) issues.push({ path: `${at}/into`, message: ACCEPT_WORDS.noInto(line.seq) })
@@ -295,7 +313,8 @@ export function acceptPlanOf(input: { readonly number: string | null; readonly a
   input.prices.forEach((entry, index) => {
     const line = byId.get(entry.lineId)
     if (!line) issues.push({ path: `body/lines/${index}/lineId`, message: ACCEPT_WORDS.notALine })
-    else if (isCustom(line)) issues.push({ path: `body/lines/${index}/lineId`, message: ACCEPT_WORDS.priceOnMap(line.seq) })
+    // od-s s.4: a row taken as it is (complete, not mapped) takes its typed price here; a mapped one on its style line.
+    else if (mapped.has(line.id) || !completeLine(line)) issues.push({ path: `body/lines/${index}/lineId`, message: ACCEPT_WORDS.priceOnMap(line.seq) })
   })
   if (issues.length > 0) return { kind: 'INVALID', words: issues[0]!.message, issues }
 
@@ -306,18 +325,28 @@ export function acceptPlanOf(input: { readonly number: string | null; readonly a
     const words = ACCEPT_WORDS.madeToMeasureOrder(madeToMeasure)
     return { kind: 'HELD', words, issues: madeToMeasure.map((seq) => ({ path: `request/lines/${seq}`, message: words })) }
   }
-  const unmapped = ordered.filter((line) => isCustom(line) && !mapped.has(line.id)).map((line) => line.seq)
+  // od-s s.4: a row that is not complete needs its map (a described or made-to-measure one in the earlier words; a catalogue one
+  // whose colour or pieces wait in its own).
+  const unmapped = ordered.filter((line) => isCustom(line) && !completeLine(line) && !mapped.has(line.id)).map((line) => line.seq)
   if (unmapped.length > 0) {
     const words = ACCEPT_WORDS.unmapped(unmapped)
     return { kind: 'HELD', words, issues: unmapped.map((seq) => ({ path: `request/lines/${seq}`, message: words })) }
+  }
+  const incomplete = ordered.filter((line) => !isCustom(line) && !completeLine(line) && !mapped.has(line.id)).map((line) => line.seq)
+  if (incomplete.length > 0) {
+    const words = ACCEPT_WORDS.incomplete(incomplete)
+    return { kind: 'HELD', words, issues: incomplete.map((seq) => ({ path: `request/lines/${seq}`, message: words })) }
   }
 
   const prices = new Map(input.prices.map((entry) => [entry.lineId, entry.unitPrice]))
   const planned: PlannedLine[] = []
   const warnings: string[] = []
   for (const line of ordered) {
-    if (!isCustom(line)) {
-      planned.push({ requestLineId: line.id, requestSeq: line.seq, kind: line.kind, styleId: line.styleId!, colourwayId: line.colourwayId!, sizes: line.sizes, unitPrice: prices.get(line.id), description: null, note: line.note, at: `request/lines/${line.seq}` })
+    // od-s s.4: a complete row not mapped is a line as it is (a catalogue one with its note; a custom one with where it came from),
+    // its open choices as words.
+    if (!mapped.has(line.id)) {
+      const sizes = line.sizes.length > 0 ? line.sizes : sizesOfPeople(line.peopleSizes)
+      planned.push({ requestLineId: line.id, requestSeq: line.seq, kind: line.kind, styleId: line.styleId!, colourwayId: line.colourwayId!, sizes, unitPrice: prices.get(line.id), description: null, note: isCustom(line) ? mappedLineNote(input.number, line) : catalogueLineNote(line), at: `request/lines/${line.seq}` })
       continue
     }
     const { entry, index } = mapped.get(line.id)!
@@ -345,7 +374,7 @@ export function acceptPlanOf(input: { readonly number: string | null; readonly a
         sizes,
         unitPrice: into.unitPrice,
         description: trimmedOrNull(into.description),
-        note: trimmedOrNull(into.note) ?? mappedLineNote(input.number, line),
+        note: trimmedOrNull(into.note) ?? (isCustom(line) ? mappedLineNote(input.number, line) : catalogueLineNote(line)),
         at,
       })
     })

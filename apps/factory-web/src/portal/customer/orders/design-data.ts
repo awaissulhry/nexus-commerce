@@ -20,7 +20,6 @@ import type {
   ChangeRules,
   CustomerOrderStatus,
   DocumentsRead,
-  InTransitRead,
   OrderChip,
   OrderRecord,
   OrderRow,
@@ -168,28 +167,7 @@ function readOf(world: readonly OrderRow[], chip: OrderChip, rows: readonly Orde
   }
 }
 
-export function inTransitRead(over: Partial<InTransitRead> = {}): InTransitRead {
-  return {
-    asOf: at(0),
-    items: [
-      {
-        shipmentId: id(101),
-        number: 'SH-2026-0233',
-        order: { id: ORDER_ID, customerRef: ROWS[0]!.customerRef, yourNumber: ROWS[0]!.yourNumber ?? null }, // fix-portal-numbers-1
-        status: 'IN_TRANSIT',
-        words: SHIPMENT_STATUS_WORDS.IN_TRANSIT,
-        carrierName: 'Corriere Demo',
-        shippedAt: at(-20),
-        expectedDeliveryAt: at(30),
-        trackingNumbers: ['DEMO00012345'],
-        trackingLinks: [{ trackingNumber: 'DEMO00012345', url: 'https://tracking.example/DEMO00012345', words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } }],
-        lastEvent: { at: at(-3), status: 'IN_TRANSIT', words: TRACKING_WORDS.IN_TRANSIT, description: 'Hub Demo', location: 'Bologna', parcelSeq: 1 },
-      },
-    ],
-    live: LIVE,
-    ...over,
-  }
-}
+// pg-w2 (D7): "On the way" left the list: no parcels-on-the-way read to draw any more.
 
 // ── B-TH-223 (fix-portal-1): Brand Beta's own order rows ─────────────────────────────────────────────────────────────
 // The reader of the wall scans (Orders & requests, its tiles and its sheet) lists ITS orders: its own ids, its own purchase-order
@@ -218,15 +196,6 @@ export const BETA_ROWS: readonly OrderRow[] = [
 /** Brand Beta's list read (its own rows and chip counts). */
 export function betaOrdersRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
   return readOf(BETA_ROWS, chip, rows, over)
-}
-/** Brand Beta's parcels on the way (its own shipment of its own first order). */
-export function betaInTransitRead(over: Partial<InTransitRead> = {}): InTransitRead {
-  const first = BETA_ROWS[0]!
-  const [item] = inTransitRead().items
-  return inTransitRead({
-    items: [{ ...item!, shipmentId: betaId(101), number: 'SH-2026-0351', order: { id: first.id, customerRef: first.customerRef, yourNumber: first.yourNumber ?? null /* fix-portal-numbers-1 */ }, expectedDeliveryAt: at(32), trackingNumbers: ['DEMO00067890'], trackingLinks: [{ trackingNumber: 'DEMO00067890', url: 'https://tracking.example/DEMO00067890', words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } }], lastEvent: { at: at(-4), status: 'IN_TRANSIT', words: TRACKING_WORDS.IN_TRANSIT, description: 'Hub Demo', location: 'Verona', parcelSeq: 1 } }],
-    ...over,
-  })
 }
 // ── end B-TH-223 (fix-portal-1) ──
 

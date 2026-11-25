@@ -120,6 +120,7 @@ export async function seedCustomerPage(context: SeedContext): Promise<CustomerPa
             requestId: made.draftId,
             seq: 3,
             kind: 'MADE_TO_MEASURE',
+            sizing: 'MADE_TO_MEASURE', // OD s.1 (…_order_start_guards): made to measure exactly when its sizing says so
             garmentType: 'JACKET',
             byPerson: true,
             note: 'Seed: the team jackets, made to measure.',

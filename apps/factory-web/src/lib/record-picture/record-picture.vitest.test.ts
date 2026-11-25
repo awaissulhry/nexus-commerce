@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCALES } from '../i18n/locales'
 import { createTranslator, messagesFor } from '../i18n/messages'
-import { PICTURE_ROUTES } from './api'
+import { PICTURE_ROUTES, readPictures } from './api'
 import { failedRecently, keepSmall, recordOf, resetPictureCache, smallOf, staleOf, drawn, want, type ReadPictures } from './cache'
 import { BATCH_MAX, BATCH_WAIT_MS, batchesOf, faceOf, fallbackOf, moreOf, PICTURE_FIT, PICTURE_PX, RETRY_AFTER_MS, rowPictureOf, styleWords, untilOf, wantsSmall, type PictureAnswer } from './model'
 import { RECORD_PICTURE_NS } from './view/RecordPicture'
@@ -198,7 +198,21 @@ describe('the reads and the words', () => {
       workorder: { path: '/production/work-orders/pictures', key: 'workOrderIds' },
       // F-CQ-103 (B-CQ-030): a portal order's first style (Incoming's portal orders, the customer's drafts).
       portalOrder: { path: '/sales/order-requests/pictures', key: 'requestIds' },
+      // pg-w2 (D4): the customer's portal list — its OWN orders only (the partner read; no file id in the answer).
+      customerOrder: { path: '/portal/sales-orders/pictures', key: 'orderIds' },
     })
+  })
+  it('pg-w2 (D4): the customer\'s answer names no file — its small address is kept under its order, in this browser only', async () => {
+    const posted: unknown[] = []
+    const api = { post: async (path: string, init: { body: unknown }) => { posted.push({ path, body: init.body }); return { pictures: [{ id: 'o1', styleId: 's1', styleCode: 'STY-01', styleName: 'Demo jacket', styleCount: 2, fileId: null, contentType: 'image/webp', small: { url: 'https://store.example/s1.webp', expiresAt: '2026-11-25T10:01:00.000Z' } }, { id: 'o2', styleId: 's2', styleCode: 'STY-02', styleName: 'Demo trousers', styleCount: 1, fileId: null, contentType: null, small: null }], asOf: '2026-11-25T10:00:00.000Z' } } } as unknown as Parameters<typeof readPictures>[0]
+    const [one, two] = await readPictures(api, 'customerOrder', ['o1', 'o2'])
+    expect(posted).toEqual([{ path: '/portal/sales-orders/pictures', body: { orderIds: ['o1', 'o2'] } }])
+    expect(one!.fileId).toBe('customerOrder:o1')
+    expect(rowPictureOf(one!)).toMatchObject({ fileId: 'customerOrder:o1', small: true })
+    expect(two!.fileId).toBeNull() // no picture: nothing kept
+    // The office's sources keep the answer as it is.
+    const office = await readPictures({ post: async () => ({ pictures: [{ id: 'o3', styleId: 's3', styleCode: 'S', styleName: 'N', styleCount: 1, fileId: null, contentType: null, small: { url: 'https://store.example/x', expiresAt: '2026-11-25T10:01:00.000Z' } }], asOf: 'x' }) } as unknown as Parameters<typeof readPictures>[0], 'order', ['o3'])
+    expect(office[0]!.fileId).toBeNull()
   })
   it('the local store\'s address through /api (#1649), a store\'s absolute address as it is', () => {
     const source = readFileSync(join(HERE, 'api.ts'), 'utf8')

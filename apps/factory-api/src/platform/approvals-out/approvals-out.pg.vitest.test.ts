@@ -490,3 +490,29 @@ describe('F-PR-16 — the customer reads its own order and quote numbers, never 
   })
 })
 // ---- end F-PR-16
+
+// ---- pg-s1 S1.4 (the pt- lane's L-1): an approval answered in the portal is never new to the one who answered it — the settle
+// writes the answer on the record's conversation in the tenant's system scope and moves the answerer's own mark to it (threads
+// reads readOwnMessage); their colleagues still read it as new.
+describe('pg-s1 S1.4: the portal person’s own answer never counts as new to them', () => {
+  it('an artwork asked on an order and answered in the portal: the answer on its conversation leaves the answerer’s count at 0', async () => {
+    const orderId = pricing.money.sales.orderId
+    const photo = await photoOf('SalesOrder', orderId, 'Made-up artwork S1.4.png')
+    const made = await as(owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType: 'SalesOrder', recordId: orderId, email: BRAND_QA, question: 'Approve the artwork (S1.4).', fileIds: [photo], send: true, language: 'en' }, 201)
+    const page = await as(quality, 'GET', `/portal/approvals/${made.request.id}`)
+    expect(page.may.answer).toBe(true)
+    await as(quality, 'POST', `/portal/approvals/${made.request.id}/answer`, { decision: 'APPROVED', typedName: 'Quinta S-one-four', version: page.request.version })
+    // The answer, as the customer's own message on a conversation shared with it.
+    const answer = await one<{ id: string; threadId: string; recordType: string; recordId: string }>(
+      `SELECT m.id::text AS id, m."threadId"::text AS "threadId", t."recordType", t."recordId"::text AS "recordId" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE m."authorName" = 'Quinta S-one-four' AND m.direction = 'INBOUND' AND m.audience = 'PARTNER'`,
+    )
+    expect(answer).toBeDefined()
+    const record = { recordType: answer.recordType, recordId: answer.recordId }
+    expect((await as(quality, 'POST', '/threads/unread', { records: [record] })).counts[0]).toMatchObject({ newCount: 0 })
+    const mark = await admin<{ message: string }>('SELECT r."lastReadMessageId"::text AS message FROM "ThreadRead" r JOIN "User" u ON u.id = r."userId" WHERE u.email = $1 AND r."threadId" = $2', [people.quality, answer.threadId])
+    expect(mark).toEqual([{ message: answer.id }])
+    // Their colleague (nobody moved her mark) reads it as new.
+    expect((await as(viewer, 'POST', '/threads/unread', { records: [record] })).counts[0].newCount).toBeGreaterThan(0)
+  })
+})
+// ---- end pg-s1 S1.4

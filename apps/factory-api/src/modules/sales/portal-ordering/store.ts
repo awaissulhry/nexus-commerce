@@ -36,6 +36,9 @@ export const REQUEST_COLUMNS = {
   laterParts: true,
   lastEditedById: true,
   lastEditedAt: true,
+  // od-s s.3 (addendum R2): the draft's subject (its title), partner-readable. NEVER `styleIds` here: the partner role cannot read it
+  // (every portal read would fail); the office reads it on its own (./office.ts, ./style-draft.ts), the portal only as a yes/no.
+  subject: true,
 } as const satisfies Prisma.PortalOrderRequestSelect
 
 export const LINE_COLUMNS = {
@@ -60,6 +63,9 @@ export const LINE_COLUMNS = {
   byPerson: true,
   // B-CP-076: "Your price", the customer's own net unit price (the price grain: the contracts mark it, the grain filter drops it).
   brandUnitPrice: true,
+  // od-s s.4 (addendum R3, the products table): the row's sizing (null: not decided yet) and its open choices (names only).
+  sizing: true,
+  choices: true,
 } as const satisfies Prisma.PortalOrderRequestLineSelect
 
 export type RequestRow = Prisma.PortalOrderRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>

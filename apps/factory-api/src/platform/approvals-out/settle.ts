@@ -6,6 +6,7 @@ import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import type { Clock } from '../../core/time'
 import { ensureThread, writeMessage } from '../threads/threads'
+import { readOwnMessage } from '../threads/reads' // pg-s1 S1.4
 import { deliverMail, queueMail } from './mail'
 import { adapterOf } from './records'
 import { COUNTER_OFFER_RECORD } from '@nexus/factory-domain/approvals-out/kinds' // fix-pr-10
@@ -96,7 +97,10 @@ export async function settleInCommand(tools: CommandTools, requestId: string, an
     const company = shared ? await tx.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } }) : null
     await writeMessage(tools, thread, { direction: shared ? 'OUTBOUND' : 'INTERNAL_NOTE', channel: shared ? 'PORTAL' : 'APP', author: { kind: 'SYSTEM', id: null, name: company ? (company.tradeName ?? company.legalName) : null }, bodyText: cleanBody(text) })
   } else {
-    await writeMessage(tools, thread, { direction: shared ? 'INBOUND' : 'INTERNAL_NOTE', channel: shared ? 'PORTAL' : 'APP', author: shared ? { kind: 'PARTY', id: null, name: row.typedName } : { kind: 'SYSTEM', id: null, name: null }, bodyText: cleanBody(text) })
+    const answer = await writeMessage(tools, thread, { direction: shared ? 'INBOUND' : 'INTERNAL_NOTE', channel: shared ? 'PORTAL' : 'APP', author: shared ? { kind: 'PARTY', id: null, name: row.typedName } : { kind: 'SYSTEM', id: null, name: null }, bodyText: cleanBody(text) })
+    // pg-s1 S1.4 (the pt- lane's L-1): the portal person who answered read their own answer (their mark only, in the tenant's system
+    // scope); an answer by link has no person (no mark), an internal note is never theirs to read.
+    if (shared) await readOwnMessage(tools, thread, { userId: row.answeredByUserId }, answer)
   }
 
   // The receipt (B-PR-30a: none for a decision we took for the party — nobody of theirs answered).

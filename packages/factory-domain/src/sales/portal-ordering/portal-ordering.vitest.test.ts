@@ -19,6 +19,11 @@ import { customLineProblems, customLineShapeProblems, draftStaleWords, lineHasPi
 import { problemPartOf, problemsByPartOf } from './office'
 import { ACCEPT_MAP_LIMITS, ACCEPT_WORDS, acceptPlanOf, lineMapOf, mappedLineNote, type AcceptLineFacts } from './office' // B-CP-077
 import { brandPricesOfAccept, draftValueOf } from './office' // B-CP-076
+// od-s s.4: Send holds only on an invalid value; Still open; a row's choices; a complete row at Confirm.
+import { holdsSend, SEND_HOLDING } from './rules'
+import { confirmHeldWords, stillOpenOf, type StillOpenLine } from './still-open'
+import { choiceProblems, choicesRow, choicesWords, withChoicesWords } from './choices'
+import { completeLine } from './office'
 
 const P1 = '00000000-0000-4000-8000-000000000001'
 const P2 = '00000000-0000-4000-8000-000000000002'
@@ -212,16 +217,19 @@ describe('B-CP-075: described and made-to-measure lines, and the people on them'
   const custom = (more: Partial<CustomLineFacts> = {}): CustomLineFacts => ({ id: 'l2', kind: 'DESCRIBED', quantity: 40, sizes: [], byPerson: false, people: [], sheetOnLine: false, style: null, colourway: null, mtmOpen: true, garmentType: null, ...more })
   const codes = (facts: CustomLineFacts) => customLineProblems(facts).map((entry) => entry.code)
 
-  it('holds each kind to its shape before it is written: words for a described line, a garment type and people for made to measure', () => {
+  // od-s s.4 (addendum R3, the products table): every cell is optional — a described row's words, a made-to-measure garment type.
+  it('holds each kind to its shape before it is written: lengths and shapes, people for made to measure; words and a garment type may wait', () => {
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Team jackets, our logo on the back', quantity: 40 })).toEqual([])
-    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: '  ' })).toEqual(['Say in your words what you need (1 to 2000 characters).'])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: '  ' })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED' })).toEqual([])
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'x'.repeat(2001) })).toContain('A description is at most 2000 characters.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 0 })).toContain('A total is 1 to 100000 pieces.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', colourwayId: 'c1' })).toContain('A colour of ours goes with its style.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', byPerson: true, quantity: 12 })).toContain('A line by person takes its pieces from its people: no total and no sizes.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 4, sizes: [{ size: '50', quantity: 2 }, { size: '50', quantity: 2 }] })).toContain('Size 50 is asked twice on the line.')
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET' })).toEqual([])
-    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: '' })).toEqual(['Choose the garment type to make to measure.'])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: '' })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'X'.repeat(41) })).toEqual(['A garment type is at most 40 characters.'])
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false, quantity: 3 })).toEqual(expect.arrayContaining(['A made-to-measure line is always by person.', 'A made-to-measure line counts its people, not a total.']))
   })
 
@@ -471,3 +479,71 @@ describe('B-CP-076: the customer’s own price — the draft’s value and its c
   })
 })
 // ---- end B-CP-076
+
+// ---- od-s s.4 (order start; the Owner's change of 2026-11-25 10:12, addendum R1–R3) --------------------------------------------
+describe('od-s s.4: nothing is required to Send; Still open is information; choices are names', () => {
+  it('holds the Send only on an invalid value, never on a missing one (every problem code has its pick)', () => {
+    expect(Object.keys(SEND_HOLDING).sort()).toEqual([...PROBLEM_CODES].sort())
+    for (const code of ['NO_LINES', 'NO_SIZES', 'NO_TOTAL', 'NO_PEOPLE'] as const) expect(holdsSend(code), code).toBe(false)
+    for (const code of ['PRICE_CHANGED', 'TOO_MANY_LINES', 'DATE_PAST', 'SHIP_TO_ARCHIVED', 'STYLE_NOT_SOLD', 'COLOUR_DISCONTINUED', 'SIZE_NOT_OFFERED', 'SIZES_NOT_TOTAL', 'MTM_CLOSED', 'GARMENT_TYPE_GONE'] as const) expect(holdsSend(code), code).toBe(true)
+  })
+
+  const row = (over: Partial<StillOpenLine> & Pick<StillOpenLine, 'id' | 'seq'>): StillOpenLine => ({ kind: 'DESCRIBED', styleId: null, colourwayId: null, sizing: null, sizes: [], byPerson: false, peopleSizes: [], choices: null, ...over })
+  const leather = { topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }
+
+  it('lists per row the product, sizing, colour, pieces and each choice, then the date and the address; nothing MISSING without a Confirm body', () => {
+    const open = stillOpenOf({ lines: [row({ id: 'l1', seq: 1, choices: [leather, { topic: 'Protection class', options: ['AA', 'AAA'], picked: 'AAA' }] })], requestedDate: null, today: '2026-11-25', shipToInUse: true })
+    expect(open.items.map((item) => [item.kind, item.seq, item.topic, item.state, item.confirmNeeds])).toEqual([
+      ['PRODUCT', 1, null, 'NOT_DECIDED', true],
+      ['SIZING', 1, null, 'NOT_DECIDED', false],
+      ['COLOUR', 1, null, 'NOT_DECIDED', true],
+      ['PIECES', 1, null, 'NOT_DECIDED', true],
+      ['CHOICE', 1, 'Leather', 'NOT_DECIDED', false],
+      ['CHOICE', 1, 'Protection class', 'DECIDED', false],
+      ['DATE', null, null, 'NOT_DECIDED', false],
+      ['SHIP_TO', null, null, 'DECIDED', true],
+    ])
+    expect(open).toMatchObject({ openCount: 6, confirmHeld: true })
+    // An empty draft: only the draft's own items; nothing the order needs per row, but the address.
+    expect(stillOpenOf({ lines: [], requestedDate: '2026-12-01', today: '2026-11-25', shipToInUse: false, }).items.map((item) => [item.kind, item.state])).toEqual([['DATE', 'DECIDED'], ['SHIP_TO', 'NOT_DECIDED']])
+  })
+
+  it('counts what the Confirm body types: a row mapped with its sizes is decided; what is still open is MISSING, in words', () => {
+    const lines = [row({ id: 'l1', seq: 1 }), row({ id: 'l2', seq: 2, kind: 'CATALOGUE', styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 2 }] })]
+    const typed = stillOpenOf({ lines, requestedDate: null, today: '2026-11-25', shipToInUse: true }, new Map([['l1', { style: true, colour: true, pieces: true }]]))
+    expect(typed.items.filter((item) => item.state === 'MISSING')).toEqual([])
+    expect(confirmHeldWords(typed, lines.length)).toBeNull()
+    const open = stillOpenOf({ lines, requestedDate: null, today: '2026-11-25', shipToInUse: false }, new Map([['l1', { style: true, colour: true, pieces: false }]]))
+    expect(open.items.filter((item) => item.state === 'MISSING').map((item) => [item.kind, item.seq])).toEqual([['PIECES', 1], ['SHIP_TO', null]])
+    expect(confirmHeldWords(open, lines.length)?.en).toBe("Before it is confirmed, the order still needs: line 1 its pieces by size; a delivery address (on the draft, or the customer's default).")
+    expect(confirmHeldWords(open, 0)?.en).toBe('Add at least one product before it is confirmed.')
+    // A by-person row whose every person has a size has its pieces by size.
+    expect(stillOpenOf({ lines: [row({ id: 'l3', seq: 1, byPerson: true, peopleSizes: ['50', '52'] })], requestedDate: null, today: '2026-11-25', shipToInUse: true }).items.find((item) => item.kind === 'PIECES')?.state).toBe('DECIDED')
+  })
+
+  it('keeps a choice to names: a topic once, 2 to 6 distinct options, the pick one of them or "Not decided yet"; its words go to the order line', () => {
+    expect(choiceProblems([leather])).toEqual([])
+    expect(choiceProblems(null)).toEqual([])
+    expect(choiceProblems([]).map((issue) => issue.message)).toEqual(['No choice is null, not an empty list.'])
+    expect(choiceProblems([{ topic: 'Leather', options: ['Cowhide'], picked: null }]).map((issue) => issue.path)).toEqual(['body/choices/0/options'])
+    expect(choiceProblems([{ topic: 'Leather', options: ['Cowhide', 'Cowhide'], picked: null }]).map((issue) => issue.path)).toEqual(['body/choices/0/options/1'])
+    expect(choiceProblems([{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: 'Goat' }]).map((issue) => issue.path)).toEqual(['body/choices/0/picked'])
+    expect(choiceProblems([leather, { ...leather, topic: 'leather' }]).map((issue) => issue.path)).toEqual(['body/choices/1/topic'])
+    expect(choicesRow([])).toBeNull()
+    expect(choicesWords([leather, { topic: 'Protection class', options: ['AA', 'AAA'], picked: 'AAA' }])).toEqual({ en: 'Leather: Cowhide or Kangaroo — not decided yet · Protection class: AAA', it: 'Leather: Cowhide o Kangaroo — non ancora deciso · Protection class: AAA' })
+    expect(withChoicesWords('Our logo on the back', [leather], 1000)).toBe('Our logo on the back · Leather: Cowhide or Kangaroo — not decided yet')
+    expect(withChoicesWords(null, null, 1000)).toBeNull()
+  })
+
+  it('a row with its style, colour and pieces by size is a line as it is at Confirm, its choices in its note; an incomplete catalogue row is mapped', () => {
+    const facts = (over: Partial<AcceptLineFacts> & Pick<AcceptLineFacts, 'id' | 'seq' | 'kind'>): AcceptLineFacts => ({ styleId: null, colourwayId: null, sizes: [], quantity: null, byPerson: false, peopleSizes: [], note: null, ownWords: null, colourText: null, ...over })
+    const described = facts({ id: 'd1', seq: 1, kind: 'DESCRIBED', styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 3 }], ownWords: 'Made-up race suit', choices: [leather] })
+    const planned = acceptPlanOf({ number: 'RQ-0009', as: 'ORDER', lines: [described], map: [], prices: [{ lineId: 'd1', unitPrice: '100' }] })
+    expect(planned).toMatchObject({ kind: 'PLAN', lines: [{ requestLineId: 'd1', styleId: 's1', colourwayId: 'k1', unitPrice: '100' }] })
+    expect(planned.kind === 'PLAN' ? planned.lines[0]!.note : null).toMatch(/Leather: Cowhide or Kangaroo — not decided yet$/)
+    expect(completeLine(described)).toBe(true)
+    const noColour = facts({ id: 'c2', seq: 2, kind: 'CATALOGUE', styleId: 's1', sizes: [{ size: '50', quantity: 1 }] })
+    expect(acceptPlanOf({ number: null, as: 'QUOTE', lines: [noColour], map: [], prices: [] })).toEqual({ kind: 'HELD', words: ACCEPT_WORDS.incomplete([2]), issues: [{ path: 'request/lines/2', message: ACCEPT_WORDS.incomplete([2]) }] })
+    expect(acceptPlanOf({ number: null, as: 'QUOTE', lines: [noColour], map: [{ lineId: 'c2', into: [{ styleId: 's1', colourwayId: 'k1' }] }], prices: [] })).toMatchObject({ kind: 'PLAN', lines: [{ requestLineId: 'c2', colourwayId: 'k1', sizes: [{ size: '50', quantity: 1 }] }] })
+  })
+})

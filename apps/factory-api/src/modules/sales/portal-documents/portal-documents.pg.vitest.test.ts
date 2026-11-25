@@ -556,7 +556,6 @@ describe("fix-portal-numbers-1: the customer's Home reads name its own numbers, 
       newDocuments: await ok(reader, '/portal/customer-documents?new=true&limit=5'),
       library,
       conformity: await ok(reader, '/portal/customer-documents/conformity'),
-      inTransit: await ok(reader, '/portal/sales-orders/in-transit'),
       // Found by the office's number (printed on the papers it holds) or a delivery's, shown by its own.
       searchOrder: (await ok(reader, `/portal/search?q=${encodeURIComponent(order.number)}`)).groups,
       searchShipment: (await ok(reader, '/portal/search?q=SEED-SH-0001')).groups,

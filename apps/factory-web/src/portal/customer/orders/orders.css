@@ -28,61 +28,8 @@
   gap: var(--nds-space-16);
 }
 
-.fw-pord-chiprow {
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-/* One chip row; on a phone it scrolls inside itself, never the page. */
-.fw-pord-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-@media (max-width: 719px) {
-  .fw-pord-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: var(--nds-space-4);
-  }
-  .fw-pord-chiprow {
-    align-items: flex-start;
-  }
-}
-
-.fw-pord-chip-count,
-.fw-pord-h2-count {
-  color: var(--nds-text-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-pord-h2-count {
-  margin-left: var(--nds-space-8);
-  font-weight: var(--nds-font-weight-normal);
-}
-
-.fw-pord-rowlink {
-  display: flex;
-  align-items: center;
-  min-height: 100%;
-  color: inherit;
-  text-decoration: none;
-}
-
-.fw-pord-rowlink:hover,
-.fw-pord-rowlink:focus-visible {
-  text-decoration: underline;
-}
-
-.fw-pord-cell {
-  display: flex;
-  align-items: center;
-  min-height: 100%;
-}
+/* pg-w2: the list's chips row, row links, one-line cells, subjects, tiles and "On the way" left with the old list (pco/list.css and the
+   shared parts draw the new one). */
 
 .fw-pord-stack {
   justify-content: center;
@@ -159,33 +106,10 @@
   margin-left: auto;
 }
 
-/* One line in a grid cell: the rest is cut with an ellipsis (the whole text is in the record). */
-.fw-pord-clip {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* A note box of a few lines, not a page (the DS field grows as the person types). */
 .fw-pord-note textarea {
   min-height: 72px;
   height: 88px;
-}
-
-/* ── On the way ── */
-.fw-pord-transit {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.fw-pord-transit-head,
-.fw-pord-transit-body {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-4) var(--nds-space-12);
-  min-width: 0;
 }
 
 /* ── the record ── */
@@ -390,24 +314,6 @@
   .fw-pord-print-toolbar {
     display: none;
   }
-}
-
-/* B-TH-223: a request's subject — two lines at most, wrapping in a phone card, never wider than its cell. */
-.fw-pord-subject {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  min-width: 0;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-/* B-TH-238: the tiles above Orders & requests (the DS MetricStrip; each tile a filter of the list). */
-.fw-pord-tiles {
-  min-width: 0;
 }
 
 /* ---- F-PR-12c: Quality and photos (the Overview's pair B, level Quality & photos). Its parts a little apart; each final inspection
