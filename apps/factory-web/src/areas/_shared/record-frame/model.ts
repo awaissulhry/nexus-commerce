@@ -1,5 +1,6 @@
 import type { DockWidth } from '../../../lib/record-thread/head/model'
 import type { ThreadFile } from '../../../lib/record-thread/files/model' // B-TH-264 follow-up
+import { defaultWidthAt, type DockDefault } from '../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core is the lib's
 
 /**
  * B-TH-213 — RecordFrame, one place for the thread on a record page (threads plan PL1, PL4; design kit §2; lead pick P2). The pure
@@ -13,35 +14,12 @@ import type { ThreadFile } from '../../../lib/record-thread/files/model' // B-TH
  * - Below 1280 px the band's "Thread" button opens the thread as a full-width view; Back returns to the same tab and scroll.
  * - Below 720 px (the phone, PL4) the same full page, with the band's details behind its "i".
  * - ONE thread per page; banners stay in the body column, never above the thread.
+ * pp-k1 k1.2: the frame's CORE — the widths it docks from (DOCK_FROM, THIRD_BELOW, PHONE_BELOW), FrameMode and frameMode, a tab's
+ * default (DockDefault, defaultWidthAt), the columns (DOCK_COLUMNS), threadPixels, ⌘J (isThreadKey) and FRAME_NS — moved as they
+ * were to lib/record-frame/model.ts, which the portal's frame reads too (O2-B3). What stays here is the office frame's own.
  */
-
-/** From this width the thread docks beside the body. */
-export const DOCK_FROM = 1280
-/** Below this width a wide grid tab gives the thread one third (the grid needs the room). */
-export const THIRD_BELOW = 1600
-/** Below this width the page is the phone's (PL4). */
-export const PHONE_BELOW = 720
-
-/** How the page shows the thread at a width: docked beside the body, or behind the band's button (a full-width view). */
-export type FrameMode = 'docked' | 'stacked'
-
-export function frameMode(viewport: number): FrameMode {
-  return viewport >= DOCK_FROM ? 'docked' : 'stacked'
-}
 
 // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own default width (replaces the `wide` boolean).
-/**
- * A tab's dock width when the person chose none: one width, or `grid` — a wide grid tab (the lines, a BOM, sizes, cost, cutting):
- * one third under 1600 px, 40 % from 1600 (the picture's rule R-18: no sideways scroll on Lines at 1440 with the thread open).
- */
-export type DockDefault = DockWidth | 'grid'
-
-/** A tab's default at a viewport: `grid` is one third under 1600 px and 40 % from 1600; any other default is itself. */
-export function defaultWidthAt(value: DockDefault, viewport: number): DockWidth {
-  if (value === 'grid') return viewport < THIRD_BELOW ? 'third' : 'forty'
-  return value
-}
-
 /**
  * The dock's width now: the person's choice when they made one (for this record type, or this tab of it); else the tab's own default
  * (40 % when the page names none).
@@ -69,21 +47,6 @@ export function viewOpenOf(value: string | null | undefined): boolean {
 }
 // ---- end F-SA-262
 
-/** The body : thread columns of each width (the gap is the grid's). Full leaves the body out. */
-export const DOCK_COLUMNS: Readonly<Record<DockWidth, string>> = {
-  third: 'minmax(0, 2fr) minmax(0, 1fr)',
-  forty: 'minmax(0, 3fr) minmax(0, 2fr)',
-  half: 'minmax(0, 1fr) minmax(0, 1fr)',
-  full: 'minmax(0, 1fr)',
-}
-
-/** The thread's share of the page at a width (for the design numbers: 40 % of 1794 px is the picture's 711 px with the gap). */
-export function threadPixels(content: number, width: DockWidth, gap = 16): number {
-  if (width === 'full') return content
-  const [body, thread] = width === 'third' ? [2, 1] : width === 'forty' ? [3, 2] : [1, 1]
-  return Math.round(((content - gap) * thread) / (body + thread))
-}
-
 /**
  * What an address asks of the frame on arrival (R-8: every old address keeps working): `?tab=activity` opens the thread (its tools
  * moved to the thread's "⋯"); `panel=approvals` also opens "Ask a partner to approve". Anything else: nothing.
@@ -106,11 +69,6 @@ export function threadButtonWords(count: number): { readonly key: 'thread.button
   if (count <= 0) return { key: 'thread.button', label: null }
   const shown = Math.min(count, 99)
   return { key: count > 99 ? 'thread.buttonMany' : 'thread.buttonNew', count: shown, label: { key: 'thread.buttonNewLabel', count: shown } }
-}
-
-/** ⌘J (Ctrl J on other systems): show or hide the docked thread, open or close the full-width one. Never with Alt or Shift. */
-export function isThreadKey(event: { readonly key: string; readonly metaKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly shiftKey: boolean }): boolean {
-  return (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j'
 }
 
 /** The keys a record page lists in its band menu's "Keyboard" line (PR-14: never a "?" overlay in the thread). */

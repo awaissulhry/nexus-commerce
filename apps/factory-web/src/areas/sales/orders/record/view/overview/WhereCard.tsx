@@ -41,7 +41,7 @@ import { stagePicksOf } from '../../overview/where' // F-SC-W3: the steps of the
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
 // ---- F-CO-K1 (the shared overview kit): the card's frame and its headline are the kit's parts. F-CO-K2: the strips' list too (its cap,
 // "Show {n} more", the reading and the failed rows). No stylesheet order decides a look any more (the dead align-items went). ----
-import { Headline, OverviewCard, Strips } from '../../../../../_shared/record-overview/Overview'
+import { Headline, OverviewCard, Strips } from '../../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K1
 
 /**

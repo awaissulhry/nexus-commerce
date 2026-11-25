@@ -6,7 +6,7 @@ import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/part
 import { canOf } from '../_demo/fixtures'
 import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } from '../model'
 import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
-import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-SA-263
+import { defaultWidthAt } from '../../../../lib/record-frame/model' // F-SA-263 (pp-k1 k1.2: the frame's core)
 import { designScreen } from './fixtures'
 // F-SA-262: the order dock's scope (the pick of ONE conversation)
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'

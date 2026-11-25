@@ -26,7 +26,8 @@ import {
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
 import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price check term (the Not equal view)
 import { isOrderPhase, type OrderPhase } from '@nexus/factory-domain/production-brand/stages' // F-CW-101: the phase term (the band's doors)
-import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
+import { ORDER_STATUS_TONE, shippedPercentOf } from '../../../lib/order-cells/model' // pg-w1: the shared cells' tone and Shipped rules
+import type { DockDefault } from '../../../lib/record-frame/model' // F-SA-263 (pp-k1 k1.2: the frame's core)
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105: our priority levels — the domain's rule, never re-written here
@@ -158,17 +159,9 @@ export function readOnlyOnPage(can: Pick<OrderAbilities, (typeof PAGE_ACT_RIGHTS
 
 // ---- words and tones ---------------------------------------------------------------------------------------------------
 
-export const STATUS_TONE: Record<OrderStatus, Tone> = {
-  CONFIRMED: 'neutral',
-  IN_PRODUCTION: 'info',
-  READY: 'info',
-  PARTLY_SHIPPED: 'warning',
-  SHIPPED: 'success',
-  CLOSED: 'neutral',
-  CANCELLED: 'danger',
-  PENDING_APPROVAL: 'warning',
-  DELIVERED: 'success',
-}
+// pg-w1 (18-lead-settles Z16 P4): ONE tone for one status on every page — the table lives with the shared status chip
+// (lib/order-cells/model.ts ORDER_STATUS_TONE, the same values); the office reads it here under its own name.
+export const STATUS_TONE: Readonly<Record<OrderStatus, Tone>> = ORDER_STATUS_TONE
 
 /** The deposit's state as the list shows it: the tone, and "overdue" once its due day passed while open. */
 export function depositTone(state: DepositState, dueDate: string | null, today: string): Tone {
@@ -533,7 +526,8 @@ export function boardRereadOf(change: { type: string; fields: Readonly<Record<st
 // ── end F-SA-214 ──
 
 /** How far the order's garments left (shipped of ordered), 0–100. */
-export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): number => (row.units > 0 ? Math.round((row.shippedUnits / row.units) * 100) : 0)
+// pg-w1: the one rule of the shared Shipped cell (lib/order-cells/model.ts), the same numbers.
+export const shippedPercent = (row: Pick<OrderRow, 'units' | 'shippedUnits'>): number => shippedPercentOf(row.shippedUnits, row.units)
 
 // ---- the record ---------------------------------------------------------------------------------------------------------
 

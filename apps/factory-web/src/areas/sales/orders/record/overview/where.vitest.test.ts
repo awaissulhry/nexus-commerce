@@ -551,7 +551,7 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
     for (const part of ["from '../../depth/model'", 'rowActsOf(row, input.acts)', 'yesDoorOf(strip.task, input.busy)', "holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })"]) expect(rules, part).toContain(part)
     // The strips' CSS: DS tone tokens only (light and dark), no raw colour. F-CO-K2: it moved to the shared overview kit's ONE
     // stylesheet (the strips are its Strips / Strip parts); where.css keeps none of it.
-    const css = readFileSync(new URL('../../../../_shared/record-overview/record-overview.css', import.meta.url), 'utf8')
+    const css = readFileSync(new URL('../../../../../lib/record-overview/record-overview.css', import.meta.url), 'utf8')
     for (const rule of ['.fw-so-strips {', '.fw-so-strip {', ".fw-so-strip[data-tone='danger'] {", '.fw-so-strip-said {']) expect(css, rule).toContain(rule)
     expect(css).toContain('var(--nds-danger)')
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)

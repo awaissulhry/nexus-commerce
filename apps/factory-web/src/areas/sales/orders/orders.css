@@ -101,14 +101,7 @@ p.fw-so-hint[role='status'] {
   text-decoration: underline;
 }
 
-.fw-so-progress {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  min-width: 0;
-  width: 100%;
-}
+/* pg-w1: .fw-so-progress (Shipped: the bar over its words) moved verbatim to lib/order-cells/order-cells.css. */
 
 .fw-so-code {
   font-family: var(--nds-font-mono);
@@ -571,7 +564,7 @@ fieldset.fw-so-colours {
 }
 
 /* ── F-SA-232: Overview — "Where it is now" (one sentence, the facts, the five stages) and "Progress by line" ── */
-/* F-CO-K1: the Overview's column (.fw-so-overview) went to the shared overview kit, areas/_shared/record-overview/record-overview.css
+/* F-CO-K1: the Overview's column (.fw-so-overview) went to the shared overview kit, lib/record-overview/record-overview.css
    (a record page that draws the kit does not load this file). */
 /* F-OO-103: "Where it is now"'s own rules (.fw-so-where, .fw-so-headline) went to record/view/overview/where.css. */
 /* A line's first cell is the button that opens its sizes: the picture beside its name and stage. */
