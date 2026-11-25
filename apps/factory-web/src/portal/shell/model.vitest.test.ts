@@ -28,6 +28,7 @@ import {
   backOnFrequency,
 } from './model'
 import { recordTypeKey, THREAD_BODY_LIMIT, threadHeldKey } from './thread-model'
+import { MAX_BODY } from '../../lib/record-thread/composer/model' // pt-t T.2
 
 const PARTY = { id: '0190f0e2-1111-7000-8000-000000000001', code: 'SEED-C1' }
 
@@ -209,7 +210,9 @@ describe('the keys', () => {
 
 describe('the conversation’s rules, said in our words', () => {
   it('counts toward the domain’s own limit and says every composer reason', () => {
-    expect(THREAD_BODY_LIMIT).toBe(MAX_BODY_LENGTH)
+    // pt-t T.2: ONE limit — the portal's is the shared composer row's (its counter shows from 18,000), the domain's own.
+    expect(THREAD_BODY_LIMIT).toBe(MAX_BODY)
+    expect(MAX_BODY).toBe(MAX_BODY_LENGTH)
     for (const reason of COMPOSER_REASONS) expect(threadHeldKey(reason)).toBe(`thread.held.${reason}`)
     expect(threadHeldKey('SOMETHING_NEW')).toBe('thread.held.other')
     expect(recordTypeKey('SalesOrder')).toBe('record.type.SalesOrder')

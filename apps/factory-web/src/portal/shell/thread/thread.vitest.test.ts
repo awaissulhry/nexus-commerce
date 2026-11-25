@@ -196,3 +196,55 @@ describe('pt-w2 W2.3 — the portal thread’s host on the partner face', () => 
 })
 // ---- end W2.3
 
+
+// ---- pt-t T.1: the gallery (SCR-027-thread) ------------------------------------------------------------------------------------------
+import { designScreen as gallery } from './fixtures'
+
+describe('pt-t T.1 — the gallery of the portal’s messages (SCR-027-thread)', () => {
+  const drawCase = (id: string, locale: 'en' | 'it') => render(createElement(ReaderProvider, { reader: 'outside' }, createElement(gallery.view, { model: gallery.cases.find((item) => item.id === id)!.model })), locale)
+  const KEY = /\b(thread|record|state|feed|quote|menu|files|kind|row|attach|keys|width|pinbar|unread|day|designer|held|failed|link|counter|box|send)\.[a-zA-Z]/
+  const TU = /\b(tu|tuo|tua|tuoi|tue|ti|te|hai|puoi|sei|vuoi|devi)\b/i
+
+  for (const locale of ['en', 'it'] as const) {
+    it(`every case draws in ${locale}: no key on screen, made-up data only, no office part, no menu or modal open`, () => {
+      for (const item of gallery.cases) {
+        const html = drawCase(item.id, locale)
+        const text = textOf(html)
+        expect(html, `${item.id} ${locale}`).toContain('class="fw-rt-column is-docked fw-rtp"')
+        expect(html, `${item.id} ${locale}`).not.toMatch(KEY)
+        expect(scanText(text, BRAND_ALPHA), item.id).toEqual([])
+        expect(scanText(text, BRAND_BETA), item.id).toEqual([])
+        expect(html, item.id).not.toMatch(/@(?!example\b)[a-z0-9-]+\.(com|it|eu)\b/)
+        for (const office of ['is-note', 'fw-rt-cx-aud', 'fw-rth-line', 'fw-rth-files', 'lucide-check-check', 'lucide-globe', 'nds-pthread', 'role="menu"', 'role="dialog"']) expect(html, `${item.id} ${office}`).not.toContain(office)
+        expect(text, `${item.id} ${locale}`).not.toMatch(/\b(seen by|read by|is typing|visto da|letto da|sta scrivendo|conversation|conversazione)\b/i)
+        if (locale === 'it') expect(text, item.id).not.toMatch(TU)
+      }
+    })
+  }
+
+  it('the busy thread holds every part: sides, quotes, the pinned bar, tiles, a locked file, a removed message, the band, the chip, the ⓘ', () => {
+    const html = drawCase('busy-forty', 'en')
+    const text = textOf(html)
+    for (const part of ['fw-rt-msg is-ours is-others is-start', 'fw-rt-msg is-theirs is-mine', 'class="fw-rt-quote fw-rt-tone-', 'class="fw-rt-pinbar"', 'class="fw-rt-album"', 'class="fw-rt-file"', 'data-feed-new=""', 'role="checkbox"', 'fw-rth-keys', 'class="fw-rt-sentinel"']) expect(html, part).toContain(part)
+    expect(text).toContain('Priced document — you cannot open it')
+    expect(text).toContain('Message removed after a privacy request')
+    expect(text).toContain('Bea Esempio Example Works')
+    expect(text).toContain('Ugo Test')
+    expect(text).toContain('3 unread messages')
+    // A reply, the jump's flash, a refused reply, the held lines, the link and the account.
+    expect(drawCase('replying', 'en')).toContain('class="fw-rt-cx-bar is-link fw-rt-tone-')
+    expect(drawCase('jump-flash', 'en')).toMatch(/<article class="fw-rt-msg [^"]*" id="message-m01" data-message-id="m01"[^>]* data-flash=""/)
+    expect(textOf(drawCase('failed-reply', 'en'))).toContain('That message cannot be answered here.')
+    expect(drawCase('held-no-comment', 'en')).toContain('class="fw-rt-cx-held"')
+    expect(textOf(drawCase('held-no-comment', 'it'))).toContain('Potete leggere questi messaggi; per scrivere qui, chiedete al vostro amministratore (Ugo Test).')
+    expect(drawCase('link', 'en')).not.toContain('fw-rt-quote')
+    expect(drawCase('link', 'en')).toContain('data-kind="link"')
+    expect(textOf(drawCase('account', 'en'))).toContain('Ask us a question')
+    expect(drawCase('width-menu', 'en')).toContain('fw-rth-menu')
+    expect(drawCase('busy-forty', 'en')).not.toContain('fw-rth-menu')
+    // The gallery lives under portal/, so the design index reads it from outside the office (app/design/_registry.ts readerOf): voi.
+    expect(new URL('./fixtures.ts', import.meta.url).pathname).toMatch(/\/src\/portal\/shell\/thread\/fixtures\.ts$/)
+    expect(gallery.screen).toBe('SCR-027-thread')
+  })
+})
+// ---- end pt-t T.1

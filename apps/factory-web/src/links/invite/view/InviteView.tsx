@@ -25,9 +25,9 @@ export type { InviteViewModel, InviteActions } from '../model'
  * the language, whom to ask, the privacy notice) around the ONE record a partner was invited to.
  * B-TH-274 (threads plan TH-6, PL7; L-INVITE.side, L-INVITE.thread): the five stacked cards became two columns. The record's shared
  * thread is the MAIN column (~2/3): its files strip on top (every file shared with the person, by name, Open in a new tab; "All
- * files" opens the Files view — the old Shared files card merged in, files in one place), the conversation (PartnerThread, the
- * partner version: two sides, never an office note; ⌘Enter posts, the shared files ticked go with it; held with the reason when the
- * invitation does not allow writing) and, under it, Add files when the invitation allows it (the link's own upload, as before). From
+ * files" opens the Files view — the old Shared files card merged in, files in one place), the conversation (pt-w2: the ONE
+ * partner face, kind link — never an office note, no Reply and no quote; Enter posts, the shared files ticked with its "+" go with it;
+ * held with the reason when the invitation does not allow writing) and, under it, Add files when the invitation allows it (the link's own upload, as before). From
  * 1280 px the SIDE column (~1/3, sticky) holds Why you are here (who invited you to what, what you can do, until when), The record
  * (only the fields shared with partners: never a price, a cost or an office person) and E-mail me (their own switch, on by default).
  * Narrower, the thread is the whole page and the side column waits behind "i" (a sheet). No rail, no menu: a link page's only way

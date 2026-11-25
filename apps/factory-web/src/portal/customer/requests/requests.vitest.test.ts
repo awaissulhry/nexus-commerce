@@ -142,9 +142,11 @@ describe('SCR-185-request design cases (read by Brand Beta)', () => {
     expect(html).not.toMatch(/another customer|other customer|belongs to/i)
   })
 
-  it('the thread draws two sides only: no office note can be drawn (the DS PartnerThread has no such kind)', () => {
+  it('the thread draws two sides only: no office note can be drawn (the partner face has no office field)', () => {
     for (const locale of ['it', 'en'] as const) {
       const html = render(locale, screen.cases.find((entry) => entry.id === 'th-222-declined')!)
+      // pt-t T.2: the ONE partner face (the office's thread parts), its type wall in lib/record-thread/partner/partner.vitest.test.ts.
+      expect(html).toContain('class="fw-rt-column is-docked fw-rtp"')
       expect(html).not.toMatch(/Office note|Nota d.ufficio|Internal note|Office only/i)
     }
   })
