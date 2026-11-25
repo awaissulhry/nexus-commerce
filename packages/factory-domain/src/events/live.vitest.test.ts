@@ -562,6 +562,53 @@ describe('the portal learns of its own request’s answer live (B-SA-055)', () =
 })
 // ── end B-SA-055 ──
 
+// ── od-ts (order start, WS-OD-10) ──
+/**
+ * WS-OD-10 (13-backend § 7, W3): a change of a draft order — the office's too — reaches the SAME customer's portal sessions that keep
+ * drafts (portal.orderDrafts.edit), the request's id only, by the payload's own party; never another customer's session, never the
+ * party or who changed it.
+ */
+describe('WS-OD-10: an office change of a draft reaches the same party’s portal session, ids only, never another party’s', () => {
+  const ALPHA = '0190a000-0000-7000-8000-0000000000b1'
+  const BETA = '0190a000-0000-7000-8000-0000000000b2'
+  const DRAFT = '0190a000-0000-7000-8000-0000000000e1'
+  const TYPE = 'portal_order_request.draft_changed'
+  const definition = EVENT_CATALOGUE.get(TYPE, 1)
+  const changed = (partyId: string) => liveMessageFor(envelope(definition, { requestId: DRAFT, partyId }), definition)!
+  const portalOf = (partyId: string, permissions: string[] = ['portal.orderDrafts.edit'], parties: Grant['parties'] = [partyId]): Actor => ({ audience: 'partner', tenantId: TENANT, partyId, grants: [{ permissions: permissions as Grant['permissions'], companies: [COMPANY], sites: 'all', parties }] })
+  const officeOf = (parties: Grant['parties']): Actor => office([{ permissions: ['orders.view'], companies: 'all', sites: 'all', parties }])
+
+  it('WS-OD-10: is on the portal list by the payload’s own party, for the people who keep drafts, with the request id only', () => {
+    expect(PARTNER_LIVE_EVENTS[TYPE]).toEqual({ permission: 'portal.orderDrafts.edit', party: 'partyId', partyFrom: 'payload', fields: ['requestId'] })
+    expect(definition.live!.fields).toEqual(['requestId'])
+    expect(definition.payload.shape.partyId!.safeParse(undefined).success).toBe(false)
+  })
+
+  it("WS-OD-10: Alpha's portal session hears Alpha's draft change — the id only; Beta's never does, whatever it holds", () => {
+    const ofAlpha = changed(ALPHA)
+    expect(ofAlpha.partyIds).toEqual([ALPHA])
+    const seen = partnerLiveViewFor(ofAlpha, portalOf(ALPHA), EVENT_CATALOGUE)
+    expect(seen!.fields).toEqual({ requestId: DRAFT })
+    expect(seen).not.toHaveProperty('partyIds')
+    expect(partnerLiveViewFor(ofAlpha, portalOf(BETA), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(ofAlpha, portalOf(BETA, ['portal.orderDrafts.edit', 'portal.orderRequests.manage', 'portal.salesOrders.view', 'portal.home.view'], 'all'), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(changed(BETA), portalOf(BETA), EVENT_CATALOGUE)!.fields).toEqual({ requestId: DRAFT })
+    // A person of Alpha who keeps no drafts, another tenant's message, no server-side party, two parties: nothing.
+    expect(partnerLiveViewFor(ofAlpha, portalOf(ALPHA, ['portal.salesOrders.view']), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor({ ...ofAlpha, tenantId: OTHER_TENANT }, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+    const { partyIds: _parties, ...older } = ofAlpha
+    expect(partnerLiveViewFor(older, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor({ ...ofAlpha, partyIds: [ALPHA, BETA] }, portalOf(ALPHA), EVENT_CATALOGUE)).toBeNull()
+  })
+
+  it('WS-OD-10: the office wall stays: a person limited to Beta hears no Alpha draft, and the office fields carry no party', () => {
+    const ofAlpha = changed(ALPHA)
+    expect(liveViewFor(ofAlpha, officeOf([BETA]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofAlpha, officeOf([ALPHA]), EVENT_CATALOGUE)!.fields).toEqual({ requestId: DRAFT })
+  })
+})
+// ── end od-ts ──
+
 // ── B-SA-004b ──
 /**
  * B-SA-004b (Sales page plan P17'): every quote.*, return.* and repair.* event (a return's label, a repair's estimate too) names

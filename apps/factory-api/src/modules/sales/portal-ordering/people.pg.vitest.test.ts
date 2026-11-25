@@ -15,10 +15,10 @@ import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser } from '../../../platform/auth/portal/testing/portal'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
-import { startHarness, type Answer, type Browser, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import { addUser, Browser, enrolTotp, startHarness, type Answer, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { rosterRecords } from '../../../platform/privacy/erasure/sources/records'
 import type { PersonFacts } from '../../../platform/privacy/erasure/sources/type'
-import { acceptRequest, listOfficeRequests, officeRequestView } from './office'
+import { acceptRequest, confirmRequest, listOfficeRequests, officeRequestView } from './office'
 
 /**
  * B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2; walls W-CP-1, W-CP-3; money M-CP-2) on the local stack,
@@ -38,6 +38,10 @@ import { acceptRequest, listOfficeRequests, officeRequestView } from './office'
  *     accept stays held while a described or made-to-measure line is not mapped (B-CP-077: accept-kinds.pg maps it);
  *   - W-CP-1: customer B adds, changes, removes or reads nobody of A's; M-CP-2: the Designer's answers carry no price;
  *   - the party's privacy export lists the roster names (the erasure keeps them: CUSTOMER), never another customer's.
+ * od-ts (order start; 13-backend § 7 WS-OD-7; addendum R1, R3): an office person (a Sales worker of the ready-made roles, signed in
+ * through the app) adds people to the customer's draft through the office's route — read by the office, never by the floor (no
+ * grant), never named in a line note after the Confirm; a draft with nothing at all sends; every relaxed row saves; the Sizing cell
+ * moves a row's kind (custom size ⇔ made to measure) and a row's choices are checked and cleared.
  * Every name and figure is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-ordering/people`.
  */
 
@@ -47,6 +51,8 @@ const NS = 'people-cp075'
 const T = seedUuid(NS, 'tenant')
 const partyA = seedUuid(NS, 'party:P1')
 const partyB = seedUuid(NS, 'party:P3')
+const companyA = seedUuid(NS, 'company:A')
+const TENANT: TestTenant = { id: T, slug: NS, companies: [{ id: companyA, code: 'SCA' }] }
 const PRICE_KEYS = /"(unitPriceShown|priceNow|amount|net|brandUnitPrice|priceDiff|priceMatch)":"/
 
 let h: Harness
@@ -71,6 +77,14 @@ async function ok(who: Who, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   return answer.body as Json
 }
 const issuesOf = (answer: Answer): Json[] => answer.body?.error?.issues ?? []
+// od-ts: a Sales worker of the ready-made roles (orders.manage, no price grain), signed in through the app: the office's draft routes.
+let officeBrowser: Browser
+let officeUserId = ''
+async function asOffice(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, status = 200): Promise<Json> {
+  const answer = await officeBrowser.send(method, url, method === 'GET' || method === 'DELETE' ? undefined : (body ?? {}), method === 'GET' ? {} : { headers: { 'idempotency-key': `cp075-key-${++serial}` } })
+  expect(answer.status, `office ${method} ${url}: ${JSON.stringify(answer.body)}`).toBe(status)
+  return answer.body as Json
+}
 const sha = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
 const pdf = (text: string): Buffer => Buffer.from(`%PDF-1.4\n% made-up file of the CP-075 test: ${text}\n%%EOF\n`)
 const png = (text: string): Buffer => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`made-up picture: ${text}`)])
@@ -141,6 +155,12 @@ beforeAll(async () => {
   // Customer A's own label (SEED-JKT-02) and one of its colours.
   G.style = (await admin<{ id: string }>(`SELECT id FROM "Style" WHERE "tenantId" = $1 AND code = 'SEED-JKT-02'`, [T]))[0]!.id
   G.colour = (await admin<{ id: string }>(`SELECT id FROM "Colourway" WHERE "tenantId" = $1 AND "styleId" = $2 AND code = 'BLK'`, [T, G.style]))[0]!.id
+  // od-ts: the office person of WS-OD-7 (signed in before the clock is set back: the sign-in moves it on).
+  const officeUser = await addUser(h, TENANT, { email: 'sam.sales.cp075@example.com', role: 'sales' })
+  officeUserId = officeUser.id
+  officeBrowser = new Browser(h.app)
+  expect((await officeBrowser.signIn(NS, officeUser.email, officeUser.password)).status).toBe(200)
+  await enrolTotp(h, officeBrowser)
   h.clock.set(new Date(Date.now() - 2_000))
 }, 900_000)
 
@@ -314,6 +334,47 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     await expect(acceptRequest(decider, sentDraft.id, { version: sent.request.version, as: 'ORDER' })).rejects.toThrow(/made to measure: accept the request as a quote/)
   })
 
+  it('WS-OD-7 office-written people are read by the office, never by the floor; names never in a line note', async () => {
+    // The customer's draft with a made-to-measure row (by person); the office adds its people through the office's route.
+    const draft = await mtmDraft()
+    const added = await asOffice('POST', `/sales/order-requests/${draft.id}/lines/${draft.lineId}/people`, {
+      version: draft.version,
+      people: [
+        { name: 'Made-up Bea Esempio', number: '12', measureBy: 'SIZE', size: '50' },
+        { name: 'Made-up Carlo Esempio', measureBy: 'SIZE', size: '52' },
+      ],
+    })
+    expect(customOf(added, draft.lineId).people.map((person: Json) => person.name)).toEqual(['Made-up Bea Esempio', 'Made-up Carlo Esempio'])
+    // The office reads them on its draft page (the portal's own record); the rows say the office person typed them.
+    const read = await asOffice('GET', `/sales/order-requests/${draft.id}/draft`)
+    expect(customOf(read, draft.lineId).people.map((person: Json) => [person.seq, person.name, person.measureBy, person.size])).toEqual([
+      [1, 'Made-up Bea Esempio', 'SIZE', '50'],
+      [2, 'Made-up Carlo Esempio', 'SIZE', '52'],
+    ])
+    expect(await admin('SELECT name, "createdById" FROM "PortalOrderRequestPerson" WHERE "lineId" = $1 ORDER BY seq', [draft.lineId])).toEqual([
+      { name: 'Made-up Bea Esempio', createdById: officeUserId },
+      { name: 'Made-up Carlo Esempio', createdById: officeUserId },
+    ])
+    // The floor has no grant on the people of a draft (the database refuses the read).
+    const floor = { audience: 'floor' as const, tenantId: T, actorId: newId(), siteId: seedUuid(NS, 'site:A1') }
+    await expect(h.database.withScope(floor, (client) => client.$queryRawUnsafe('SELECT name FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid', draft.id))).rejects.toThrow(/permission denied/)
+    // Confirmed as a QUOTE (send + accept in one command): the quote line says how many people, never who.
+    const decider = officeWith(['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'money.price', 'files.read', 'threads.read'])
+    const confirmed = await confirmRequest(decider, draft.id, { version: read.request.version, as: 'QUOTE', map: [{ lineId: draft.lineId, into: [{ styleId: G.style, colourwayId: G.colour }] }] })
+    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', quote: { id: confirmed.made.quoteId } })
+    const quoteLines = await admin<{ note: string | null; pieces: number }>(
+      `SELECT l.note, l.quantity::int AS pieces FROM "QuoteLine" l JOIN "QuoteVersion" v ON v.id = l."versionId" WHERE v."quoteId" = $1 ORDER BY l.seq`,
+      [confirmed.made.quoteId],
+    )
+    expect(quoteLines.map((line) => line.pieces)).toEqual([2])
+    expect(quoteLines[0]!.note).toContain('People: 2 on the request (their names stay there)')
+    const quote = await admin('SELECT "internalNote" FROM "Quote" WHERE id = $1', [confirmed.made.quoteId])
+    expect(JSON.stringify([quoteLines, quote, confirmed.made])).not.toMatch(/Esempio/)
+    // The roster stays on the request, which the quote links: the office reads it there.
+    const after = await officeRequestView(decider, draft.id)
+    expect(after.request.customLines[0]!.people.map((person) => person.name)).toEqual(['Made-up Bea Esempio', 'Made-up Carlo Esempio'])
+  })
+
   it('a line taken out takes its roster; a discarded draft takes all of its people (personal data)', async () => {
     const draft = await mtmDraft()
     const read = await ok('aBuyer', 'GET', base(draft.id))
@@ -354,5 +415,82 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
       // The brand wall: the same name in customer B finds nothing of A's.
       expect((await rosterRecords.collect(client, facts(partyB, 'Made-up Sara Blu'))).sections).toEqual([])
     })
+  })
+})
+
+// ---- od-ts (order start; addendum R1 and R3, the Owner's change of 2026-11-25 10:12): nothing is required, one products table -------
+describe('od-ts: nothing is required to send; every cell of a product row is optional; the Sizing cell moves the row’s kind', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('R1: Send with nothing at all', async () => {
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', {}, 201)
+    const id = made.request.id as string
+    expect(made.request).toMatchObject({ status: 'DRAFT', subject: null, note: null, lines: [], customLines: [], may: { send: true } })
+    // Still open names only the draft's own items (no row): information, never a hold.
+    expect(made.request.stillOpen.items.map((item: Json) => item.kind)).toEqual(['DATE', 'SHIP_TO'])
+    const sent = await ok('aBuyer', 'POST', `${base(id)}/send`, { version: made.request.version })
+    expect(sent.request).toMatchObject({ status: 'SENT', number: expect.any(String), lines: [], customLines: [] })
+    expect(sent.sent).toMatchObject({ number: sent.request.number, confirmBy: null })
+    expect(await admin('SELECT id FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [id])).toEqual([])
+    expect((await admin<{ status: string; number: string | null }>('SELECT status::text AS status, number FROM "PortalOrderRequest" WHERE id = $1', [id]))[0]).toEqual({ status: 'SENT', number: sent.request.number })
+    const [event] = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'portal_order_request.sent' AND subject = $2`, [T, id])
+    expect(event!.payload).toMatchObject({ requestId: id, partyId: partyA, lines: 0 })
+  })
+
+  it('R3: a relaxed row of each kind saves — an empty row (described, sizing not decided), a custom-size row (made to measure), a catalogue row (standard)', async () => {
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', {}, 201)
+    const id = made.request.id as string
+    // No kind, nothing in it: a described row whose Sizing is "Not decided yet".
+    const blank = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: {} })
+    const blankId = blank.request.customLines[0].id as string
+    expect(customOf(blank, blankId)).toMatchObject({ seq: 1, kind: 'DESCRIBED', sizing: null, description: null, colourText: null, style: null, colourway: null, garmentType: null, quantity: null, sizes: [], byPerson: false, choices: null })
+    // Custom size and nothing else (no garment type yet): made to measure, always by person.
+    const custom = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: blank.request.version, line: { sizing: 'MADE_TO_MEASURE' } })
+    const customId = custom.request.customLines.find((line: Json) => line.id !== blankId).id as string
+    expect(customOf(custom, customId)).toMatchObject({ seq: 2, kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', garmentType: null, quantity: null, byPerson: true, people: [] })
+    // A catalogue row from the picker: standard sizes.
+    const picked = await ok('aBuyer', 'POST', `${base(id)}/lines`, { version: custom.request.version, lines: [{ styleId: G.style, colourwayId: G.colour, sizes: [{ size: '50', quantity: 2 }] }] })
+    expect(picked.request.lines).toEqual([expect.objectContaining({ seq: 3, kind: 'CATALOGUE', sizing: 'STANDARD', choices: null, style: expect.objectContaining({ id: G.style }) })])
+    expect(await admin('SELECT seq, kind::text AS kind, sizing::text AS sizing FROM "PortalOrderRequestLine" WHERE "requestId" = $1 ORDER BY seq', [id])).toEqual([
+      { seq: 1, kind: 'DESCRIBED', sizing: null },
+      { seq: 2, kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE' },
+      { seq: 3, kind: 'CATALOGUE', sizing: 'STANDARD' },
+    ])
+  })
+
+  it('R3: sizing ⇔ kind — custom size makes a row made to measure and back; a catalogue row turns custom size; disagreeing words refused; choices checked, [] clears', async () => {
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', {}, 201)
+    const id = made.request.id as string
+    const described = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: { description: 'Made-up caps with our logo', quantity: 6 } })
+    const lineId = described.request.customLines[0].id as string
+    expect(customOf(described, lineId)).toMatchObject({ kind: 'DESCRIBED', sizing: null, quantity: 6, byPerson: false })
+    // Custom size: made to measure in one update — by person, its total gone (its people will carry the sizes).
+    const custom = await ok('aBuyer', 'PUT', `${base(id)}/custom-lines/${lineId}`, { version: described.request.version, sizing: 'MADE_TO_MEASURE', garmentType: 'JACKET' })
+    expect(customOf(custom, lineId)).toMatchObject({ kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, quantity: null, garmentType: { code: 'JACKET' }, description: 'Made-up caps with our logo' })
+    // Back to standard sizes: a described row again, its garment type gone.
+    const standard = await ok('aBuyer', 'PUT', `${base(id)}/custom-lines/${lineId}`, { version: custom.request.version, sizing: 'STANDARD' })
+    expect(customOf(standard, lineId)).toMatchObject({ kind: 'DESCRIBED', sizing: 'STANDARD', garmentType: null })
+    expect((await admin('SELECT kind::text AS kind, sizing::text AS sizing, "garmentType" FROM "PortalOrderRequestLine" WHERE id = $1', [lineId]))[0]).toEqual({ kind: 'DESCRIBED', sizing: 'STANDARD', garmentType: null })
+    // A catalogue row whose Sizing turns to custom size: made to measure (its style and colour kept as the hint), its sizes gone.
+    const picked = await ok('aBuyer', 'POST', `${base(id)}/lines`, { version: standard.request.version, lines: [{ styleId: G.style, colourwayId: G.colour, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 1 }] }] })
+    const catalogueId = picked.request.lines[0].id as string
+    const turned = await ok('aBuyer', 'PUT', `${base(id)}/lines/${catalogueId}`, { version: picked.request.version, sizing: 'MADE_TO_MEASURE' })
+    expect(turned.request.lines).toEqual([])
+    expect(customOf(turned, catalogueId)).toMatchObject({ kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, quantity: null, sizes: [], style: { id: G.style }, colourway: { id: G.colour } })
+    expect(await admin('SELECT size FROM "PortalOrderRequestSize" WHERE "lineId" = $1', [catalogueId])).toEqual([])
+    // A described kind with a custom size in one body: refused in words (400), nothing written.
+    const disagree = await call('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: turned.request.version, line: { kind: 'DESCRIBED', sizing: 'MADE_TO_MEASURE' } })
+    expect(disagree.status).toBe(400)
+    expect(disagree.body.error.message).toBe('A custom-size row is made to measure.')
+    expect(issuesOf(disagree)).toEqual([{ path: 'body/line/kind', message: 'A custom-size row is made to measure.' }])
+    expect((await ok('aBuyer', 'GET', base(id))).request.version).toBe(turned.request.version)
+    // The row's open choices: written, then [] clears them (none: null); a pick that is not one of the options is refused (400).
+    const leather = [{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }]
+    const chosen = await ok('aBuyer', 'PUT', `${base(id)}/custom-lines/${lineId}`, { version: turned.request.version, choices: leather })
+    expect(customOf(chosen, lineId).choices).toEqual(leather)
+    const cleared = await ok('aBuyer', 'PUT', `${base(id)}/custom-lines/${lineId}`, { version: chosen.request.version, choices: [] })
+    expect(customOf(cleared, lineId).choices).toBeNull()
+    expect((await admin('SELECT choices FROM "PortalOrderRequestLine" WHERE id = $1', [lineId]))[0]).toEqual({ choices: null })
+    const wrong = await call('aBuyer', 'PUT', `${base(id)}/custom-lines/${lineId}`, { version: cleared.request.version, choices: [{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: 'Suede' }] })
+    expect(wrong.status).toBe(400)
+    expect(issuesOf(wrong)).toEqual([{ path: 'body/choices/0/picked', message: 'The pick is one of the options, or "Not decided yet".' }])
   })
 })
