@@ -482,7 +482,9 @@ describe('TH-9 — pins, the draft on the server, Done, search, the follow-up', 
   it('B-TH-288: a hit or a pin is brought on screen (older pages read), the View back to All first; search only for readers', () => {
     const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
     expect(container).toContain('const jumpTo = useCallback(')
-    expect(container).toContain('readThreadPage(api, key, current.cursor, undefined, JUMP_PAGE)')
+    // pt-w1 W1.4: the loop lives in lib/record-thread/jump.ts (pageBack); the host hands it this thread's page read, pages of JUMP_PAGE.
+    expect(container).toContain('readPage: (after: string, size: number) => readThreadPage(api, key, after, undefined, size),')
+    expect(container).toContain('page: JUMP_PAGE,')
     const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(docked).toMatch(/const pickHit = \(messageId: string\) => \{\s*setSearch\(null\)[\s\S]*?void jumpInView\(messageId\)/)
     expect(docked).toMatch(/const jumpInView = useCallback\([\s\S]*?if \(viewHides\(viewRef\.current, [\s\S]*?setView\('all'\)[\s\S]*?return base\.jumpTo\(messageId\)/)
@@ -811,8 +813,9 @@ describe('B-CP-014 — a draft keeps a priced file locked for this reader, and t
 // ── end B-CP-014
 
 // ---- tw- W1.4 (THE THREAD REBUILD; 13-backend §1.3, §1.4; Z8, Z10, Z12, B10; R3, R4) --------------------------------------------------
-import { JUMP_LIMIT, JUMP_PAGE, THREAD_PAGE } from './api'
-import { jumpRefusal, withCorrections } from './state'
+import { THREAD_PAGE } from './api'
+import { JUMP_LIMIT, JUMP_PAGE } from '../../../lib/record-thread/jump' // pt-w1 W1.4: the jump both doors run
+import { withCorrections } from './state'
 import { viewHides, viewKeeps } from '../../../lib/record-thread/model'
 
 describe('tw- W1.4 — one door to a message, the jump, Reply on every message, a live correction', () => {
@@ -828,31 +831,25 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
     expect(calls[0]).toEqual({ path: '/threads/SalesOrder/o1', query: { cursor: 'c1', limit: 200 } })
     await readThreadPage(api, { type: 'SalesOrder', id: 'o1' }, null)
     expect(calls[1]).toEqual({ path: '/threads/SalesOrder/o1', query: { cursor: undefined, limit: 50 } })
-    expect(container).toContain('pages * JUMP_PAGE < JUMP_LIMIT')
+    // pt-w1 W1.4: the loop's bound lives with the loop (jump.ts); the host hands it the office's page and limit.
+    const jump = readFileSync(new URL('../../../lib/record-thread/jump.ts', import.meta.url), 'utf8')
+    expect(jump).toContain('while (!there() && cursor && pages * page < limit) {')
+    expect(jump).toContain('const next = await readPage(cursor, page)')
+    expect(container).toContain('page: JUMP_PAGE,\n        limit: JUMP_LIMIT,')
     // One render for every page read: the pages are applied in ONE setServer after the loop.
     const loop = container.slice(container.indexOf('const jumpTo = useCallback('), container.indexOf('const refusal = jumpRefusal('))
     expect(loop.match(/setServer\(/g)?.length).toBe(1)
     expect(loop).toContain('setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))')
   })
 
-  it('B10: the words when a jump does not reach its message — a page failed, too far back (more left past 1,000), out of reach', () => {
-    expect(jumpRefusal({ found: true, failed: false, cursor: 'c' })).toBeNull()
-    expect(jumpRefusal({ found: false, failed: true, cursor: 'c' })).toEqual({ ns: 'record-thread-feed', key: 'older.failed' })
-    expect(jumpRefusal({ found: false, failed: false, cursor: 'c' })).toEqual({ ns: 'record-thread', key: 'notice.messageGone' })
-    expect(jumpRefusal({ found: false, failed: false, cursor: null })).toEqual({ ns: 'record-thread', key: 'notice.outOfReach' })
-    for (const locale of LOCALES) {
-      const t = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
-      expect(t('notice.messageGone')).toBe(locale === 'en' ? 'Too far back to open here.' : 'Troppo indietro per aprirlo qui.')
-      expect(t('notice.outOfReach')).toBe(locale === 'en' ? 'That message is out of your reach.' : 'Quel messaggio è fuori dalla tua portata.')
-      expect(t('notice.viewAll')).toBe(locale === 'en' ? 'Showing all messages' : 'Mostro tutti i messaggi')
-    }
-  })
+  // pt-w1 W1.4: B10 (the words when a jump does not reach its message) moved with jumpRefusal to lib/record-thread/jump.vitest.test.ts.
 
   it('the found message is lit (the flash, seq again on the next jump), centred at once and focused — no anchor ring', () => {
     expect(container).toContain('setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))')
-    // tw- fx2 (G-3): centred in its LIST only (never scrollIntoView, which also scrolled the office page).
-    expect(container).toMatch(/centreInList\(target\) \/\/ tw- fx2 \(G-3\): the list scrolls, never the page\s*target\?\.focus\(\{ preventScroll: true \}\)/)
-    for (const file of ['../../../lib/record-thread/feed/view/Feed.tsx', '../../../lib/record-thread/feed/use-feed-shell.ts', '../../../lib/record-thread/feed/view/FeedShell.tsx' /* pt-w1 W1.3 */, './DockedOfficeThread.tsx', './use-record-thread.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('scrollIntoView(')
+    // tw- fx2 (G-3): centred in its LIST only (never scrollIntoView, which also scrolled the office page). pt-w1 W1.4: jump.ts lightRow.
+    expect(readFileSync(new URL('../../../lib/record-thread/jump.ts', import.meta.url), 'utf8')).toMatch(/centreInList\(target\) \/\/ tw- fx2 \(G-3\): the list scrolls, never the page\s*target\?\.focus\(\{ preventScroll: true \}\)/)
+    expect(container).toContain('requestAnimationFrame(() => lightRow(messageId))')
+    for (const file of ['../../../lib/record-thread/feed/view/Feed.tsx', '../../../lib/record-thread/feed/use-feed-shell.ts', '../../../lib/record-thread/feed/view/FeedShell.tsx' /* pt-w1 W1.3 */, '../../../lib/record-thread/jump.ts' /* pt-w1 W1.4 */, './DockedOfficeThread.tsx', './use-record-thread.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('scrollIntoView(')
     expect(container).not.toMatch(/setAnchor\(messageId\)/)
     expect(container).toMatch(/\n\s*flash,\n\s*pins: pinPills,/)
   })

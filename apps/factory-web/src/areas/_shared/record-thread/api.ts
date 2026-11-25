@@ -15,10 +15,7 @@ const threadPath = (record: RecordKey) => `/threads/${enc(record.type)}/${enc(re
 
 /** A page of messages (the top of the list as the person scrolls up; the API allows up to 200), newest first. */
 export const THREAD_PAGE = 50
-/** tw- W1.4 (13-backend §1.3): a jump reads older pages of the API's most (200), one render at the end … */
-export const JUMP_PAGE = 200
-/** … up to this many older messages; further: "Too far back to open here." (B10). */
-export const JUMP_LIMIT = 1000
+// pt-w1 W1.4: a jump's page and its limit (JUMP_PAGE 200, JUMP_LIMIT 1000) live with the jump both doors run (lib/record-thread/jump.ts).
 
 // ---- B-TH-229: the reader's own reading (B-TH-027) and the office head — who answers, what waits (B-TH-028)
 export const readingSchema = z.object({ lastReadMessageId: z.string().nullable(), newCount: z.number().int(), firstNewMessageId: z.string().nullable() })

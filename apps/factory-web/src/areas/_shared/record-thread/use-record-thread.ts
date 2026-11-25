@@ -9,11 +9,9 @@ import { messageLink, type CardMessage } from '../../../lib/record-thread/card/m
 import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
 import { senderTone, tonesFor } from '../../../lib/record-thread/parts/tones'
 import type { FeedPin } from '../../../lib/record-thread/feed/model'
-import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
+import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, lightRow, pageBack } from '../../../lib/record-thread/jump' // pt-w1 W1.4: the jump both doors run
 import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
-import { jumpRefusal } from './state'
 import { cardDepth, copyTextOf } from '../../../lib/record-thread/card/model' // B-TH-255; tw- W2.2: Copy text
-import { centreInList } from '../../../lib/record-thread/parts/scroll' // tw- fx2 (G-3)
 import { askRemindMe } from '../../../shell/panels/remind-me/model' // tw- W2.2: a message's Remind me
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
@@ -960,36 +958,24 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   serverRef.current = server
   const jumpTo = useCallback(
     async (messageId: string): Promise<boolean> => {
-      let current = serverRef.current
-      const read: OfficeMessage[] = []
-      let failed = false
-      let pages = 0
-      while (!current.messages.some((message) => message.id === messageId) && current.cursor && pages * JUMP_PAGE < JUMP_LIMIT) {
-        try {
-          const page = await readThreadPage(api, key, current.cursor, undefined, JUMP_PAGE)
-          current = applyOlder(current, page)
-          read.push(...page.messages)
-        } catch {
-          failed = true
-          break
-        }
-        pages += 1
-      }
-      if (pages > 0) {
-        const cursor = current.cursor
-        setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))
-      }
-      const refusal = jumpRefusal({ found: current.messages.some((message) => message.id === messageId), failed, cursor: current.cursor })
+      const current = serverRef.current
+      // pt-w1 W1.4: the ONE loop both doors run (lib/record-thread/jump.ts) over this thread's own page read.
+      const { read, cursor, found, failed, pages } = await pageBack({
+        id: messageId,
+        has: (id) => current.messages.some((message) => message.id === id),
+        cursor: current.cursor,
+        readPage: (after: string, size: number) => readThreadPage(api, key, after, undefined, size),
+        page: JUMP_PAGE,
+        limit: JUMP_LIMIT,
+      })
+      if (pages > 0) setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))
+      const refusal = jumpRefusal({ found, failed, cursor })
       if (refusal) {
         setNotice({ ...refusal, tone: 'warning' })
         return false
       }
       setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))
-      requestAnimationFrame(() => {
-        const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
-        centreInList(target) // tw- fx2 (G-3): the list scrolls, never the page
-        target?.focus({ preventScroll: true })
-      })
+      requestAnimationFrame(() => lightRow(messageId))
       return true
     },
     [api, key],
