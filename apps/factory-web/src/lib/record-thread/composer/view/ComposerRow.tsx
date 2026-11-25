@@ -52,7 +52,7 @@ export interface ComposerBox {
   readonly drop?: ReactNode
 }
 
-export function ComposerRow({ data, bar, fields, chips, plus, chip, box, send, length, lines, announce }: ComposerRowProps) {
+export function ComposerRow({ data, bar, fields, chips, plus, chip, box, send, length, lines, announce }: ComposerRowProps): ReactNode {
   const t = useT('record-thread-composer')
   return (
     <div className="fw-rt-composer" {...data}>
@@ -83,7 +83,7 @@ export function ComposerRow({ data, bar, fields, chips, plus, chip, box, send, l
 }
 
 /** Closed, or no right to write: ONE line in place of the box — its icon, its words, what follows them (the office's Reopen). */
-export function ComposerHeld({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+export function ComposerHeld({ icon, children }: { icon: ReactNode; children: ReactNode }): ReactNode {
   return (
     <div className="fw-rt-composer">
       <div className="fw-rt-cx-held">
@@ -95,7 +95,7 @@ export function ComposerHeld({ icon, children }: { icon: ReactNode; children: Re
 }
 
 /** The reply (or the correction) above the box: the quoted person's colour edge, its words, × lets it go. */
-export function LinkBar({ tone, label, drop, children }: { tone?: SenderTone | undefined; label?: string | undefined; drop: { readonly label: string; readonly onDrop: () => void }; children: ReactNode }) {
+export function LinkBar({ tone, label, drop, children }: { tone?: SenderTone | undefined; label?: string | undefined; drop: { readonly label: string; readonly onDrop: () => void }; children: ReactNode }): ReactNode {
   return (
     <div className={`fw-rt-cx-bar is-link${tone ? ` ${toneClass(tone)}` : ''}`} role="group" aria-label={label}>
       {children}
@@ -107,7 +107,7 @@ export function LinkBar({ tone, label, drop, children }: { tone?: SenderTone | u
 }
 
 /** The reply's words in its bar: who wrote what it answers, and one line of it. */
-export function ReplyLine({ who, line }: { who: string; line?: string | undefined }) {
+export function ReplyLine({ who, line }: { who: string; line?: string | undefined }): ReactNode {
   return (
     <span className="fw-rt-cx-quote">
       <b>{who}</b>

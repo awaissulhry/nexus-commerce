@@ -149,7 +149,7 @@ export function MessageRow({
   lines?: { readonly words?: readonly TailLine[]; readonly end?: readonly TailLine[] }
   /** The host's own parts of the foot: after the pin, who reads it (its marks), in the time's place, after the time. */
   foot?: { readonly start?: ReactNode; readonly marks?: ReactNode; readonly time?: ReactNode; readonly end?: ReactNode }
-}) {
+}): ReactNode {
   const t = useT('record-thread-card')
   const pricedWords = useT('record-files') // B-CP-014: a priced document's lock (record-files.json priced.*; THREAD_NAMESPACES loads it)
   const locale = useLocale()
@@ -346,7 +346,7 @@ export function MessageRow({
 }
 
 /** One small icon of the foot with its honest word as the tooltip and for screen readers (R17). */
-export function FootIcon({ icon, word, className }: { icon: ReactNode; word: string; className?: string | undefined }) {
+export function FootIcon({ icon, word, className }: { icon: ReactNode; word: string; className?: string | undefined }): ReactNode {
   return (
     <span className={`fw-rt-mi${className ? ` ${className}` : ''}`} title={word}>
       {icon}

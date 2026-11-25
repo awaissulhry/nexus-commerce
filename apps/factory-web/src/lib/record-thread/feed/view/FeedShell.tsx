@@ -32,7 +32,7 @@ export function FeedShell({
   rows: ReactNode
   /** The host's lines at the end, where new messages arrive. */
   end?: ReactNode
-}) {
+}): ReactNode {
   const t = useT('record-thread-feed')
   return (
     <div className="fw-rt-feedwrap">
