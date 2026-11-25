@@ -241,12 +241,19 @@
 
 /* pp-fx5 (walk W-14): at 1440 the band is ONE row — "Messages (2 new)" (the conversation hidden) pushed "Made from your request #1 ›"
    under the reference although 196 px stood free: the DS caps a dense band's identity pills at half the title's room. From 1280 px
-   the portal band's pills take the room they need, down to their widest one, before the title shrinks. */
+   the portal band's pills take the room they need, down to their widest one.
+   pp-fx6 (re-walk N-01): never the title's room — the title is NEVER cut ("Your orde…" at 1440 with the conversation hidden: the pills
+   kept their width and the title shrank). The title keeps its whole width; when both cannot fit on one row, the pills wrap inside
+   their own place (a second line), as before W-14. */
 @media (min-width: 1280px) {
   .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
     flex: 0 1 auto;
     min-width: min-content;
     max-width: none;
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    flex-shrink: 0;
   }
 }
 
@@ -259,6 +266,12 @@
 .fw-ptabs {
   padding: 0 var(--nds-space-16);
   border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+/* pp-fx6 (re-walk W-15): the band's tab row scrolls with the DS arrows (`overflow="scroll"`: the strip scrolls inside itself, the page
+   never sideways); it keeps the band's 16 px gutter at its sides (the DS strip's own 4 px stays above and below, for the focus ring). */
+.fw-pband .fw-ptabs.nds-tabs.scrollable {
+  padding-inline: var(--nds-space-16);
 }
 
 .fw-pmain {
@@ -880,11 +893,14 @@
     flex: 0 0 auto;
   }
 
-  /* pp-fx5 (walk W-15): a band's tab row (a supplier order's Lines · Confirm or propose · Ship notices) longer than the phone scrolls
-     inside itself — its last tab sat 6 px past the screen's edge, the page sideways. */
-  .fw-ptabs {
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: auto;
+  /* pp-fx6 (re-walk N-02; the DS fold, older than this lane): scrolled, the band folds — the DS fades its pills in place, and on a phone
+     (≤ 760 px) it keeps the band's height on purpose (a band that shrinks while the page scrolls moves the page under the reader and
+     flips the fold). Since the reference stays whole (W-07) the status chip has a line of its own, so the fade left an EMPTY row (156 px,
+     customer and supplier orders). On a phone the folded band keeps its pills: nothing empty, nothing moves. */
+  .fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta > *,
+  .fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta .nds-pill {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
   }
 }

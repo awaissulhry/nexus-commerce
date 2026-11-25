@@ -17,6 +17,7 @@ import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './desig
 import { RECORD_TABS, tabOf } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { keyJoinOf } from '../../shell/view/FrameDialogs' // pp-fx5 (walk W-18)
+import { designScreen as supplierRecord } from '../../supplier/orders/record/fixtures' // pp-fx6 (re-walk W-15)
 import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 
 /**
@@ -281,6 +282,21 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('W-14: from 1280 px the band’s pills take the room they need (no half-room cap), down to their widest one — the band keeps one row', () => {
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-meta \{\s*flex: 0 1 auto;\s*min-width: min-content;\s*max-width: none;\s*\}/)
+    // pp-fx6 (re-walk N-01): never the title's room — at 1440 with the conversation hidden the title was cut ("Your orde…"). In the same
+    // block the title keeps its whole width; the pills wrap inside their own place when both cannot fit.
+    const wide = css.slice(css.indexOf('@media (min-width: 1280px) {\n  .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {'))
+    expect(wide.slice(0, wide.indexOf('\n}\n'))).toMatch(/\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-title h1 \{\s*flex-shrink: 0;\s*\}/)
+  })
+
+  // pp-fx6 (re-walk N-02): at 375, scrolled, the band folded but kept 156 px with an EMPTY row — the DS fold fades the pills in place and
+  // keeps a phone band's height on purpose (no page jump); since W-07 the status chip has a line of its own. On a phone the folded
+  // band keeps its pills (no empty row, nothing moves); from 720 px the DS fold is untouched.
+  it('N-02: on a phone the folded band keeps its pills — no faded hole, no empty row; wider bands fold as the DS does', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    const at = css.indexOf('.fw-pband.nds-detailhdr-fold.is-folded .nds-detailhdr.dense .nds-detailhdr-meta > *,')
+    expect(at).toBeGreaterThan(css.indexOf('@media (max-width: 719px)'))
+    expect(css.slice(at, at + 260)).toMatch(/\.nds-detailhdr-meta \.nds-pill \{\s*opacity: 1;\s*transform: none;\s*pointer-events: auto;\s*\}/)
+    expect(css.slice(0, css.indexOf('@media (max-width: 719px)'))).not.toContain('is-folded')
   })
 
   // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a
@@ -290,7 +306,14 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
     expect(phone).toMatch(/\.fw-pfoot \{[^}]*flex-direction: column;[^}]*flex-wrap: nowrap;/)
     expect(phone).toContain('.fw-pfoot-free {\n    flex: 0 0 auto;\n  }')
-    expect(phone).toContain('.fw-ptabs {\n    min-width: 0;\n    max-width: 100%;\n    overflow-x: auto;\n  }')
+    // pp-fx6 (re-walk W-15): the band's tab row is the DS scrolling strip with its arrows ("Ship notices 2" sat at the edge, no ›) — the
+    // shell hands the band's Tabs `overflow="scroll"` (packages/ui frozen); the strip keeps the band's 16 px gutter.
+    const view = readFileSync(new URL('../../shell/view/PortalShellView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<Tabs className="fw-ptabs" ariaLabel={band.tabs.label} tabs={band.tabs.items} active={band.tabs.active} overflow="scroll" />')
+    expect(css).toContain('.fw-pband .fw-ptabs.nds-tabs.scrollable {\n  padding-inline: var(--nds-space-16);\n}')
+    expect(phone).not.toMatch(/\.fw-ptabs \{\s*min-width: 0;/)
+    const html = render(createElement(supplierRecord.view, { model: supplierRecord.cases.find((item) => item.id === 'phone')!.model }), 'en')
+    expect(html).toMatch(/<div class="nds-tabs-scroller"[^>]*>\s*<(nav|div)[^>]*class="nds-tabs[^"]*scrollable[^"]*fw-ptabs/)
   })
 })
 
