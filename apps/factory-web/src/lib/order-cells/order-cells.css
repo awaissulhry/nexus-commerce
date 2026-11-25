@@ -178,7 +178,7 @@
 
 /* ---- pg-w1 (10-design § 1.4): the customer face of Promised — the day (its door) over one quiet line: "was …" (the warning words,
    one fact one place: Z4), "date asked", "wanted". Tokens only. ---- */
-.fw-oc-stack {
+.fw-ocl-stack {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -186,7 +186,7 @@
   min-width: 0;
   line-height: 1.25;
 }
-.fw-oc-sub {
+.fw-ocl-sub {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,7 +194,7 @@
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-xs);
 }
-.fw-oc-sub.is-warn {
+.fw-ocl-sub.is-warn {
   color: var(--nds-warning-text);
   font-weight: var(--nds-font-weight-semibold);
 }

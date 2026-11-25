@@ -90,13 +90,13 @@ describe('pg-w1: the office\'s markup, as the Orders sheet drew it', () => {
 describe('pg-w1: the customer face (Z4: one fact, one place)', () => {
   it('Promised: "was …" under a day that moved, "date asked" while nothing is promised, "wanted" for a request; none: "No promise" / "—"', () => {
     const moved = draw(createElement(PromiseCell, { cell: { face: 'customer', day: '04/12/2026', door, was: '28/11/2026' }, t: sheet }), 'outside')
-    expect(moved).toContain('class="fw-oc-stack"')
-    expect(moved).toContain('<span class="fw-oc-sub is-warn">was 28/11/2026</span>')
+    expect(moved).toContain('class="fw-ocl-stack"')
+    expect(moved).toContain('<span class="fw-ocl-sub is-warn">was 28/11/2026</span>')
     expect(text(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '04/12/2026', door }, t: sheet }), 'outside'))).toBe('04/12/2026')
-    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '01/12/2026', of: 'asked', door }, t: sheet }), 'outside')).toContain('<span class="fw-oc-sub">date asked</span>')
-    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '01/12/2026', of: 'wanted', door }, t: sheet }), 'outside')).toContain('<span class="fw-oc-sub">wanted</span>')
+    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '01/12/2026', of: 'asked', door }, t: sheet }), 'outside')).toContain('<span class="fw-ocl-sub">date asked</span>')
+    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '01/12/2026', of: 'wanted', door }, t: sheet }), 'outside')).toContain('<span class="fw-ocl-sub">wanted</span>')
     expect(text(draw(createElement(PromiseCell, { cell: { face: 'customer', day: null, door }, t: sheet }), 'outside'))).toBe('No promise')
-    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: null, of: 'wanted', door: null }, t: sheet }), 'outside')).toBe('<span class="fw-oc-sub">—</span>')
+    expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: null, of: 'wanted', door: null }, t: sheet }), 'outside')).toBe('<span class="fw-ocl-sub">—</span>')
     // Italian, the customer's words.
     expect(draw(createElement(PromiseCell, { cell: { face: 'customer', day: '04/12/2026', door, was: '28/11/2026' }, t: sheet }), 'outside', 'it')).toContain('era il 28/11/2026')
   })

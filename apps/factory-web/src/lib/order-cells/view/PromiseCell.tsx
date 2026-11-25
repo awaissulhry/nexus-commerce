@@ -35,7 +35,7 @@ export function PromiseCell({ cell, t }: { cell: PromiseCellModel; t: Translate 
   const of = cell.of ?? 'promise'
   if (!cell.day)
     return of === 'wanted' ? (
-      <span className="fw-oc-sub">—</span>
+      <span className="fw-ocl-sub">—</span>
     ) : (
       <span className="fw-sheet-wraps is-quiet">
         <DoorCell door={cell.door} t={t}>
@@ -45,11 +45,11 @@ export function PromiseCell({ cell, t }: { cell: PromiseCellModel; t: Translate 
     )
   const under = of === 'asked' ? words.list('customer.promise.asked') : of === 'wanted' ? words.list('customer.promise.wanted') : cell.was ? words.list('customer.promise.was', { date: cell.was }) : null
   return (
-    <span className="fw-oc-stack">
+    <span className="fw-ocl-stack">
       <DoorCell door={cell.door} t={t}>
         {cell.day}
       </DoorCell>
-      {under && <span className={of === 'promise' ? 'fw-oc-sub is-warn' : 'fw-oc-sub'}>{under}</span>}
+      {under && <span className={of === 'promise' ? 'fw-ocl-sub is-warn' : 'fw-ocl-sub'}>{under}</span>}
     </span>
   )
 }
