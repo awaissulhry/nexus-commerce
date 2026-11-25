@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
-import type { CustomerOrderStatus } from '@nexus/factory-domain/sales/portal-orders/status'
+import { groupOf, type CustomerOrderStatus } from '@nexus/factory-domain/sales/portal-orders/status'
 import { CUSTOMER_GROUP_ICON, type CustomerGroup } from '../order-groups/groups'
 
 /**
@@ -44,12 +44,8 @@ export const ORDER_STATUS_TONE: Readonly<Record<SalesOrderStatus, Tone>> = Objec
 /** A customer status' tone: the office's for the same status ("Requested" is the office's "Waiting for a yes"). */
 export const customerStatusTone = (status: CustomerOrderStatus): Tone => ORDER_STATUS_TONE[status === 'REQUESTED' ? 'PENDING_APPROVAL' : status]
 
-/** The customer group a customer status counts in (Shipped holds partly shipped and shipped; the server's sheet groups). */
-export function customerGroupOf(status: CustomerOrderStatus): Exclude<CustomerGroup, 'CLOSED_REQUESTS'> {
-  if (status === 'REQUESTED') return 'REQUESTS'
-  if (status === 'PARTLY_SHIPPED') return 'SHIPPED'
-  return status
-}
+/** The customer group a customer status counts in (Shipped holds partly shipped and shipped): the domain's ONE rule, the server's too. */
+export const customerGroupOf = (status: CustomerOrderStatus): CustomerGroup => groupOf({ kind: 'ROW', status, needsYou: false }) ?? 'REQUESTS'
 
 // ---- the status chip and the mark chip (Z1: shared; the office's Where it is cell draws them inside) ------------------------------
 

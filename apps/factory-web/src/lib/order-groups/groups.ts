@@ -1,5 +1,6 @@
 import { Archive, Ban, CircleCheck, Hourglass, Inbox, Package, Scissors, Send, Truck, type LucideIcon } from 'lucide-react'
 import { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_GROUPS } from '@nexus/factory-domain/sales/portal-orders/status'
 
 /**
  * pg-w1 (portal grid plan § 2; 18-lead-settles Z1–Z3, Z6) — the groups of a customer's orders, pure: the ONE set per face, one mark
@@ -14,8 +15,8 @@ export type GroupFace = 'office' | 'customer'
 /** The office face: the domain's seven phases, in their order (Cancelled apart). */
 export const OFFICE_GROUPS: readonly OrderPhase[] = ORDER_PHASES
 
-/** The customer face: the portal's eight groups (the sheet answer's `groups`), in their order (the last two apart). */
-export const CUSTOMER_GROUPS = ['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'CLOSED_REQUESTS'] as const
+/** The customer face: the portal's eight groups (the sheet answer's `groups`, the domain's ORDER_GROUPS), in their order (the last two apart). */
+export const CUSTOMER_GROUPS = ORDER_GROUPS
 export type CustomerGroup = (typeof CUSTOMER_GROUPS)[number]
 
 /** A group of either face (the office's phases and the customer's groups share four names: the face says which set). */

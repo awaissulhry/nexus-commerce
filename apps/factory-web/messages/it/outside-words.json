@@ -15,7 +15,7 @@
       "label_one": "{count} messaggio nuovo su {record}: aprite la conversazione al primo nuovo",
       "label_other": "{count} messaggi nuovi su {record}: aprite la conversazione al primo nuovo"
     },
-    "columnHint": "I vostri nuovi messaggi sull'ordine da quando avete letto la sua conversazione. Un clic apre la conversazione al primo nuovo."
+    "columnHint": "I vostri nuovi messaggi da quando avete letto la conversazione. Un clic apre la conversazione al primo nuovo."
   },
   "photo-kit": {
     "photo": {
