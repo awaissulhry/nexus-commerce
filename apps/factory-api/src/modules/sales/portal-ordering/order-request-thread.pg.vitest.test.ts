@@ -275,7 +275,8 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     for (const status of ['OPEN', 'ALL'] as const) expect((await listOfficeRequests(persona('sales'), { status })).requests.map((entry) => entry.id)).not.toContain(draft)
     const view = await officeRequestView(persona('sales'), draft)
     expect(view.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ title: row.draft!.title }) })
-    expect(view.may).toEqual({ order: false, quote: false, refuse: false })
+    // od-s s.3 (Owner yes 2a, 4a): Sales confirms a draft (orders.manage); Make style draft is held (no product.styles.manage).
+    expect(view.may).toEqual({ order: false, quote: false, refuse: false, confirm: true, styleDraft: false })
     await expect(acceptRequest(office(['orders.view', 'orders.manage', 'quotes.manage', 'money.price']), draft, { version: view.request.version, as: 'ORDER' })).rejects.toThrow("This is still the customer's draft: it is decided once they send it.")
     await expect(refuseRequest(office(['orders.view', 'orders.manage']), draft, { version: view.request.version, reason: 'Made-up' })).rejects.toThrow(/still the customer's draft/)
     // Never in Incoming, Home › Approvals or "Customer replies" (the customer's message on it waits there for nobody).

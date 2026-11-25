@@ -50,6 +50,26 @@ export const manifest = defineManifest({
   'GET /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'POST /sales/order-requests/:requestId/accept': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // od-s s.3 (order start, Owner yes 1a): the office fills a customer's draft through the SAME commands — orders.manage (orders.view
+  // to read) over the draft's company and customer, checked by the handler (the office writer); files also ask files.upload; Make
+  // style draft asks product.styles.manage over the company (the style library's check). No Incoming route (Owner yes 3a).
+  'POST /sales/order-requests': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /sales/order-requests/:requestId/draft': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'PATCH /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'DELETE /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/custom-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'PUT /sales/order-requests/:requestId/custom-lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'PUT /sales/order-requests/:requestId/lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'DELETE /sales/order-requests/:requestId/lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/lines/:lineId/people': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'PUT /sales/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'DELETE /sales/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/files': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/files/:fileId/complete': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'DELETE /sales/order-requests/:requestId/files/:fileId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/style-draft': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // od-s s.4 (Owner yes 2a): Confirm = send (if still a draft) + the accept, in ONE command (quotes.manage too for a quote: the handler).
+  'POST /sales/order-requests/:requestId/confirm': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   // B-CQ-030 (customer page › Quotes & incoming): the small pictures of a page of portal orders, drafts too (each one's orders.view).
   'POST /sales/order-requests/pictures': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-W2b-F13b: the delivery addresses customers add wait for the office's check (whoever takes the customer's orders).
