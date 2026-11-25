@@ -1,5 +1,6 @@
 import type { PortalQuote, PortalThreadMessage } from '../../lib/record-thread/partner/model'
 import type { PartnerLinkRead, PartnerMessageRead } from './api'
+import { MAX_BODY } from '../../lib/record-thread/composer/model'
 
 /**
  * The record conversation's rules the frame says in its own words (B-W2b-168's composer reasons; pure, held by
@@ -7,8 +8,8 @@ import type { PartnerLinkRead, PartnerMessageRead } from './api'
  * never imports them).
  */
 
-/** The longest message (factory-domain threads/rules MAX_BODY_LENGTH): the Textarea counts toward it, never blocks. */
-export const THREAD_BODY_LIMIT = 20_000
+/** The longest message (factory-domain threads/rules MAX_BODY_LENGTH) — pt-t T.2: the ONE limit the shared composer row counts toward. */
+export const THREAD_BODY_LIMIT = MAX_BODY
 
 /** Why the person may not write here, as the words' key (factory-domain threads/partner COMPOSER_REASONS). */
 export function threadHeldKey(reason: string | null): string {
