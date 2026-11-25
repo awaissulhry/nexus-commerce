@@ -163,7 +163,7 @@ export function bytesOf(size: string | undefined): number {
 export function partnerFilesOf(attachments: readonly PortalThreadFile[] | undefined): { readonly files: CardFile[]; readonly locked: number } {
   const open = (attachments ?? []).filter((file) => !file.locked)
   return {
-    files: open.map((file) => ({ id: file.id, name: file.name, sizeBytes: file.sizeBytes ?? bytesOf(file.size), contentType: file.contentType ?? (PICTURE_TYPE.test(file.name) ? 'image/jpeg' : 'application/octet-stream'), status: 'AVAILABLE' })),
+    files: open.map((file): CardFile => ({ id: file.id, name: file.name, sizeBytes: file.sizeBytes ?? bytesOf(file.size), contentType: file.contentType ?? (PICTURE_TYPE.test(file.name) ? 'image/jpeg' : 'application/octet-stream'), status: 'AVAILABLE' })),
     locked: (attachments ?? []).length - open.length,
   }
 }
