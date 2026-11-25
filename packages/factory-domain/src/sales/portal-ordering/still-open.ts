@@ -38,7 +38,8 @@ export interface StillOpenItem {
 }
 
 export interface StillOpen {
-  readonly items: readonly StillOpenItem[]
+  /** A list of its own (the contracts' output arrays are mutable). */
+  readonly items: StillOpenItem[]
   /** Items not DECIDED. */
   readonly openCount: number
   /** An item the order needs is open (the office card says the Confirm window asks it; it never holds Send). */

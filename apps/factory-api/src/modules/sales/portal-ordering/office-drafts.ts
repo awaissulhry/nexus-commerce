@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { isCustomer } from '@nexus/factory-domain/parties/rules'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { RequestSource } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import type { FilesRuntime } from '../../../platform/files/service'
@@ -37,7 +38,7 @@ import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } fro
  */
 
 /** The office's writer of a draft, `permission` over its company and customer (404 out of reach, 403 without it). */
-const writerOf = async (app: FastifyInstance, request: FastifyRequest, requestId: string, permission = ORDERS_MANAGE): Promise<DraftWriter> => (await officeDraftWriter(app, request, requestId, permission)).writer
+const writerOf = async (app: FastifyInstance, request: FastifyRequest, requestId: string, permission: Permission = ORDERS_MANAGE): Promise<DraftWriter> => (await officeDraftWriter(app, request, requestId, permission)).writer
 
 export interface OfficeStartBody extends HeaderBody {
   readonly companyId: string

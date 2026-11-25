@@ -53,10 +53,17 @@ export function choicesRow(choices: readonly DraftChoice[] | null | undefined): 
   return choices.map((choice) => ({ topic: choice.topic.trim(), options: choice.options.map((option) => option.trim()), picked: choice.picked === null ? null : choice.picked.trim() }))
 }
 
+/** A choice as an answer carries it (its own arrays: the contracts' output types are mutable). */
+export interface DraftChoiceView {
+  readonly topic: string
+  readonly options: string[]
+  readonly picked: string | null
+}
+
 /** The stored choices read back (a value the database holds: null, or the shape above; anything else reads as none). */
-export function choicesOf(value: unknown): DraftChoice[] | null {
+export function choicesOf(value: unknown): DraftChoiceView[] | null {
   if (!Array.isArray(value) || value.length === 0) return null
-  const out: DraftChoice[] = []
+  const out: DraftChoiceView[] = []
   for (const entry of value) {
     const item = entry as { topic?: unknown; options?: unknown; picked?: unknown } | null
     if (!item || typeof item.topic !== 'string' || !Array.isArray(item.options)) continue
