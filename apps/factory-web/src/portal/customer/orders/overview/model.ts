@@ -301,6 +301,7 @@ const DAY_MS = 86_400_000
 export function requestsOf(input: OverviewInput, now: number = Date.now()): RequestsModel | null {
   const { words } = input
   const { t, locale, day, at } = words
+  const pw = wordsFor(locale)
   const requests = input.requests
   if (requests.state === 'noAccess') return null
   const base = { title: t('overview.requests'), nothing: t('overview.nothing') }
@@ -311,7 +312,8 @@ export function requestsOf(input: OverviewInput, now: number = Date.now()): Requ
     what: [request.kindWords[locale], whatOf(request, words)].filter(Boolean).join(' · '),
     chip: request.status === 'ACCEPTED' && request.followUp ? { words: t(`requests.followUp.${request.followUp}`), tone: request.followUp === 'DONE' ? 'success' : 'info' } : { words: request.words[locale], tone: requestTone(request.status) },
     since: request.askedAt,
-    age: `${Math.max(0, Math.floor((now - Date.parse(request.askedAt)) / DAY_MS))} d`,
+    // The shared parts' own age word ("3 d" · "3 g"), never a written English letter.
+    age: pw.t('parts.age.days', { count: Math.max(0, Math.floor((now - Date.parse(request.askedAt)) / DAY_MS)) }),
     askedDay: t(request.mine ? 'requests.askedByYou' : 'requests.asked', { when: at(request.askedAt) }),
     yourNote: request.note ? t('requests.note', { note: request.note }) : null,
     answer: request.answer ? t('requests.ourAnswer', { answer: request.answer }) : request.status === 'ACCEPTED' && request.answeredAt ? t('requests.acceptedOn', { date: day(request.answeredAt.slice(0, 10)) }) : null,
