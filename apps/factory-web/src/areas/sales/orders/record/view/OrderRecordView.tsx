@@ -45,7 +45,7 @@ import { bandMenuFor, bandStepOf } from '../../model' // F-OP-311 (oo-walk #10):
 import type { NextStep } from '../../model' // F-OS-101 (L10): the band's step on the Shipments tab
 import type { NoticeWords } from '../record-model' // F-OS-204
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
 import { TabLink } from '../../../../../lib/tab-link/TabLink' // F-OP-210
 // ---- B-TH-256: what points at the order (its complaints and returns, planning's re-promises, the gates' refusals) ----
@@ -77,7 +77,7 @@ import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the 
 // ---- end F-SA-232
 // ---- F-CO-K1 (the shared overview kit): PartState draws the kit's CardState. F-CO-K2: no stylesheet order decides a look any more
 // (the two dead align-items went), so the kit's stylesheet may load before or after the order's own (Changes reaches it first). ----
-import { CardState } from '../../../../_shared/record-overview/Overview'
+import { CardState } from '../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K1
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'

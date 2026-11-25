@@ -26,7 +26,7 @@ import {
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
 import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price check term (the Not equal view)
 import { isOrderPhase, type OrderPhase } from '@nexus/factory-domain/production-brand/stages' // F-CW-101: the phase term (the band's doors)
-import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
+import type { DockDefault } from '../../../lib/record-frame/model' // F-SA-263 (pp-k1 k1.2: the frame's core)
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105: our priority levels — the domain's rule, never re-written here

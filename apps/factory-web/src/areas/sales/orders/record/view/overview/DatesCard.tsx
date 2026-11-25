@@ -15,7 +15,7 @@ import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import './dates.css' // F-OO-141: the card's own rows
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 // ---- F-OO-143: the new date the customer refused (the ONE waiting list's DATE row) and Decide… (the ONE promise dialog) ----
 import type { WaitingState } from '../../overview/model'
 import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates'

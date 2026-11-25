@@ -19,7 +19,7 @@ import { say } from '../../overview/model'
 import { creditLinesOf, refuseLineOf, type StripDoor, type WhereStrip } from '../../overview/where'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 // F-CO-K2: the row is the shared overview kit's Strip (its look comes with it, on Overview and on Production › Problems & holds alike)
-import { Strip, StripSaid } from '../../../../../_shared/record-overview/Overview'
+import { Strip, StripSaid } from '../../../../../../lib/record-overview/Overview'
 
 /**
  * F-PT-301 (order PRODUCTION tab; plan D2 / L9) — ONE strip row for what stops the order, moved out of WhereCard unchanged (F-OO-105,

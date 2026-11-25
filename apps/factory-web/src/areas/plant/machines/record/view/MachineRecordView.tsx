@@ -13,7 +13,7 @@ import { ageWords, labelOf, personWords } from '../../../_shared/model'
 import { Cost, JobPill, MachinePill, NoticeBanner, PlantMessages, SymptomText, useWords } from '../../../_shared/parts'
 // ---- B-TH-265: the machine on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 // ---- end B-TH-265
 import { changeHeld, nextCheckWords } from '../../depth/model'
 import { DepthMessages, useDepthWords } from '../../depth/parts'

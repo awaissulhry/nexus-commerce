@@ -15,7 +15,7 @@ import { OrderAffectedTab, OrderApprovalsTab, OrderChangeTab, OrderImpactTab } f
 import { RequestAffectedTab, RequestApprovalsTab, RequestChangeTab, RequestImpactTab } from './RequestTabs'
 // ---- B-TH-262: the change on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { ChangeRecordActions, ChangeRecordModel } from '../view-model'
 

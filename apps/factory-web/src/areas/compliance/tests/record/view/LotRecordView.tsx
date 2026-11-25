@@ -34,7 +34,7 @@ import { DecideDialog, DocumentDialog, ResultDialog } from './dialogs'
 import { costWords, LAB_COST_NAMESPACE } from '../../lab-cost/lab-cost'
 // ---- B-TH-267: the lot on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export interface LotRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void

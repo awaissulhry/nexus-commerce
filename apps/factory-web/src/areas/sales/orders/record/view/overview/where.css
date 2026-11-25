@@ -3,7 +3,7 @@
    (F-OO-107). The card is a container already (the kit's stylesheet makes every Overview card `fw-so-ov-card`): no container here.
    Its rules came from so/orders.css (.fw-so-where, .fw-so-headline). Tokens only. ── */
 /* F-CO-K1: the card's column (.fw-so-where) and the headline with its quiet line (.fw-so-where-said, .fw-so-headline) moved on to
-   the shared overview kit: areas/_shared/record-overview/record-overview.css (its lead card and its Headline part). F-CO-K2: the
+   the shared overview kit: lib/record-overview/record-overview.css (its lead card and its Headline part). F-CO-K2: the
    strips (.fw-so-strips-box, .fw-so-strips, .fw-so-strip and its parts) followed them there (its Strips, Strip and StripSaid). */
 
 /* The five stages and their quiet line under them — F-MS-101: "set by the floor and quality, or by hand when the floor cannot record
