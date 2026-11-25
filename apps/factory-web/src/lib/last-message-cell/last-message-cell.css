@@ -49,3 +49,39 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---- pg-w1 (18-lead-settles Z10): moved verbatim from the Orders sheet (sheet/chips.css) — the bubble "2" and its header mark, ONE
+   look for one fact on both faces (NewMessagesBubble, MessagesHeader). ---- */
+/* ---- F-CW-102: New messages — a count bubble; in a narrow column its header is the message mark ---- */
+.fw-sheet-msgs {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+button.fw-sheet-msgs,
+a.fw-sheet-msgs {
+  cursor: pointer;
+}
+.fw-sheet-msgs:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+.fw-sheet-hicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--nds-text-2);
+}
