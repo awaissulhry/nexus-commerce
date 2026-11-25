@@ -321,7 +321,7 @@ function PriceCard({ record, rows }: { record: DraftRecord; rows: readonly Produ
   const own = (rowId: string): string | null => record.request.lines.find((line) => line.id === rowId)?.brandUnitPrice ?? customLinesOf(record.request).find((line) => line.id === rowId)?.brandUnitPrice ?? null
   const money = (value: string | null) => (value === null ? '—' : new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'en-GB', { style: 'currency', currency: record.request.currency }).format(Number(value)))
   return (
-    <Card padded>
+    <Card padded className="fw-od-pricecard">
       <section className="fw-od-section" aria-labelledby="od-price-title">
         <h2 id="od-price-title" className="fw-od-h2">
           {t('pm.title')}

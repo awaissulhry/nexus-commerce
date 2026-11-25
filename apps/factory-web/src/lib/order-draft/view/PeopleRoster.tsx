@@ -111,11 +111,12 @@ export function LineRoster({ line, model, actions }: { line: DraftViewCustomLine
         </ul>
       ) : null}
       {onLine.length > 0 ? <p className="fw-od-quiet">{t('draftPage.roster.sheetOnLine', { names: onLine.map((file) => file.originalName ?? '—').join(', ') })}</p> : null}
+      {/* od-fx10 W-31: a reader is told once, at the window's top — nothing here; W-27: ONE prompt, the part's own words. */}
       {model.uploadsOpen ? (
-        (held ?? model.addHeld) ? (
-          <p className="fw-od-held">{held ?? model.addHeld}</p>
+        held ? null : model.addHeld ? (
+          <p className="fw-od-held">{model.addHeld}</p>
         ) : (
-          <FileDropzone multiple accept={ACCEPT.SHEET} hint={t('draftPage.roster.attach')} onFiles={(files) => actions?.onFiles?.('SHEET', files, line.id)} />
+          <FileDropzone multiple accept={ACCEPT.SHEET} labels={{ prompt: t('draftPage.roster.attach') }} hint="" onFiles={(files) => actions?.onFiles?.('SHEET', files, line.id)} />
         )
       ) : (
         // D14: on live, until the virus scanner runs — the e-mail way, naming the draft and the line.

@@ -401,3 +401,11 @@
   gap: var(--nds-space-4);
   color: var(--nds-text-2);
 }
+
+/* od-fx10 W-19: "catalogue · a past order · a sheet" stay together (the label "Add from:" may go above them, never one alone). */
+.fw-pno-addways {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

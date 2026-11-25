@@ -28,6 +28,7 @@ export const OFFICE_VOICE: ReadonlySet<string> = new Set([
   'cf.quoteNext',
   'date.ref',
   'draftPage.measure.LATER', // od-fx8 W-22: "They send the measures later."
+  'draftPage.roster.privacy', // od-fx10 W-31: "the customer's riders and team"
   'head.savedByCustomer', // od-fx8 W-09: the office only (a customer's person, with the customer)
   // od-fx2: a reordered row's origin, in the office's voice (the customer's order)
   'lines.fromDay',

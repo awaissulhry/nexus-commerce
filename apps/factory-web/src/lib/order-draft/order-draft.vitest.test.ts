@@ -7,7 +7,7 @@ import { CATALOGUE, createTranslator, messagesFor } from '../i18n/messages'
 import { I18nProvider } from '../i18n/provider'
 import { draftRecord, kindsRecord, describedLine, mtmLine, TODAY } from '../../portal/customer/neworder/design-data'
 import { draftSendHeld } from '../../portal/customer/neworder/model'
-import { choiceWords, draftViewOf, headerDraftOf, productRowsOf, rowProductOf, savedByWords } from './model'
+import { choiceWords, draftViewOf, headerDraftOf, personWhat, productRowsOf, rowProductOf, savedByWords } from './model'
 import { DRAFT_NS, draftWordsFor } from './words'
 import { DraftPage, type DraftPageModel } from './view/DraftPage'
 import { PiecesBody, piecesOpenOf } from './view/RowWindows'
@@ -172,9 +172,54 @@ describe('od-fx8 — the walk of the shared part (W-01, W-09, W-10, W-15, W-21, 
     const css = readFileSync(new URL('./order-draft.css', import.meta.url), 'utf8')
     expect(css).toContain('.fw-portal .fw-od-actionbar {\n    bottom: calc(56px + env(safe-area-inset-bottom));')
     expect(css).toContain('.fw-office-main .fw-od-actionbar {\n    bottom: calc(64px + env(safe-area-inset-bottom));')
-    expect(css).toMatch(/\.fw-od-trow input,\n\.fw-od-trow select \{\n  width: 100%;\n  min-width: 0;/)
+    expect(css).toMatch(/\.fw-od-trow input,\n\.fw-od-trow select \{\n[^}]*width: 100%;\n  min-width: 0;/)
     expect(css).toContain('grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));')
     expect(css).toContain("'n product product more'")
+  })
+})
+
+describe('od-fx10 — re-walk 1 of the shared part (W-12, W-17, W-19, W-22, W-27, W-29, W-30, W-31, W-32)', () => {
+  const office = (locale: 'it' | 'en') => draftWordsFor(td(locale), locale, 'office').t
+
+  it('W-29: a person sending later says it once — "How we get the size" says it, "What is there" a short state', () => {
+    for (const locale of ['it', 'en'] as const) {
+      expect(personWhat({ measureBy: 'LATER', size: null, sheet: null }, td(locale)), locale).toBe(td(locale)('draftPage.roster.notYet'))
+      expect(td(locale)('draftPage.roster.notYet'), locale).not.toBe(td(locale)('draftPage.measure.LATER'))
+    }
+  })
+
+  it('W-22 / W-31: the roster says "row", the office reads the privacy line in its own voice', () => {
+    expect(td('en')('draftPage.roster.title', { seq: 1, kind: 'Custom size', title: 'Suit' })).toBe('Row 1 · Custom size · Suit — one row per person')
+    expect(td('en')('draftPage.roster.title', { seq: 1, kind: 'x', title: 'y' })).not.toMatch(/\bline\b/)
+    for (const locale of ['it', 'en'] as const) {
+      expect(office(locale)('draftPage.roster.privacy'), locale).not.toBe(td(locale)('draftPage.roster.privacy'))
+      expect(office(locale)('draftPage.roster.privacy'), locale).not.toMatch(/\byour\b|vostr/i)
+    }
+  })
+
+  it('W-31 / W-27: a reader’s Pieces window on a custom size says "You can read, not change…" ONCE; a writer’s roster drop area ONE prompt', () => {
+    const record = kindsRecord()
+    const view = draftViewOf(record)
+    const row = productRowsOf(record.request).find((entry) => entry.sizing === 'MADE_TO_MEASURE')!
+    const line = view.request.customLines!.find((entry) => entry.id === row.id)!
+    const held = 'You can read, not change: your role does not manage orders.'
+    const draw = (writeHeld: string | null) =>
+      renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', [DRAFT_NS, 'ds-words']) }, createElement(PiecesBody, { model: { row, ...piecesOpenOf(row), roster: { draft: view, writeHeld, uploadsOpen: true, addHeld: null, draftName: '' }, rosterLine: line, busy: false, failed: null, writeHeld } })))
+    expect(draw(held).split('You can read, not change').length - 1).toBe(1)
+    const writer = draw(null)
+    expect(writer).toContain(td('en')('draftPage.roster.attach'))
+    expect(writer).not.toContain('Drag &amp; drop')
+  })
+
+  it('looks (W-12, W-30, W-32, W-17): boxes sized for their longest words, two lines below 900 px, cards below 640 px, price cards a whole row', () => {
+    const css = readFileSync(new URL('./order-draft.css', import.meta.url), 'utf8')
+    expect(css).toContain('minmax(180px, 1.3fr) minmax(140px, 1.1fr)')
+    expect(css).toContain('@container (max-width: 899px)')
+    expect(css).toContain("'. colour options files .'")
+    expect(css).toContain('@container (max-width: 639px)')
+    expect(css).toContain("'sizing sizing sizing sizing'")
+    expect(css).toContain('box-sizing: border-box;')
+    expect(css).toContain('.fw-od-hostrow > .fw-od-pricecard {\n  grid-column: 1 / -1;')
   })
 })
 

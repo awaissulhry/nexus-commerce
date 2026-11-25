@@ -88,7 +88,8 @@
       "remove": "Togli",
       "sheetGone": "una scheda non più sulla bozza",
       "sheetOnLine": "Scheda misure su questa riga: {names}",
-      "title": "Riga {seq} · {kind} · {title} — una persona per riga"
+      "title": "Riga {seq} · {kind} · {title} — una riga per persona",
+      "notYet": "Non ancora"
     }
   },
   "head": {
@@ -255,6 +256,9 @@
     "draftPage": {
       "measure": {
         "LATER": "Le misure le mandano dopo."
+      },
+      "roster": {
+        "privacy": "Nomi e misure dei piloti e del team del cliente sono dati personali: servono solo a questo ordine, e le schede misure le aprono solo le persone che si occupano delle misure."
       }
     }
   },
