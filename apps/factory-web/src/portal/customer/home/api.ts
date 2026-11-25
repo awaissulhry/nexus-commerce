@@ -42,7 +42,8 @@ export const orderRowSchema = z.object({
   promiseMoved: z.boolean(),
   requestedDate: z.string().nullable(),
   pieces: z.object({ ordered: z.number(), shipped: z.number(), open: z.number() }),
-  nextShipment: z.object({ id: z.string(), number: z.string(), status: z.string(), words }).nullable(),
+  // pg-w2 (D6): a parcel is named by its order, never the office's shipment series (`number` null from the server step; `parcel` its place).
+  nextShipment: z.object({ id: z.string(), number: z.string().nullable(), parcel: z.number().optional(), status: z.string(), words }).nullable(),
   progressPercent: z.number().nullable(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>

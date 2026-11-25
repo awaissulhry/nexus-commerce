@@ -1,7 +1,7 @@
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { PortalBand, PortalBandAction } from '../../shell/frame'
 import type { OrderRecord } from './api'
-import { listQuery, recordHref, statusTone, type ListChip, type RecordTab } from './model'
+import { recordHref, statusTone, type RecordTab } from './model'
 // B-TH-275: the order named by the customer's own number (plan §0.5).
 import { orderNameOf } from './model'
 import type { OrderWords } from './words'
@@ -13,7 +13,8 @@ import type { OrderWords } from './words'
  */
 
 // B-W2b-194: `newOrder` = the New order page's address for a person who may order (else null: no button).
-export function listBandOf(input: { words: OrderWords; asOf: string | null; rows: number; chip: ListChip | null; q: string; prefix: string; onExport?: () => void; newOrder?: string | null; /* B-TH-246 */ onDownloadAll?: (() => void) | null; downloading?: boolean }): PortalBand {
+// pg-w2 (Z8): ONE export — "Download (Excel)" of the group shown, written by the server; Export this view (CSV) and Print left.
+export function listBandOf(input: { words: OrderWords; asOf: string | null; newOrder?: string | null; /* B-TH-246 */ onDownloadAll?: (() => void) | null; downloading?: boolean }): PortalBand {
   const { t, time } = input.words
   return {
     title: t('list.title'),
@@ -21,10 +22,8 @@ export function listBandOf(input: { words: OrderWords; asOf: string | null; rows
     // B-W2b-194: the band's primary "New order" (a buyer's).
     actions: input.newOrder ? [{ id: 'new-order', label: t('band.newOrder'), variant: 'primary', href: input.newOrder }] : [],
     more: [
-      // B-TH-246 (SHEET-G10, Owner decision 13): every row of the view with the portal columns, written by the server in the customer's scope.
+      // B-TH-246 (SHEET-G10, Owner decision 13): the group's rows with the portal columns, written by the server in the customer's scope.
       ...(input.onDownloadAll ? [{ id: 'download-all', label: input.downloading ? t('band.downloading') : t('band.downloadAll'), description: t('band.downloadAllHint'), disabled: !!input.downloading, onSelect: () => input.onDownloadAll?.() }] : []),
-      { id: 'export', label: t('band.export'), disabled: input.rows === 0, description: input.rows === 0 ? t('held.noRows') : undefined, onSelect: () => input.onExport?.() },
-      { id: 'print', label: t('band.print'), href: `${input.prefix}/orders${listQuery(input.chip, input.q, { print: '1' })}`, target: '_blank' },
     ],
     keys: [
       { keys: ['/'], words: t('keys.search') },

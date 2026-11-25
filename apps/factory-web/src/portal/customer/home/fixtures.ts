@@ -181,7 +181,7 @@ const ORDERS: OrdersRead = {
   ],
   count: 7,
   items: [
-    row(1, 'PARTLY_SHIPPED', { pieces: { ordered: 70, shipped: 40, open: 30 }, nextShipment: { id: id(301), number: 'SH-2026-0012', status: 'IN_TRANSIT', words: W('In viaggio', 'On the way') } }),
+    row(1, 'PARTLY_SHIPPED', { pieces: { ordered: 70, shipped: 40, open: 30 }, nextShipment: { id: id(301), number: null, parcel: 1 /* pg-w2 (D6): named by its order */, status: 'IN_TRANSIT', words: W('In viaggio', 'On the way') } }),
     row(2, 'READY', { progressPercent: 100 }),
     row(3, 'IN_PRODUCTION', { promiseMoved: true, originalPromiseDate: dayAt(8), promiseDate: dayAt(15), progressPercent: 45 }),
     row(4, 'CONFIRMED', { progressPercent: 0 }),

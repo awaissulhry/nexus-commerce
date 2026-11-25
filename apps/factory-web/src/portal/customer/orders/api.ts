@@ -128,7 +128,8 @@ export const fetchOrders = (api: ApiClient, query: { chip?: OrderChip | null; q?
   })
 
 // ── B-TH-246: the customer's own sheet (GET /portal/sales-orders/sheet: the list's rows with the portal columns) ──
-export const fetchSheet = (api: ApiClient, query: { chip?: OrderChip | null; q?: string | null; offset?: number; limit?: number }, signal?: AbortSignal): Promise<OrdersRead> =>
+// pg-w2: the chip is the server's own word for a group (sheetChipOf: OPEN, REQUESTED, CONFIRMED …): text, the server checks it.
+export const fetchSheet = (api: ApiClient, query: { chip?: string | null; q?: string | null; offset?: number; limit?: number }, signal?: AbortSignal): Promise<OrdersRead> =>
   api.get('/portal/sales-orders/sheet', {
     query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, limit: query.limit ?? PAGE_SIZE, offset: query.offset ?? 0 },
     schema: ordersSchema,
@@ -136,10 +137,10 @@ export const fetchSheet = (api: ApiClient, query: { chip?: OrderChip | null; q?:
   })
 
 /**
- * "Download all (Excel)": the server writes the file in the customer's own scope (its rows and its columns only; never the office's
- * export job, Owner decision 13) — the view's chip and search, every row.
+ * "Download (Excel)": the server writes the file in the customer's own scope (its rows and its columns only; never the office's
+ * export job, Owner decision 13) — the group shown and the search, every row (Z8: under Requests the order requests only).
  */
-export async function downloadSheet(api: ApiClient, query: { chip: OrderChip | null; q: string | null; format: 'XLSX' | 'CSV'; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
+export async function downloadSheet(api: ApiClient, query: { chip: string | null; q: string | null; format: 'XLSX' | 'CSV'; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
   let disposition: string | null = null
   let contentType = query.format === 'XLSX' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8'
   const bytes = await api.bytes('/portal/sales-orders/sheet/download', {
@@ -172,30 +173,7 @@ const trackingEvent = z.object({ at: z.string(), status: z.string(), words, desc
 export type TrackingEvent = z.infer<typeof trackingEvent>
 const trackingLink = z.object({ url: z.string(), words })
 
-export const inTransitSchema = z.object({
-  asOf: z.string(),
-  items: z.array(
-    z.object({
-      shipmentId: z.string(),
-      number: z.string(),
-      // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's series.
-      order: z.object({ id: z.string(), customerRef: z.string().nullable(), yourNumber }),
-      status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
-      words,
-      carrierName: z.string().nullable(),
-      shippedAt: z.string().nullable(),
-      expectedDeliveryAt: z.string().nullable().optional(),
-      trackingNumbers: z.array(z.string()),
-      trackingLinks: z.array(z.object({ trackingNumber: z.string(), url: z.string(), words })).optional(),
-      lastEvent: trackingEvent.nullable(),
-    }),
-  ),
-  live,
-})
-export type InTransitRead = z.infer<typeof inTransitSchema>
-export type InTransitRow = InTransitRead['items'][number]
-
-export const fetchInTransit = (api: ApiClient, signal?: AbortSignal): Promise<InTransitRead> => api.get('/portal/sales-orders/in-transit', { schema: inTransitSchema, signal })
+// pg-w2 (D7): "On the way" left the list (it repeated orders the grid shows); its read (GET …/in-transit) is no longer called.
 
 // ── one order ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const sizeRow = z.object({ size: z.string().nullable(), ordered: z.number(), shipped: z.number(), open: z.number(), closedShort: z.number(), unitPrice: z.string().nullable().optional() })

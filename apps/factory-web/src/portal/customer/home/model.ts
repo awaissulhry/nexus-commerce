@@ -141,7 +141,8 @@ export interface NextOrderRow {
   /** Shown only when the account shares production progress (C1). */
   readonly progress: number | null
   readonly pieces: OrderRow['pieces']
-  readonly shipment: { readonly number: string; readonly words: string } | null
+  /** pg-w2 (D6): the next parcel by its order ("Your order 12 · parcel 2": the order's own number and its place), never a series. */
+  readonly shipment: { readonly parcel: { readonly order: number; readonly n: number } | null; readonly words: string } | null
   /** Where the card opens (its record; null for a request: no page of its own yet). */
   readonly href: string | null
 }
@@ -176,7 +177,7 @@ export function nextOrderRows(read: OrdersRead | null, locale: Locale, prefix: s
       moved: row.promiseMoved && from && to && from !== to ? { from, to } : null,
       progress: row.progressPercent !== null ? Math.max(0, Math.min(100, Math.round(row.progressPercent))) : null,
       pieces: row.pieces,
-      shipment: row.nextShipment ? { number: row.nextShipment.number, words: row.nextShipment.words[locale] } : null,
+      shipment: row.nextShipment ? { parcel: row.yourNumber && typeof row.nextShipment.parcel === 'number' ? { order: row.yourNumber.seq, n: row.nextShipment.parcel } : null, words: row.nextShipment.words[locale] } : null,
       href: row.kind === 'ORDER' ? `${prefix}/open/SalesOrder/${encodeURIComponent(row.id)}` : null,
     }
   })
