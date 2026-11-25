@@ -116,7 +116,7 @@ describe('F-OF T.2 — th9 walks the Files tab at the end (step 16)', () => {
     expect(at("await flow.step('16 · the Files tab")).toBeGreaterThan(at("await flow.step('15 · the Shipments tab"))
     expect(flow).toContain("await flow.step('7 · the files viewer walk by keys")
     for (const path of ['/^\\/files\\/[^/]+\\/complete$/', '/^\\/sales\\/orders\\/[^/]+\\/file-asks$/', '/answer$/', '/ask-again$/', '/accept$/', '/^\\/files\\/[^/]+\\/rename$/', '/^\\/files\\/[^/]+\\/restore$/', '/^\\/files\\/[^/]+\\/delete-document$/']) expect(flow, path).toContain(path)
-    expect(flow).toContain("alpha.go(`/orders/${world.so2.id}?tab=documents`)")
+    expect(flow).toContain("alpha.go(`/orders/${world.so2.id}?tab=files`)") // pp-t: the portal order's Files tab by its own name
     expect(flow).toContain("FA('band.counted.priced', { count: 1 })")
     expect(flow).toContain("roles.some((role) => role.key === 'designer' && !role.archivedAt)")
     const harness = readFileSync(new URL('../../../../../../tests/golden-flow/_harness/flow.ts', import.meta.url), 'utf8')

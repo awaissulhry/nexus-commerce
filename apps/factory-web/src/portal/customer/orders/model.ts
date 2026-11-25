@@ -111,22 +111,7 @@ export const opens = (row: Pick<OrderRow, 'kind'>): boolean => row.kind === 'ORD
 // ── tones ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
-export function statusTone(status: CustomerOrderStatus): Tone {
-  switch (status) {
-    case 'DELIVERED':
-      return 'success'
-    case 'CANCELLED':
-      return 'neutral'
-    case 'REQUESTED':
-      return 'warning'
-    case 'SHIPPED':
-    case 'PARTLY_SHIPPED':
-    case 'READY':
-      return 'info'
-    default:
-      return 'neutral'
-  }
-}
+// pp-t: the order's status pill is the shared lib status chip's (`customerStatusTone`, lib/order-cells/model.ts); statusTone went.
 
 export function shipmentTone(status: CustomerShipmentStatus): Tone {
   switch (status) {

@@ -168,7 +168,7 @@ export function whereOf(input: OverviewInput): WhereModel {
             title: t('history.title'),
             history: promiseMoves(record.promiseHistory, locale, day)
               .reverse()
-              .map((move) => ({ words: move.from ? t('history.move', { on: move.on, from: move.from, to: move.to }) : t('history.set', { on: move.on, to: move.to }), reason: move.reason })),
+              .map((move) => ({ words: move.from ? t('history.move', { on: move.on, from: move.from, to: move.to }) : t('history.set', { on: move.on, to: move.to }), reason: move.reason ?? null })),
           }
         : null,
   }

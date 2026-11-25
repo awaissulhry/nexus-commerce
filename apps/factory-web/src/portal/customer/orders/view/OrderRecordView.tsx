@@ -54,7 +54,7 @@ export type OrderDialog =
   | { kind: 'reconfirm'; model: ReconfirmDialogModel }
   | { kind: 'pay'; model: PayDialogModel }
   | { kind: 'preview'; model: PreviewModel }
-  // F-PR-12c: a photo the factory shared on the order, full size (Status & progress › Quality and photos).
+  // F-PR-12c: a photo the factory shared on the order, full size (Overview › Quality and photos).
   | { kind: 'photo'; model: QualityPhotoModel }
   // F-PR-13: the Ask dialog (what, the details of a production ask, what it means before Send).
   | { kind: 'ask'; model: AskDialogModel }
@@ -103,7 +103,7 @@ export interface OrderRecordViewModel {
   /** The design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
   frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number; /* F-SA-264 */ width?: PortalDockWidth; hidden?: boolean }
   // ---- end B-TH-275
-  // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on Status & progress, part 1
+  // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on the Overview (was Status & progress), part 1
   /**
    * `hidden`: not part of the reader's access (no portal.production.view), not in production, or not one of its orders (404):
    * no production section is drawn (a section not shared is not drawn); absent: the same.
