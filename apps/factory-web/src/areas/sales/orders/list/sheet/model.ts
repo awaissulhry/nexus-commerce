@@ -7,6 +7,7 @@ import type { OrderAbilities } from '../../model'
 import type { OrderPhase } from '../../api' // F-CW-101
 import type { OrderStatus } from '../../api' // F-CW-102
 import { isAfterProduction, officeStripStateOf, orderPhaseOf } from '@nexus/factory-domain/production-brand/stages' // F-CW-102: the ONE phase rule
+import type { Door, Phrase } from '../../../../../lib/order-cells/model' // pg-w1: the shared cells' door
 
 /**
  * B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24; Owner rule 2026-11-16 "every cell is a door", features
@@ -19,12 +20,8 @@ import { isAfterProduction, officeStripStateOf, orderPhaseOf } from '@nexus/fact
 export const NAMESPACE = 'orders-sheet'
 
 /** A cell's door: its address, or the reason it is plain text (a right the reader does not hold), or nothing to open. */
-export type Door = { readonly href: string; readonly tip: Phrase } | { readonly held: Phrase } | null
-
-export interface Phrase {
-  readonly key: string
-  readonly params?: Readonly<Record<string, string | number>>
-}
+// pg-w1: the door and its words are the shared order cells' (lib/order-cells/model.ts); the sheet's importers keep these names.
+export type { Door, Phrase }
 
 const seg = encodeURIComponent
 

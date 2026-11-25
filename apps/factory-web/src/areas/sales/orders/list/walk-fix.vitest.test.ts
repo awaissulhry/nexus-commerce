@@ -256,11 +256,14 @@ describe('walk W-5, W-6, W-7, W-16: the row keeps its words in the four rooms (8
     expect(tailWhole('Waiting on customer', null)).toBe('Waiting on customer')
     expect(tailWhole('Asked production · now', '16 d')).toBe('Asked production · now') // not its tail: untouched
     const css = read('./sheet/chips.css')
-    expect(css).toMatch(/\.fw-sheet-wraps,[^{]*\{\s*white-space: normal;/)
+    // pg-w1: the wrapping words moved verbatim to the shared cells' css (Promised, a shared cell, draws them).
+    expect(read('../../../../lib/order-cells/order-cells.css')).toMatch(/\.fw-sheet-wraps,[^{]*\{\s*white-space: normal;/)
     expect(css).toMatch(/\.fw-sheet-sub\.fw-sheet-wraps \{[^}]*-webkit-line-clamp: 2;/)
     const view = read('./view/OrdersListView.tsx')
     // "No promise" / "Nessuna data promessa", the PO line ("Senza ordine del cliente") and "nothing requested".
-    expect(view).toContain(`<span className="fw-sheet-wraps is-quiet">{door(linesDoor(prefix, data, true), t('list.noPromise'))}</span>`)
+    const promise = read('../../../../lib/order-cells/view/PromiseCell.tsx')
+    expect(promise).toMatch(/<span className="fw-sheet-wraps is-quiet">\s*<DoorCell door=\{cell\.door\} t=\{t\}>\s*\{words\.orders\('list\.noPromise'\)\}\s*<\/DoorCell>\s*<\/span>/)
+    expect(view).toContain("data ? <SharedPromiseCell cell={{ face: 'office', day: data.promiseDate ? day(data.promiseDate) : null, door: linesDoor(prefix, data, true), lateDays: whereShown ? null : data.daysLate }} t={s} /> : null")
     expect(view.match(/<span className="fw-sheet-sub fw-sheet-wraps">\{data\.customerRef \? t\('list\.customerRef'/g)?.length).toBe(2)
     expect(view).toMatch(/<span className="fw-sheet-sub fw-sheet-wraps">\{data\.requestedDate \?/)
     expect(read('./sheet/parts.tsx').match(/<span className="fw-sheet-wraps">/g)?.length).toBe(3) // the three Waiting on forms that end with a time

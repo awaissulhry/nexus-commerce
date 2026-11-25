@@ -101,14 +101,7 @@ p.fw-so-hint[role='status'] {
   text-decoration: underline;
 }
 
-.fw-so-progress {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  min-width: 0;
-  width: 100%;
-}
+/* pg-w1: .fw-so-progress (Shipped: the bar over its words) moved verbatim to lib/order-cells/order-cells.css. */
 
 .fw-so-code {
   font-family: var(--nds-font-mono);

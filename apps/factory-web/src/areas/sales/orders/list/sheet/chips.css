@@ -15,66 +15,8 @@
   font-size: var(--nds-font-size-sm);
 }
 
-/* ---- F-CW-102: Where it is — line 1 the chips (they wrap WHOLE: never half a chip, never a cut one), line 2 this order's pieces.
-   When the chips need two lines the pieces line gives way for that row (the row keeps its height; the words stay in the tooltip). ---- */
-.fw-sheet-wi {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px var(--nds-space-4);
-  width: 100%;
-  min-width: 0;
-  max-height: 43px;
-  overflow: hidden;
-  line-height: 1.25;
-}
-.fw-sheet-wi > .nds-pill,
-.fw-sheet-wi > .nds-tag,
-.fw-sheet-wi > .fw-sheet-chip-door {
-  flex: none;
-  max-width: 100%;
-}
-.fw-sheet-wi-pcs {
-  flex-basis: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-xs);
-  line-height: 1.3;
-}
-.fw-sheet-wi-pcs b {
-  color: var(--nds-text-2);
-  font-weight: var(--nds-font-weight-semibold);
-}
-/* A closed order's chip: outlined, quiet (told by its word and mark). */
-.nds-pill.fw-sheet-st.is-line {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
-}
-/* Chip 3 (and "Urgent – asked"): its mark beside its words; who it waits on is outlined. */
-.nds-tag.fw-sheet-stop {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-}
-.nds-tag.fw-sheet-stop.is-dash {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
-}
-.fw-sheet-chip-door {
-  display: inline-flex;
-  border-radius: var(--nds-radius-pill);
-  text-decoration: none;
-}
-.fw-sheet-chip-door:hover > .nds-tag {
-  text-decoration: underline;
-}
-.fw-sheet-chip-door:focus-visible {
-  outline: 2px solid var(--nds-primary);
-  outline-offset: -2px;
-}
+/* pg-w1: Where it is's chip rules (.fw-sheet-wi, .fw-sheet-wi-pcs, the closed status chip, the stop chip, its door) moved verbatim to
+   lib/order-cells/order-cells.css (the shared status and mark chips draw them). */
 
 /* ---- F-CW-102: Customer urgency — the customer's chip and, beside it, our priority (they wrap; never cut) ---- */
 .fw-sheet-urg {
@@ -181,22 +123,7 @@ a.fw-sheet-msgs {
   white-space: normal;
   line-height: 1.15;
 }
-/* Words that wrap inside their cell on a word's edge instead of being cut: "No promise" / "Nessuna data promessa", the customer's
-   PO line, "nothing requested", "Waiting on customer" over "· 16 d", "Extra deposit open". The row keeps its height: three lines
-   of words at the most. */
-.fw-sheet-wraps,
-.fw-sheet-wraps .fw-sheet-door,
-.fw-sheet-wraps .fw-sheet-held,
-.fw-sheet-wraps .fw-sheet-plain {
-  white-space: normal;
-  overflow-wrap: break-word;
-  line-height: 1.2;
-}
-.fw-sheet-wraps.is-quiet .fw-sheet-door,
-.fw-sheet-wraps.is-quiet .fw-sheet-held,
-.fw-sheet-wraps.is-quiet .fw-sheet-plain {
-  font-size: var(--nds-font-size-sm);
-}
+/* pg-w1: the wrapping words (.fw-sheet-wraps, .is-quiet) moved verbatim to lib/order-cells/order-cells.css (Promised draws them). */
 .fw-sheet-sub.fw-sheet-wraps {
   display: -webkit-box;
   -webkit-box-orient: vertical;
