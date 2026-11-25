@@ -22,7 +22,7 @@ import { readFromStore } from '../../../record-panels/store'
  *                                               order, then Regular by the day sent), the chips with counts, "2 of 3 urgent
  *                                               used" (its own open orders only), every row (no page, no cut)
  *   GET  /portal/production?format=csv          "Export": the same rows as a file the server writes in its own scope
- *   GET  /portal/production/:orderId            one order's production (order › Status & progress), by its level
+ *   GET  /portal/production/:orderId            one order's production (order › Overview), by its level
  *   GET  /portal/production/:orderId/quality    F-PR-12c: the quality of its own goods (level Quality & photos), + its report PDF
  *   POST /portal/production/urgency             Mark urgent / Mark regular (one or many of its own orders)
  *   PUT  /portal/production/urgent-order        its Urgent list in a new order (the Urgent order dialog)
@@ -178,7 +178,7 @@ export async function downloadProduction(
   return { bytes, fileName: fileNameOf(disposition), contentType }
 }
 
-// ── one order's production (F-PR-12a: order › Status & progress) ─────────────────────────────────────────────────────────
+// ── one order's production (F-PR-12a: order › Overview, was Status & progress) ────────────────────────────────────────────
 const stageFigures = { ordered: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), inspected: z.number().nullable(), packed: z.number().nullable() }
 
 // ---- F-PR-12b: the sections of + Progress (per line and size) and + Gates & dates (real gates, swatch answers, the published

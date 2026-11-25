@@ -246,7 +246,7 @@ import { emailTopicNoteKey } from './model'
 describe('B-TH-273 — record pages without Messages: the conversation docks in the portal record frame', () => {
   it('no portal record page keeps a Messages tab (order 4, return and complaint 2, purchase order 3, job 3)', () => {
     for (const tabs of [CUSTOMER_ORDER_TABS, CUSTOMER_CASE_TABS, SUPPLIER_ORDER_TABS, JOB_TABS] as readonly (readonly string[])[]) expect(tabs).not.toContain('messages')
-    expect(CUSTOMER_ORDER_TABS).toEqual(['status', 'lines', 'shipments', 'documents'])
+    expect(CUSTOMER_ORDER_TABS).toEqual(['overview', 'lines', 'shipments', 'files']) // pp-w1 (w1.3): the order's tabs by the office's words
     expect(CUSTOMER_CASE_TABS).toEqual(['request', 'status'])
     expect(SUPPLIER_ORDER_TABS).toHaveLength(3)
     expect(JOB_TABS).toHaveLength(3)

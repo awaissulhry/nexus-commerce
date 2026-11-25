@@ -201,7 +201,7 @@ export interface PortalRecordPage {
 }
 
 export const RECORD_PAGES: readonly PortalRecordPage[] = [
-  // B-W2b-191: the customer's order (Status & progress first).
+  // B-W2b-191: the customer's order (Overview first; pp-w1).
   { kinds: ['CUSTOMER'], type: 'SalesOrder', href: (id) => `/orders/${id}`, built: true },
   // B-TH-222: the customer's request (its true state and its thread; SCR-185-request).
   { kinds: ['CUSTOMER'], type: 'Inquiry', href: (id) => `/orders/requests/${id}`, built: true },

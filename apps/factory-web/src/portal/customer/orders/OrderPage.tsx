@@ -80,7 +80,7 @@ import {
 } from './model'
 import { Closed } from './OrdersPage'
 import { OrderRecordView, type OrderDialog, type OrderRecordViewModel } from './view/OrderRecordView'
-// ---- F-PR-12a: the order's production (B-PR-18) on Status & progress, part 1
+// ---- F-PR-12a: the order's production (B-PR-18) on the Overview (was Status & progress), part 1
 import { fetchProductionOrder } from '../production/api'
 import { waitingHrefOf } from '../production/model'
 import { productionOwnsProgress } from '../production/model' // F-PR-12b

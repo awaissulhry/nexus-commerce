@@ -14,7 +14,7 @@ import type { OrderRecordActions, OrderRecordViewModel } from './view/OrderRecor
 import { OverviewTab } from './view/OverviewTab' // pp-w2 (t.1): moved from status-quality onto the Overview
 
 /**
- * F-PR-12c — the portal order › Status & progress, part 3: + Quality & photos (production plan §4 "first piece, in-line, final
+ * F-PR-12c — the portal order › Overview (pp-w2; was Status & progress), part 3: + Quality & photos (production plan §4 "first piece, in-line, final
  * results and photos of its own goods — single-brand work orders only"; 06-tree P-ORD-quality; wall PW-P04). At the level Quality
  * & photos only (a lower level asks no read and draws nothing): per line and size the pieces released by quality and taken back
  * since, a line partly made on shared work said in the API's words; first-piece, cutting and end-of-line checks; each final

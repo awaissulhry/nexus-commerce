@@ -48,9 +48,9 @@ import type { ThreadViewModel } from '../../../shell/view/ThreadView'
 
 /**
  * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191; B-TH-275, picture 22), MADE-UP data only: the four
- * tabs (Status & progress with the state line, "Made from your request", the tracker, the promise history, your requests,
- * production progress, the deposit and the facts; Lines with each size run and the totals; Shipments & tracking with parcels,
- * steps, papers and what is still to ship; Documents by version) beside the order's conversation docked at 1440 (the portal
+ * tabs (pp-w2: Overview — where the order is with its strips, progress by line, dates, requests & changes, quality and photos,
+ * what you pay and the facts; Lines with each size run and the totals; Shipments with parcels, steps, papers and what is
+ * still to ship; Files by version) beside the order's conversation docked at 1440 (the portal
  * record frame; narrower: "Messages (2 new)" and its full-width view), "Please re-confirm", every pop-up (Ask for a change: edit, held cells, review, a refusal, discard; Ask
  * to cancel; Re-confirm version 2: choose, decline, signed, held; Pay the deposit on the FAKE provider: idle, its fields,
  * waiting, failed, paid; a document's preview), a role without prices, an office preview, no connection, loading, a failed
