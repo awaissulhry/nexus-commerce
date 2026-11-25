@@ -15,7 +15,7 @@ import { DraftPage } from '../../../../../lib/order-draft/view/DraftPage'
 import { ContinueDrafts, useContinueLine } from '../../../../../lib/order-draft/view/ContinueDrafts'
 import { ACCEPT, type FilesBoxActions, type UploadRow } from '../../../../../lib/order-draft/view/files'
 import type { ProductsTableActions } from '../../../../../lib/order-draft/view/ProductsTable'
-import { OptionsWindow, PiecesWindow, RowFilesWindow, type OptionsWindowActions, type PiecesMode, type PiecesWindowActions } from '../../../../../lib/order-draft/view/RowWindows'
+import { OptionsWindow, PiecesWindow, RowFilesWindow, useSizeCopy, type OptionsWindowActions, type PiecesMode, type PiecesWindowActions } from '../../../../../lib/order-draft/view/RowWindows'
 import { PersonDialog, type PersonDialogActions } from '../../../../../lib/order-draft/view/PeopleRoster'
 import { personProblems, draftFilesOf, customLinesOf, uploadsOpenOf, draftMailName, filesAddHeld, type PersonDraft } from '../../../../../lib/order-draft/model'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -25,7 +25,9 @@ import type { ScaleOption, StyleDetail } from '../../../inquiries/api'
 import type { StyleDraftDraft } from '../../../inquiries/model'
 import type { DraftRow } from '../../../customers/record/drafts/api'
 import type { ConfirmAnswer, OfficeRead } from '../api'
-import { confirmAsOf, confirmHeldOf, missingOf, type ConfirmEntry } from '../confirm-model'
+import { cellsOf, confirmAsOf, confirmHeldOf, missingOf, sizesTextOf, type ConfirmEntry } from '../confirm-model'
+import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
+import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import './office-draft.css'
 
 /**
@@ -182,13 +184,15 @@ export function OfficeDraftView({ model, actions }: { model: OfficeDraftModel; a
                   <PencilLine size={14} aria-hidden /> {t('start.typed')}
                 </Link>
                 <span className="fw-od-quiet">
-                  {t('start.prospect')} <Link href={`${model.prefix}/sales/incoming?new=1${start.partyId ? `&party=${encodeURIComponent(start.partyId)}` : ''}`}>{t('start.request')}</Link>
+                  {t('start.prospect')} {/* od-w2.7: Incoming reads `party` as its list filter, never as New request's customer: the link opens New request alone. */}
+                  <Link href={`${model.prefix}/sales/incoming?new=1`}>{t('start.request')}</Link>
                 </span>
               </>
             }
           />
         ) : null,
         cards: record ? <HostCards model={model} actions={actions} record={record} /> : null,
+        actionBar: record ? <ConfirmButton model={model} actions={actions} rows={productRowsOf(record.request).length} quote={confirmAsOf(productRowsOf(record.request)) === 'QUOTE'} /> : null,
         dialogs: <Windows model={model} actions={actions} record={record} />,
       }}
     />
@@ -253,9 +257,7 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
           <p className="fw-od-quiet">
             <Info size={14} aria-hidden /> {t('cf.choices')}
           </p>
-          <Button variant="primary" heldReason={model.writeHeld ?? (rows.length === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()}>
-            {quote ? t('cf.goQuote') : t('cf.go')}
-          </Button>
+          <ConfirmButton model={model} actions={actions} rows={rows.length} quote={quote} className="fw-od-hostgo" />
         </section>
       </Card>
       <Card padded>
@@ -284,6 +286,16 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
       </Card>
       {record.seesPrices && rows.length > 0 ? <PriceCard record={record} rows={rows} /> : null}
     </>
+  )
+}
+
+/** The ONE "Confirm order…" button: in its card, and (od-w2.6) in the page's sticky bar on a phone. */
+function ConfirmButton({ model, actions, rows, quote, className }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; quote: boolean; className?: string }) {
+  const { t } = useDraftWords()
+  return (
+    <Button variant="primary" heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
+      {quote ? t('cf.goQuote') : t('cf.go')}
+    </Button>
   )
 }
 
@@ -365,7 +377,8 @@ function Windows({ model, actions, record }: { model: OfficeDraftModel; actions?
 
 /** The Confirm window: one section per row — what it already has, and what the order still needs (Missing), typed here. */
 function ConfirmWindow({ model, actions, record }: { model: OfficeDraftModel; actions?: OfficeDraftActions; record: DraftRecord }) {
-  const { t } = useDraftWords()
+  const { t, locale } = useDraftWords()
+  const copy = useSizeCopy()
   const confirm = model.confirm!
   const rows = productRowsOf(record.request)
   const quote = confirmAsOf(rows) === 'QUOTE'
@@ -400,6 +413,8 @@ function ConfirmWindow({ model, actions, record }: { model: OfficeDraftModel; ac
           if (!entry) return null
           const needs = missingOf(row, entry)
           const colours = entry.styleId ? (model.details[entry.styleId]?.colourways ?? []).filter((colourway) => colourway.status === 'ACTIVE') : []
+          const colour = colours.find((colourway) => colourway.id === entry.colourwayId) ?? null
+          const offered = colour?.offeredSizes ?? []
           return (
             <section key={row.id} className="fw-od-section fw-od-confirmrow" aria-label={rowLabelOf(row, t)}>
               <div className="fw-od-parthead">
@@ -430,7 +445,22 @@ function ConfirmWindow({ model, actions, record }: { model: OfficeDraftModel; ac
                     </Select>
                   </Field>
                   <Field label={<>{t('pc.sizesCaption')} {needs.includes('need.pieces') ? missing : null}</>} hint={row.pieces.mode === 'PEOPLE' ? t('cf.fromPeople', { count: row.pieces.people }) : entry.styleId ? undefined : t('cf.sizesAfterStyle')}>
-                    <Input value={entry.sizesText} placeholder="48:2 50:3" onChange={(event) => actions?.confirm?.onEntry?.(row.id, { sizesText: event.target.value })} />
+                    {/* od-w2.5: the style's size grid once a colour with its sizes is picked; typed only when the style has no size chart. */}
+                    {offered.length > 0 && colour ? (
+                      <SizeGridEditor
+                        layout="auto"
+                        colours={[{ key: row.id, label: colour.name, offered }]}
+                        sizes={offered.map((size) => ({ key: size, label: size }))}
+                        value={{ [row.id]: cellsOf(entry.sizesText) }}
+                        onChange={(next) => actions?.confirm?.onEntry?.(row.id, { sizesText: sizesTextOf(next[row.id] ?? {}) })}
+                        issues={[]}
+                        caption={`${t('pc.sizesCaption')} · ${rowLabelOf(row, t)}`}
+                        locale={INTL_LOCALE[locale]}
+                        copy={copy}
+                      />
+                    ) : (
+                      <Input value={entry.sizesText} placeholder="48:2 50:3" disabled={entry.styleId !== null && entry.colourwayId === null} onChange={(event) => actions?.confirm?.onEntry?.(row.id, { sizesText: event.target.value })} />
+                    )}
                   </Field>
                   {record.seesPrices ? (
                     <Field label={t('cf.unit')}>

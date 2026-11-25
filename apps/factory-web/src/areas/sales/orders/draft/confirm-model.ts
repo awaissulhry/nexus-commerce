@@ -46,6 +46,14 @@ export function sizesOf(text: string): { size: string; quantity: number }[] {
   return [...out].map(([size, quantity]) => ({ size, quantity }))
 }
 
+/** od-w2.5: the size grid's cells from the typed run, and back ("48:2 50:3"; empty cells left out). */
+export const cellsOf = (text: string): Record<string, number> => Object.fromEntries(sizesOf(text).map((entry) => [entry.size, entry.quantity]))
+export const sizesTextOf = (cells: Readonly<Record<string, number>>): string =>
+  Object.entries(cells)
+    .filter(([, quantity]) => quantity > 0)
+    .map(([size, quantity]) => `${size}:${Math.trunc(quantity)}`)
+    .join(' ')
+
 /** What a row still needs before the order takes it (the part's `need.*` keys): style, colour, pieces by size. */
 export function missingOf(row: ProductRow, entry: ConfirmEntry | undefined): string[] {
   if (!entry) return []

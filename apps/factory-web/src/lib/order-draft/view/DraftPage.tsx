@@ -85,6 +85,8 @@ export interface DraftPageSlots {
   continueSlot?: ReactNode
   /** The host's own cards (Send · Your price / Confirm · Design work · Price), in ONE row under Still open. */
   cards?: ReactNode
+  /** od-w2.6: on a phone the host's Send / Confirm sits in a sticky bar at the foot (its card's own button hides there). */
+  actionBar?: ReactNode
   dialogs?: ReactNode
 }
 
@@ -216,6 +218,7 @@ function DraftBody({ model, actions, slots, onSendKey }: { model: DraftPageModel
           <div className="fw-od-draftfoot">
             <ListKeysInfo keys={model.keys.map((entry) => ({ keys: entry.keys, does: entry.words }))} />
           </div>
+          {slots?.actionBar ? <div className="fw-od-actionbar">{slots.actionBar}</div> : null}
         </>
       ) : (
         slots?.continueSlot
