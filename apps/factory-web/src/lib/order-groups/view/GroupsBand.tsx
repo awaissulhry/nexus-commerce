@@ -156,6 +156,9 @@ function Band({ model, actions }: { model: GroupsBandModel; actions?: GroupsBand
   )
 
   const chips = office ? model.officeFacts?.chips : undefined
+  // pg-fx3 (walk W-06): the customer's failed read says ONLY that, with its Try again — no notes line of "—", no ⓘ over a window of
+  // dashes. The office face keeps what it draws (cw fx6: the Work tab's own facts and the ⓘ stay beside the failed line).
+  const quiet = !office && model.state === 'failed'
   return (
     <CustomerBand
       model={{
@@ -165,9 +168,9 @@ function Band({ model, actions }: { model: GroupsBandModel; actions?: GroupsBand
         state: model.state,
         failed,
         closed: { groups: closed },
-        notes: office ? model.officeFacts?.line : customerLine,
+        notes: office ? model.officeFacts?.line : quiet ? null : customerLine,
         ...(chips ? { chips } : {}),
-        info: parties('customers.work.band.info'), // F-CQ-B fx1 (walk B-06): the ONE ⓘ (it opens the groups' window)
+        ...(quiet ? {} : { info: parties('customers.work.band.info') }), // F-CQ-B fx1 (walk B-06): the ONE ⓘ (it opens the groups' window)
         everything: { label: office ? all : list('customer.band.open'), value: <span className="fw-cwb-num">{number(model.total)}</span> },
         window: { title: all, notes: office ? model.officeFacts?.window : customerWindow, ...(model.windowOpen ? { open: true } : {}) },
       }}
