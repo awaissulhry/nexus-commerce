@@ -18,7 +18,7 @@ import '../requests.css'
  * from you, Quote being prepared, Quote sent, Order waiting for approval, Order confirmed, Declined, Closed — never "confirmed"
  * before it is), when it got there, what it means for the customer, what was made of it (the order's page, the quote by name,
  * each with the customer's own number); "We need something from you" quotes our question with Answer, which puts the cursor
- * in the message box. The thread is the main column (the portal's PartnerThread: two sides, never an office note); what was
+ * in the message box. The thread is the main column (the partner face on the office's thread parts: never an office note); what was
  * asked sits beside it from 1280 px. Draws one view model and fetches nothing: the thread comes in as `thread`.
  */
 

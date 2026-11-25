@@ -25,7 +25,7 @@ import { useRequestWords } from './words'
  * `/p/<party>/orders/requests/<id>` — the customer's request (B-TH-222, B-TH-303; threads plan X-P-CUS-REQ): GET
  * /portal/inquiries/:id (another customer's id answers 404: the neutral "not one of yours" page, W37), the band ("Your request
  * 7", back to Orders & requests, their PO, the true state), the state line, and the request's thread through the portal's
- * PortalThread on the DS PartnerThread (two sides, no office-note kind by type, PR-15; read and posted only through the
+ * PortalThread on the partner face (two sides, no office-note field by type; read and posted only through the
  * partner thread routes, W08). It reads again on the live channel's request events (ours only: the channel names the party)
  * and when the connection comes back; Answer puts the cursor in the message box.
  */

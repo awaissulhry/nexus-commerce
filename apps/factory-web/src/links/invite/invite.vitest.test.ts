@@ -222,3 +222,34 @@ describe('B-TH-274 — the brand wall (W24, W25): a Brand Beta invitation shows 
   })
 })
 // ---- end B-TH-274
+
+// ---- pt-w2 W2.4 (lane pt-, A10; ONE SHARED THREAD): the invite page's thread on the ONE partner face, kind link -----------------------
+describe('pt-w2 W2.4 — the invite page on the partner face', () => {
+  const view = readFileSync(new URL('./view/InviteView.tsx', import.meta.url), 'utf8')
+
+  it('WALL: the invite page’s thread offers no Reply and quotes nothing its read does not carry', () => {
+    // Its read and its post carry no reply link (api.ts): the face's link kind draws no quote and offers no Reply.
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).not.toMatch(/replyTo|replyToMessageId|corrects/)
+    expect(view).toContain("kind: 'link',")
+    expect(view).not.toMatch(/replyTo|onReply|onJump/)
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(caseModel('record'), locale)
+      expect(html, locale).toContain('<section class="fw-rt-column is-docked fw-rtp" data-kind="link"')
+      expect(html, locale).not.toContain('fw-rt-quote')
+      expect(html, locale).not.toContain('nds-pthread')
+      expect(html, locale).toContain('fw-rt-cx-send')
+    }
+    // The DS PartnerThread is drawn no more on this page (the DS lab keeps it: it is packages/ui's catalogue).
+    expect(view).not.toMatch(/patterns\/PartnerThread/)
+  })
+
+  it('the "+" ticks the record’s shared files to go with the message; the thread is a bounded column (its list scrolls itself)', () => {
+    expect(view).toContain('attach: { files: page.files.map((file) => ({ id: file.id, name: file.originalName })), attached: model.attached },')
+    expect(view).toContain('onAttach: (ids) => actions?.onAttach?.(ids),')
+    expect(css).toMatch(/\.fw-inv-thread > \.fw-rtp \{\s*height: clamp\(440px, calc\(100vh - 220px\), 1000px\);/)
+    for (const locale of ['en', 'it'] as const) expect(flat(catalogue(locale))).not.toHaveProperty('thread.empty')
+    expect(flat(catalogue('en'))['thread.replyByEmail']).toBe('You can also answer our emails: your reply lands here.')
+  })
+})
+// ---- end pt-w2 W2.4

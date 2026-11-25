@@ -12,9 +12,6 @@ import type { ShareField, ShareFile, ShareMessage, SharePage } from './api'
 
 export const LINK_NS = 'link-invite'
 
-/** The composer's limit (factory-domain threads MAX_BODY_LENGTH). */
-export const BODY_LIMIT = 20_000
-
 /** The code fields' values the catalogue says in words (`code.<field>.<VALUE>`), one list per field. */
 export const CODE_VALUES = Object.freeze({
   status: [
@@ -87,14 +84,6 @@ export function threadOldestFirst(first: readonly ShareMessage[], older: readonl
     all.push(message)
   }
   return all.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id))
-}
-
-/** "673 KB" — a file's size as the reader reads it. */
-export function sizeText(bytes: number, locale: 'it' | 'en'): string {
-  const format = (value: number, digits: number) => value.toLocaleString(locale === 'it' ? 'it-IT' : 'en-GB', { maximumFractionDigits: digits })
-  if (bytes >= 1_048_576) return `${format(bytes / 1_048_576, 1)} MB`
-  if (bytes >= 1024) return `${format(Math.round(bytes / 1024), 0)} KB`
-  return `${bytes} B`
 }
 
 /** The file's kinds a browser picker offers (the API's content types as extensions). */

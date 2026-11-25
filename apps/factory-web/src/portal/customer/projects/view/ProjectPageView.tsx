@@ -13,7 +13,7 @@ import '../projects.css'
  * SCR-702 — a project in the portal (threads plan TH-5, B-TH-253; design PROJ.portal-F02, F05, F07…F09, PROJ.linked-F09; picture
  * 37 never drawn: built to the design kit and the portal frame, as the generic record page grown, PL5): one summary line — the
  * project's name (never the office's number), its status in one word, its target date, with whom it is shared — then the
- * conversation as the main column (the portal's PartnerThread: two sides, never an office note; writing needs portal.comment and
+ * conversation as the main column (the partner face on the office's thread parts: never an office note; writing needs portal.comment and
  * the thread says so) and beside it, from 1280 px, "News of your records" (only the records the person opens in its own portal:
  * their reference, the move in words, the day). A project that is not theirs, or no longer exists, reads like one that does not
  * exist. Office-only facts (the lead, the goal, the outcome, office notes, who did what) never come and are never drawn. Fills

@@ -151,3 +151,18 @@
   color: var(--nds-text-strong);
   cursor: pointer;
 }
+
+/* ---- pt-w2 W2.4 (lane pt-, A6): the thread on the ONE partner face is a BOUNDED column — its list scrolls itself (it opens at the
+   newest, the down button and older-on-scroll work), the box stays on screen; the phone: the window less the frame's band. */
+.fw-inv-thread > .fw-rtp {
+  height: clamp(440px, calc(100vh - 220px), 1000px);
+  height: clamp(440px, calc(100dvh - 220px), 1000px);
+}
+
+@media (max-width: 719px) {
+  .fw-inv-thread > .fw-rtp {
+    height: max(420px, calc(100vh - 140px));
+    height: max(420px, calc(100dvh - 140px));
+  }
+}
+/* ---- end pt-w2 W2.4 */

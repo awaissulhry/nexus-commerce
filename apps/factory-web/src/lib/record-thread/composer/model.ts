@@ -9,7 +9,7 @@ import { amountProblem, floorPriceFound } from '../helpers/amount'
  * "Reply to <customer>" — the customer's real name, only when the record has a customer and the person may send mail. The whole
  * box takes the audience's colour and Send names it ("Add note" / "Send to Brand Alpha"). Typed text survives a switch;
  * @mentions are taken out of a mail and named. A work order's note may tick "For the floor". Held states: closed, no right,
- * offline, a prospect ("Make the customer first"). Office only: the portal keeps the DS PartnerThread box (PR-15). Pure.
+ * offline, a prospect ("Make the customer first"). Office only: the portal's box is the partner face's (partner/view/PartnerComposer, on the same ComposerRow). Pure.
  *
  * B-TH-237 (TH-3, G15): a third audience, "In the portal only" — a message the customer reads in its portal, no e-mail (POST
  * …/replies), offered when the record's customer may read it there. B-TH-236: Reply / Correct name the message they answer or

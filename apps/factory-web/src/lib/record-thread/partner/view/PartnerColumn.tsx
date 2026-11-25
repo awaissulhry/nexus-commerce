@@ -67,6 +67,8 @@ export interface PartnerColumnActions extends PartnerComposerActions {
   /** The read failed: Try again. */
   readonly onRetry?: (() => void) | undefined
   readonly onDismissNotice?: (() => void) | undefined
+  /** A file of a message: the host opens it its own way (the link page's); absent: its download address in a new tab. */
+  readonly onOpenFile?: ((fileId: string) => void) | undefined
 }
 
 /**
@@ -126,6 +128,7 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
     focusBox()
   }
   const open = (fileId: string) => {
+    if (actions?.onOpenFile) return actions.onOpenFile(fileId)
     const href = model.messages.flatMap((message) => message.attachments ?? []).find((file) => file.id === fileId)?.href
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
   }

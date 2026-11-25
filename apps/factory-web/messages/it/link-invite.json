@@ -170,8 +170,7 @@
   },
   "thread": {
     "title": "Messaggi",
-    "empty": "Nessun messaggio per ora. Scrivete il primo qui sotto.",
-    "replyByEmail": "Potete anche rispondere alle nostre e-mail: la risposta arriva qui."
+    "replyByEmail": "Potete anche rispondere alle nostre email: la risposta arriva qui."
   },
   "held": {
     "NO_COMMENT": "Il vostro invito permette di leggere questo record, non di scrivere. Chiedete a chi vi ha invitato.",

@@ -22,7 +22,7 @@ import { ASK_STATES } from '../../../../lib/record-thread/card/model'
  *   Production     per work order "Told the floor at 10:42"
  *   Overview       People: "Told about changes: 6 people"
  * THE WALL is the API's: a work order this reader does not reach is counted ("1 more work order"), never named; the portal reads
- * none of it (PartnerThread untouched: the customer sees only its ask and our reply).
+ * none of it (the portal's thread untouched: the customer sees only its ask and our reply).
  */
 
 const workOrderRef = z.object({ id: z.string(), number: z.string() })

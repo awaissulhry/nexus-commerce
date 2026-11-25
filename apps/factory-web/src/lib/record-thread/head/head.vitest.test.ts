@@ -12,7 +12,6 @@ import { DEFAULT_DOCK_WIDTH, doorHolds, menuRows, R_ACT_ORDER, viewsOffered, wai
 import { answersOf, waitingWords } from './model'
 import { OwnerDialog } from './view/OwnerDialog'
 import { readWidth, writeWidth } from './use-thread-width'
-import { PortalHeadLine } from './view/PortalHeadLine'
 // B-TH-255
 import { viewQuery } from './model'
 import { feedKinds } from '../model'
@@ -290,21 +289,6 @@ describe('the width', () => {
     expect(CATALOGUE.it['record-thread-head']?.['width.reset']).toBe('Larghezza predefinita')
   })
   // ---- end F-SA-263
-})
-
-describe('the portal line', () => {
-  it('carries no office count, owner or waiting time, and only the reader’s own record (W08, W34)', () => {
-    for (const locale of LOCALES) {
-      const html = renderToString(
-        createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(PortalHeadLine, { model: { needInfo: false, last: { from: 'us', at: '2026-11-16T15:10:00.000Z' }, factory: 'Factory Demo' } })),
-      )
-      const t = createTranslator(locale, messagesFor(locale, ['record-thread-head'])['record-thread-head'] ?? {})
-      for (const office of [t('answers.us', { wait: '' }), t('more.label'), t('width.label'), t('act.task')]) expect(html).not.toContain(office.trim())
-      expect(html).toContain(t('portal.lastFromUs', { factory: 'Factory Demo', date: '' }).split(',')[0]!)
-      expect(scanText(html, BRAND_ALPHA)).toEqual([])
-      expect(scanText(html, BRAND_BETA)).toEqual([])
-    }
-  })
 })
 
 describe('the words', () => {

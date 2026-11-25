@@ -23,8 +23,8 @@ import '../returns.css'
  * opens the same tabs). The frame's band holds the title, their reference first, the state, "Add photos" while we have not
  * decided and "Print the return label" once approved, the ⋯ (the return label and credit note PDFs in a new tab, Cancel this
  * request…, Ask a question) and the two tabs; this view draws the tab and the pop-ups beside the case's ONE conversation, docked by
- * the portal record frame (`children`: PortalThread live, ThreadView in the design). Photos keep the page's own Add photos (the DS
- * PartnerThread takes no files yet). No money on this page: a credit note is named by its number.
+ * the portal record frame (`children`: PortalThread live, ThreadView in the design). Photos keep the page's own Add photos (the
+ * portal's thread takes no files yet). No money on this page: a credit note is named by its number.
  */
 
 export type CaseRecord = { type: 'RETURN'; record: ReturnRecord } | { type: 'COMPLAINT'; record: ComplaintRecord }

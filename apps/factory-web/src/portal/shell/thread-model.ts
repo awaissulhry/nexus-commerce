@@ -42,9 +42,9 @@ export const RECORD_TYPE_WORDS: readonly string[] = [
 export const recordTypeKey = (type: string): string => (RECORD_TYPE_WORDS.includes(type) ? `record.type.${type}` : 'record.type.other')
 
 // ---- F-CP-156 (customer page plan C7, D12; 12 §5; B-CP-079): "Ask <name>, factory designer" under the portal thread ----------------
-// The DS PartnerThread stays as it is: under it, a DS Checkbox "Ask Giulia Verdi, factory designer" with its hint. Typing "@" in the box
-// shows ONE chip "Giulia Verdi · factory designer" — never another name, never a list of our people; pressing it puts "@Giulia Verdi "
-// in the text and ticks the box. No name (none named for the customer) or a record the customer cannot ask on: no box. After Send:
+// pt-w2 (lane pt-, A5): in the partner face's chips row, ONE checkbox drawn as a chip "Ask Giulia Verdi, factory designer" (its rule in
+// the ⓘ and its tooltip). While "@" is typed the same chip completes "@Giulia Verdi " and ticks — never another name, never a list of
+// our people; the name typed whole ticks it too. No name (none named for the customer) or a record the customer cannot ask on: no box. After Send:
 // "We asked Giulia Verdi." — never whether she read it (no "seen by", Statuto art. 4). A 409 keeps the text, with its words.
 
 /** The records whose thread may ask the factory designer (factory-domain threads/designer DESIGNER_ASK_RECORD_TYPES; a draft order too). */

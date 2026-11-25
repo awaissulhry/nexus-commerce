@@ -26,7 +26,7 @@ import { words } from './_harness/words'
 
 const OR = words('portal-ordering')
 const PT = words('portal')
-const DS = words('ds-words')
+const RTP = words('record-thread-partner') // pt-w2 W2.4: the portal box's own words (the partner face's)
 const SIGN_IN = words('portal-signin')
 
 /** Brand Alpha's Designer (made up): starts and fills drafts, sees no price, never sends. */
@@ -177,11 +177,11 @@ export default defineStage({
       const { page } = designer
       const dock = dockOf(page)
       await seen(dock, 60_000)
-      await typeInto(dock.getByRole('textbox', { name: DS('partnerThread.composer'), exact: true }), ASK_WORDS)
+      await typeInto(dock.getByRole('textbox', { name: RTP('box'), exact: true }), ASK_WORDS)
       const ask = page.getByRole('checkbox', { name: PT('thread.designer.ask', { name: set.designerName }) })
       await keyOn(ask, 'Space')
       await expect(ask).toBeChecked()
-      await keyOn(dock.getByRole('button', { name: DS('partnerThread.send'), exact: true }))
+      await keyOn(dock.getByRole('button', { name: RTP('send'), exact: true }))
       await seen(page.getByText(PT('thread.designer.asked', { name: set.designerName })).first(), 60_000)
       await seen(dock.getByText(ASK_WORDS).first(), 60_000)
       await flow.settle()

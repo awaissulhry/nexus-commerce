@@ -170,8 +170,7 @@
   },
   "thread": {
     "title": "Messages",
-    "empty": "No messages yet. Write the first one below.",
-    "replyByEmail": "You can also answer our e-mails: your reply lands here."
+    "replyByEmail": "You can also answer our emails: your reply lands here."
   },
   "held": {
     "NO_COMMENT": "Your invitation lets you read this record, not write on it. Ask the person who invited you.",
