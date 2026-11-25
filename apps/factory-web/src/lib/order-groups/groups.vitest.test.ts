@@ -122,6 +122,19 @@ describe('pg-w1: the groups band draws the counts it is given', () => {
     expect(failed).toContain('<p class="fw-cb-failed" role="status"><button type="button" class="fw-cb-link">')
   })
 
+  it('pg-fx3 (walk W-06): the customer\'s failed read says only that — no notes line of "—", no ⓘ; the office keeps its own facts', () => {
+    const failed = html(customerModel({ state: 'failed', total: null, needsYou: null }), { onRetry: () => undefined, onEverything: () => undefined })
+    expect(failed).toContain('class="fw-cb-failed" role="status"')
+    expect(failed).not.toContain('Your open orders and requests')
+    expect(failed).not.toContain('About these numbers')
+    expect(failed).not.toContain('fw-cb-notes')
+    const office: GroupsBandModel = { face: 'office', groups: ORDER_PHASES.map((group) => ({ group, count: null, door: true })), total: null, shown: null, state: 'failed', customer: 'Brand Alpha', officeFacts: { line: 'All orders of Brand Alpha: —' } }
+    const page = html(office, { onRetry: () => undefined })
+    expect(page).toContain('class="fw-cb-failed" role="status"')
+    expect(page).toContain('All orders of Brand Alpha: —') // the Work tab's own line stays (cw fx6)
+    expect(page).toContain('About these numbers')
+  })
+
   it('a pressed group says so (its tip, aria-pressed); a group without the host\'s handler is a plain count', () => {
     const page = html(customerModel({ shown: 'SHIPPED' }), { onGroup: () => undefined })
     expect(page).toContain('aria-pressed="true" title="Showing: Shipped. Press again to show everything open."')

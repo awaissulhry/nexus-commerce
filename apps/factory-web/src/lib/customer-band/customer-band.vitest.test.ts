@@ -191,7 +191,7 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     // fx1 (walk B-07): "Work orders of <customer> ›" on the notes line only from 1040 px (the window says it below), Cancelled stays.
     expect(work).toContain('{workOrders && <span className="fw-cb-roomy">{workOrders}</span>}')
     expect(work).toContain('officeFacts: { line: notes, chips: { label: t(\'customers.work.strip.label\'), items: chips }, window: windowNotes },')
-    expect(groups).toContain("info: parties('customers.work.band.info'),")
+    expect(groups).toContain("{ info: parties('customers.work.band.info') }") // pg-fx3 (W-06): left out only on the customer's failed read
     // The two doors that navigate: the host's (WorkTab: router.push), the view stays pure.
     expect(work).toContain('onPress: () => actions?.onGo?.(href, true)')
     expect(src('../../areas/sales/customers/record/view/WorkTab.tsx')).toContain('onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),')

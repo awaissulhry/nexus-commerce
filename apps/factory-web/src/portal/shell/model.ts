@@ -245,6 +245,14 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 /** What a portal key does: `/` search, `?` the shortcuts, `g` then a letter goes to an area. */
 export type PortalKeyAction = { kind: 'search' } | { kind: 'shortcuts' } | { kind: 'chord' } | { kind: 'go'; href: string } | null
 
+/**
+ * pg-fx3 (walk W-01): a page that shows a list's own search keeps `/` — the list frame (list-frame/ListFrame.tsx) focuses it, as on
+ * the office's lists; elsewhere `/` opens the portal's Search. It is the field the frame's own `/` looks for: the frame's root
+ * `.fw-list`, its toolbar's input (a list without a search box, or its phone cards, leave `/` to Search).
+ */
+export const LIST_SEARCH_SELECTOR = '.fw-list .nds-toolbar input'
+export const pageKeepsSlash = (doc: { readonly querySelector: (selector: string) => unknown }): boolean => doc.querySelector(LIST_SEARCH_SELECTOR) !== null
+
 export function portalKeyAction(key: string, chordOpen: boolean, chords: Readonly<Record<string, string>>): PortalKeyAction {
   if (chordOpen) {
     const href = chords[key.toLowerCase()]
