@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useMemo, useState, type MouseEvent, type ReactNode, type Ref, type UIEvent } from 'react'
+import { forwardRef, useMemo, useRef, useState, type MouseEvent, type ReactNode, type Ref, type UIEvent } from 'react'
 import Link from 'next/link'
 import { Bell, Keyboard, LogOut, MessageCircleQuestion, MessageSquare, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { Banner, Menu, SearchTrigger, Tabs, type MenuItemDef } from '@nexus/ui/components'
@@ -24,6 +24,7 @@ import type { BadgeWords, PortalNotice } from '../model'
 import { portalPlace, translatePortalNav } from '../nav/portal-nav'
 import { messagesButtonWords } from '../record/model' // pp-w1 (w1.1): the band's thread button words
 import { PortalRail } from './PortalRail'
+import { useActiveTabInView } from './active-tab' // pp-fx7 (re-walk R2-01)
 import '../portal-shell.css'
 
 /**
@@ -121,6 +122,9 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
     onNavigate(href)
   }
   const band = model.band ?? {}
+  // pp-fx7 (re-walk R2-01): a band's tab row keeps the tab you are on whole in view, as the order's body tabs (the one shared part).
+  const bandRef = useRef<HTMLDivElement>(null)
+  useActiveTabInView(bandRef, band.tabs ? `${band.tabs.active}:${band.tabs.items.length}` : null)
   const title = band.title ?? place?.item?.label ?? area?.label ?? t('band.portal')
   const actions = (band.actions ?? []).slice(0, 2)
   const primary = actions.find((action) => action.variant === 'primary') ?? null
@@ -220,7 +224,7 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
       <div className="fw-pbody">
         <PortalRail nav={nav} current={area?.id ?? null} badges={model.badges} toHref={toHref} onNavigate={follow} />
         <div className="fw-ppage" onScroll={onScroll}>
-          <div className={['fw-pband', DETAIL_HEADER_FOLD.host, folded ? DETAIL_HEADER_FOLD.folded : ''].filter(Boolean).join(' ')}>
+          <div ref={bandRef} className={['fw-pband', DETAIL_HEADER_FOLD.host, folded ? DETAIL_HEADER_FOLD.folded : ''].filter(Boolean).join(' ')}>
             <DetailHeader
               dense
               backAsChild={Boolean(band.back)}
