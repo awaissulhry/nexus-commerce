@@ -16,7 +16,7 @@ import { REQUESTS, requestRow } from '../requests/design-data'
 import { fetchSheet, type OrdersRead } from './api'
 import { BETA_ROWS, betaOrdersRead, ordersRead, ROWS } from './design-data'
 import { designScreen as listScreen } from './fixtures'
-import { bandOf, CLOSED_REQUEST_STATES, countOf, groupOfAddress, groupQuery, holdsOrders, LIST_WIDTHS, listRowsOf, nextParcelOf, requestsOf, roomColumnsOf, rowViewOf, sheetChipOf, type ListWords } from './list-view-model'
+import { bandOf, countOf, groupOfAddress, groupQuery, holdsOrders, LIST_WIDTHS, listRowsOf, nextParcelOf, requestsOf, roomColumnsOf, rowViewOf, sheetChipOf, type ListWords } from './list-view-model'
 import { NS, type ListRow } from './model'
 import { dayWriter } from './words'
 
@@ -138,7 +138,7 @@ describe('pg-t: the groups and the address', () => {
     expect(open.every((row) => row.state.open)).toBe(true)
     expect(requestsOf('REQUESTS', REQUESTS)).toEqual(open)
     expect(requestsOf('CLOSED_REQUESTS', REQUESTS).map((row) => row.state.code)).toEqual(['DECLINED'])
-    expect(CLOSED_REQUEST_STATES).toEqual(['DECLINED', 'CLOSED', 'WITHDRAWN'])
+    expect(requestsOf('CLOSED_REQUESTS', [requestRow(1, 'CLOSED'), requestRow(2, 'WITHDRAWN'), requestRow(3, 'ORDER_CONFIRMED')]).map((row) => row.state.code)).toEqual(['CLOSED', 'WITHDRAWN'])
     expect(requestsOf('SHIPPED', REQUESTS)).toEqual([])
     // Requests first (the one that needs the customer on top), then the orders read; a search narrows the requests.
     const rows = listRowsOf(null, '', REQUESTS, BETA_ROWS, 'en')

@@ -9,9 +9,10 @@ import { BETA_ROWS, betaOrdersRead } from './design-data'
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
 import type { RequestRow } from '../requests/api'
 // pg-w2: the groups of the band and what each holds (the server's rule, imitated by the made-up reads below).
-import { CUSTOMER_GROUPS, type CustomerGroup } from '../../../lib/order-groups/groups'
+import { bandCounts } from '@nexus/factory-domain/sales/portal-orders/status'
+import type { CustomerGroup } from '../../../lib/order-groups/groups'
 import { customerGroupOf } from '../../../lib/order-cells/model'
-import { CLOSED_REQUEST_STATES, holdsOrders, sheetChipOf } from './list-view-model'
+import { holdsOrders, sheetChipOf } from './list-view-model'
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrdersListViewModel } from './view/OrdersListView'
@@ -25,20 +26,11 @@ import type { OrdersListViewModel } from './view/OrdersListView'
  */
 
 /**
- * The made-up answer's band (pg-server § Shapes): each group's count over ONE customer's rows, before the search — the server's own
- * rule imitated for the design cases (the live page never counts: it draws the numbers the server sends).
+ * The made-up answer's band (pg-server § Shapes): each group's count over ONE customer's rows, before the search — by the domain's
+ * own rule, the one the server counts with (the live page never counts: it draws the numbers the server sends).
  */
 function bandRead(read: OrdersRead, world: readonly OrderRow[], requests: readonly RequestRow[]): OrdersRead {
-  const counts = new Map<CustomerGroup, number>(CUSTOMER_GROUPS.map((group) => [group, 0]))
-  const add = (group: CustomerGroup) => counts.set(group, (counts.get(group) ?? 0) + 1)
-  for (const row of world) add(customerGroupOf(row.status))
-  for (const request of requests) {
-    if (request.state.open && request.state.code !== 'ORDER_WAITING') add('REQUESTS')
-    else if (CLOSED_REQUEST_STATES.includes(request.state.code)) add('CLOSED_REQUESTS')
-  }
-  const open = (['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED'] as const).reduce((sum, group) => sum + (counts.get(group) ?? 0), 0)
-  const needsYou = requests.filter((request) => request.state.needsYou).length + world.filter((row) => row.needsYou).length
-  return { ...read, groups: CUSTOMER_GROUPS.map((group) => ({ group, count: counts.get(group) ?? 0 })), open, needsYou }
+  return { ...read, ...bandCounts([...world.map((row) => ({ kind: 'ROW' as const, status: row.status, needsYou: !!row.needsYou })), ...requests.map((request) => ({ kind: 'INQUIRY' as const, state: request.state.code }))]) }
 }
 
 /** A group's rows as the sheet answers them (the orders only; Closed requests holds none). */

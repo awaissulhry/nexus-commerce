@@ -1,4 +1,5 @@
 import { Reply } from 'lucide-react'
+import { groupOf } from '@nexus/factory-domain/sales/portal-orders/status'
 import type { Locale } from '../../../lib/i18n/locales'
 import { customerStateChipOf, type Door, type MarkChipModel, type PromiseCellModel, type ShippedCellModel, type StateChipModel } from '../../../lib/order-cells/model'
 import { CUSTOMER_GROUP_ICON, CUSTOMER_GROUPS, isCustomerGroup, type CustomerGroup } from '../../../lib/order-groups/groups'
@@ -55,17 +56,14 @@ export function sheetChipOf(group: CustomerGroup | null): string {
   return group
 }
 
-/** The ended requests that stay findable (declined, closed, withdrawn: Closed requests never vanish). */
-export const CLOSED_REQUEST_STATES: readonly string[] = Object.freeze(['DECLINED', 'CLOSED', 'WITHDRAWN'])
-
 /**
- * The customer's requests (inquiries) a group shows: under everything open and Requests the open ones, except those whose order
- * waits for our yes (their order row carries them: never twice); under Closed requests the ended ones; none in the order groups.
+ * The customer's requests (inquiries) a group shows, by the domain's ONE rule (the server counts them by it): under everything open
+ * and Requests the open ones, except those whose order waits for our yes (their order row carries them: never twice); under Closed
+ * requests the declined, closed and withdrawn ones (never vanished); none in the order groups.
  */
 export function requestsOf(group: CustomerGroup | null, rows: readonly RequestRow[]): RequestRow[] {
-  if (group === null || group === 'REQUESTS') return rows.filter((row) => row.state.open && row.state.code !== 'ORDER_WAITING')
-  if (group === 'CLOSED_REQUESTS') return rows.filter((row) => CLOSED_REQUEST_STATES.includes(row.state.code))
-  return []
+  const shown: CustomerGroup | null = group === null || group === 'REQUESTS' ? 'REQUESTS' : group === 'CLOSED_REQUESTS' ? 'CLOSED_REQUESTS' : null
+  return shown ? rows.filter((row) => groupOf({ kind: 'INQUIRY', state: row.state.code }) === shown) : []
 }
 
 /** The rows of the list: the group's requests that match the search (the one that needs you on top), then the orders read. */
