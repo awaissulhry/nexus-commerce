@@ -26,11 +26,9 @@ import { DraftsFrame, QuotesTabFrame, SectionFoot, TabSection } from './quotes-t
 import './quotes-tab/quotes-tab.css'
 // ---- F-CQ-205: the section "Customer is writing" — the customer's portal drafts, read only (the Work tab's own parts, mounted here)
 import { pictureReader } from '../../../../lib/record-picture/api'
-import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture' // cq fx2 W-06: the draft window's garment
 import { useCustomerDrafts } from './drafts/use-customer-drafts'
 import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
-import { DraftWindow } from './drafts/view/DraftWindow'
-import { draftPick, draftsNav, draftTitle } from './drafts/model'
+import { draftPick, draftTitle } from './drafts/model'
 import type { DraftRow } from './drafts/api'
 
 /**
@@ -257,23 +255,12 @@ function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps
   const untitled = t('customers.drafts.untitled')
   const count = tab.counts?.byKind.drafts ?? null
   const showing = tab.terms.drafts && !hidden && count !== 0
-  const drafts = useCustomerDrafts(party.id, showing, untitled)
-  const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
+  const drafts = useCustomerDrafts(party.id, showing)
   if (hidden) return null
   return (
     <DraftsFrame
       customer={party.name}
       tab={tab}
-      window={
-        drafts.open &&
-        drafts.window &&
-        draftRows && (
-          <DraftWindow
-            model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread, picture: <RecordPicture source="portalOrder" recordId={drafts.open.id} number={draftTitle(drafts.open, untitled)} size="cell" read={readPictures} /> /* cq fx2 W-06 */ }}
-            actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
-          />
-        )
-      }
     >
       <CustomerDraftsList
         model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, room: tab.room /* cq fx2 W-04 */, pictures: { read: readPictures, header: b('drafts.picture') } }}

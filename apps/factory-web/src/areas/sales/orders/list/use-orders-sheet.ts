@@ -1062,6 +1062,12 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onDismissNotice: () => setNotice(null),
     // F-CP-104: on a host that holds the customer (the customer page) the window opens with it picked, and keeps it (no Change).
     onNewOrder: (open) => {
+      // od-w2.3: on the Orders list "New order" opens the ONE draft order's start (the customer above the mail; the typed catalogue
+      // order is one link there, `?new=1`); a host that holds the customer (the customer page) keeps today's window with it picked.
+      if (open && can.manage && !host.locked?.party) {
+        router.push(`${prefix}/sales/orders/new`)
+        return
+      }
       setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */, !!host.locked?.party /* F-CP-104 */) : null)
       if (open && can.manage && host.locked?.party) pickNew(host.locked.party) // F-CP-104
     },

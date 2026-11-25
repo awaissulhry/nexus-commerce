@@ -1513,7 +1513,7 @@
     "startAgain": "Inizia un nuovo ordine",
     "discard": "Scarta",
     "confirm": "Conferma ordine",
-    "draft": "Bozza — non confermato",
+    "draft": "Non ancora salvato",
     "contactIs": "Contatto: {name}",
     "nothingSaved": "Nulla viene salvato fino a Conferma ordine: le righe restano in questa scheda, anche se si ricarica. La conferma rende subito l'ordine confermato, con la sua richiesta d'acconto.",
     "details": "Date e nota",

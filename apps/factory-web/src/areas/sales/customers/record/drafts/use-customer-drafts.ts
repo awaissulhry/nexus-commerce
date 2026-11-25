@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useOfficeApi } from '../../../../../lib/session/context'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
+import { companyPrefix } from '../../../../../lib/session/session'
 import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useCoalesced } from '../../../orders/hooks'
-import { useCatalogueOrder } from '../../../inquiries/use-catalogue-order'
-import type { CatalogueActions, CatalogueModel } from '../../../inquiries/catalogue-model'
 import { listCustomerDrafts, type DraftRow } from './api'
-import { draftsTouched, draftTitle, type DraftsRead } from './model'
+import { draftsTouched, officeDraftHref, type DraftsRead } from './model'
 
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6) — the reads of "Drafts of <customer>": the customer's portal drafts (B-CP-071's
@@ -22,21 +22,18 @@ export interface CustomerDrafts {
   readonly read: DraftsRead
   /** Live changes waiting behind "N updates · Show". */
   readonly updates: number
-  /** The draft open in the window (its row), else null. */
-  readonly open: DraftRow | null
-  readonly window: { readonly model: CatalogueModel; readonly actions: CatalogueActions; readonly thread: ReactNode } | null
   readonly onRetry: () => void
   readonly onShowUpdates: () => void
+  /** od-w2.3: a row opens the office draft page, EDITABLE (was the read-only window). */
   readonly onOpen: (row: DraftRow) => void
-  readonly onGo: (id: string) => void
-  readonly onClose: () => void
 }
 
-export function useCustomerDrafts(partyId: string, shown: boolean, untitled: string): CustomerDrafts {
+export function useCustomerDrafts(partyId: string, shown: boolean): CustomerDrafts {
   const api = useOfficeApi()
+  const session = useOfficeSession()
+  const router = useRouter()
   const [read, setRead] = useState<DraftsRead>(shown ? READING : OFF)
   const [updates, setUpdates] = useState(0)
-  const [openId, setOpenId] = useState<string | null>(null)
   const turn = useRef(0)
 
   const load = useCallback(() => {
@@ -73,18 +70,11 @@ export function useCustomerDrafts(partyId: string, shown: boolean, untitled: str
     shown,
   )
 
-  const rows = read.status === 'ready' ? read.rows : null
-  const open = useMemo(() => (openId && rows ? (rows.find((row) => row.id === openId) ?? null) : null), [openId, rows])
-  const catalogue = useCatalogueOrder({ requestId: open?.id ?? null, draft: open ? { title: draftTitle(open, untitled) } : null })
   return {
     read,
     updates,
-    open,
-    window: open ? catalogue : null,
     onRetry: load,
     onShowUpdates: load,
-    onOpen: (row) => setOpenId(row.id),
-    onGo: setOpenId,
-    onClose: () => setOpenId(null),
+    onOpen: (row) => router.push(officeDraftHref(companyPrefix(session.company?.code ?? ''), row.id)),
   }
 }
