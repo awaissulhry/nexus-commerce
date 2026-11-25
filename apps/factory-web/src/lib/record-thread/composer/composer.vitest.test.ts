@@ -595,9 +595,11 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
   it('D5 / Z3: Enter sends in one thread, Shift+Enter is a new line; Reply to N never sends on Enter (⌘/Ctrl+Enter there)', () => {
     expect(enterSends(ORDER)).toBe(true)
     expect(enterSends({ ...ORDER, many: true })).toBe(false)
-    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("if (event.key === 'Enter' && !event.shiftKey && !event.altKey && (enterSends(context) || event.metaKey || event.ctrlKey)) {")
-    expect(source).toContain('if (event.nativeEvent.isComposing) return')
+    // pt-w1 W1.2: the ONE key rule both doors run lives in ComposerRow (composerKeys); the office hands it its own enterSends.
+    const row = readFileSync(new URL('./view/ComposerRow.tsx', import.meta.url), 'utf8')
+    expect(row).toContain("if (event.key === 'Enter' && !event.shiftKey && !event.altKey && (enterSends || event.metaKey || event.ctrlKey)) {")
+    expect(row).toContain('if (event.nativeEvent.isComposing) return')
+    expect(readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')).toContain('{ enterSends: enterSends(context), body: draft.body },')
     // The @ list takes its own Enter first (it inserts the colleague; the message does not go).
     const mention = readFileSync(new URL('../helpers/view/MentionInput.tsx', import.meta.url), 'utf8')
     expect(mention.indexOf("if ((event.key === 'Enter' || event.key === 'Tab')")).toBeLessThan(mention.indexOf('onKeyDown?.(event)'))
@@ -615,9 +617,13 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
     expect(css).toMatch(/\.fw-rt-cx-box > \.fw-rtm \{\s*flex: 1 1 160px;\s*min-width: 0;/)
     expect(css).not.toMatch(/^\.fw-rt-cx-box \.fw-rt-cx-text \{/m)
     const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    const row = readFileSync(new URL('./view/ComposerRow.tsx', import.meta.url), 'utf8') // pt-w1 W1.2: useBoxGrow
     expect(source).not.toContain('honourRows')
+    expect(row).not.toContain('honourRows')
     expect(source).toContain('rows={1}')
-    expect(source).toContain("area.style.removeProperty('height')")
+    expect(row).toContain("area.style.removeProperty('height')")
+    expect(row).toContain('}, [draft.body, draft.mode])')
+    expect(source).toContain('useBoxGrow(boxRef, draft)')
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
   })
 
@@ -685,3 +691,68 @@ describe('tw- fx2 — the composer after the walk', () => {
   })
 })
 // ---- end tw- fx2
+
+// ---- pt-w1 W1.2 (lane pt-, S3; ONE SHARED THREAD): the composer's ONE row both doors draw — narrow, one key rule ---------------------
+import { ComposerHeld, ComposerRow, composerKeys, type ComposerKeyEvent } from './view/ComposerRow'
+
+describe('pt-w1 W1.2 — the shared composer row', () => {
+  const row = readFileSync(new URL('./view/ComposerRow.tsx', import.meta.url), 'utf8')
+
+  it('ComposerRow takes no mode, audience, mention, amount or floor (its props are slots and words only)', () => {
+    for (const name of ['export interface ComposerRowProps {', 'export interface ComposerBox {']) {
+      const start = row.indexOf(name)
+      expect(start, name).toBeGreaterThan(-1)
+      const props = row.slice(start, row.indexOf('\n}\n', start)).replace(/\/\*\*[\s\S]*?\*\//g, '')
+      expect(props, name).not.toMatch(/\b(mode|modes|audience|mentions?|people|amount|currency|floor|forFloor|about|recipients|party|context|draft)\??:/)
+    }
+    expect(row).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
+    expect(row).not.toMatch(/MentionInput|AmountField|Checkbox/)
+    expect(row).not.toMatch(/\bfetch\(/)
+  })
+
+  it('Enter sends, Shift+Enter a new line, Esc drops the reply bar — one rule for both doors (composerKeys)', () => {
+    const key = (over: Partial<ComposerKeyEvent> & { readonly key: string }, composing = false) => {
+      const said = { prevented: false }
+      const event: ComposerKeyEvent = { shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, ...over, nativeEvent: { isComposing: composing }, preventDefault: () => void (said.prevented = true) }
+      return { event, said }
+    }
+    const run = (over: Partial<ComposerKeyEvent> & { readonly key: string }, box: { enterSends: boolean; body: string }, composing = false, slash?: () => boolean) => {
+      const done: string[] = []
+      const { event, said } = key(over, composing)
+      composerKeys(event, box, { send: () => done.push('send'), escape: () => done.push('escape'), slash: slash ? () => (done.push('slash'), slash()) : undefined })
+      return { done, prevented: said.prevented }
+    }
+    const one = { enterSends: true, body: 'Hello' }
+    expect(run({ key: 'Enter' }, one)).toEqual({ done: ['send'], prevented: true })
+    expect(run({ key: 'Enter', shiftKey: true }, one)).toEqual({ done: [], prevented: false }) // a new line: the box types it
+    expect(run({ key: 'Enter' }, one, true)).toEqual({ done: [], prevented: false }) // a word being composed is never sent
+    expect(run({ key: 'Escape' }, one)).toEqual({ done: ['escape'], prevented: true }) // the host drops the reply bar first
+    // Where Enter does not send (the office's Reply to N), only ⌘ / Ctrl + Enter does.
+    const many = { enterSends: false, body: 'Hello' }
+    expect(run({ key: 'Enter' }, many)).toEqual({ done: [], prevented: false })
+    expect(run({ key: 'Enter', metaKey: true }, many)).toEqual({ done: ['send'], prevented: true })
+    expect(run({ key: 'Enter', ctrlKey: true }, many)).toEqual({ done: ['send'], prevented: true })
+    // "/" in an empty box opens the host's helpers when there are some; otherwise it is typed.
+    expect(run({ key: '/' }, { enterSends: true, body: '' }, false, () => true)).toEqual({ done: ['slash'], prevented: true })
+    expect(run({ key: '/' }, { enterSends: true, body: '' }, false, () => false)).toEqual({ done: ['slash'], prevented: false })
+    expect(run({ key: '/' }, { enterSends: true, body: 'x' }, false, () => true)).toEqual({ done: [], prevented: false })
+    expect(run({ key: '/' }, { enterSends: true, body: '' })).toEqual({ done: [], prevented: false })
+    // The office runs the same rule.
+    const composer = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(composer).toContain('composerKeys(')
+    expect(composer).not.toContain("event.key === 'Enter'")
+  })
+
+  it('drawn alone the row is the office’s one row (the same classes); the counter shows only near the limit; held is ONE line', () => {
+    const html = render(createElement(ComposerRow, { box: { input: createElement('textarea', { 'aria-label': 'Your message' }) }, send: { label: 'Send', held: null, onSend: () => undefined }, length: 0, announce: '' }))
+    expect(html).toMatch(/^<div class="fw-rt-composer"><div class="fw-rt-cx-row"><div class="fw-rt-cx-box"><textarea aria-label="Your message"><\/textarea><\/div><button[^>]*class="[^"]*fw-rt-cx-send/)
+    expect(html).not.toContain('fw-rt-cx-count')
+    expect(html).not.toContain('data-mode')
+    const near = render(createElement(ComposerRow, { box: { input: null }, send: { label: 'Send', held: null, onSend: () => undefined }, length: 18_500, announce: '' }))
+    expect(textOf(near)).toContain('1500 characters left')
+    expect(near).toContain('class="fw-rt-cx-count"')
+    const held = render(createElement(ComposerHeld, { icon: createElement('i'), children: createElement('span', null, 'Writing here is closed.') }))
+    expect(held).toBe('<div class="fw-rt-composer"><div class="fw-rt-cx-held"><i></i><span>Writing here is closed.</span></div></div>')
+  })
+})
+// ---- end pt-w1 W1.2
