@@ -798,8 +798,9 @@ describe('the people of a by-person line (PortalOrderRequestPerson)', () => {
     expect(await insert(p1(), 'PortalOrderRequestPerson', rider)).toBe(1)
     expect(await update(p1(), 'PortalOrderRequestPerson', rider.id as string, `size = '52', version = version + 1`)).toBe(1)
     expect(await refusalOf(update(p1(), 'PortalOrderRequestPerson', rider.id as string, `"lineId" = $2::uuid, version = version + 1`, catalogueLine.id))).toMatch(/stays on its line of its request/)
-    // A line that has people stays by person; removing the line removes them.
-    expect(await refusalOf(update(p1(), 'PortalOrderRequestLine', line, `"byPerson" = false, kind = 'DESCRIBED', description = 'Jackets', version = version + 1`))).toMatch(KEEPS_PEOPLE)
+    // A line that has people stays by person; removing the line removes them. od-fx1: the kind change carries its sizing (OD s.1 (5):
+    // made to measure exactly when sized so), so the refusal is the people's own.
+    expect(await refusalOf(update(p1(), 'PortalOrderRequestLine', line, `"byPerson" = false, kind = 'DESCRIBED', sizing = 'STANDARD', description = 'Jackets', version = version + 1`))).toMatch(KEEPS_PEOPLE)
     expect(await remove(p1(), 'PortalOrderRequestLine', line)).toBe(1)
     expect(await admin(`SELECT count(*)::int AS n FROM "PortalOrderRequestPerson" WHERE "lineId" = $1::uuid`, [line])).toEqual([{ n: 0 }])
     // Once sent, they never change.
