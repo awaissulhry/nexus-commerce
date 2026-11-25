@@ -196,13 +196,13 @@ const record = (locale: Locale, over: Partial<ThreadViewModel> = {}, summary: Pa
   thread: thread(locale, { record: null, ...over }),
 })
 
-// ---- B-TH-273 (PL3, picture 22): the rule every portal record page follows — a record's body (here a made-up order's Status card)
+// ---- B-TH-273 (PL3, picture 22): the rule every portal record page follows — a record's body (here a made-up order's Overview card)
 // with its conversation docked at 1440, and below 1280 px behind "Messages (2 new)" (opened: the conversation full width, Back).
 const frameBody = (locale: Locale) =>
   createElement(
     'div',
     { className: 'fw-precord' },
-    createElement(Card, { padded: true }, createElement('h2', { className: 'fw-precord-h2' }, locale === 'it' ? 'Stato e avanzamento' : 'Status & progress'), createElement('p', { className: 'fw-precord-sub' }, locale === 'it' ? 'In produzione: taglio terminato, cucitura in corso. Consegna prevista 21 novembre.' : 'In production: cutting done, sewing under way. Delivery expected 21 November.')),
+    createElement(Card, { padded: true }, createElement('h2', { className: 'fw-precord-h2' }, locale === 'it' ? 'Panoramica' : 'Overview'), createElement('p', { className: 'fw-precord-sub' }, locale === 'it' ? 'In produzione: taglio terminato, cucitura in corso. Consegna prevista 21 novembre.' : 'In production: cutting done, sewing under way. Delivery expected 21 November.')),
     createElement(Card, { padded: true }, createElement('h2', { className: 'fw-precord-h2' }, locale === 'it' ? 'Righe' : 'Lines'), createElement('p', { className: 'fw-precord-sub' }, locale === 'it' ? '4 righe · 120 capi' : '4 lines · 120 garments')),
   )
 const orderBand = (locale: Locale): PortalBand => {
@@ -215,12 +215,13 @@ const orderBand = (locale: Locale): PortalBand => {
     ask: { type: 'SalesOrder', id: '00000000-0000-7000-8000-000000000101', label: '#12' },
     tabs: {
       label: t('record.tabs'),
-      active: 'status',
+      // pp-t: the order's tab names since round 1 (portal-orders tabs.*); the tabs in the band stay this case's (the rule's) picture.
+      active: 'overview',
       items: [
-        { id: 'status', label: locale === 'it' ? 'Stato e avanzamento' : 'Status & progress', href: '#status' },
+        { id: 'overview', label: locale === 'it' ? 'Panoramica' : 'Overview', href: '#overview' },
         { id: 'lines', label: locale === 'it' ? 'Righe' : 'Lines', href: '#lines', count: 4 },
-        { id: 'shipments', label: locale === 'it' ? 'Spedizioni e tracking' : 'Shipments & tracking', href: '#shipments' },
-        { id: 'documents', label: locale === 'it' ? 'Documenti' : 'Documents', href: '#documents' },
+        { id: 'shipments', label: locale === 'it' ? 'Spedizioni' : 'Shipments', href: '#shipments' },
+        { id: 'files', label: locale === 'it' ? 'File' : 'Files', href: '#files' },
       ],
     },
   }

@@ -15,7 +15,7 @@ export default function PortalOrderPage({ params }: { params: Promise<{ id: stri
   const { kinds } = usePortalFrame()
   // B-W2b-179: the supplier's purchase order.
   if (kinds.includes('SUPPLIER')) return <SupplierOrderPage id={id} />
-  // B-W2b-191: the customer's order (Status & progress first).
+  // B-W2b-191: the customer's order (Overview first; pp-w1).
   if (kinds.includes('CUSTOMER')) return <CustomerOrderPage id={id} />
   return <NotInAccessHere />
 }

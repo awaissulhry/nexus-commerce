@@ -1616,7 +1616,7 @@ export default defineStage({
       await expect(row(page, FILES_WORDS.ask)).toHaveCount(0, { timeout: 60_000 })
       await flow.shot(page, 'files-ask-accepted')
       const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
-      await alpha.go(`/orders/${world.so2.id}?tab=documents`)
+      await alpha.go(`/orders/${world.so2.id}?tab=files`) // pp-t: the order's Files tab by its own name (an old ?tab=documents still lands there)
       await seen(alpha.page.getByText(FILES.second.name).first(), 60_000)
       await expectNothingOf(alpha.page, BRAND_BETA, world.betaNumbers, 'alpha portal: the accepted file')
 

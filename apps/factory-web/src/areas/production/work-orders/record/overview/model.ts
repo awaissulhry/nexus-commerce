@@ -42,7 +42,7 @@ export function previewHeld(fact: CustomerFact, can: boolean, busy: boolean): Ph
   return null
 }
 
-/** The portal record the preview opens: the work order's one order (its Status & progress), else the customer's portal home. */
+/** The portal record the preview opens: the work order's one order (its Overview), else the customer's portal home. */
 export function previewRecord(workOrder: Pick<WorkOrder, 'orders'>): { type: 'SalesOrder'; id: string } | null {
   const ids = [...new Set(workOrder.orders.map((order) => order.id))]
   return ids.length === 1 ? { type: 'SalesOrder', id: ids[0]! } : null
