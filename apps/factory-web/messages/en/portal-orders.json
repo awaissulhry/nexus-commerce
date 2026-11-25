@@ -5,8 +5,7 @@
     "retry": "Try again"
   },
   "ref": {
-    "yours": "Your PO",
-    "ours": "Our order"
+    "yours": "Your PO"
   },
   "prices": {
     "none": "Prices are not part of your access."
@@ -29,7 +28,6 @@
   "band": {
     "updated": "Updated {time}",
     "export": "Export this view (CSV)",
-    "print": "Print this list",
     "change": "Ask for a change…",
     "reconfirm": "Re-confirm version {version}",
     "cancel": "Ask to cancel…",
@@ -54,8 +52,7 @@
   "chips": {
     "label": "Which orders",
     "chip": "{name}: {count}",
-    "clear": "Clear filters",
-    "closedRequests": "Closed requests"
+    "clear": "Clear filters"
   },
   "list": {
     "title": "Orders & requests",
@@ -75,40 +72,17 @@
     "noMatchSearch": "Nothing found for “{q}”.",
     "noMatchChip": "Nothing is in this group right now.",
     "clear": "Show everything open",
-    "requestWaits": "To be confirmed by us",
-    "asked": "date asked",
-    "moved": "was {date}",
     "piecesShipped": "{shipped} of {ordered} shipped",
-    "piecesOpen_one": "{count} open",
-    "piecesOpen_other": "{count} open",
-    "allShipped": "All shipped",
-    "eta": "expected {date}",
-    "needsYou": "Needs your answer",
-    "wanted": "wanted",
-    "updated": "updated {date}",
-    "piecesAsked": "{count} asked",
     "requestsFailed": "Your requests could not be read: only your orders are shown.",
     "yourPo": "Your PO {ref}",
     "emptyBodyView": "Your orders show here as soon as we make them.",
     "clearSearch": "Clear the search"
   },
   "col": {
-    "yourPo": "Your PO",
-    "status": "Status",
-    "pieces": "Pieces",
-    "ordered": "Ordered",
     "shipped": "Shipped",
-    "open": "Open",
     "value": "Net value",
-    "currency": "Currency",
-    "nextShipment": "Next shipment",
     "actions": "Actions",
     "number": "Number",
-    "kind": "Kind",
-    "yours": "Your number",
-    "subject": "Subject",
-    "date": "Date",
-    "wanted": "Wanted or promised",
     "picture": "Picture",
     "whereItIs": "Where it is",
     "promised": "Promised",
@@ -116,18 +90,15 @@
   },
   "row": {
     "open": "Open the order",
-    "lines": "Lines",
     "shipments": "Shipments & tracking",
     "messages": "Messages",
     "menu": "Actions for order {number}",
-    "openRequest": "Open the request",
-    "requestMenu": "Actions for {name}"
+    "openRequest": "Open the request"
   },
   "bulk": {
     "export": "Export {count}"
   },
   "held": {
-    "noRows": "Nothing to export in this view.",
     "busy": "Sending…",
     "offline": "No connection",
     "preview": "An office preview cannot send anything.",
@@ -137,25 +108,6 @@
     "mayPay": "Only colleagues who pay invoices can pay online: ask your admin.",
     "reading": "Reading what is possible…",
     "verdict": "{words}"
-  },
-  "transit": {
-    "title": "On the way",
-    "failed": "The parcels on their way could not be read",
-    "shipment": "Shipment {number}",
-    "open": "Opens the shipments of order {number}",
-    "steps": "Shipment {number} progress"
-  },
-  "print": {
-    "title": "Print this list",
-    "toolbar": "Print",
-    "print": "Print",
-    "back": "Back to the list",
-    "held": "The list is still being read.",
-    "filters": "Shown: {chip}",
-    "filtersSearch": "Shown: {chip} · search “{q}”",
-    "chipOpen": "Open",
-    "printedBy": "Printed by {name} on {when}",
-    "capped": "The first {shown} of {count} orders and requests."
   },
   "record": {
     "missing": "Order not found",
@@ -255,7 +207,6 @@
     "title": "Order facts",
     "orderedOn": "Ordered on",
     "requested": "Requested date",
-    "promise": "Promise date",
     "shipTo": "Delivery address",
     "paymentTerms": "Payment terms",
     "withdrawal": "Right of withdrawal",
@@ -609,17 +560,6 @@
     "catalogue": "Catalogue",
     "order": "Order"
   },
-  "tiles": {
-    "label": "What waits",
-    "NEEDS_YOU": "We need something from you",
-    "OPEN_REQUESTS": "Open requests",
-    "OPEN_ORDERS": "Open orders",
-    "hint": {
-      "NEEDS_YOU": "Requests we asked you about",
-      "OPEN_REQUESTS": "Sent, not an order yet",
-      "OPEN_ORDERS": "Not delivered yet"
-    }
-  },
   "sheet": {
     "yes": "Yes",
     "no": "No",
@@ -635,22 +575,14 @@
     "madeFromQuoteNone": "Made from your quote"
   },
   "production": {
-    "label": "Production of this order",
     "waitingTitle": "We are waiting for you on this order",
     "waitingSince": "Since {date}",
     "waitingLink": "See what waits for you",
     "ask": "Ask a question",
-    "health": "Health",
-    "waitingOn": "Waiting on",
     "failed": "Could not load the production of this order",
     "gates": {
-      "title": "Gates and dates",
-      "label": "Gates of this order",
-      "step": "Gate",
-      "state": "State",
       "planned": "Planned",
       "done": "Done on",
-      "review": "See what waits for you",
       "none": "No gates or dates planned for this order yet.",
       "states": {
         "WAITING_YOU": "Waiting on you",
@@ -660,8 +592,6 @@
       }
     },
     "approvals": {
-      "label": "Your material approvals",
-      "material": "Material",
       "sent": "Sent",
       "answered": "Answered on",
       "states": {
@@ -971,16 +901,6 @@
       "sent": "Request sent. We answer here and in the order's conversation."
     }
   },
-  "orderFiles": {
-    "title": "Order files ({count})",
-    "label": "The newest files we shared on this order and its lines",
-    "all": "All in Documents ({count})",
-    "open": "Open",
-    "openOf": "Open {name}",
-    "download": "Download",
-    "downloadOf": "Download {name}",
-    "failed": "The order's files could not be read."
-  },
   "reported": {
     "label": "Problems you reported on this order",
     "report": "Report a problem"
@@ -1029,5 +949,24 @@
     "refused": "These prices cannot be saved as they are: check the lines marked.",
     "notSaved": "Your prices were not saved: try again.",
     "failed": "The prices could not be read."
+  },
+  "overview": {
+    "strips": "What waits for you, and what holds the order",
+    "progress": "Progress by line",
+    "piecesAsOf": "Pieces as of {time}",
+    "dates": "Next dates",
+    "requests": "Requests & changes",
+    "nothing": "No request or change waits",
+    "groupYou": "Waiting on you · {count}",
+    "groupUs": "Waiting on us · {count}",
+    "groupAnswered": "Answered · {count}",
+    "pay": "What you pay",
+    "partPaid": "{paid} of {amount} paid",
+    "total": "Order total · VAT incl.",
+    "paid": "Paid",
+    "still": "Still to pay"
+  },
+  "strip": {
+    "deposit": "Deposit to pay by {date}"
   }
 }

@@ -26,7 +26,7 @@ import { startsWith, words } from './_harness/words'
  *   OV  the overall view (All customers, "Group by customer"): A's header carries the server's figures and its order count opens
  *       exactly A's rows (the rows the API's filter of that door returns, all A's); the grand total is pinned under the grid;
  *   T39 customer A's buyer reads its own sheet in its portal (Orders & requests): A's column with the value as edited, never B's
- *       column, never the office's note; "Download all (Excel)" — the server's file holds A's column, its value and A's own order
+ *       column, never the office's note; "Download (Excel)" — the server's file holds A's column, its value and A's own order
  *       reference, nothing of B;
  *   T17 customer B's buyer reads its sheet (its own column and value) and downloads its file; every page B visits (its sheet, its
  *       order, the address of A's order: "Order not found") passes the DOM name scan, and its file and the file's name hold nothing
@@ -229,7 +229,7 @@ function xlsxText(bytes: Buffer): string {
     .replace(/&amp;/g, '&')
 }
 
-/** The portal's band ⋯ › "Download all (Excel)": the file the server wrote in the customer's own scope, as text, and its name. */
+/** The portal's band ⋯ › "Download (Excel)" (pg-: the ONE export, the group shown): the file the server wrote in the customer's own scope, as text, and its name. */
 async function downloadAll(desk: PortalDesk): Promise<{ text: string; name: string }> {
   const { page } = desk
   await page.getByRole('button', { name: PORTAL('band.more') }).first().click()
@@ -460,6 +460,8 @@ export default defineStage({
     await flow.step('T39: customer A reads its own sheet in its portal — its column as edited, never B’s, never the office note — and downloads it', async () => {
       const { page } = alpha
       await alpha.go('/orders')
+      // pg- (D8): the ticked portal columns join one at a time while the list's room holds them — at this flow's 1440 the room (a
+      // 1138 px grid) holds two after the fixed cells, and each customer has ONE of its own: it is on screen, never in a sideways scroll.
       await reveal(page, columnOf(COLUMN.alpha.code))
       await expect(page.getByRole('columnheader', { name: COLUMN.alpha.labelEn })).toBeVisible({ timeout: 60_000 })
       await seen(page.getByText(VALUE.alphaEdited).first())

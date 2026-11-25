@@ -178,12 +178,4 @@ export function problemChipOf(problem: ProblemState | null | undefined, t: Trans
   return { tone: 'success', text: problem.on ? t('problem.chip.answered', { date: day(problem.on) }) : t('problem.chip.answeredNoDate') }
 }
 
-// ── the files card on the order (Order files (3) · All in Documents (7)) ─────────────────────────────────────────────────
-/** The files card shows the newest three. */
-export const ORDER_FILES_SHOWN = 3
-
-/** The newest current documents we shared on the order and its lines, and how many there are in all; none: the card is not drawn. */
-export function orderFilesOf<D extends Pick<OrderDocument, 'current' | 'date'>>(items: readonly D[], max = ORDER_FILES_SHOWN): { readonly shown: D[]; readonly count: number } {
-  const current = items.filter((item) => item.current).sort((a, b) => b.date.localeCompare(a.date))
-  return { shown: current.slice(0, max), count: current.length }
-}
+// pp-w2 (w2.4, O1-B3): the order's "Order files (3)" card went from its Overview (one home for files: the Files tab) — and its rule.

@@ -32,7 +32,7 @@ import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/m
 import { LinesTab } from './LinesTab'
 import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
-import { StatusTab } from './StatusTab'
+import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & progress
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -54,7 +54,7 @@ export type OrderDialog =
   | { kind: 'reconfirm'; model: ReconfirmDialogModel }
   | { kind: 'pay'; model: PayDialogModel }
   | { kind: 'preview'; model: PreviewModel }
-  // F-PR-12c: a photo the factory shared on the order, full size (Status & progress › Quality and photos).
+  // F-PR-12c: a photo the factory shared on the order, full size (Overview › Quality and photos).
   | { kind: 'photo'; model: QualityPhotoModel }
   // F-PR-13: the Ask dialog (what, the details of a production ask, what it means before Send).
   | { kind: 'ask'; model: AskDialogModel }
@@ -94,8 +94,6 @@ export interface OrderRecordViewModel {
   copied: string | null
   /** B-W2b-170: why "Copy tracking link" waits (a preview, offline), or null; `link:<shipment id>` in `copied` once copied. */
   linkHeld?: string | null
-  /** The promise history is open (the band's ⋯ opens it too). */
-  historyOpen?: boolean
   dialog: OrderDialog | null
   /** B-W2b-194: "Reorder this line" (New order's reorder of this order; a person who may order), else null. */
   reorderHref?: string | null
@@ -105,7 +103,7 @@ export interface OrderRecordViewModel {
   /** The design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
   frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number; /* F-SA-264 */ width?: PortalDockWidth; hidden?: boolean }
   // ---- end B-TH-275
-  // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on Status & progress, part 1
+  // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on the Overview (was Status & progress), part 1
   /**
    * `hidden`: not part of the reader's access (no portal.production.view), not in production, or not one of its orders (404):
    * no production section is drawn (a section not shared is not drawn); absent: the same.
@@ -145,7 +143,6 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onWithdraw?: (request: ChangeRequest) => void
   onChangeLine?: (lineId: string) => void
   onLine?: (lineId: string) => void
-  onHistory?: (open: boolean) => void
   onCopy?: (text: string) => void
   /** B-W2b-170: a link to the shipment's branded tracking page, copied to the clipboard. */
   onCopyTrackingLink?: (shipmentId: string) => void
@@ -239,7 +236,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
           {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
           {model.notice && model.notice.tone !== 'danger' ? notice : null}
         </RecordNotices>
-        {model.tab === 'overview' ? <StatusTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'overview' ? <OverviewTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
         {model.tab === 'files' ? <DocumentsTab model={model} actions={actions} /> : null}

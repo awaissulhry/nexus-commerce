@@ -7,6 +7,7 @@ import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progr
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
+import { ORDER_GROUPS } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1 S1.2
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { pictureIds } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids)
 
@@ -29,7 +30,10 @@ const yourNumber = output({ seq: z.number().int(), words }).nullable()
 
 const nextShipment = output({
   id: id(),
-  number: z.string(),
+  /** pg-s1 S1.3 (Owner D6): never the office's shipment series — a shipment is named by its order ("Your order 12 · parcel 1"). */
+  number: z.null(),
+  /** pg-s1 S1.3 (D6): which of the order's shipments that left it is (1-based, by the moment it left); a packed one not left yet: the next. */
+  parcel: z.number().int(),
   status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
   words,
   date: day.nullable(),
@@ -40,14 +44,15 @@ const nextShipment = output({
 
 const row = output({
   /**
-   * ORDER, or REQUEST: a portal order request sent and not decided yet (its number is the request's). fix-portal-numbers-1
-   * (B-TH-303): an order's `number` is null — the customer reads its own `yourNumber`, never the office's series.
+   * ORDER, or REQUEST: a portal order request sent and not decided yet. fix-portal-numbers-1 (B-TH-303): an order's `number` is
+   * null — the customer reads its own `yourNumber`, never the office's series; pg-s1 S1.3 (G3-B1): a request's too (its RQ-… is
+   * the company's series: it would tell how much the others ask; the search still finds the row by it).
    */
   kind: z.enum(['ORDER', 'REQUEST']),
   id: id(),
   /** Their purchase order number (first in the row). */
   customerRef: z.string().nullable(),
-  number: z.string().nullable(),
+  number: z.null(),
   /** B-TH-105 (Owner decision PR-06): "Your order 12", the customer's own count beside our number (a request: null). */
   yourNumber,
   orderedOn: day.nullable(),
@@ -66,12 +71,17 @@ const row = output({
   nextShipment: nextShipment.nullable(),
   /** With progress=true, for the first 10 rows of the page when the customer shares progress (C1); else null. */
   progressPercent: z.number().int().nullable(),
+  /** pg-s1 (Z4): the row's one mark "Needs your answer" — an OPEN order whose revision waits for their re-confirmation; a request: false. */
+  needsYou: z.boolean(),
 })
 
 export const listContract = defineContract({
   querystring: input({
     chip: z.enum(ORDER_CHIPS).default('OPEN'),
-    /** Their PO number, our order number, or a style's code or name. */
+    /**
+     * Their PO number, our order number, or a style's code or name. pg-s1 S1.3: a number alone ("12", "#12") is their own number,
+     * matched exactly ("Your order 12", never 112), or (without "#") a PO holding it.
+     */
     q: z.string().trim().max(80).optional(),
     /** The production progress % of the page's first 10 rows (Home's next deliveries), when shared. */
     progress: z.enum(['true', 'false']).default('false'),
@@ -262,37 +272,6 @@ export const shipmentsContract = defineContract({
   },
 })
 
-export const inTransitContract = defineContract({
-  response: {
-    200: output({
-      asOf: instant(),
-      items: z.array(
-        output({
-          shipmentId: id(),
-          number: z.string(),
-          // fix-portal-numbers-1 (B-TH-303): its PO and the customer's own number, never the office's series.
-          order: output({ id: id(), customerRef: z.string().nullable(), yourNumber }),
-          status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
-          words,
-          carrierName: z.string().nullable(),
-          shippedAt: instant().nullable(),
-          /** B-W2b-F14: when the carrier expects to deliver it; null: not said. */
-          expectedDeliveryAt: instant().nullable(),
-          /** B-OP-031: the number typed for a carrier booked by hand ("No live tracking"); null: none. */
-          typedTrackingNumber: z.string().nullable(),
-          /** B-OP-034: the tracking link typed beside it (https only); null: none. */
-          typedTrackingUrl: z.string().nullable(),
-          trackingNumbers: z.array(z.string()),
-          /** B-W2b-F14: "Track on the carrier's site" per tracking number (https pages only). */
-          trackingLinks: z.array(output({ trackingNumber: z.string(), url: z.string(), words })),
-          lastEvent: trackingEvent.nullable(),
-        }),
-      ),
-      live,
-    }),
-  },
-})
-
 // ---- B-TH-061 (SHEET-G10, Owner decision 13; wall W39 / T39): the customer's own sheet — the list's rows with the columns the office
 // ticked for the portal, and "Download all" written by the server in the partner scope (never the export job).
 const portalColumn = output({
@@ -318,9 +297,18 @@ export const sheetContract = defineContract({
       chip: z.enum(ORDER_CHIPS),
       chips: z.array(output({ chip: z.enum(ORDER_CHIPS), count: z.number().int(), words })),
       count: z.number().int(),
+      // ---- pg-s1 S1.2 (portal grid Z3, H4): the band's numbers, counted by the server over the party's own rows BEFORE the search
+      // (a search never moves them) — its orders, catalogue requests and requests; never another customer's.
+      /** Each group of the band, in the groups' order (factory-domain ORDER_GROUPS). */
+      groups: z.array(output({ group: z.enum(ORDER_GROUPS), count: z.number().int() })),
+      /** Every open order and request (Requests … Shipped), each once. */
+      open: z.number().int(),
+      /** The requests we asked something about (NEED_INFO) and the OPEN orders waiting for their re-confirmation. */
+      needsYou: z.number().int(),
+      // ---- end pg-s1 S1.2
       /** The portal columns: every customer's fields shown in the portal and this customer's own. */
       columns: z.array(portalColumn),
-      /** The list's rows (an order's `number` is null: the customer reads its own `yourNumber`), each with its cells by column id. */
+      /** The list's rows (`number` null: the customer reads its own `yourNumber`, never an office series), each with its cells by column id. */
       items: z.array(row.extend({ values: z.record(z.string(), portalCell) })),
       live,
     }),

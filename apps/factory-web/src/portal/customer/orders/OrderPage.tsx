@@ -80,7 +80,7 @@ import {
 } from './model'
 import { Closed } from './OrdersPage'
 import { OrderRecordView, type OrderDialog, type OrderRecordViewModel } from './view/OrderRecordView'
-// ---- F-PR-12a: the order's production (B-PR-18) on Status & progress, part 1
+// ---- F-PR-12a: the order's production (B-PR-18) on the Overview (was Status & progress), part 1
 import { fetchProductionOrder } from '../production/api'
 import { waitingHrefOf } from '../production/model'
 import { productionOwnsProgress } from '../production/model' // F-PR-12b
@@ -200,7 +200,6 @@ function OrderContainer({ id }: { id: string }) {
   const [dialog, setDialog] = useState<DialogState>(null)
   const [notice, setNotice] = useState<OrderRecordViewModel['notice']>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [openLine, setOpenLine] = useState<string | null>(lineParam)
   const writeKey = useRef<{ body: string; key: string } | null>(null)
   const keyFor = (body: unknown) => {
@@ -330,8 +329,8 @@ function OrderContainer({ id }: { id: string }) {
   }, [api, id, readsDocuments])
 
   // ---- F-PR-24: Report a problem on this order (in production, for a person who writes in its conversation: portal.comment); after it
-  // the order's production is read again (its chip: "Waiting on us since …"). The Status tab's "Order files (3)" reads the order's
-  // documents too (the newest we shared on it and its lines).
+  // the order's production is read again (its chip: "Waiting on us since …"). pp-w2 (w2.4, O1-B3): no documents read on the Overview —
+  // "Order files" went (one home for files: the Files tab).
   const productionWords = useProductionPageWords()
   const mayReport = can('portal.comment') && seesProduction
   const problemDialog = useReportProblem({
@@ -349,9 +348,6 @@ function OrderContainer({ id }: { id: string }) {
     if (read && reportFacts && reportFacts.held === null) problemDialog.open([{ id: read.order.id, name: rowName(read.order, locale, productionWords.t) }])
   }
   const productionReady = production.state === 'ready'
-  useEffect(() => {
-    if (tab === 'overview' && productionReady && readsDocuments) void loadDocuments()
-  }, [tab, productionReady, readsDocuments, loadDocuments])
   // ---- end F-PR-24
 
   const loadOpenItems = useCallback(async () => {
@@ -435,6 +431,13 @@ function OrderContainer({ id }: { id: string }) {
     const element = document.getElementById(`line-${openLine}`)
     element?.scrollIntoView({ block: 'center' })
   }, [tab, openLine])
+  // pp-w2 (lead 11-25): the orders list's "On the way" lands on `?tab=shipments#shipment-<id>`; the browser's own jump comes before the
+  // card exists, so the card is brought into view once the shipments are read (as a line's sizes are above).
+  const shipmentsReady = shipments.state === 'ready'
+  useEffect(() => {
+    if (tab !== 'shipments' || !shipmentsReady || !window.location.hash.startsWith('#shipment-')) return
+    document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView({ block: 'start' })
+  }, [tab, shipmentsReady])
 
   // A hint on the live channel (the bell's news of an order confirmed, a promise moved, a shipment shipped, an answer): read again.
   usePortalLive({
@@ -1094,7 +1097,6 @@ function OrderContainer({ id }: { id: string }) {
         copied,
         // B-W2b-170
         linkHeld,
-        historyOpen,
         dialog: dialogModel,
         // F-PR-12a: the order's production (hidden: no section) and where "See what waits for you" leads.
         production: seesProduction ? production : { state: 'hidden', read: null },
@@ -1128,7 +1130,6 @@ function OrderContainer({ id }: { id: string }) {
         onWithdraw: withdraw,
         onChangeLine: (lineId) => openAsk('CHANGE', lineId), // pp-w1 (w1.2): the ONE Ask, at this line
         onLine: (lineId) => setOpenLine(lineId),
-        onHistory: setHistoryOpen,
         onCopy: copy,
         // B-W2b-170
         onCopyTrackingLink: copyTrackingLink,

@@ -11,10 +11,10 @@ import { anyTakenBack, checkPiecesText, FINAL_STATE_TONE, finalLinesText, photoS
 import type { OrderRecord } from './api'
 import { at, dayAt, documentsRead, ORDER_ID, orderRecord, progressRead, requestsOf, shipmentsRead } from './design-data'
 import type { OrderRecordActions, OrderRecordViewModel } from './view/OrderRecordView'
-import { StatusTab } from './view/StatusTab'
+import { OverviewTab } from './view/OverviewTab' // pp-w2 (t.1): moved from status-quality onto the Overview
 
 /**
- * F-PR-12c — the portal order › Status & progress, part 3: + Quality & photos (production plan §4 "first piece, in-line, final
+ * F-PR-12c — the portal order › Overview (pp-w2; was Status & progress), part 3: + Quality & photos (production plan §4 "first piece, in-line, final
  * results and photos of its own goods — single-brand work orders only"; 06-tree P-ORD-quality; wall PW-P04). At the level Quality
  * & photos only (a lower level asks no read and draws nothing): per line and size the pieces released by quality and taken back
  * since, a line partly made on shared work said in the API's words; first-piece, cutting and end-of-line checks; each final
@@ -157,7 +157,6 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
     fileHeld: null,
     openLine: null,
     copied: null,
-    historyOpen: false,
     dialog: null,
     production: { state: 'ready', read: production() },
     waitingHref: waitingHrefOf(PREFIX),
@@ -169,11 +168,11 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
 const ACTIONS: OrderRecordActions = { onAsk: () => undefined, onRetryProduction: () => undefined, onRetryQuality: () => undefined, onReport: () => undefined, onPhoto: () => undefined }
 const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en') => {
   const record = betaRecord()
-  return render(createElement(StatusTab, { model: model(record, over), record, actions: ACTIONS }), locale)
+  return render(createElement(OverviewTab, { model: model(record, over), record, actions: ACTIONS }), locale)
 }
 const withQuality = (read: ProductionQuality): Partial<OrderRecordViewModel> => ({ quality: { state: 'ready', read } })
 
-describe('+ Quality & photos on the order’s Status & progress (F-PR-12c, level Quality & photos only)', () => {
+describe('+ Quality & photos on the order’s Overview (F-PR-12c, level Quality & photos only; pp-w2: pair B, the kit’s card)', () => {
   it('a section not shared is not drawn: hidden or absent quality draws nothing; no production read, no quality', () => {
     for (const over of [{ quality: { state: 'hidden' as const, read: null } }, { quality: undefined }, { production: { state: 'hidden' as const, read: null } }]) {
       const text = textOf(draw(over))

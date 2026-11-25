@@ -265,7 +265,7 @@ export function orderRefusal(error: unknown, t: Translate): { words: string; con
   return { words: t('dialog.failed'), conflict: false }
 }
 
-// ── the order's production, as both pages draw it (F-PR-11 cells, F-PR-12a Status & progress) ──────────────────────────
+// ── the order's production, as both pages draw it (F-PR-11 cells, F-PR-12a the order's Overview) ────────────────────
 const HEALTH_OF: Readonly<Record<ProductionHealth['code'], HealthState>> = Object.freeze({ LATE: 'LATE', AT_RISK: 'AT_RISK', NO_DATE: 'NOT_PROMISED', ON_TRACK: 'ON_TIME' })
 
 /** The health chip's input: the API's chip and, when a person raised it, the curated reason (never the office's note). */
@@ -280,7 +280,7 @@ export const waitingInputOf = (waiting: ProductionWaiting): WaitingInput => ({ w
 /** The plain stage of the lib's strip (the API's five stages are the same). */
 export const plainStageOf = (stage: { readonly code: string } | null): PlainStage | null => (stage ? (stage.code as PlainStage) : null)
 
-// ── F-PR-12a: the order's Status & progress (portal/customer/orders/view/StatusTab.tsx) ─────────────────────────────────────
+// ── F-PR-12a: the order's Overview (portal/customer/orders/overview/model.ts; was Status & progress) ─────────────────────────────────────
 /** What holds its work, as the lib's banner reads it: the curated words only (every level). */
 export const holdsOf = (holds: ProductionOrder['holds'], locale: Locale): HoldInput[] => holds.map((hold, index) => ({ id: `${hold.kind}-${index}`, kind: hold.kind, since: hold.since, customerWords: say(hold.words, locale) }))
 
@@ -312,7 +312,7 @@ export function waitingHrefOf(prefix: string, areas = PORTAL_AREAS): string {
 }
 // ── end F-PR-12a
 
-// ── F-PR-12b: + Progress and + Gates & dates on the order's Status & progress ─────────────────────────────────────────────
+// ── F-PR-12b: + Progress and + Gates & dates on the order's Overview (was Status & progress) ──────────────────────────────
 /**
  * Whether the order's production read draws its progress (and its gates) by the customer's level: while it is read or being
  * read. Otherwise (no production right, not in production, its read failed) the order keeps today's progress card (C1).
@@ -345,7 +345,7 @@ export const gatesEmpty = (gates: ProductionGates): boolean => gates.gates.lengt
 export const gatesWaitOnYou = (gates: ProductionGates): boolean => gates.gates.some((gate) => gate.state === 'WAITING_YOU') || gates.approvals.some((answer) => answer.state === 'WAITING_YOU')
 // ── end F-PR-12b
 
-// ── F-PR-12c: + Quality & photos on the order's Status & progress ─────────────────────────────────────────────────────────
+// ── F-PR-12c: + Quality & photos on the order's Overview (was Status & progress) ──────────────────────────────────────────
 /**
  * Whether the customer's level shares Quality & photos (plan §4: the last level). Only then is the order's quality read asked
  * (below it the API answers 404 and the section is not drawn): a level that does not share it costs no call.

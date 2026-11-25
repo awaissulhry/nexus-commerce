@@ -219,7 +219,7 @@ export function ProductionListView({ model, actions }: { model: ProductionListMo
       return (
         <span className="fw-pprod-stack">
           <WaitingOnPill face="customer" now={now()} {...waitingInputOf(data.waiting)} />
-          {/* The one next step when it is the customer's turn: the order's Status & progress, where what waits is named. */}
+          {/* The one next step when it is the customer's turn: the order's Overview, where what waits is named. */}
           {data.waiting.code === 'YOU' ? (
             <Button asChild size="sm" variant="quiet">
               <a href={rowHref(latest.current.model.prefix, data)}>{t('cell.seeWhat')}</a>

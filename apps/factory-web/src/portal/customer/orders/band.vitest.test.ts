@@ -16,7 +16,7 @@ import { bandChipsOf, bandHealthOf, bandProductionOf, orderBandOf, orderTabsOf, 
 import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './design-data'
 import { RECORD_TABS, tabOf } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
-import { CustomerCase } from './view/CustomerCase'
+import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 
 /**
  * pp-w1 (lane pp-, the customer's order page on shared parts, round 1; 10-design § 2): the order's band — ONE "Ask for a change…"
@@ -35,7 +35,7 @@ const LATE_URGENT: BandProduction = { health: health('LATE'), urgency: urgency('
 
 const bandOf = (facts: Partial<OrderBandFacts> = {}, status: OrderRecord['order']['status'] = 'IN_PRODUCTION', locale: Locale = 'en') =>
   orderBandOf({ words: orderWords(locale), record: orderRecord({ status }), prefix: PREFIX, facts: { ...FACTS, ...facts } })
-const drawBand = (band: PortalBand, locale: Locale) => render(createElement(CustomerCase, { model: (at: Locale) => ({ shell: shellOf(at, band), body: { kind: 'noAccess', admins: [] } }) }), locale)
+const drawBand = (band: PortalBand, locale: Locale) => render(createElement(CustomerCase, { model: (at: Locale): CustomerCaseModel => ({ shell: shellOf(at, band), body: { kind: 'noAccess', admins: [] } }) }), locale)
 const plain = (band: PortalBand) => JSON.stringify(band, (_key, value) => (typeof value === 'function' ? undefined : value))
 
 describe('w1.2 — ONE "Ask for a change…" in the band (O1-B1, O1-B2, O1-B7)', () => {
@@ -180,7 +180,7 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   })
 
   it('the page draws them in its body (after the band, inside main), the band draws none; each tab draws its part', () => {
-    const entry = recordScreen.cases.find((item) => item.id === 'status')!
+    const entry = recordScreen.cases.find((item) => item.id === 'overview')!
     for (const locale of ['en', 'it'] as const) {
       const html = render(createElement(recordScreen.view, { model: entry.model }), locale)
       expect(html, locale).not.toContain('fw-ptabs')
@@ -189,7 +189,7 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
       for (const tab of RECORD_TABS) expect(html, `${locale} ${tab}`).toContain(`?tab=${tab}"`)
       expect(html, locale).toContain('aria-current="page"')
     }
-    const files = recordScreen.cases.find((item) => item.id === 'documents')!
+    const files = recordScreen.cases.find((item) => item.id === 'files')!
     expect(textOf(render(createElement(recordScreen.view, { model: files.model }), 'en'))).toContain(CATALOGUE.en['portal-orders']!['docs.filesTitle']!)
   })
 

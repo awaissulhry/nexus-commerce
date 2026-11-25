@@ -9,9 +9,11 @@ import { BETA_ROWS, betaOrdersRead } from './design-data'
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
 import type { RequestRow } from '../requests/api'
 // pg-w2: the groups of the band and what each holds (the server's rule, imitated by the made-up reads below).
-import { CUSTOMER_GROUPS, type CustomerGroup } from '../../../lib/order-groups/groups'
+import { bandCounts } from '@nexus/factory-domain/sales/portal-orders/status'
+import type { CustomerGroup } from '../../../lib/order-groups/groups'
 import { customerGroupOf } from '../../../lib/order-cells/model'
-import { CLOSED_REQUEST_STATES, holdsOrders, sheetChipOf } from './list-view-model'
+import { holdsOrders, sheetChipOf } from './list-view-model'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrdersListViewModel } from './view/OrdersListView'
 
@@ -24,20 +26,11 @@ import type { OrdersListViewModel } from './view/OrdersListView'
  */
 
 /**
- * The made-up answer's band (pg-server § Shapes): each group's count over ONE customer's rows, before the search — the server's own
- * rule imitated for the design cases (the live page never counts: it draws the numbers the server sends).
+ * The made-up answer's band (pg-server § Shapes): each group's count over ONE customer's rows, before the search — by the domain's
+ * own rule, the one the server counts with (the live page never counts: it draws the numbers the server sends).
  */
 function bandRead(read: OrdersRead, world: readonly OrderRow[], requests: readonly RequestRow[]): OrdersRead {
-  const counts = new Map<CustomerGroup, number>(CUSTOMER_GROUPS.map((group) => [group, 0]))
-  const add = (group: CustomerGroup) => counts.set(group, (counts.get(group) ?? 0) + 1)
-  for (const row of world) add(customerGroupOf(row.status))
-  for (const request of requests) {
-    if (request.state.open && request.state.code !== 'ORDER_WAITING') add('REQUESTS')
-    else if (CLOSED_REQUEST_STATES.includes(request.state.code)) add('CLOSED_REQUESTS')
-  }
-  const open = (['REQUESTS', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED'] as const).reduce((sum, group) => sum + (counts.get(group) ?? 0), 0)
-  const needsYou = requests.filter((request) => request.state.needsYou).length + world.filter((row) => row.needsYou).length
-  return { ...read, groups: CUSTOMER_GROUPS.map((group) => ({ group, count: counts.get(group) ?? 0 })), open, needsYou }
+  return { ...read, ...bandCounts([...world.map((row) => ({ kind: 'ROW' as const, status: row.status, needsYou: !!row.needsYou })), ...requests.map((request) => ({ kind: 'INQUIRY' as const, state: request.state.code }))]) }
 }
 
 /** A group's rows as the sheet answers them (the orders only; Closed requests holds none). */
@@ -87,10 +80,13 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
     }
   }
 }
-/** B-TH-238: the requests' counts as GET /portal/inquiries says them (what needs the customer, the open ones). */
-export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: rows.filter((row) => row.state.needsYou).length, open: rows.filter((row) => row.state.open).length })
 /** A group pressed: its rows only (Brand Beta's). */
 const betaGroup = (group: CustomerGroup) => betaCase(() => ({ group, read: betaRead(group) }))
+/** pg-t: 200 orders of Brand Beta's own (its own ids, numbers and PO codes): the first page of 50 shown, "50 of 200 …", Show more. */
+const MANY: readonly OrderRow[] = Array.from({ length: 50 }, (_, index) => {
+  const like = BETA_ROWS[index % 3]!
+  return { ...like, id: `b2b2b2b2-0000-4000-8000-${String(900 + index).padStart(12, '0')}`, customerRef: `BETA-PO-${String(500 + index).padStart(4, '0')}`, yourNumber: customerNumberOf('ORDER', 100 + index) }
+})
 
 // ── B-TH-246 (threads plan TH-4, picture 28): Brand Beta's own sheet — the columns the office ticked for its portal ──
 /** Made-up portal columns: one for every customer (a list value the rows use), and Brand Beta's own (a day). */
@@ -112,18 +108,23 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'th-223-list', label: 'Orders & requests: everything open (the band of groups, requests first)', model: betaCase(), note: 'ONE band (Requests · Confirmed · In production · Ready to ship · Shipped · Delivered; Cancelled and Closed requests apart; the server\'s numbers), then Picture · Number (“Your order 21” / your PO; a request’s subject) · Where it is · Promised (+ “was …”) · Shipped · New messages · Net value · your columns. Every cell a door; a catalogue request plain.' },
     // B-TH-230 (Z10): New messages — the bubble "2", the person's own, on their own requests and orders only.
     { id: 'th-230-new-messages', label: 'New messages: the bubble on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [BETA_ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown; the bubble opens the request’s page or the order with its conversation shown.' },
-    { id: 'pg-group-requests', label: 'Group pressed: Requests (the requests and the catalogue order that wait for our yes)', model: betaGroup('REQUESTS') },
-    { id: 'pg-group-in-production', label: 'Group pressed: In production', model: betaGroup('IN_PRODUCTION') },
-    { id: 'pg-group-shipped', label: 'Group pressed: Shipped (partly or fully, not all arrived)', model: betaGroup('SHIPPED') },
-    { id: 'pg-group-closed', label: 'Closed requests: never vanished (apart, quiet)', model: betaGroup('CLOSED_REQUESTS') },
-    { id: 'pg-window', label: 'The band’s ⓘ window: every group with what it holds', model: betaCase(() => ({ windowOpen: true })) },
+    { id: 'th-223-requests', label: 'Group pressed: Requests (the open requests, the catalogue order and the order that wait for our yes)', model: betaGroup('REQUESTS'), note: 'The request whose order waits ("Club vests") shows once: as its order row (H4).' },
+    { id: 'th-223-confirmed', label: 'Group pressed: Confirmed', model: betaGroup('CONFIRMED') },
+    { id: 'th-223-in-production', label: 'Group pressed: In production (an order that needs your answer: its one mark)', model: betaGroup('IN_PRODUCTION') },
+    { id: 'th-223-ready', label: 'Group pressed: Ready to ship', model: betaGroup('READY') },
+    { id: 'th-223-shipped', label: 'Group pressed: Shipped (partly or fully, not all arrived; the next parcel in Shipped’s tip)', model: betaGroup('SHIPPED') },
+    { id: 'th-223-delivered', label: 'Group pressed: Delivered', model: betaGroup('DELIVERED') },
+    { id: 'th-223-cancelled', label: 'Group pressed: Cancelled (apart, quiet)', model: betaGroup('CANCELLED') },
+    { id: 'th-223-closed', label: 'Closed requests: never vanished (apart, quiet)', model: betaGroup('CLOSED_REQUESTS') },
+    { id: 'th-223-many', label: '200 orders: 50 shown, Show more', model: betaCase(() => ({ read: { ...betaRead(null), items: [...MANY], count: 200, open: 200 }, rows: MANY, more: { loading: false }, requests: { state: 'ready', rows: [], complete: true } })) },
+    { id: 'th-223-window', label: 'The band’s ⓘ window: every group with what it holds', model: betaCase(() => ({ windowOpen: true })) },
     // B-TH-246: the customer's own sheet (read-only columns the office ticked, joining while the room holds them; Download (Excel) in ⋯).
     { id: 'th-246-sheet', label: 'TH-4 · Brand Beta · Its own sheet: the columns ticked for its portal, read-only; Download (Excel) in ⋯', model: betaCase(() => ({ read: bandRead(sheetRead(betaOrdersRead('OPEN')), BETA_ROWS, REQUESTS) })), note: 'Every cell opens Brand Beta\'s own order page; the file is written by the server with Brand Beta\'s rows and columns only.' },
     { id: 'th-246-download-failed', label: 'TH-4 · Brand Beta · Download (Excel) could not be prepared (Try again)', model: betaCase(() => ({ read: bandRead(sheetRead(betaOrdersRead('OPEN')), BETA_ROWS, REQUESTS), downloadFailed: true })) },
     { id: 'th-223-search', label: 'A search finds nothing: Clear the search', model: betaCase(() => ({ q: 'gloves-9999', read: betaRead(null, {}, REQUESTS), rows: [], requests: { state: 'ready', rows: [], complete: true } })) },
     { id: 'th-223-requests-failed', label: 'The requests could not be read', model: betaCase(() => ({ requests: { state: 'error', rows: [], complete: true } })), note: 'Said in words with Try again; the orders still show (never drawn as “no requests”).' },
     { id: 'th-223-empty', label: 'Nothing yet, for who may order: New order', model: betaCase(() => ({ read: bandRead(betaOrdersRead('OPEN', []), [], []), rows: [], requests: { state: 'ready', rows: [], complete: true } })) },
-    { id: 'pg-empty-viewer', label: 'Nothing yet, for who may not order (no New order)', model: betaCase(() => ({ read: bandRead(betaOrdersRead('OPEN', []), [], []), rows: [], requests: { state: 'ready', rows: [], complete: true } }), false), note: 'G1-B11: the words never name New order to a person who cannot order.' },
+    { id: 'th-223-empty-viewer', label: 'Nothing yet, for who may not order (no New order)', model: betaCase(() => ({ read: bandRead(betaOrdersRead('OPEN', []), [], []), rows: [], requests: { state: 'ready', rows: [], complete: true } }), false), note: 'G1-B11: the words never name New order to a person who cannot order.' },
     { id: 'th-223-no-prices', label: 'A colleague without prices', model: betaCase(() => ({ read: betaRead(null, { seesPrices: false }) })), note: 'No Net value column at all and one quiet line: “Prices are not part of your access”.' },
     { id: 'normal', label: 'Brand Alpha: everything open (busy)', model: listCase() },
     { id: 'chip-empty', label: 'Nothing in a group', model: listCase(() => ({ group: 'READY', read: bandRead(ordersRead('OPEN', []), ROWS, []), rows: [] })) },

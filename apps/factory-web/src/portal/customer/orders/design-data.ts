@@ -29,6 +29,7 @@ import type {
   Verdict,
 } from './api'
 import { NS } from './model'
+import type { ProductionOrder } from '../production/api' // pp-w2 (w2.4): the design's production read
 import { orderWordsFor, type OrderWords } from './words'
 
 /**
@@ -132,12 +133,15 @@ export const ROWS: readonly OrderRow[] = [
     promiseMoved: true,
     movedLately: true,
     pieces: { ordered: 46, shipped: 18, open: 28 },
-    nextShipment: { id: id(101), number: 'SH-2026-0233', status: 'IN_TRANSIT', words: SHIPMENT_STATUS_WORDS.IN_TRANSIT, date: dayAt(-1), carrierName: 'Corriere Demo', expectedDeliveryAt: at(30) },
+    // pg-t (D6): the parcel by its order (its 2nd shipment), never the office's series.
+    nextShipment: { id: id(101), number: null, parcel: 2, status: 'IN_TRANSIT', words: SHIPMENT_STATUS_WORDS.IN_TRANSIT, date: dayAt(-1), carrierName: 'Corriere Demo', expectedDeliveryAt: at(30) },
   }),
-  row(2, 'IN_PRODUCTION', { pieces: { ordered: 60, shipped: 0, open: 60 } }),
+  // pg-t (Z16 P3): an order that needs the customer's answer (a re-confirm asked).
+  row(2, 'IN_PRODUCTION', { pieces: { ordered: 60, shipped: 0, open: 60 }, needsYou: true }),
   row(3, 'CONFIRMED', { customerRef: null, pieces: { ordered: 1, shipped: 0, open: 1 }, netAmount: 189000 }),
-  { ...row(4, 'REQUESTED'), kind: 'REQUEST', number: 'RQ-2026-0012', yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 24, shipped: 0, open: 24 } },
-  row(5, 'READY', { pieces: { ordered: 30, shipped: 0, open: 30 }, nextShipment: { id: id(105), number: 'SH-2026-0240', status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
+  // pg-t (G3-B1): a catalogue request carries no office series (`number` null, the server step).
+  { ...row(4, 'REQUESTED'), kind: 'REQUEST', number: null, yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 24, shipped: 0, open: 24 } },
+  row(5, 'READY', { pieces: { ordered: 30, shipped: 0, open: 30 }, nextShipment: { id: id(105), number: null, parcel: 1, status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
   row(6, 'DELIVERED', { promiseDate: dayAt(-6), pieces: { ordered: 20, shipped: 20, open: 0 } }),
   row(7, 'CANCELLED', { promiseDate: null, pieces: { ordered: 12, shipped: 0, open: 0 } }),
 ]
@@ -183,14 +187,16 @@ export const BETA_ROWS: readonly OrderRow[] = [
     promiseMoved: true,
     movedLately: true,
     pieces: { ordered: 52, shipped: 20, open: 32 },
-    nextShipment: { id: betaId(101), number: 'SH-2026-0351', status: 'IN_TRANSIT', words: SHIPMENT_STATUS_WORDS.IN_TRANSIT, date: dayAt(-1), carrierName: 'Corriere Demo', expectedDeliveryAt: at(32) },
+    nextShipment: { id: betaId(101), number: null, parcel: 2, status: 'IN_TRANSIT', words: SHIPMENT_STATUS_WORDS.IN_TRANSIT, date: dayAt(-1), carrierName: 'Corriere Demo', expectedDeliveryAt: at(32) },
   }),
-  betaRow(2, 'IN_PRODUCTION', { pieces: { ordered: 80, shipped: 0, open: 80 } }),
+  betaRow(2, 'IN_PRODUCTION', { pieces: { ordered: 80, shipped: 0, open: 80 }, needsYou: true }),
   betaRow(3, 'CONFIRMED', { customerRef: null, pieces: { ordered: 2, shipped: 0, open: 2 }, netAmount: 214000 }),
-  { ...betaRow(4, 'REQUESTED'), kind: 'REQUEST', number: 'RQ-2026-0025', yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 36, shipped: 0, open: 36 } },
-  betaRow(5, 'READY', { pieces: { ordered: 44, shipped: 0, open: 44 }, nextShipment: { id: betaId(105), number: 'SH-2026-0355', status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
+  { ...betaRow(4, 'REQUESTED'), kind: 'REQUEST', number: null, yourNumber: null, orderedOn: null, promiseDate: null, originalPromiseDate: null, netAmount: null, pieces: { ordered: 36, shipped: 0, open: 36 } },
+  betaRow(5, 'READY', { pieces: { ordered: 44, shipped: 0, open: 44 }, nextShipment: { id: betaId(105), number: null, parcel: 1, status: 'PACKED', words: SHIPMENT_STATUS_WORDS.PACKED, date: dayAt(1), carrierName: 'Corriere Demo', expectedDeliveryAt: null } }),
   betaRow(6, 'DELIVERED', { promiseDate: dayAt(-7), pieces: { ordered: 24, shipped: 24, open: 0 } }),
   betaRow(7, 'CANCELLED', { promiseDate: null, pieces: { ordered: 16, shipped: 0, open: 0 } }),
+  // pg-t (H4): the order of the request "Club vests, 25 pieces" (ORDER_WAITING): it waits for our yes — Requests counts it ONCE (this row).
+  betaRow(8, 'REQUESTED', { promiseDate: null, originalPromiseDate: null, requestedDate: dayAt(30), pieces: { ordered: 25, shipped: 0, open: 25 } }),
 ]
 /** Brand Beta's list read (its own rows and chip counts). */
 export function betaOrdersRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
@@ -293,6 +299,44 @@ export function orderRecord(over: Partial<OrderRecord['order']> = {}, rest: Part
 }
 
 /** A record as a role without the price grain reads it: every price key left out. */
+/**
+ * pp-w2 (w2.4): the order's production read as the design's Overview cases draw it (made up; Brand Alpha's own order): sewing, its
+ * pieces from the progress fixture, its gates and approvals, Late with a curated reason, its own urgency, waiting on the customer.
+ * The office's series in `order.number` is the read's (a later job takes it out of this read): the Overview never draws it.
+ */
+export function productionReadOf(over: Partial<ProductionOrder> = {}): ProductionOrder {
+  const pieces = progressRead()
+  const w = (en: string, it: string) => ({ en, it })
+  return {
+    asOf: at(0),
+    level: 'GATES',
+    levelWords: w('+ Gates & dates', '+ Tappe e date'),
+    urgencyOn: true,
+    urgentUse: null,
+    order: { id: ORDER_ID, customerRef: 'BA-PO-771', number: 'SO-2026-0141', yourNumber: customerNumberOf('ORDER', 11), orderedOn: dayAt(-20), promiseDate: dayAt(12), originalPromiseDate: dayAt(5), promiseMoved: true },
+    inProduction: true,
+    stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: dayAt(-3), next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, ahead: 0, aheadWords: null, sewingNotCounted: false, sewingNotCountedWords: null },
+    health: { code: 'LATE', words: w('Late', 'In ritardo'), reason: { code: 'MATERIAL_LATE', words: w('Material delivery late', 'Consegna dei materiali in ritardo') } },
+    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a voi'), since: dayAt(-2) },
+    marks: { onHold: false, paused: false, partlyShipped: false, changePending: false, words: [] },
+    holds: [],
+    urgency: { code: 'URGENT', words: w('Urgent', 'Urgente'), urgentRank: 1, asked: false, askedWords: null, byUs: false, byUsWords: null, locked: false, lockWords: null },
+    promiseHistory: [],
+    progress: { asOf: pieces.asOf, refreshSeconds: pieces.refreshSeconds, lines: pieces.lines, whole: pieces.whole, percent: pieces.percent },
+    gates: {
+      gates: [
+        { kind: 'PP_SAMPLE', words: w('Pre-production sample', 'Campione di pre-produzione'), state: 'WAITING_YOU', targetDate: dayAt(3), doneOn: null },
+        { kind: 'SIZE_SET', words: w('Size set', 'Set taglie'), state: 'PASSED', targetDate: dayAt(-6), doneOn: dayAt(-5) },
+      ],
+      approvals: [{ kind: 'LEATHER', words: w('Black leather swatch', 'Campione di pelle nera'), state: 'WAITING_YOU', sentOn: dayAt(-4), answeredOn: null }],
+      planned: { cutStart: dayAt(-8), sewStart: dayAt(-3), finish: dayAt(9) },
+    },
+    problem: { state: 'WAITING_ON_US', since: dayAt(-1), on: null, inOrder: null },
+    live: { events: ['brand_production.stage_changed'] },
+    ...over,
+  }
+}
+
 export function withoutPrices(record: OrderRecord): OrderRecord {
   const { netAmount: _n, vatAmount: _v, grossAmount: _g, ...order } = record.order
   return {
