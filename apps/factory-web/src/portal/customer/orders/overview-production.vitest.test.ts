@@ -332,8 +332,9 @@ describe('the order’s production on the Overview, part 2 (by level): Progress 
     for (const words of ['Prossime date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
     expect(html).toContain('Avanzamento per riga')
     const words = CATALOGUE.it['portal-orders']!
-    const mine = Object.entries(words).filter(([key]) => /^production\.(gates|approvals|planned|pieces)\./.test(key))
-    expect(mine.length).toBeGreaterThan(20)
+    // pp-w2 dropped six dead words of these groups (26 → 20): the Overview's own words (overview.*, strip.*) join the "voi" check.
+    const mine = Object.entries(words).filter(([key]) => /^(production\.(gates|approvals|planned|pieces)|overview|strip)\./.test(key))
+    expect(mine.length).toBeGreaterThan(30)
     for (const [key, value] of mine) expect(value, key).not.toMatch(TU_FORM)
   })
 
