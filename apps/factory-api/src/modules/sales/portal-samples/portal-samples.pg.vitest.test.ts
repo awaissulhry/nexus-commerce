@@ -253,12 +253,21 @@ describe('a style draft made on a draft order (od-ts)', () => {
     expect(started.request).toMatchObject({ status: 'DRAFT', subject, designStarted: false })
     const sizeScaleId = (await one('SELECT "sizeScaleId" FROM "Style" WHERE id = $1', [jacket1])).sizeScaleId as string
     const code = 'OD3-TEAM-JKT'
+    // od-fx7 (walk W-06): the Production manager reads the draft in the office and may make a style draft on it (the styles right),
+    // never confirm it (no orders.manage): the office read says so before anything is pressed.
+    const office = await as(manager, 'GET', `/sales/order-requests/${draftId}`)
+    expect(office.may).toMatchObject({ styleDraft: true, confirm: false, order: false })
+    expect(office.request.styles).toEqual([])
     // The Production manager (orders.view + product.styles.manage) makes it on P1's draft: a DRAFT style of P1's own label, named
     // as the draft's subject, appended to the draft's style drafts (the office's column).
     const made = await as(manager, 'POST', `/sales/order-requests/${draftId}/style-draft`, { version: started.request.version, code, productType: 'JACKET', sizeScaleId, sizes: ['50', '52'], baseSize: '52', ppeCategory: 'NOT_PPE' })
     expect(made).toMatchObject({ styleId: expect.any(String), code, name: subject, status: 'DRAFT', version: started.request.version + 1, files: { carried: [], notCarried: [] } })
     expect(await one('SELECT "brandPartyId", "companyId" FROM "Style" WHERE id = $1', [made.styleId])).toEqual({ brandPartyId: P1, companyId: companyA })
     expect(await one('SELECT "styleIds"::text[] AS "styleIds" FROM "PortalOrderRequest" WHERE id = $1', [draftId])).toEqual({ styleIds: [made.styleId] })
+    // od-fx7: the office read names the style draft made (office only) and keeps Make style draft open for him.
+    const after = await as(manager, 'GET', `/sales/order-requests/${draftId}`)
+    expect(after.request.styles).toEqual([{ id: made.styleId, code, name: subject, status: 'DRAFT' }])
+    expect(after.may.styleDraft).toBe(true)
     // Brand A's (P1's) Samples page lists it among its own styles in development; brand B's (Brand Alpha's) never.
     const mine = await as(buyer, 'GET', '/portal/samples')
     expect((mine.styles as Json[]).find((row) => row.id === made.styleId)).toMatchObject({ code, openRounds: 0, waiting: 0, latestRound: null, techPack: null, techPacks: [] })

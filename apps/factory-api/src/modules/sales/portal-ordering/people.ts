@@ -194,10 +194,11 @@ export const shipToInUseOf = (row: Pick<RequestRow, 'shipToAddressId'>, addresse
 export const peopleSizesOf = (line: Pick<LineRow, 'id'>, people: readonly PersonRow[]): (string | null)[] => people.filter((person) => person.lineId === line.id).map((person) => (person.measureBy === 'SIZE' ? person.size : null))
 
 /** The draft's Still open list (`typed`: the Confirm's body per row — what is still open after it is MISSING). */
-export function draftStillOpen(lines: readonly LineRow[], people: readonly PersonRow[], row: Pick<RequestRow, 'requestedDate'>, shipToInUse: boolean, today: BusinessDate, typed?: ReadonlyMap<string, ConfirmTyped>): StillOpen {
+export function draftStillOpen(lines: readonly LineRow[], people: readonly PersonRow[], row: Pick<RequestRow, 'requestedDate'>, shipToInUse: boolean, today: BusinessDate, typed?: ReadonlyMap<string, ConfirmTyped>, /* od-fx7 */ sheetLines?: ReadonlySet<string>): StillOpen {
   return stillOpenOf(
     {
-      lines: lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, styleId: line.styleId, colourwayId: line.colourwayId, sizing: line.sizing, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })), byPerson: line.byPerson, peopleSizes: peopleSizesOf(line, people), choices: choicesOf(line.choices) })),
+      // od-fx7 (walk W-04): + what the row holds in the customer's terms (its words, colours in words, a total, a sheet on it).
+      lines: lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, styleId: line.styleId, colourwayId: line.colourwayId, sizing: line.sizing, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })), byPerson: line.byPerson, peopleSizes: peopleSizesOf(line, people), choices: choicesOf(line.choices), ownWords: line.description ?? line.garmentType, colourText: line.colourText, quantity: line.quantity, sheetOnLine: sheetLines?.has(line.id) ?? false })),
       requestedDate: dayText(row.requestedDate),
       today,
       shipToInUse,
