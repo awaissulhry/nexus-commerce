@@ -12,10 +12,11 @@ import { words } from './_harness/words'
  * fresh stack (`--stages cp-portal-draft`): it makes the world it needs — the seeded P1 as Brand Alpha with its portal buyer
  * (two-brands.ts), the brand's Designer invited by the office, Sara Sales named the brand's factory designer (Who looks after). Then,
  * KEYBOARD ONLY (focus and Enter / Space; no pointer on the screens the stage proves):
- *   1  the Designer starts a new draft (New order › Describe it: the start's first way, an action card — a button — reached by Tab;
- *      an arrow key starts nothing, Enter starts it — follow-up 22; above the brand's drafts to continue — the seed's own among them),
- *      types a line in its own words with a total, reads no price anywhere
- *      ("Prices are not part of your access."), finds Send held in words (a colleague who may order sends it);
+ *   1  the Designer starts a new draft — od-fx5, THE SIMPLE ORDER START (R1): a mail and ONE products table, no Start button and no
+ *      ways; below the brand's drafts to continue (the seed's own among them). "Add a product", reached by Tab, draws an empty row
+ *      and starts NOTHING (no draft on a click); the row's Product in its own words, Enter, is the first input that makes the draft
+ *      (the address keeps it). It reads no price anywhere (no Price card, no Your price field, no amount, no currency), and finds
+ *      Send held in words (a colleague who may order sends it; nothing required, so no missing cell holds it);
  *   2  the Designer asks the factory designer in the draft's own conversation (the box "Ask <name>, factory designer"): "We asked
  *      <name>." — the office's thread of the draft carries the office-only note that mentions the designer (never shown in the portal);
  *   3  the Buyer opens the same draft (the address keeps it), reads its Your price part, and sends it to the factory: the office reads
@@ -25,6 +26,7 @@ import { words } from './_harness/words'
  */
 
 const OR = words('portal-ordering')
+const DW = words('order-draft') // od-fx5: the ONE draft order's shared part (the mail, the products table, Send, Your price)
 const PT = words('portal')
 const RTP = words('record-thread-partner') // pt-w2 W2.4: the portal box's own words (the partner face's)
 const SIGN_IN = words('portal-signin')
@@ -132,42 +134,40 @@ export default defineStage({
     const draftsOfAlpha = async () => ((await flow.read(sales.page, `/sales/order-requests?status=DRAFT&partyId=${alphaId}`)).requests as { id: string }[]).map((row) => row.id)
     const draftId = await flow.step('1 · the Designer starts the draft in its own words (keyboard only) and reads no price; Send held in words', async () => {
       const { page } = designer
-      // F-CP-158 follow-up (cp-fx10): the start's four ways, "Describe it" first (design 12 §2 Doors), above the brand's drafts to
-      // continue — the seed's own draft among them, never deleted.
-      // follow-up 22 (cp-fx12): the ways are actions — the design system's Card that is a button, no longer radio cards (an arrow key
-      // moved AND picked there: ArrowDown from "Describe it" started a "Pick styles" draft). A keyboard user Tabs to "Describe it";
-      // an arrow key leaves the focus there and starts nothing; Enter starts it: a NEW draft, none of those listed.
+      // od-fx5 (R1): the start is the mail and ONE products table — no ways, no Start button — below the brand's drafts to continue
+      // (the seed's own draft among them, never deleted). Nothing is saved until the first input: a keyboard user Tabs to "Add a
+      // product", Enter draws an empty row (its Product focused) and starts NO draft; the row's words, then Enter, make a NEW draft.
       const before = await draftsOfAlpha()
       await designer.go('/orders/new')
-      if (before.length > 0) await seen(page.getByRole('heading', { name: OR('start.drafts'), exact: true }), 60_000)
-      const describe = page.getByRole('button', { name: OR('draftPage.start.describe'), exact: true })
-      await tabTo(describe)
-      await page.keyboard.press('ArrowDown')
-      await page.waitForTimeout(1_500) // the old radio started its draft within this
-      await expect(describe, 'an arrow key leaves the focus on "Describe it"').toBeFocused()
-      expect(page.url(), 'an arrow key starts no draft').not.toMatch(/[?&]draft=/)
-      expect(await draftsOfAlpha(), 'an arrow key starts no draft').toEqual(before)
+      if (before.length > 0) await seen(page.getByRole('heading', { name: DW('start.continue'), exact: true }), 60_000)
+      await seen(page.getByRole('heading', { name: DW('tbl.title'), exact: true }), 60_000)
+      const add = page.getByRole('button', { name: DW('add.product'), exact: true })
+      await tabTo(add)
       await page.keyboard.press('Enter')
-      const window = page.getByRole('dialog', { name: OR('draftPage.customLine.titleDescribed') })
-      await seen(window, 60_000)
-      // F-CP-158 follow-up (cp-fx10): the fields by their accessible names — a required field's label carries the "*" mark the name
-      // leaves out (aria-hidden), so a label match would never find "What you need".
-      await typeInto(window.getByRole('textbox', { name: OR('draftPage.customLine.description'), exact: true }), DRAFT_WORDS)
-      await typeInto(window.getByRole('textbox', { name: OR('draftPage.customLine.total'), exact: true }), '12')
-      await keyOn(window.getByRole('button', { name: OR('draftPage.customLine.add'), exact: true }))
-      await expect(window).toHaveCount(0, { timeout: 60_000 })
-      await seen(page.getByText(OR('draftPage.kind.DESCRIBED')).first(), 60_000)
-      await expect(page).toHaveURL(/[?&]draft=[0-9a-f-]{36}/)
+      const product = page.getByLabel(DW('col.product'), { exact: true })
+      await expect(product, '"Add a product" draws one empty row, its Product focused').toHaveCount(1, { timeout: 60_000 })
+      await expect(product).toBeFocused()
+      await page.waitForTimeout(1_500) // a draft made on the click would be there by now
+      expect(page.url(), '"Add a product" alone starts no draft').not.toMatch(/[?&]draft=/)
+      expect(await draftsOfAlpha(), '"Add a product" alone starts no draft').toEqual(before)
+      await page.keyboard.type(DRAFT_WORDS)
+      await page.keyboard.press('Enter') // the row's first input: it makes the draft and the row
+      await expect(page).toHaveURL(/[?&]draft=[0-9a-f-]{36}/, { timeout: 60_000 })
       const id = new URL(page.url()).searchParams.get('draft')!
+      await expect(page.getByLabel(DW('col.product'), { exact: true }).first()).toHaveValue(DRAFT_WORDS, { timeout: 60_000 })
       // F-CP-158 follow-up (cp-fx10): a new draft beside the ones there were; those stay.
-      expect(before, 'Describe it starts a new draft').not.toContain(id)
-      expect(await draftsOfAlpha()).toEqual(expect.arrayContaining([...before, id]))
-      // M-CP-2: no price anywhere — part 6 says so in words; no amount, no currency on the page; Send held for one who may not order.
-      await seen(page.getByText(OR('prices.none')).first(), 60_000)
-      await expect(page.getByRole('textbox', { name: OR('draftPage.price.yours') })).toHaveCount(0)
+      expect(before, 'the first input starts a new draft').not.toContain(id)
+      await expect.poll(draftsOfAlpha, { timeout: 60_000 }).toEqual(expect.arrayContaining([...before, id]))
+      // M-CP-2: no price anywhere — no Price card, no Your price field, no amount, no currency on the page.
+      const send = page.getByRole('button', { name: DW('send.title'), exact: true }).first()
+      await seen(send, 60_000)
+      await expect(page.getByRole('heading', { name: DW('price.title'), exact: true })).toHaveCount(0)
+      await expect(page.getByLabel(DW('price.yours'))).toHaveCount(0)
       expect(await page.locator('body').innerText(), 'no money on the Designer’s draft').not.toMatch(/€|\bEUR\b/)
-      const send = page.getByRole('button', { name: OR('draftPage.send'), exact: true }).first()
+      // Send held for one who may not order, said in words (the colleagues who may send it, or "ask your admin") — never by a cell.
       await expect(send).toHaveAttribute('aria-disabled', 'true')
+      const heldPrefix = OR('draftPage.sendHeldNone').split(':')[0]!
+      await expect(send).toHaveAttribute('aria-description', new RegExp(`^${heldPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
       await expectNothingOf(page, BRAND_BETA, [], 'Brand Alpha’s Designer: the draft')
       await flow.shot(page, 'cp-draft-designer')
       return id
@@ -197,12 +197,14 @@ export default defineStage({
       const buyer = await signInToPortal(flow, BRAND_ALPHA, alphaId)
       const { page } = buyer
       await buyer.go(`/orders/new?draft=${draftId}`)
-      // F-CP-158 follow-up (cp-fx10): a described line is named by its words cut at 60 characters (F-CP-154, customTitleOf): the
-      // start of the Designer's words names the same draft's line.
+      // F-CP-158 follow-up (cp-fx10): a row in its own words names the draft, cut at 60 characters (od- R2: the band's "Draft order ·
+      // <title>"): the start of the Designer's words names the same draft; od-fx5 (R1): its Product cell holds them whole.
       await seen(page.getByText(DRAFT_START).first(), 60_000)
-      await seen(page.getByText(OR('draftPage.price.yours')).first(), 60_000)
+      await expect(page.getByLabel(DW('col.product'), { exact: true }).first()).toHaveValue(DRAFT_WORDS, { timeout: 60_000 })
+      // od-fx5 (R1): the Buyer's own card "Your price" (a price holder's, one row per product).
+      await seen(page.getByRole('heading', { name: DW('price.title'), exact: true }), 60_000)
       await expectNothingOf(page, BRAND_BETA, [], 'Brand Alpha’s Buyer: the draft')
-      await keyOn(page.getByRole('button', { name: OR('draftPage.send'), exact: true }).first())
+      await keyOn(page.getByRole('button', { name: DW('send.title'), exact: true }).first())
       await expect.poll(async () => ((await flow.read(sales.page, `/sales/order-requests/${draftId}`)).request as { status: string }).status, { timeout: 60_000 }).toBe('SENT')
       const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       await seen(page.getByText(new RegExp(`${escape(OR('band.sentTitle'))}|${escape(OR('draftPage.sentThread'))}`)).first(), 60_000)
