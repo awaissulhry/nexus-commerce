@@ -422,7 +422,7 @@ describe('F-CP-156 — Ask the factory designer: the box, the one @ chip, held w
     // A tick on a held chip changes nothing; it keeps its own colour (never the disabled grey).
     const source = readFileSync(new URL('../../lib/record-thread/partner/view/PartnerComposer.tsx', import.meta.url), 'utf8')
     expect(source).toContain('if (held !== null) return')
-    expect(source).not.toMatch(/\bdisabled=\{/)
+    expect(source).not.toMatch(/(?<![-\w])disabled=\{/) // pt-fx1 R-2: a `disabled` prop, never `aria-disabled`
     const css = readFileSync(new URL('../../lib/record-thread/partner/partner.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.fw-rtp-designer\.is-held \{\s*cursor: default;\s*\}/)
   })

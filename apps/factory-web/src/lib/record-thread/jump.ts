@@ -25,25 +25,21 @@ export interface PageBack<M> {
   readonly pages: number
 }
 
-/**
- * Older pages read until the message `id` is there: `has` says whether the host has it loaded already; `readPage` reads the page after
- * a cursor (`size` messages); at most `limit` older messages (`page` a page). Stops at the first page that fails.
- */
-export async function pageBack<M extends { readonly id: string }>({
-  id,
-  has,
-  cursor: from,
-  readPage,
-  page,
-  limit,
-}: {
+/** What a jump asks for: the message, whether the host has it loaded, its older pages' read, a page's size and the limit. */
+export interface PageBackAsk<M> {
   readonly id: string
   readonly has: (messageId: string) => boolean
   readonly cursor: string | null
   readonly readPage: (cursor: string, size: number) => Promise<{ readonly messages: readonly M[]; readonly nextCursor: string | null }>
   readonly page: number
   readonly limit: number
-}): Promise<PageBack<M>> {
+}
+
+/**
+ * Older pages read until the message `id` is there: `has` says whether the host has it loaded already; `readPage` reads the page after
+ * a cursor (`size` messages); at most `limit` older messages (`page` a page). Stops at the first page that fails.
+ */
+export async function pageBack<M extends { readonly id: string }>({ id, has, cursor: from, readPage, page, limit }: PageBackAsk<M>): Promise<PageBack<M>> {
   const read: M[] = []
   const there = () => has(id) || read.some((message) => message.id === id)
   let cursor = from
@@ -61,6 +57,17 @@ export async function pageBack<M extends { readonly id: string }>({
     pages += 1
   }
   return { read, cursor, found: there(), failed, pages }
+}
+
+/**
+ * pt-fx1 R-1: the jump's pages — or, when the message is loaded already, what it found AT ONCE (no promise, so the host lights the row
+ * in the same turn). A caller's own work scheduled right after the jump then still comes last: the office's Answer door puts the focus
+ * in the box after the jump lit (and focused) its row, as before the jump moved here (an `await` always yields, and the row's focus
+ * then came after the box's).
+ */
+export function pageBackOrNow<M extends { readonly id: string }>(ask: PageBackAsk<M>): PageBack<M> | Promise<PageBack<M>> {
+  if (ask.has(ask.id)) return { read: [], cursor: ask.cursor, found: true, failed: false, pages: 0 }
+  return pageBack(ask)
 }
 
 /**

@@ -9,7 +9,7 @@ import { messageLink, type CardMessage } from '../../../lib/record-thread/card/m
 import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
 import { senderTone, tonesFor } from '../../../lib/record-thread/parts/tones'
 import type { FeedPin } from '../../../lib/record-thread/feed/model'
-import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, lightRow, pageBack } from '../../../lib/record-thread/jump' // pt-w1 W1.4: the jump both doors run
+import { JUMP_LIMIT, JUMP_PAGE, jumpRefusal, lightRow, pageBackOrNow } from '../../../lib/record-thread/jump' // pt-w1 W1.4: the jump both doors run
 import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
 import { cardDepth, copyTextOf } from '../../../lib/record-thread/card/model' // B-TH-255; tw- W2.2: Copy text
 import { askRemindMe } from '../../../shell/panels/remind-me/model' // tw- W2.2: a message's Remind me
@@ -959,8 +959,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const jumpTo = useCallback(
     async (messageId: string): Promise<boolean> => {
       const current = serverRef.current
-      // pt-w1 W1.4: the ONE loop both doors run (lib/record-thread/jump.ts) over this thread's own page read.
-      const { read, cursor, found, failed, pages } = await pageBack({
+      // pt-w1 W1.4: the ONE loop both doors run (lib/record-thread/jump.ts) over this thread's own page read. pt-fx1 R-1: a message
+      // loaded already is reached in this same turn (no await), so a caller's focus after the jump (the Answer door's box) comes last.
+      const back = pageBackOrNow({
         id: messageId,
         has: (id) => current.messages.some((message) => message.id === id),
         cursor: current.cursor,
@@ -968,6 +969,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         page: JUMP_PAGE,
         limit: JUMP_LIMIT,
       })
+      const { read, cursor, found, failed, pages } = back instanceof Promise ? await back : back
       if (pages > 0) setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))
       const refusal = jumpRefusal({ found, failed, cursor })
       if (refusal) {

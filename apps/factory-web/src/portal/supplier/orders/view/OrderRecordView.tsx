@@ -420,12 +420,6 @@ function NoticesTab({ model, actions }: { model: OrderRecordViewModel; actions?:
   )
 }
 
-// ── B-TH-277: the line above the docked conversation (the Messages tab's hint): price talk lives there (C2) ───────────
-export function PriceTalkHint() {
-  const { t } = useOrderWords()
-  return <p className="fw-pso-thread-hint">{t('messages.priceTalk')}</p>
-}
-
 // ── B-TH-277: what the Documents tab held, where it does work now ──────────────────────────────────────────────────
 /** The order as sent: its price-free PDF in a new tab (Lines' facts card; the band's ⋯ has it too). */
 function AsSent({ page }: { page: OrderPage }) {

@@ -160,10 +160,11 @@ const partnerMessage = z.object({
   ),
   // B-TH-273 (B-TH-079, thread-G09): its writer was erased after a privacy request ("Message removed after a privacy request").
   erased: z.boolean().optional(),
-  // pt-w2 W2.1: the message it answers / corrects (its own links), the newest that corrects it.
-  replyTo: partnerLink.nullable().optional(),
-  corrects: partnerLink.nullable().optional(),
-  correctedBy: z.object({ id: z.string(), at: z.string() }).nullable().optional(),
+  // pt-w2 W2.1: the message it answers / corrects (its own links), the newest that corrects it. pt-fx1 R-4 (defence in depth): a link
+  // the web cannot read is dropped — the thread still reads, and nothing it does not name reaches the face.
+  replyTo: partnerLink.nullable().optional().catch(undefined),
+  corrects: partnerLink.nullable().optional().catch(undefined),
+  correctedBy: z.object({ id: z.string(), at: z.string() }).nullable().optional().catch(undefined),
   at: z.string(),
 })
 export type PartnerMessageRead = z.infer<typeof partnerMessage>
