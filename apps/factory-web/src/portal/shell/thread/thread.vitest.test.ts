@@ -50,6 +50,11 @@ describe('pt-w2 W2.1 — the portal thread’s reads', () => {
     expect(message.author).toEqual({ name: 'Lia Modello', mine: true })
     expect(message.replyTo).toEqual({ id: 'm1', authorName: 'Bea Esempio', excerpt: 'Are the sizes fine?', at: '2026-11-17T09:00:00.000Z', authorKind: 'USER' })
     expect(message.attachments[0]).toMatchObject({ locked: 'PRICED', contentType: 'application/pdf' })
+    // pt-fx1 R-4: a link the web cannot read (an office-shaped one, a broken one) is dropped; the thread still reads.
+    const odd = partnerThreadSchema.parse({ ...read, messages: [{ ...read.messages[0]!, replyTo: { id: 'x', audience: 'OFFICE' }, corrects: { id: 'y' } }] })
+    expect(odd.messages[0]!.replyTo).toBeUndefined()
+    expect(odd.messages[0]!.corrects).toBeUndefined()
+    expect(odd.messages[0]!.body).toBe('The sizes are fine.')
     // An older answer (no link, no file type) still reads.
     expect(partnerThreadSchema.parse({ ...read, messages: [{ id: 'm3', side: 'COMPANY', channel: 'EMAIL', author: { name: null, mine: false }, body: 'x', attachments: [{ id: 'f2', originalName: 'a.pdf', sizeBytes: 1 }], at: '2026-11-17T09:06:00.000Z' }] }).messages[0]!.replyTo).toBeUndefined()
   })
