@@ -65,11 +65,6 @@ export type DraftLaterPart = (typeof DRAFT_LATER_PARTS)[number]
 /** The parts of a draft a problem is on: NEED (a line's own), PEOPLE (a roster's), DATE (the header's date and address). */
 export const PROBLEM_PARTS = ['NEED', 'PEOPLE', 'DATE'] as const
 export type ProblemPart = (typeof PROBLEM_PARTS)[number]
-/**
- * od-fx3: the name the web's problem schema (apps/factory-web lib/order-draft/schema.ts) still imports — the same three values;
- * goes once the web imports PROBLEM_PARTS.
- */
-export const DRAFT_PARTS = PROBLEM_PARTS
 
 /** NEED: a line's own (what it is, its total, its sizes, a price changed); PEOPLE: a roster's (no one named, a person's size); DATE: the header's date and address. */
 export function problemPartOf(problem: Pick<Problem, 'code' | 'personId'>): ProblemPart {
