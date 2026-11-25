@@ -77,10 +77,12 @@ export function bandHealthOf(health: ProductionHealth | null): NonNullable<Porta
 }
 
 /** pp-w1 (w1.2; 10-design § 2): the band's chips — health, the customer's own urgency, made from — or null when none applies. */
-export function bandChipsOf(words: OrderWords, facts: Pick<OrderBandFacts, 'production' | 'madeFrom'>): PortalBandChips | null {
+export function bandChipsOf(words: OrderWords, facts: Pick<OrderBandFacts, 'production' | 'madeFrom'>, status: OrderRecord['order']['status'] | null = null): PortalBandChips | null {
   const { t } = words
-  const health = bandHealthOf(facts.production?.health ?? null)
-  const urgent = facts.production?.urgency?.code === 'URGENT' ? t('band.urgent') : null
+  // pp-fx4 (walk W-20): a delivered or cancelled order is done — nothing is late, at risk or urgent any more (no health, no urgency).
+  const done = status === 'DELIVERED' || status === 'CANCELLED'
+  const health = done ? null : bandHealthOf(facts.production?.health ?? null)
+  const urgent = !done && facts.production?.urgency?.code === 'URGENT' ? t('band.urgent') : null
   const made = facts.madeFrom ?? null
   const madeFrom = made
     ? { href: made.href, label: t(made.kind === 'request' ? (made.label ? 'status.madeFromRequest' : 'status.madeFromRequestNone') : made.label ? 'status.madeFromQuote' : 'status.madeFromQuoteNone', made.label ? { label: made.label } : undefined) }
@@ -132,7 +134,7 @@ export function orderBandOf(input: {
     // F-PR-24: one message in this order's thread; we answer there.
     ...(facts.problem ? [{ id: 'problem', label: t('reported.report'), disabled: facts.problem.held !== null, description: facts.problem.held ?? undefined, onSelect: () => input.onProblem?.() }] : []),
   ]
-  const chips = bandChipsOf(input.words, facts)
+  const chips = bandChipsOf(input.words, facts, order.status)
   // ---- B-TH-275 (P-CUS-ORD.band; plan §0.5, B-TH-303): "Your order 12" — the customer's own number, never the office's SO- series;
   // their PO first in the band's references. The conversation docks beside the body (no Messages tab, no Ask modal).
   const name = orderNameOf(order, locale, t)

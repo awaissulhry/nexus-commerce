@@ -16,6 +16,7 @@ import { ComposeFiles, type ComposeFilesModel } from '../../../../lib/request-co
 import { MAX_NOTE } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { AskImpact, type AskImpactModel } from './AskImpact'
+import { ChangeDiscard, ChangeStep, ChangeStepFooter, type ChangeDialogActions, type ChangeDialogModel } from './Dialogs' // pp-fx4 (walk W-05)
 import { Loading, ReadFailed } from './parts'
 // B-SA-046d: the line's picture, the ONE picture part (src/lib), drawn from the address the portal's own read holds.
 import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
@@ -25,8 +26,8 @@ import type { RowPicture } from '../../../../lib/record-picture/model'
  * F-PR-13 — the portal Ask dialog (production plan §3, §5; 06-tree B.2 P-ORD-ask; design: a DS Modal, a full-screen sheet on a
  * phone): step 1 what (change, cancel, and the production asks the customer's limits open — make it urgent, pause, resume, ship
  * what is ready, another sample), step 2 the details of a production ask, step 3 what it means before Send (AskImpact). A change
- * and a cancel go on in their own pop-ups (the size grid, the lines and reasons), each with the same step 3. A kind whose request
- * waits is not asked twice: Withdraw it here, or answer our counter-offer in Waiting for you. Every button that cannot act says
+ * goes on in this same pop-up (pp-fx4, walk W-05: its sizes are step 2); a cancel in its own (the lines and reasons), with the same
+ * step 3. A kind whose request waits is not asked twice: Withdraw it here, or answer our counter-offer in Waiting for you. Every button that cannot act says
  * why; Esc closes; Ctrl/⌘ + Enter sends on step 3.
  */
 
@@ -89,49 +90,70 @@ export interface AskDialogActions {
 
 const STEP_KEY = { what: 'ask.step.what', details: 'ask.step.details', impact: 'ask.step.impact' } as const
 
-export function AskDialog({ model, actions }: { model: AskDialogModel; actions?: AskDialogActions }) {
-  const { t } = useOrderWords()
-  const held = model.held ? t(model.held) : null
+/**
+ * pp-fx4 (walk W-05): the ONE Ask pop-up — the band's "Ask for a change…" and a line's ⋯ open it. A change is its steps 2 and 3 (the
+ * sizes, then what it means: `ChangeStep`), drawn in this same frame and Modal, so the pop-up stays one as it moves between its steps.
+ */
+export type AskFlow = { kind: 'ask'; model: AskDialogModel; actions?: AskDialogActions } | { kind: 'change'; model: ChangeDialogModel; actions?: ChangeDialogActions }
+
+export function AskDialog({ flow }: { flow: AskFlow }) {
+  const { t, locale } = useOrderWords()
+  const change = flow.kind === 'change' ? flow : null
+  const step: AskDialogModel['step'] = change ? (change.model.draft.step === 'review' ? 'impact' : 'details') : flow.kind === 'ask' ? flow.model.step : 'what'
+  const heldKey = flow.model.held
+  const held = heldKey ? (change ? t(heldKey, { words: change.model.rules?.change.words[locale] ?? '' }) : t(heldKey)) : null
+  const close = () => flow.actions?.onClose?.()
+  const send = () => flow.actions?.onSend?.()
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (model.step === 'impact' && event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !held) {
+    if (step === 'impact' && event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !held) {
       event.preventDefault()
-      actions?.onSend?.()
+      send()
     }
   }
-  const footer =
-    model.state !== 'ready' || !model.rules ? (
-      <Button onClick={() => actions?.onClose?.()}>{t('dialog.close')}</Button>
-    ) : model.step === 'what' ? (
+  const footer = change ? <ChangeStepFooter model={change.model} actions={change.actions} held={held} /> : flow.kind === 'ask' ? <AskFooter model={flow.model} actions={flow.actions} held={held} /> : null
+  return (
+    <>
+      <Modal open sheet size="lg" onClose={close} title={t('ask.title', { number: flow.model.number })} subtitle={t(STEP_KEY[step])} footer={footer} closeHeld={flow.model.busy ? t('held.busy') : null}>
+        <div className="fw-pord-dialog" onKeyDown={onKey}>
+          {change ? <ChangeStep model={change.model} actions={change.actions} /> : flow.kind === 'ask' ? <AskDialogBody model={flow.model} actions={flow.actions} /> : null}
+          {flow.model.problem ? <Banner tone="danger" title={t(flow.model.problem)} /> : null}
+        </div>
+      </Modal>
+      {change?.model.discard ? <ChangeDiscard actions={change.actions} /> : null}
+    </>
+  )
+}
+
+function AskFooter({ model, actions, held }: { model: AskDialogModel; actions?: AskDialogActions; held: string | null }) {
+  const { t } = useOrderWords()
+  if (model.state !== 'ready' || !model.rules) return <Button onClick={() => actions?.onClose?.()}>{t('dialog.close')}</Button>
+  if (model.step === 'what')
+    return (
       <>
         <Button onClick={() => actions?.onClose?.()}>{t('dialog.cancel')}</Button>
         <Button variant="primary" heldReason={held} onClick={() => actions?.onNext?.()}>
           {t('ask.next')}
         </Button>
       </>
-    ) : model.step === 'details' ? (
+    )
+  if (model.step === 'details')
+    return (
       <>
         <Button onClick={() => actions?.onBack?.()}>{t('change.back')}</Button>
         <Button variant="primary" heldReason={held} onClick={() => actions?.onReview?.()}>
           {t('ask.review.go')}
         </Button>
       </>
-    ) : (
-      <>
-        <Button onClick={() => actions?.onBack?.()} heldReason={model.busy ? t('held.busy') : null}>
-          {t('change.back')}
-        </Button>
-        <Button variant="primary" heldReason={held} onClick={() => actions?.onSend?.()}>
-          {model.busy ? <Spinner size={14} /> : null} {t('ask.send')}
-        </Button>
-      </>
     )
   return (
-    <Modal open sheet size="lg" onClose={() => actions?.onClose?.()} title={t('ask.title', { number: model.number })} subtitle={t(STEP_KEY[model.step])} footer={footer} closeHeld={model.busy ? t('held.busy') : null}>
-      <div className="fw-pord-dialog" onKeyDown={onKey}>
-        <AskDialogBody model={model} actions={actions} />
-        {model.problem ? <Banner tone="danger" title={t(model.problem)} /> : null}
-      </div>
-    </Modal>
+    <>
+      <Button onClick={() => actions?.onBack?.()} heldReason={model.busy ? t('held.busy') : null}>
+        {t('change.back')}
+      </Button>
+      <Button variant="primary" heldReason={held} onClick={() => actions?.onSend?.()}>
+        {model.busy ? <Spinner size={14} /> : null} {t('ask.send')}
+      </Button>
+    </>
   )
 }
 

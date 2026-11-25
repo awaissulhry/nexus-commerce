@@ -72,7 +72,6 @@ import {
   tabOf,
   // B-TH-275
   madeFromOf,
-  orderRefOf,
   type SummaryParent,
   type CancelDraft,
   type ChangeDraft,
@@ -141,7 +140,7 @@ function OrderRoute({ id }: { id: string }) {
 
 // F-PR-13: the impact read before Send (change, cancel and the production asks), and the Ask dialog's own state.
 type ImpactPart = { state: 'loading' | 'error' | 'ready'; view: ImpactView | null }
-type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null }
+type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null; /** pp-fx4 (W-05): Discard goes back to step 1, not out. */ discardTo?: 'what' }
 type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem: string | null; impact?: ImpactPart | null }
 type AskState = {
   kind: 'ask'
@@ -542,6 +541,8 @@ function OrderContainer({ id }: { id: string }) {
    * Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. pp-w1 (w1.2):
    * the line ⋯ "Ask for a change on this line" opens the same dialog at Change, at that line (`line`).
    */
+  /** pp-fx4 (walk W-05): the Ask at its step 1, a kind already chosen (Back from a change's sizes). */
+  const askAtWhat = (kind: AskKind | null): AskState => ({ kind: 'ask', step: 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
   const openAsk = (kind: AskKind | null = null, line: string | null = null) => {
     if (kind === 'CHANGE') return openChange(line)
     if (kind === 'CANCEL') return openCancel()
@@ -977,7 +978,7 @@ function OrderContainer({ id }: { id: string }) {
           model: {
             state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
             // B-TH-275: the customer's own reference (#12), never the office's SO- series.
-            number: orderRefOf(record.order, t),
+            number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
             rules: rules.read,
             draft: dialog.draft,
             // F-PR-13: Send waits for what it means (read, nothing blocked).
@@ -994,14 +995,14 @@ function OrderContainer({ id }: { id: string }) {
         ? {
             kind: 'cancel',
             // F-PR-13: Send waits for what it means (read, nothing blocked).
-            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
+            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderNameOf(record.order, locale, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
           }
         : dialog.kind === 'ask' // F-PR-13
           ? {
               kind: 'ask',
               model: {
                 state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading',
-                number: orderRefOf(record.order, t),
+                number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
                 rules: rules.read,
                 step: dialog.step,
                 kind: dialog.ask,
@@ -1038,7 +1039,7 @@ function OrderContainer({ id }: { id: string }) {
         : dialog.kind === 'reconfirm'
           ? {
               kind: 'reconfirm',
-              model: { state: dialog.state, page: dialog.page, number: orderRefOf(record.order, t), decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
+              model: { state: dialog.state, page: dialog.page, number: orderNameOf(record.order, locale, t), decision: dialog.decision, comment: dialog.comment, held: dialog.done ? null : reconfirmHeld(dialog.page, { preview, mayApprove, offline }), problem: dialog.problem, busy: dialog.busy, done: dialog.done },
             }
           : dialog.kind === 'pay'
             ? (() => {
@@ -1050,7 +1051,7 @@ function OrderContainer({ id }: { id: string }) {
                   kind: 'pay' as const,
                   model: {
                     amount: words.money(item?.open ?? deposit?.amount ?? null, deposit?.currency ?? record.order.currency),
-                    number: orderRefOf(record.order, t),
+                    number: orderNameOf(record.order, locale, t), // pp-fx4 (walk W-17): the band's name, "Your order 12", in every pop-up
                     methods: openItems?.card.methods ?? [],
                     method: dialog.method,
                     state: paymentStateOf(dialog.phase, dialog.intent),
@@ -1191,8 +1192,11 @@ function OrderContainer({ id }: { id: string }) {
             onBack: () => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, step: 'edit' } } : current)),
             onSend: sendChange,
             onClose: () => setDialog((current) => (current?.kind === 'change' && !current.busy ? (changeDirty ? { ...current, discard: true } : null) : current)),
-            onDiscard: () => setDialog(null),
-            onStay: () => setDialog((current) => (current?.kind === 'change' ? { ...current, discard: false } : current)),
+            onDiscard: () => setDialog((current) => (current?.kind === 'change' && current.discardTo === 'what' ? askAtWhat('CHANGE') : null)),
+            onStay: () => setDialog((current) => (current?.kind === 'change' ? { ...current, discard: false, discardTo: undefined } : current)),
+            // pp-fx4 (walk W-05): the change is steps 2 and 3 of the ONE Ask: Back on its sizes returns to "What you would like" (a typed
+            // change asks first).
+            onWhat: () => setDialog((current) => (current?.kind !== 'change' || current.busy ? current : changeDirty ? { ...current, discard: true, discardTo: 'what' } : askAtWhat('CHANGE'))),
             onRetry: () => void loadRules(),
           },
           cancel: {

@@ -87,6 +87,18 @@ describe('w1.2 — the band’s chips: health (Late / At risk, never On track), 
     expect(bandChipsOf(orderWords('it'), { madeFrom: { kind: 'quote', href: `${PREFIX}/open/Quote/q3?view=conversation`, label: null } })?.madeFrom?.label).toBe('Nato dal vostro preventivo')
   })
 
+  // pp-fx4 (walk W-20): the gallery's Delivered order showed "Late · Material delivery late" and "Urgent" in its band.
+  it('W-20: a delivered or cancelled order shows no health and no urgency chip ("Made from" stays: a fact, not a state)', () => {
+    const words = orderWords('en')
+    const made = { kind: 'request' as const, href: `${PREFIX}/orders/requests/r7`, label: '#7' }
+    for (const status of ['DELIVERED', 'CANCELLED'] as const) {
+      expect(bandChipsOf(words, { production: LATE_URGENT }, status), status).toBeNull()
+      expect(bandChipsOf(words, { production: LATE_URGENT, madeFrom: made }, status), status).toMatchObject({ health: null, urgent: null, madeFrom: { label: 'Made from your request #7' } })
+    }
+    for (const status of ['IN_PRODUCTION', 'SHIPPED', 'PARTLY_SHIPPED'] as const) expect(bandChipsOf(words, { production: LATE_URGENT }, status), status).toMatchObject({ health: { computed: 'LATE' }, urgent: 'Urgent' })
+    expect(readFileSync(new URL('./band.ts', import.meta.url), 'utf8')).toContain('const chips = bandChipsOf(input.words, facts, order.status)')
+  })
+
   it('the shell draws them after the status pill (the shared HealthPill’s customer face); a page without chips draws as before', () => {
     const made = { kind: 'request' as const, href: `${PREFIX}/orders/requests/r7`, label: '#7' }
     const html = drawBand(bandOf({ production: LATE_URGENT, madeFrom: made }), 'en')

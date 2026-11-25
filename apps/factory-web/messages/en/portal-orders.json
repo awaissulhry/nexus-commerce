@@ -245,7 +245,7 @@
     "whatChanged_one": "What changed (1 change)",
     "whatChanged_other": "What changed ({count} changes)",
     "title": "Re-confirm order version {version}",
-    "due": "Order {number} · please answer by {date}",
+    "due": "{number} · please answer by {date}",
     "why": "Why it changed: {reason}",
     "choose": "Your answer",
     "approve": "Confirm version {version}",
@@ -432,8 +432,6 @@
     "go": "Discard"
   },
   "change": {
-    "title": "Ask for a change on order {number}",
-    "editStep": "Step 1 of 2: what to change",
     "reviewStep": "Step 2 of 2: check and send",
     "failed": "What may change could not be read",
     "hint": "Change the pieces per size, the date or the delivery address. We answer here and by e-mail.",
@@ -468,7 +466,7 @@
     "colourwayChanged": "Colourway changed"
   },
   "cancel": {
-    "title": "Ask to cancel order {number}",
+    "title": "Ask to cancel · {number}",
     "failed": "What may be cancelled could not be read",
     "hint": "We check your request and answer here and by e-mail. Nothing is cancelled until we accept it.",
     "what": "What to cancel",
@@ -514,7 +512,7 @@
   },
   "pay": {
     "title": "Pay the deposit",
-    "purpose": "Deposit for order {number}",
+    "purpose": "Deposit · {number}",
     "fakeProvider": "the test payment provider",
     "fakeNote": "Test payments only: no card is charged. Choose what the bank does.",
     "method": {
@@ -687,7 +685,7 @@
     }
   },
   "ask": {
-    "title": "Ask us · {number}",
+    "title": "Ask for a change · {number}",
     "step": {
       "what": "Step 1 of 3 · What you would like",
       "details": "Step 2 of 3 · The details",
@@ -963,9 +961,8 @@
     "groupAnswered": "Answered · {count}",
     "pay": "What you pay",
     "partPaid": "{paid} of {amount} paid",
-    "total": "Order total · VAT incl.",
     "paid": "Paid",
-    "still": "Still to pay"
+    "notRead": "Not known yet"
   },
   "strip": {
     "deposit": "Deposit to pay by {date}"
