@@ -281,19 +281,18 @@
     "drafts": {
       "col": {
         "draft": "Bozza",
-        "lines": "Righe",
+        "lines": "Prodotti",
         "files": "File",
-        "ready": "Pronta",
+        "ready": "Ancora aperto",
         "changed": "Ultima modifica",
         "wanted": "Entro il",
         "value": "Valore ai prezzi mostrati",
         "messages": "Messaggi"
       },
-      "untitled": "Bozza senza titolo",
       "started": "Iniziata il {date} da {name}",
       "startedNoName": "Iniziata il {date}",
-      "lineCount_one": "{count} riga",
-      "lineCount_other": "{count} righe",
+      "lineCount_one": "{count} prodotto",
+      "lineCount_other": "{count} prodotti",
       "pieceCount_one": "{count} pezzo",
       "pieceCount_other": "{count} pezzi",
       "peopleCount_one": "{count} persona",
@@ -319,8 +318,7 @@
       "retry": "Riprova",
       "open": "Apri",
       "openOf": "Apri {draft}",
-      "noun": "bozza",
-      "readOnly": "Sola lettura: {customer} la sta ancora scrivendo."
+      "noun": "bozza"
     },
     "designer": {
       "label": "Designer della fabbrica",

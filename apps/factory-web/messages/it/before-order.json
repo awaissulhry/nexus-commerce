@@ -37,7 +37,7 @@
   "door": {
     "showAll": "Mostra tutto ({count})",
     "why": {
-      "WRITING": "bozze nel portale del cliente: sola lettura, mai contate come cose che toccano a noi",
+      "WRITING": "bozze nel portale del cliente: aprine una per completarla o confermarla, mai contate come cose che toccano a noi",
       "TO_ANSWER": "richieste Nuove o In lavorazione, e ordini dal portale inviati: aspettano noi",
       "PREPARING": "preventivi in Bozza, o Approvati e non ancora inviati",
       "APPROVAL": "preventivi su cui decide un approvatore",
@@ -54,7 +54,7 @@
     "countOpen": "{open} aperte · {closed} chiuse restano fuori",
     "countNotClosed": "{open} non chiusi · {closed} chiusi restano fuori",
     "countGroup": "{count} in «{group}»",
-    "writingSub": "bozze nel portale di {customer} · sola lettura · mai contate come cose che toccano a noi",
+    "writingSub": "bozze nel portale di {customer} · aprine una per completarla o confermarla · mai contate come cose che toccano a noi",
     "countAll": "{count}, ogni stato"
   },
   "empty": {

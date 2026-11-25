@@ -1,4 +1,6 @@
-import type { ProductRow } from '../../../../lib/order-draft/model'
+import { rowLabelOf, type ProductRow } from '../../../../lib/order-draft/model'
+import type { StillOpen } from '../../../../lib/order-draft/schema'
+import type { Translate } from '../../../../lib/i18n/messages'
 import type { ConfirmBody } from './api'
 
 /**
@@ -63,6 +65,36 @@ export function missingOf(row: ProductRow, entry: ConfirmEntry | undefined): str
   // A row's own size run or its people (every person sized) carry the pieces of ONE line; else they are typed here.
   if (sizesOf(entry.sizesText).length === 0 && row.pieces.mode !== 'PEOPLE') out.push('need.pieces')
   return out
+}
+
+/** What the Confirm card says the window will ask: a row (or the delivery address) and the order's needs there, in the part's keys. */
+export interface CardAsk {
+  readonly id: string
+  readonly label: string
+  readonly needs: readonly string[]
+}
+
+const NEED_OF: Readonly<Record<string, string>> = { PRODUCT: 'need.style', COLOUR: 'need.colour', PIECES: 'need.pieces', SHIP_TO: 'need.shipTo' }
+
+/**
+ * od-fx8 (W-05; od-fx7's `confirmReady`): the Confirm card lists what the ORDER still lacks — the server's items the order needs and
+ * does not have yet (`confirmNeeds && !confirmReady`), never what the customer left "Not decided yet" (a row decided in words still
+ * needs a style for the order). An older answer without `confirmReady`: the rows themselves (their own style, colour, size run).
+ */
+export function cardAsksOf(stillOpen: StillOpen | undefined, rows: readonly ProductRow[], t: Translate): CardAsk[] {
+  const items = stillOpen?.items ?? []
+  if (items.length > 0 && items.every((item) => item.confirmReady !== undefined)) {
+    const lacking = items.filter((item) => item.confirmNeeds && item.confirmReady === false && NEED_OF[item.kind])
+    const out: CardAsk[] = []
+    for (const row of rows) {
+      const needs = [...new Set(lacking.filter((item) => item.lineId === row.id).map((item) => NEED_OF[item.kind]!))]
+      if (needs.length > 0) out.push({ id: row.id, label: rowLabelOf(row, t), needs })
+    }
+    if (lacking.some((item) => item.kind === 'SHIP_TO')) out.push({ id: 'shipTo', label: t('row.shipTo'), needs: ['need.shipTo'] })
+    return out
+  }
+  const entries = confirmRowsOf(rows)
+  return rows.map((row, at) => ({ id: row.id, label: rowLabelOf(row, t), needs: missingOf(row, entries[at]) })).filter((ask) => ask.needs.length > 0)
 }
 
 /** The window's final button waits while a row still needs something (its words name the first such row). */

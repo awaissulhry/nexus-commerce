@@ -410,14 +410,15 @@ function PriceCard({ model, actions }: { model: NewOrderViewModel; actions?: New
               label={dw.t('price.title')}
               density="roomy"
               stackOnPhone
-              columns={[dw.t('col.product'), dw.t('price.yours')]}
+              columns={[dw.t('col.product'), dw.t('price.col')]}
               align={['left', 'right']}
               widths={[undefined, '180px']}
               rows={[
                 ...rows.map((row) => ({
                   id: row.id,
                   cells: [
-                    `${row.seq} · ${row.label}`,
+                    // od-fx8 W-17: the product's name whole (it wraps in its cell, never cut).
+                    <span key="p" className="fw-od-wrap">{`${row.seq} · ${row.label}`}</span>,
                     <YourPriceCell
                       key="yours"
                       seq={row.seq}
@@ -431,9 +432,12 @@ function PriceCard({ model, actions }: { model: NewOrderViewModel; actions?: New
                     />,
                   ],
                 })),
-                { id: 'total', cells: [<strong key="l">{t('draftPage.price.total')}</strong>, own.total !== null ? <strong key="y">{price(own.total)}</strong> : <span key="y" className="fw-pno-quiet">{t('draftPage.price.missing', { count: own.missing })}</span>] },
               ]}
             />
+            {/* od-fx8 W-17: the total under the table (a stacked phone card would repeat the column labels on it). */}
+            <p className="fw-od-total">
+              <strong>{t('draftPage.price.total')}</strong> {own.total !== null ? <strong>{price(own.total)}</strong> : <span className="fw-pno-quiet">{t('draftPage.price.missing', { count: own.missing })}</span>}
+            </p>
             <p className="fw-pno-quiet">{dw.t('price.frozen')}</p>
             {request.pricesChanged > 0 ? (
               <p className="fw-pno-held">

@@ -21,10 +21,10 @@
   "start": {
     "keeps": "Choosing a way keeps what is already in the draft.",
     "draftsFailed": "We could not read your drafts.",
-    "draft_one": "Continue your draft from {day} · {count} line",
-    "draft_other": "Continue your draft from {day} · {count} lines",
-    "draftRef_one": "Continue your draft {ref} from {day} · {count} line",
-    "draftRef_other": "Continue your draft {ref} from {day} · {count} lines"
+    "draft_one": "From {day} · {count} product",
+    "draft_other": "From {day} · {count} products",
+    "draftRef_one": "{ref} · from {day} · {count} product",
+    "draftRef_other": "{ref} · from {day} · {count} products"
   },
   "head": {
     "title": "Order details",
@@ -444,8 +444,8 @@
     "price": {
       "cell": "Your price for line {seq}",
       "total": "Total",
-      "missing_one": "{count} line still without your price",
-      "missing_other": "{count} lines still without your price",
+      "missing_one": "{count} product still without your price",
+      "missing_other": "{count} products still without your price",
       "problem": "A price of 0 or more, with up to 6 decimals."
     },
     "thread": "Messages · this draft",

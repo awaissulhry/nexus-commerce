@@ -333,9 +333,6 @@ export function entriesInOrder(request: Pick<DraftRequest, 'lines'> & Partial<Pi
 /** How many lines the draft holds, of every kind. */
 export const lineCountOf = (request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>): number => request.lines.length + customLinesOf(request).length
 
-/** A line's kind in words: "From the catalogue" · "Described by you" · "Made to measure". */
-export const kindKey = (kind: DraftEntry['kind']): string => `draftPage.kind.${kind}`
-
 /** Made to measure for this customer: open unless the office switched it off; never offered once the draft is no longer one. */
 export function mtmOf(request: Pick<DraftRequest, 'status'> & Partial<Pick<DraftRequest, 'madeToMeasure'>>): { open: boolean; garmentTypes: MadeToMeasure['garmentTypes'] } {
   if (request.status !== 'DRAFT' || request.madeToMeasure === null) return { open: false, garmentTypes: [] }
@@ -583,7 +580,8 @@ export function productRowsOf(request: Pick<DraftViewRequest, 'lines' | 'files'>
 }
 
 /** A row's product in words: the customer's words, else the style ("SEED-JKT-02 Seed crew jacket"); null = not decided yet. */
-export const rowProductOf = (row: Pick<ProductRow, 'words' | 'style'>): string | null => row.words ?? (row.style ? `${row.style.code} ${row.style.name}`.trim() : null)
+/** od-fx8 W-25: ONE name for a product everywhere — the customer's words, else the style's name (its code is drawn beside it in the table). */
+export const rowProductOf = (row: Pick<ProductRow, 'words' | 'style'>): string | null => row.words ?? (row.style ? row.style.name.trim() || row.style.code : null)
 
 /** "Custom race suit · row 1", or "Row 3" while its product is not decided yet. */
 export const rowLabelOf = (row: Pick<ProductRow, 'words' | 'style' | 'seq'>, t: Translate): string => {
@@ -653,14 +651,33 @@ export function stillOpenEntries(stillOpen: StillOpen | undefined, rows: readonl
   return out
 }
 
-/** Who saved the draft last, in words (R1): your own save "Draft saved 10:42", a colleague's "Saved 10:42 by …", the office's "… by the factory". */
-export function savedByWords(request: Pick<DraftRequest, 'updatedAt' | 'lastEditedAt' | 'lastEditedBy'> & Partial<Pick<DraftRequest, 'savedBy'>>, t: Translate, time: (iso: string) => string): string {
-  const when = time(request.lastEditedAt ?? request.updatedAt)
+/** How "saved by" says when (od-fx8 W-21): the time today ("10:42"), else the day and the time ("12/11/2026, 10:42"). */
+export interface SavedWhen {
+  readonly time: (iso: string) => string
+  /** The day of a stamp; absent: the time only. */
+  readonly day?: (iso: string) => string
+  /** Today, YYYY-MM-DD in the site's zone (`todayIn`). */
+  readonly today?: string
+  /** od-fx8 W-09: the office names every person — a customer's person with the customer ("Bianca Brand (Seed Racing)"). */
+  readonly door?: 'portal' | 'office'
+  readonly customer?: string | null
+}
+
+/**
+ * Who saved the draft last, in words (R1): your own save "Draft saved 10:42", a colleague's "Saved 10:42 by …"; an office save reads
+ * "… by the factory" on the portal (never a worker's name) and names the person in the office (od-fx8 W-09).
+ */
+export function savedByWords(request: Pick<DraftRequest, 'updatedAt' | 'lastEditedAt' | 'lastEditedBy'> & Partial<Pick<DraftRequest, 'savedBy'>>, t: Translate, at: SavedWhen | ((iso: string) => string)): string {
+  const how: SavedWhen = typeof at === 'function' ? { time: at } : at
+  const stamp = request.lastEditedAt ?? request.updatedAt
+  const sameDay = !how.day || !how.today || todayIn(new Date(stamp)) === how.today
+  const when = sameDay ? t('head.at', { time: how.time(stamp) }) : t('head.on', { day: how.day!(stamp), time: how.time(stamp) })
   const by = request.savedBy
-  if (by?.who === 'FACTORY') return t('head.savedByFactory', { time: when })
-  if (by?.who === 'COLLEAGUE' && by.name) return t('head.savedBy', { time: when, name: by.name })
-  if (!by && request.lastEditedBy) return t('head.savedBy', { time: when, name: request.lastEditedBy })
-  return t('save.draftSaved', { time: when })
+  const office = how.door === 'office'
+  if (by?.who === 'FACTORY') return office && by.name ? t('head.savedBy', { when, name: by.name }) : t('head.savedByFactory', { when })
+  if (by?.who === 'COLLEAGUE' && by.name) return office && how.customer ? t('head.savedByCustomer', { when, name: by.name, customer: how.customer }) : t('head.savedBy', { when, name: by.name })
+  if (!by && request.lastEditedBy) return t('head.savedBy', { when, name: request.lastEditedBy })
+  return t('save.draftSaved', { when })
 }
 
 /** Who changed the draft meanwhile (a 409's re-read): a colleague by name, any office save as "the factory". */

@@ -18,7 +18,7 @@ import { changedByOf, choicesTyped, customLinesOf, draftFileCount, draftFilesOf,
 import type { CustomLineFields, DraftChoice, DraftFile, DraftFilePart, DraftRecord, SavedBy } from '../../../../lib/order-draft/schema'
 import { DRAFT_NS, DraftDoorProvider, useDraftWords } from '../../../../lib/order-draft/words'
 import type { UploadRow } from '../../../../lib/order-draft/view/files'
-import { piecesModesOf, type PiecesMode } from '../../../../lib/order-draft/view/RowWindows'
+import { piecesOpenOf, type PiecesMode } from '../../../../lib/order-draft/view/RowWindows'
 import { CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { STYLE_CODE } from '@nexus/factory-domain/product/styles/rules'
 import { findStyles, listRequestCustomers, listScales, readStyle, type ScaleOption, type StyleDetail } from '../../inquiries/api'
@@ -41,7 +41,7 @@ import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordT
  */
 export function OfficeDraftPage() {
   return (
-    <WithMessages namespaces={[DRAFT_NS, 'ds-words', 'lists', 'records', 'sales-inquiries', COMPOSE_NS]}>
+    <WithMessages namespaces={[DRAFT_NS, 'ds-words', 'lists', 'records', 'orders' /* od-fx8 W-02: the band's ‹ Orders, New order */, 'sales-inquiries', COMPOSE_NS]}>
       {/* The office's whole word set (its voice) for the container's own words too. */}
       <DraftDoorProvider door="office">
         <OfficeDraftContainer />
@@ -220,11 +220,12 @@ function OfficeDraftContainer() {
   }, [draftId, read])
   // The start: the company's customers (as New request picks them).
   useEffect(() => {
-    if (draftId || !companyId) return
+    // od-fx8 W-08: a reader (no orders.manage) starts no draft: no customer is read (its start says so in words).
+    if (draftId || !companyId || !manages) return
     listRequestCustomers(api, companyId)
       .then((answer) => setCustomers({ state: 'ready', rows: answer.customers.map((row) => ({ id: row.id, label: `${row.code} · ${row.tradeName ?? row.legalName}` })) }))
       .catch(() => setCustomers({ state: 'error', rows: [] }))
-  }, [api, companyId, draftId])
+  }, [api, companyId, draftId, manages])
   // The picked customer's drafts to continue, and its catalogue for the Product cell (its own label's styles and the open ones).
   useEffect(() => {
     if (!partyId) return
@@ -363,10 +364,7 @@ function OfficeDraftContainer() {
   const openPieces = (rowId: string) => {
     const row = rowOf(rowId)
     if (!row) return
-    const modes = piecesModesOf(row)
-    const mode: PiecesMode = row.pieces.mode !== 'NONE' && modes.includes(row.pieces.mode) ? row.pieces.mode : modes[0]!
-    const cells = row.pieces.mode === 'SIZES' ? Object.fromEntries(row.pieces.sizes.map((entry) => [entry.size, entry.quantity])) : {}
-    setPiecesWin({ rowId, mode, total: row.pieces.mode === 'TOTAL' || (row.pieces.mode === 'SIZES' && !row.catalogue) ? String(row.pieces.total) : '', cells, busy: false, failed: null })
+    setPiecesWin({ rowId, ...piecesOpenOf(row), busy: false, failed: null }) // od-fx8 W-15: on what the row holds
   }
   const savePieces = async () => {
     const win = piecesWin

@@ -7,7 +7,6 @@ import { FileDropzone, Modal } from '../../i18n/ds-parts'
 import type { DraftFile, DraftFilePart, DraftPerson, MeasureBy } from '../schema'
 import {
   customTitleOf,
-  kindKey,
   MEASURES,
   measureKey,
   peopleInOrder,
@@ -67,7 +66,8 @@ export function LineRoster({ line, model, actions }: { line: DraftViewCustomLine
   const onLine = sheetsOfLine(request, line.id)
   const kit = { t, price: () => null, locale }
   const personProblems = line.problems.filter((problem) => problem.personId)
-  const title = t('draftPage.roster.title', { seq: line.seq, kind: t(kindKey(line.kind)), title: customTitleOf(line, t, locale) })
+  // od-fx8 W-22: the row's words of the table ("Row 1 · Custom size"), never the old line kinds.
+  const title = t('draftPage.roster.title', { seq: line.seq, kind: t(line.sizing === 'MADE_TO_MEASURE' ? 'siz.MADE_TO_MEASURE' : 'pc.byPerson'), title: customTitleOf(line, t, locale) })
   const headingId = `people-${line.id}-title`
   return (
     <section className="fw-od-roster" id={`people-${line.id}`} tabIndex={-1} aria-labelledby={headingId}>
@@ -75,9 +75,12 @@ export function LineRoster({ line, model, actions }: { line: DraftViewCustomLine
         <h3 id={headingId} className="fw-od-h3">
           {title}
         </h3>
-        <Button size="sm" variant="secondary" heldReason={held} onClick={() => actions?.onAddPerson?.(line.id)}>
-          <UserPlus size={14} aria-hidden /> {t('draftPage.roster.add')}
-        </Button>
+        {/* od-fx8 W-10: a reader reads the people; adding one is for who may write (a button you may not use is hidden). */}
+        {held ? null : (
+          <Button size="sm" variant="secondary" onClick={() => actions?.onAddPerson?.(line.id)}>
+            <UserPlus size={14} aria-hidden /> {t('draftPage.roster.add')}
+          </Button>
+        )}
       </div>
       {people.length > 0 ? (
         <SummaryTable

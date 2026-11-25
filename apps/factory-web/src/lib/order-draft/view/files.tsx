@@ -98,7 +98,8 @@ export function FilesBox({ model, actions, logo = false }: { model: FilesBoxMode
         model.addHeld ? (
           <p className="fw-od-held">{model.addHeld}</p>
         ) : (
-          <FileDropzone multiple accept={model.accept} hint={t(model.dropKey)} onFiles={(files) => actions?.onFiles?.(files)} />
+          // od-fx8 W-27: ONE prompt — the part's own words in the drop area (the design system's prompt and its file-type hint give way).
+          <FileDropzone multiple accept={model.accept} labels={{ prompt: t(model.dropKey) }} hint="" onFiles={(files) => actions?.onFiles?.(files)} />
         )
       ) : (
         // D14: on live, until the virus scanner runs — the e-mail way, naming the draft.

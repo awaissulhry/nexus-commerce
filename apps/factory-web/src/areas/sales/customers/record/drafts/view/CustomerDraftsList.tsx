@@ -12,7 +12,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'
 import type { DraftRow } from '../api'
-import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, type DraftsRead, type Words } from '../model'
+import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, untitledOf, type DraftsRead, type Words } from '../model'
 import { DRAFT_NS } from '../../../../../../lib/order-draft/words'
 import { draftValueOf } from '../model' // F-CP-141 (follow-up 6): the draft's own value when the API sends it
 import { money } from '../../../../quotes/model' // F-CP-141: minor units
@@ -91,7 +91,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
   latest.current = actions
   const say = (words: Words) => t(words.key, words.params)
   const joined = (list: readonly Words[]) => (list.length > 0 ? list.map(say).join(' · ') : '—')
-  const untitled = t('customers.drafts.untitled')
+  const untitled = (row: DraftRow) => untitledOf(row, dt, (iso) => formatDate(iso, { locale }))
   const today = new Date().toDateString()
   const moment = (iso: string) => (new Date(iso).toDateString() === today ? formatTime(iso, { locale }) : formatDate(iso, { locale }))
   const rows = model.read.status === 'ready' ? model.read.rows : null
@@ -104,7 +104,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     const DraftCell = ({ data }: ICellRendererParams<DraftRow>) =>
       data ? (
         <span className="fw-cwd-cell is-wrap">
-          <strong className="fw-cwd-title">{draftTitle(data, untitled)}</strong>
+          <strong className="fw-cwd-title">{draftTitle(data, untitled(data))}</strong>
           <span className="fw-cwd-sub">
             {data.draft?.startedBy ? t('customers.drafts.started', { date: formatDate(data.draft.startedAt, { locale }), name: data.draft.startedBy }) : data.draft ? t('customers.drafts.startedNoName', { date: formatDate(data.draft.startedAt, { locale }) }) : '—'}
           </span>
@@ -118,18 +118,18 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     }
     const OpenCell = ({ data }: ICellRendererParams<DraftRow>) =>
       data ? (
-        <Button size="sm" variant="quiet" aria-label={t('customers.drafts.openOf', { draft: draftTitle(data, untitled) })} onClick={() => latest.current?.onOpen?.(data)}>
+        <Button size="sm" variant="quiet" aria-label={t('customers.drafts.openOf', { draft: draftTitle(data, untitled(data)) })} onClick={() => latest.current?.onOpen?.(data)}>
           {t('customers.drafts.open')}
         </Button>
       ) : null
     // F-CQ-205: the draft's garment (the one picture part; the batch read names its first style) — only when the host hands its read.
     const pictures = picturesNow.current
-    const PictureCell = ({ data }: ICellRendererParams<DraftRow>) => (data ? <RecordPicture source="portalOrder" recordId={data.id} number={draftTitle(data, untitled)} size="cell" read={picturesNow.current?.read ?? null} /> : null)
+    const PictureCell = ({ data }: ICellRendererParams<DraftRow>) => (data ? <RecordPicture source="portalOrder" recordId={data.id} number={draftTitle(data, untitled(data))} size="cell" read={picturesNow.current?.read ?? null} /> : null)
     return [
       ...(pictures ? [{ colId: 'picture', headerName: pictures.header, minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell } satisfies ColDef<DraftRow>] : []),
       // cq fx2 W-04: the two-fact cells wrap (autoHeight) instead of cutting; least widths 180 · 110 · 120 · 120 · 64 (+ Files 88, Wanted by
       // 110 from 1000 px): 670 px beside the dock at 779 with the Picture, 868 from 1000.
-      { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 180, flex: 2, autoHeight: true, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
+      { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 180, flex: 2, autoHeight: true, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled(params.data)) : '') },
       { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 110, flex: 1, autoHeight: true, wrapText: true, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
       { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, hide: !roomy, autoHeight: true, wrapText: true, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
       // F-CW-102 (lead settle S28: only the Drafts view's sideways scroll): Ready and Wanted by had no share of the room, so the grid
@@ -184,7 +184,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       { colId: 'more', headerName: '', minWidth: 64, maxWidth: 88, sortable: false, cellRenderer: OpenCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest actions through `latest`
-  }, [t, locale, wide, price, untitled, !!model.pictures /* F-CQ-205 */, roomy /* cq fx2 W-04 */])
+  }, [t, dt, locale, wide, price, !!model.pictures /* F-CQ-205 */, roomy /* cq fx2 W-04 */]) // od-fx8: `untitled` reads dt and locale
 
   // F-CQ-303: the Work tab's Views ▾ over the drafts is gone with its Drafts view (Quotes & incoming draws this list with no Views ▾).
 

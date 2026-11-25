@@ -23,6 +23,10 @@ export interface Words {
 /** The draft's name: its first line's style, else the words for "Untitled draft". */
 export const draftTitle = (row: Pick<DraftRow, 'draft'>, untitled: string): string => row.draft?.title?.trim() || untitled
 
+/** od-fx8 W-23: ONE name for a draft with no title, as the portal names it — "Draft order {the day it was started}" (the part's words). */
+export const untitledOf = (row: Pick<DraftRow, 'draft'>, t: (key: string, params?: Record<string, string>) => string, day: (iso: string) => string): string =>
+  t('head.untitled', { date: row.draft ? day(row.draft.startedAt) : '' }).trim()
+
 /** "3 lines · 140 pieces · 12 people" (each its own plural; people only when it has a roster). */
 export function linesWords(row: DraftRow): Words[] {
   const people = row.draft?.people ?? 0

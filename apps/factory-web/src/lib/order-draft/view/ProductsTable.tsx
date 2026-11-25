@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
-import { AlertTriangle, FileText, Hourglass, LayoutGrid, MoreHorizontal, Plus, Ruler, Users } from 'lucide-react'
+import { AlertTriangle, FileText, Hourglass, LayoutGrid, MoreHorizontal, Plus, Users } from 'lucide-react'
+import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { Card, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input, Select, Tag } from '@nexus/ui/primitives'
 import { choiceWords, fromOrderText, problemWords, rowPiecesWords, rowProductOf, type ProductRow } from '../model'
@@ -132,7 +133,6 @@ export function ProductsTable({ model, actions, below }: { model: ProductsTableM
   )
 }
 
-const SIZING_ICON: Readonly<Record<Sizing, ReactNode>> = { STANDARD: <LayoutGrid size={14} aria-hidden />, MADE_TO_MEASURE: <Ruler size={14} aria-hidden /> }
 
 function NotDecided() {
   const { t } = useDraftWords()
@@ -179,8 +179,9 @@ function Row({ index, row, model, actions }: { index: number; row: ProductRow | 
       ? { id: 'remove', label: t('row.remove'), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onRemove?.(id) }
       : { id: 'remove', label: t('row.remove'), onSelect: () => actions?.onDropPending?.() },
   ]
-  // A row not saved yet: its windows wait for its first input (they write the saved row).
-  const windowHeld = held ?? (id ? null : t('save.notYet'))
+  // A row not saved yet: its windows wait for its first input (they write the saved row). od-fx8 W-10: a reader opens them to READ
+  // (read-only windows: no field, no save) — only writing is barred, never reading.
+  const windowHeld = id ? null : t('save.notYet')
   return (
     <div className={`fw-od-trow${model.saving.includes(id ?? '') ? ' is-saving' : ''}`} role="row" id={id ? `row-${id}` : 'row-new'} aria-rowindex={index + 2}>
       <span role="rowheader" className="fw-od-c-n" aria-label={t('row.label', { seq })}>
@@ -219,10 +220,11 @@ function Row({ index, row, model, actions }: { index: number; row: ProductRow | 
             </datalist>
           </>
         )}
-        {row && row.problems.filter((problem) => !problem.personId).length > 0 ? (
+        {/* od-fx8 W-14: nothing is required — a row says only an INVALID value (the domain's holdsSend); a missing one is Still open's. */}
+        {row && row.problems.filter((problem) => !problem.personId && holdsSend(problem.code)).length > 0 ? (
           <ul className="fw-od-notes">
             {row.problems
-              .filter((problem) => !problem.personId)
+              .filter((problem) => !problem.personId && holdsSend(problem.code))
               .map((problem, at) => (
                 <li key={at} className="fw-od-note is-danger">
                   <AlertTriangle size={14} aria-hidden /> {problemWords(problem, [], kit)}
@@ -233,8 +235,8 @@ function Row({ index, row, model, actions }: { index: number; row: ProductRow | 
       </div>
       <div role="gridcell" className="fw-od-c-sizing" data-cell={cell('sizing')}>
         <span className="fw-od-celllabel">{t('col.sizing')}</span>
+        {/* od-fx8 W-12: the words alone (no icon beside the box): "Standard sizes", "Non ancora deciso" fit whole. */}
         <span className="fw-od-sizing">
-          {row?.sizing ? SIZING_ICON[row.sizing] : <Hourglass size={14} aria-hidden />}
           <Select value={row?.sizing ?? ''} aria-label={t('col.sizing')} aria-describedby={peopleFirst ? `od-siz-${id}` : undefined} disabled={held !== null} onChange={(event) => pickSizing(event.target.value)}>
             <option value="">{t('state.OPEN')}</option>
             <option value="STANDARD">{t('siz.STANDARD')}</option>

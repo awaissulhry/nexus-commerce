@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { Hourglass, Plus, ShieldCheck, X } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
-import { SizeGridEditor, type SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
+import { SizeGridEditor, SizeGridView, type SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
 import { Button, Input, SegmentedControl } from '@nexus/ui/primitives'
 import { Modal, Textarea, useDsWords } from '../../i18n/ds-parts'
 import { INTL_LOCALE } from '../../i18n/locales'
@@ -52,6 +52,19 @@ export function piecesModesOf(row: Pick<ProductRow, 'catalogue' | 'sizing'>): Pi
   return row.catalogue ? ['SIZES', 'NONE'] : ['TOTAL', 'PEOPLE', 'NONE']
 }
 
+/**
+ * How the Pieces window opens on a row (both hosts): on what the row holds — a row whose pieces are not decided yet opens on "Not
+ * decided yet" (od-fx8 W-15), a row in its own words with a size run on its total; a custom size on its people.
+ */
+export function piecesOpenOf(row: Pick<ProductRow, 'catalogue' | 'sizing' | 'pieces'>): { mode: PiecesMode; total: string; cells: Cells } {
+  const modes = piecesModesOf(row)
+  const now = row.pieces.mode
+  const mode: PiecesMode = modes.includes(now) ? now : now === 'SIZES' && modes.includes('TOTAL') ? 'TOTAL' : modes.includes('NONE') ? 'NONE' : modes[0]!
+  const cells: Cells = row.pieces.mode === 'SIZES' ? Object.fromEntries(row.pieces.sizes.map((entry) => [entry.size, entry.quantity])) : {}
+  const total = row.pieces.mode === 'TOTAL' || (row.pieces.mode === 'SIZES' && !row.catalogue) ? String(row.pieces.total) : ''
+  return { mode, total, cells }
+}
+
 export interface PiecesWindowModel {
   row: ProductRow
   mode: PiecesMode
@@ -92,14 +105,21 @@ export function PiecesWindow({ model, actions }: { model: PiecesWindowModel; act
       onClose={() => (model.busy ? undefined : actions?.onClose?.())}
       title={t('pc.title', { seq: row.seq, product })}
       footer={
-        <>
-          <Button variant="secondary" onClick={() => actions?.onClose?.()} disabled={model.busy}>
-            {t('pc.cancel')}
+        // od-fx8 W-10: a reader closes it (nothing to save).
+        model.writeHeld !== null ? (
+          <Button variant="secondary" onClick={() => actions?.onClose?.()}>
+            {t('opt.close')}
           </Button>
-          <Button variant="primary" heldReason={model.writeHeld ?? (model.busy ? t('state.saving') : null)} onClick={() => actions?.onSave?.()}>
-            {t('pc.save')}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={() => actions?.onClose?.()} disabled={model.busy}>
+              {t('pc.cancel')}
+            </Button>
+            <Button variant="primary" heldReason={model.busy ? t('state.saving') : null} onClick={() => actions?.onSave?.()}>
+              {t('pc.save')}
+            </Button>
+          </>
+        )
       }
     >
       <PiecesBody model={model} actions={actions} />
@@ -115,41 +135,58 @@ export function PiecesBody({ model, actions }: { model: PiecesWindowModel; actio
   const row = model.row
   const modes = piecesModesOf(row)
   const locked = row.sizing === 'MADE_TO_MEASURE'
+  // od-fx8 W-10: a reader reads the window — how it is counted in words, the total, the size run, the people; no field, no save.
+  const reading = model.writeHeld !== null
   return (
     <div className="fw-od-dialog">
       {model.failed ? <Banner tone="danger" title={model.failed} /> : null}
+      {reading ? <p className="fw-od-held">{model.writeHeld}</p> : null}
       <div className="fw-od-stack">
         <span className="fw-od-label">{t('pc.how')}</span>
-        <SegmentedControl
-          ariaLabel={t('pc.how')}
-          wrap
-          value={model.mode}
-          onChange={(value) => actions?.onMode?.(value as PiecesMode)}
-          options={modes.map((mode) => ({ value: mode, label: t(MODE_KEY[mode]), ...(mode === 'NONE' ? { icon: <Hourglass size={12} aria-hidden /> } : {}) }))}
-        />
-        {locked ? <p className="fw-od-quiet">{t('pc.mtmLocked')}</p> : null}
+        {reading ? (
+          <span>{t(MODE_KEY[model.mode])}</span>
+        ) : (
+          <SegmentedControl
+            ariaLabel={t('pc.how')}
+            wrap
+            value={model.mode}
+            onChange={(value) => actions?.onMode?.(value as PiecesMode)}
+            options={modes.map((mode) => ({ value: mode, label: t(MODE_KEY[mode]), ...(mode === 'NONE' ? { icon: <Hourglass size={12} aria-hidden /> } : {}) }))}
+          />
+        )}
+        {locked && !reading ? <p className="fw-od-quiet">{t('pc.mtmLocked')}</p> : null}
       </div>
       {model.mode === 'TOTAL' ? (
-        <Field label={t('pc.totalField')} hint={t('pc.totalHint')}>
-          <Input value={model.total} inputMode="numeric" maxLength={6} data-autofocus onChange={(event) => actions?.onTotal?.(event.target.value)} />
-        </Field>
+        reading ? (
+          <p>
+            <span className="fw-od-label">{t('pc.totalField')}</span> {model.total === '' ? t('state.OPEN') : model.total}
+          </p>
+        ) : (
+          <Field label={t('pc.totalField')} hint={t('pc.totalHint')}>
+            <Input value={model.total} inputMode="numeric" maxLength={6} data-autofocus onChange={(event) => actions?.onTotal?.(event.target.value)} />
+          </Field>
+        )
       ) : null}
       {model.mode === 'SIZES' && row.style ? (
         <div className="fw-od-stack">
           <span className="fw-od-label">
             {t('pc.sizesCaption')} · {t('pc.sizesOf', { style: row.style.code })}
           </span>
-          <SizeGridEditor
-            layout="auto"
-            colours={[{ key: row.id, label: row.colour ?? t('state.OPEN'), offered: [...row.offered] }]}
-            sizes={row.offered.map((size) => ({ key: size, label: size }))}
-            value={{ [row.id]: model.cells }}
-            onChange={(next) => actions?.onCells?.({ ...(next[row.id] ?? {}) })}
-            issues={[]}
-            caption={t('pc.sizesOf', { style: row.style.code })}
-            locale={INTL_LOCALE[locale]}
-            copy={copy}
-          />
+          {reading ? (
+            <SizeGridView colours={[{ key: row.id, label: row.colour ?? t('state.OPEN'), offered: [...row.offered] }]} sizes={row.offered.map((size) => ({ key: size, label: size }))} value={{ [row.id]: model.cells }} caption={t('pc.sizesOf', { style: row.style.code })} locale={INTL_LOCALE[locale]} copy={copy} />
+          ) : (
+            <SizeGridEditor
+              layout="auto"
+              colours={[{ key: row.id, label: row.colour ?? t('state.OPEN'), offered: [...row.offered] }]}
+              sizes={row.offered.map((size) => ({ key: size, label: size }))}
+              value={{ [row.id]: model.cells }}
+              onChange={(next) => actions?.onCells?.({ ...(next[row.id] ?? {}) })}
+              issues={[]}
+              caption={t('pc.sizesOf', { style: row.style.code })}
+              locale={INTL_LOCALE[locale]}
+              copy={copy}
+            />
+          )}
           <p className="fw-od-quiet">{t('cell.total', { pieces: words.pieces(piecesOfCells(model.cells)) })}</p>
         </div>
       ) : null}
@@ -222,13 +259,17 @@ export function OptionsWindow({ model, actions }: { model: OptionsWindowModel; a
                 onChange={(value) => actions?.onPick?.(choice.topic, value === OPEN ? null : value)}
                 options={[...choice.options.map((option) => ({ value: option, label: option })), { value: OPEN, label: t('state.OPEN'), icon: <Hourglass size={12} aria-hidden /> }]}
               />
-              <Button size="sm" variant="quiet" aria-label={`${t('opt.remove')} · ${choice.topic}`} heldReason={held} onClick={() => actions?.onRemove?.(choice.topic)}>
-                <X size={14} aria-hidden />
-              </Button>
+              {model.writeHeld === null ? (
+                <Button size="sm" variant="quiet" aria-label={`${t('opt.remove')} · ${choice.topic}`} heldReason={held} onClick={() => actions?.onRemove?.(choice.topic)}>
+                  <X size={14} aria-hidden />
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
-        <div className="fw-od-stack fw-od-addoption" role="group" aria-labelledby="od-opt-add">
+        {/* od-fx8 W-10: a reader reads the options and their picks; adding one is for who may write. */}
+        {model.writeHeld !== null ? <p className="fw-od-held">{model.writeHeld}</p> : null}
+        {model.writeHeld !== null ? null : <div className="fw-od-stack fw-od-addoption" role="group" aria-labelledby="od-opt-add">
           <span id="od-opt-add" className="fw-od-h3">
             {t('opt.add')}
           </span>
@@ -246,7 +287,7 @@ export function OptionsWindow({ model, actions }: { model: OptionsWindowModel; a
               <Plus size={14} aria-hidden /> {t('opt.save')}
             </Button>
           </span>
-        </div>
+        </div>}
       </div>
     </Modal>
   )
@@ -267,7 +308,7 @@ export function RowFilesWindow({ model, actions, onClose }: { model: RowFilesWin
       sheet
       size="md"
       onClose={() => onClose?.()}
-      title={`${t('col.files')} · ${t('row.label', { seq: row.seq })} · ${rowProductOf(row) ?? t('state.OPEN')}`}
+      title={t('rf.title', { seq: row.seq, product: rowProductOf(row) ?? t('state.OPEN') })}
       footer={
         <Button variant="secondary" onClick={() => onClose?.()}>
           {t('opt.close')}

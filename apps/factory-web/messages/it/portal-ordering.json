@@ -21,10 +21,10 @@
   "start": {
     "keeps": "Scegliere un modo mantiene quanto è già nella bozza.",
     "draftsFailed": "Non è stato possibile leggere le vostre bozze.",
-    "draft_one": "Continua la bozza del {day} · {count} riga",
-    "draft_other": "Continua la bozza del {day} · {count} righe",
-    "draftRef_one": "Continua la bozza {ref} del {day} · {count} riga",
-    "draftRef_other": "Continua la bozza {ref} del {day} · {count} righe"
+    "draft_one": "Del {day} · {count} prodotto",
+    "draft_other": "Del {day} · {count} prodotti",
+    "draftRef_one": "{ref} · del {day} · {count} prodotto",
+    "draftRef_other": "{ref} · del {day} · {count} prodotti"
   },
   "head": {
     "title": "Dati dell'ordine",
@@ -444,8 +444,8 @@
     "price": {
       "cell": "Il vostro prezzo per la riga {seq}",
       "total": "Totale",
-      "missing_one": "{count} riga ancora senza il vostro prezzo",
-      "missing_other": "{count} righe ancora senza il vostro prezzo",
+      "missing_one": "{count} prodotto ancora senza il vostro prezzo",
+      "missing_other": "{count} prodotti ancora senza il vostro prezzo",
       "problem": "Un prezzo da 0 in su, con al massimo 6 decimali."
     },
     "thread": "Messaggi · questa bozza",
