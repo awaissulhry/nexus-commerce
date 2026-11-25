@@ -200,7 +200,8 @@ export default defineStage({
       await seen(page.getByRole('heading', { name: words('portal-customer-home')('title'), exact: true }), 60_000)
       await scanned(flow, page, BRAND_ALPHA, extra, 'beta home')
       await beta.go('/orders')
-      await seen(page.getByText('Made-up: a size chart question').first(), 60_000)
+      // pg- (H1): a request's subject is the quiet second line of its Number cell (grid) or of its card (phone).
+      await seen(page.locator('.fw-ocl-sub', { hasText: 'Made-up: a size chart question' }).first(), 60_000)
       await scanned(flow, page, BRAND_ALPHA, extra, 'beta orders and requests')
       await beta.go(`/orders/requests/${own.id}`)
       await seen(page.getByRole('heading', { name: REQUEST('title', { seq: own.seq }) }), 60_000)

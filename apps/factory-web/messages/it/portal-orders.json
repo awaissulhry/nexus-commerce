@@ -5,8 +5,7 @@
     "retry": "Riprova"
   },
   "ref": {
-    "yours": "Vs. ordine",
-    "ours": "Ns. ordine"
+    "yours": "Vs. ordine"
   },
   "prices": {
     "none": "I prezzi non fanno parte del vostro accesso."
@@ -29,7 +28,6 @@
   "band": {
     "updated": "Aggiornato alle {time}",
     "export": "Esporta questa vista (CSV)",
-    "print": "Stampa questo elenco",
     "change": "Chiedi una modifica…",
     "reconfirm": "Riconferma la versione {version}",
     "cancel": "Chiedi di annullare…",
@@ -54,8 +52,7 @@
   "chips": {
     "label": "Quali ordini",
     "chip": "{name}: {count}",
-    "clear": "Togli i filtri",
-    "closedRequests": "Richieste chiuse"
+    "clear": "Togli i filtri"
   },
   "list": {
     "title": "Ordini e richieste",
@@ -75,40 +72,17 @@
     "noMatchSearch": "Nessun risultato per «{q}».",
     "noMatchChip": "Al momento in questo gruppo non c’è nulla.",
     "clear": "Mostra tutto ciò che è aperto",
-    "requestWaits": "Da confermare da noi",
-    "asked": "data richiesta",
-    "moved": "era il {date}",
     "piecesShipped": "{shipped} di {ordered} spediti",
-    "piecesOpen_one": "{count} aperto",
-    "piecesOpen_other": "{count} aperti",
-    "allShipped": "Tutto spedito",
-    "eta": "previsto il {date}",
-    "needsYou": "Attende la vostra risposta",
-    "wanted": "desiderata",
-    "updated": "aggiornata il {date}",
-    "piecesAsked": "{count} chiesti",
     "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini.",
     "yourPo": "Vs. ordine {ref}",
     "emptyBodyView": "I vostri ordini appaiono qui appena li facciamo.",
     "clearSearch": "Togli la ricerca"
   },
   "col": {
-    "yourPo": "Vostro ordine",
-    "status": "Stato",
-    "pieces": "Pezzi",
-    "ordered": "Ordinati",
     "shipped": "Spediti",
-    "open": "Aperti",
     "value": "Valore netto",
-    "currency": "Valuta",
-    "nextShipment": "Prossima spedizione",
     "actions": "Azioni",
     "number": "Numero",
-    "kind": "Tipo",
-    "yours": "Vostro numero",
-    "subject": "Oggetto",
-    "date": "Data",
-    "wanted": "Desiderata o promessa",
     "picture": "Foto",
     "whereItIs": "A che punto è",
     "promised": "Promessa",
@@ -116,18 +90,15 @@
   },
   "row": {
     "open": "Apri l’ordine",
-    "lines": "Righe",
     "shipments": "Spedizioni e tracciamento",
     "messages": "Messaggi",
     "menu": "Azioni per l’ordine {number}",
-    "openRequest": "Apri la richiesta",
-    "requestMenu": "Azioni per {name}"
+    "openRequest": "Apri la richiesta"
   },
   "bulk": {
     "export": "Esporta {count}"
   },
   "held": {
-    "noRows": "Niente da esportare in questa vista.",
     "busy": "Invio in corso…",
     "offline": "Nessuna connessione",
     "preview": "Un’anteprima dell’ufficio non può inviare nulla.",
@@ -137,25 +108,6 @@
     "mayPay": "Solo i colleghi che pagano le fatture possono pagare online: chiedete al vostro amministratore.",
     "reading": "Verifica di cosa è possibile…",
     "verdict": "{words}"
-  },
-  "transit": {
-    "title": "In viaggio",
-    "failed": "Non è stato possibile leggere i colli in viaggio",
-    "shipment": "Spedizione {number}",
-    "open": "Apre le spedizioni dell’ordine {number}",
-    "steps": "Avanzamento della spedizione {number}"
-  },
-  "print": {
-    "title": "Stampa questo elenco",
-    "toolbar": "Stampa",
-    "print": "Stampa",
-    "back": "Torna all’elenco",
-    "held": "L’elenco è ancora in lettura.",
-    "filters": "Mostrati: {chip}",
-    "filtersSearch": "Mostrati: {chip} · ricerca «{q}»",
-    "chipOpen": "Aperti",
-    "printedBy": "Stampato da {name} il {when}",
-    "capped": "I primi {shown} di {count} ordini e richieste."
   },
   "record": {
     "missing": "Ordine non trovato",
@@ -607,17 +559,6 @@
     "request": "Richiesta",
     "catalogue": "Catalogo",
     "order": "Ordine"
-  },
-  "tiles": {
-    "label": "Cosa aspetta",
-    "NEEDS_YOU": "Ci serve qualcosa da voi",
-    "OPEN_REQUESTS": "Richieste aperte",
-    "OPEN_ORDERS": "Ordini aperti",
-    "hint": {
-      "NEEDS_YOU": "Richieste su cui vi abbiamo chiesto qualcosa",
-      "OPEN_REQUESTS": "Inviate, non ancora un ordine",
-      "OPEN_ORDERS": "Non ancora consegnati"
-    }
   },
   "sheet": {
     "yes": "Sì",

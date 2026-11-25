@@ -34,19 +34,13 @@ import {
   EMPTY_CANCEL,
   EMPTY_CHANGE,
   emptiedLines,
-  listQuery,
   milestoneSteps,
   movesOf,
   neighbourOf,
   NS,
   opens,
-  listCsv,
-  listChips,
-  listRows,
   kindKey,
-  ownRef,
   rowHref,
-  CLOSED_REQUESTS,
   paymentStateOf,
   payHeld,
   promiseMoves,
@@ -57,25 +51,19 @@ import {
   shipToLines,
   tabOf,
   totalsOf,
-  transitSteps,
   depositPaid, // F-OM-204
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 // B-TH-223, B-TH-303: Orders & requests.
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
-import { REQUESTS, requestRow } from '../requests/design-data'
+import { REQUESTS } from '../requests/design-data'
 // B-TH-223 (fix-portal-1): Brand Beta's own rows; the Alpha world's codes no Beta case may carry.
 import { BETA_ROWS } from './design-data'
 import { listRowsOf } from './list-view-model' // pg-w2: the rows of a group (the list on the shared parts)
 import type { OrdersListViewModel } from './view/OrdersListView'
 import type { CustomerCaseBuilder } from './view/CustomerCase'
-// B-TH-238: the tiles (their chips, the customer's own reads).
 import type { ApiClient } from '../../../lib/api/client'
-import { fetchRequests } from '../requests/api'
-import { fetchOrders } from './api'
-import { requestCountsOf } from './fixtures'
-import { apiChipOf, isListChip, listTiles, NEEDS_YOU, OPEN_ORDERS, OPEN_REQUESTS, ordersInChip, requestsInChip, TILE_CHIPS } from './model'
 
 /**
  * SCR-184 (B-W2b-191): the customer's Orders & tracking, pure — the list's address and the record's tabs, the tracker's
@@ -110,10 +98,8 @@ describe('the web keeps the API’s codes', () => {
 })
 
 describe('addresses and tabs', () => {
-  it('writes the chip and search in the address (Open, the default, is left out); a record opens on a tab', () => {
-    expect(listQuery(null, '')).toBe('')
-    expect(listQuery('OPEN', '  ')).toBe('')
-    expect(listQuery('DATE_MOVED', ' BA-PO ', { print: '1' })).toBe('?chip=DATE_MOVED&q=BA-PO&print=1')
+  // pg-t: the list's address (its group and search) is pco/list.vitest.test.ts's (groupQuery).
+  it('a record opens on a tab', () => {
     expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=overview')
     // B-TH-275: no Messages tab — the list's "Messages" opens the order with its docked conversation shown (the frame's arrival term).
     expect(recordHref('/p/X', 'o1', 'lines')).toBe('/p/X/orders/o1?tab=lines')
@@ -153,11 +139,6 @@ describe('where the order is', () => {
     expect(movesOf(record.promiseHistory)).toBe(2)
     expect(promiseOf(record.order)).toEqual({ date: record.order.promiseDate, first: record.order.originalPromiseDate })
     expect(promiseOf({ ...record.order, promiseMoved: false }).first).toBeNull()
-  })
-
-  it('a parcel on its way as four steps', () => {
-    expect(transitSteps({ status: 'IN_TRANSIT', shippedAt: '2026-11-07T10:00:00Z' }, 'en').map((step) => step.state)).toEqual(['done', 'done', 'done', 'todo'])
-    expect(transitSteps({ status: 'PACKED', shippedAt: null }, 'en').map((step) => step.state)).toEqual(['done', 'todo', 'todo', 'todo'])
   })
 
   it('the delivery address line by line; the totals only with the price grain', () => {
@@ -300,7 +281,7 @@ describe('Pay the deposit', () => {
   })
 })
 
-describe('documents and the CSV', () => {
+describe('documents', () => {
   it('the current versions first, each earlier one after the version that replaced it; the confirmation’s PDF', () => {
     const read = documentsRead()
     const ordered = documentsInOrder(read.items)
@@ -310,53 +291,13 @@ describe('documents and the CSV', () => {
     expect(confirmationFileOf([])).toBeNull()
   })
 
-  it('exports the rows shown in the person’s words, own numbers only; the value only with the price grain', () => {
-    const rows = listRows('ALL', '', REQUESTS, ordersRead('ALL').items, 'en')
-    const csv = listCsv(rows, t, 'en', true, day).split('\r\n')
-    expect(csv).toHaveLength(rows.length + 1)
-    expect(csv[0]).toBe('Your PO,Kind,Your number,Subject,Date,Status,Wanted or promised,Ordered,Shipped,Open,Net value,Currency,Next shipment')
-    expect(csv[1]).toContain('Request')
-    expect(csv[1]).toContain('Your request 7')
-    expect(csv.join('\n')).toContain('7520.00')
-    expect(csv.join('\n')).not.toMatch(/\b(?:INQ|SO|RQ)-\d{4}-\d+/)
-    const without = listCsv(listRows('ALL', '', [], ordersRead('ALL', null, { seesPrices: false }).items, 'en'), t, 'en', false, day)
-    expect(without).not.toMatch(/Value|EUR|\d+\.\d\d/)
-  })
-
-  it('B-TH-223: requests first (the one that needs the customer on top), then the orders; each chip its own requests', () => {
-    const orders = ordersRead('OPEN').items
-    const rows = listRows('OPEN', '', REQUESTS, orders, 'en')
-    const open = REQUESTS.filter((row) => row.state.open)
-    expect(rows.slice(0, open.length).every((row) => row.kind === 'request')).toBe(true)
-    expect(rows[0]).toMatchObject({ kind: 'request', request: { state: { code: 'NEED_INFO' } } })
-    expect(rows).toHaveLength(open.length + orders.length)
-    expect(listRows('REQUESTED', '', REQUESTS, [], 'en')).toHaveLength(open.length)
-    expect(listRows('ALL', '', REQUESTS, [], 'en')).toHaveLength(REQUESTS.length)
-    expect(listRows(CLOSED_REQUESTS, '', REQUESTS, orders, 'en').map((row) => (row.kind === 'request' ? row.request.state.code : 'ORDER')).sort()).toEqual(['DECLINED', 'ORDER_CONFIRMED'])
-    expect(listRows('DELIVERED', '', REQUESTS, [], 'en')).toEqual([])
-    expect(listRows('ALL', 'gloves', REQUESTS, [], 'en').map((row) => row.id)).toEqual([REQUESTS[1]!.id])
-  })
-
-  it('B-TH-223: chip counts add the chip’s requests; Closed requests only when there are some; "+" when not all were read', () => {
-    const read = ordersRead('OPEN')
-    const chips = listChips(read.chips, { rows: REQUESTS, complete: true }, 'en', 'Closed requests')
-    const open = REQUESTS.filter((row) => row.state.open).length
-    expect(chips.find((chip) => chip.chip === 'OPEN')!.count).toBe(String(read.chips.find((chip) => chip.chip === 'OPEN')!.count + open))
-    expect(chips.find((chip) => chip.chip === 'DELIVERED')!.count).toBe(String(read.chips.find((chip) => chip.chip === 'DELIVERED')!.count))
-    expect(chips.at(-1)).toEqual({ chip: CLOSED_REQUESTS, label: 'Closed requests', count: '2' })
-    expect(listChips(read.chips, { rows: REQUESTS, complete: false }, 'en', 'x').find((chip) => chip.chip === 'ALL')!.count).toMatch(/\+$/)
-    expect(listChips(read.chips, { rows: [requestRow(1, 'SENT')], complete: true }, 'en', 'x').some((chip) => chip.chip === CLOSED_REQUESTS)).toBe(false)
-  })
-
-  it('B-TH-303: a row names the customer’s own number, its kind, and where it opens', () => {
+  // pg-t: the list's rows, cells and doors are pco/list.vitest.test.ts's; here the shared rules a row still reads.
+  it('B-TH-303: a row names its kind and where it opens', () => {
     const [request, order, catalogue] = [
-      listRows('ALL', '', [REQUESTS[0]!], [], 'en')[0]!,
-      listRows('ALL', '', [], [ROWS[0]!], 'en')[0]!,
-      listRows('ALL', '', [], [ROWS[3]!], 'en')[0]!,
+      listRowsOf(null, '', [REQUESTS[0]!], [], 'en')[0]!,
+      listRowsOf(null, '', [], [ROWS[0]!], 'en')[0]!,
+      listRowsOf(null, '', [], [ROWS[3]!], 'en')[0]!,
     ]
-    expect(ownRef(request, 'en')).toEqual({ label: 'Your request', value: '7' })
-    expect(ownRef(order, 'it')).toEqual({ label: 'Il vostro ordine', value: '11' })
-    expect(ownRef(catalogue, 'en')).toBeNull()
     expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.catalogue'])
     expect(rowHref('/p/B', request)).toBe(`/p/B/orders/requests/${REQUESTS[0]!.id}`)
     expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=overview`)
@@ -407,7 +348,7 @@ describe('SCR-184 design cases', () => {
   }
 
   it('a role without prices sees no amount anywhere', () => {
-    for (const id of ['no-prices']) {
+    for (const id of ['th-223-no-prices']) { // pg-t: the case id of the list on the shared parts
       const entry = listScreen.cases.find((item) => item.id === id)!
       const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(listScreen.view, { model: entry.model })))
       expect(html).not.toMatch(/€/)
@@ -421,77 +362,46 @@ describe('SCR-184 design cases', () => {
   })
 })
 
+// pg-t: Orders & requests on the shared parts — the band, the rows, the doors, the two customers (W05 / W10), the D6 parcel and the
+// room's columns are pco/list.vitest.test.ts's; the tiles, chips, CSV and print of the old list left with it.
 describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
   const screen = listScreen as unknown as DesignScreen<unknown>
   const render = (locale: 'it' | 'en', id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
 
-  it('every th-223 case holds nothing of Brand Alpha and no office series; the list says kinds and true states', () => {
+  it('every th-223 case holds nothing of Brand Alpha and no office series; the list says its title and its closed requests', () => {
     for (const locale of ['it', 'en'] as const) {
       for (const entry of screen.cases.filter((item) => item.id.startsWith('th-223-'))) {
         const html = render(locale, entry.id)
         expect(scanText(html, BRAND_ALPHA), `${entry.id} (${locale})`).toEqual([])
-        expect(html.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
+        expect(html.match(/\b(?:INQ|SO|RQ|QT|SH)-\d{4}-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
       }
     }
-    const html = render('en', 'th-223-all')
+    const html = render('en', 'th-223-list')
     expect(html).toContain('Orders &amp; requests')
     expect(html).toContain('Closed requests')
   })
 
-  it('the rows of each th-223 case (what the grid and the phone cards draw, what the file writes) are Brand Beta’s alone', () => {
-    for (const entry of screen.cases.filter((item) => item.id.startsWith('th-223-'))) {
-      const body = (entry.model as (locale: 'en') => { body: { kind: string; model: OrdersListViewModel } })('en').body
-      if (body.kind !== 'list') continue
-      const view = body.model
-      const rows = listRowsOf(view.group, view.q, view.requests.state === 'ready' ? view.requests.rows : [], view.rows, 'en')
-      const file = listCsv(rows, t, 'en', true, day)
-      expect(scanText(file, BRAND_ALPHA), entry.id).toEqual([])
-      expect(file.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, entry.id).toBeNull()
-    }
-    const open = listCsv(listRows('OPEN', '', REQUESTS, [], 'en'), t, 'en', true, day)
-    for (const words of ['We need something from you', 'Quote being prepared', 'Being reviewed', 'Sent', 'Order waiting for approval']) expect(open).toContain(words)
-    expect(open).not.toMatch(/Quote sent|Order confirmed/)
-  })
-
   // B-TH-223 (fix-portal-1): the server render draws no grid row, so the scans above pass whatever the rows hold; the rows
-  // themselves (the list read, the rows handed to the grid, the parcels, the unread marks) must be Brand Beta's own.
+  // themselves (the list read, the rows handed to the grid, the unread marks) must be Brand Beta's own.
   it('no row of a Brand Beta case carries a code of the Alpha world (its PO codes, ids, order and parcel numbers)', () => {
-    const alphaCodes = [
-      ...ROWS.flatMap((row) => [row.id, row.customerRef, row.number, row.nextShipment?.id, row.nextShipment?.number]),
-    ].filter((code): code is string => typeof code === 'string' && code !== '')
-    const betaCases = screen.cases.filter((item) => /^th-(?:223|230|238|246)-/.test(item.id))
-    expect(betaCases.length).toBeGreaterThanOrEqual(14)
+    const alphaCodes = ROWS.flatMap((row) => [row.id, row.customerRef, row.number, row.nextShipment?.id, row.nextShipment?.number]).filter((code): code is string => typeof code === 'string' && code !== '')
+    const betaCases = screen.cases.filter((item) => /^th-(?:223|230|246)-/.test(item.id))
+    expect(betaCases.length).toBeGreaterThanOrEqual(19)
     for (const entry of betaCases) {
       for (const locale of ['it', 'en'] as const) {
         const body = (entry.model as CustomerCaseBuilder)(locale).body
         if (body.kind !== 'list') continue
         const { read, rows, unread } = body.model
-        const data = JSON.stringify({ read, rows, unread })
+        const shown = listRowsOf(body.model.group, body.model.q, body.model.requests.state === 'ready' ? body.model.requests.rows : [], rows, locale)
+        const data = JSON.stringify({ read, rows, unread, shown })
         expect(alphaCodes.filter((code) => data.includes(code)), `${entry.id} (${locale})`).toEqual([])
         expect(data.match(/\bBA-PO-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
         expect(scanText(data, BRAND_ALPHA), `${entry.id} (${locale})`).toEqual([])
       }
     }
-    // Beta's rows are there to be checked: its own purchase-order codes, ids and parcels.
+    // Beta's rows are there to be checked: its own purchase-order codes and ids.
     expect(BETA_ROWS.filter((row) => row.customerRef !== null).every((row) => row.customerRef!.startsWith('BETA-PO-'))).toBe(true)
-    // fix-portal-numbers-1 (B-TH-303): an order's office number is no longer answered (null on both sides): the numbers that are
-    // there (a request's) are compared, every id still is.
-    expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id || (alpha.number !== null && alpha.number === row.number)))).toBe(false)
-  })
-
-  // cp-walk (customer page review walk, brand wall): the print case named Brand Alpha S.r.l. over Brand Beta's own request and PO
-  // (REQUESTS are Brand Beta's). A print is ONE customer's: Brand Beta's shell, rows, name — nothing of the Alpha world.
-  it('the print of Orders & requests is one customer\'s own: Brand Beta\'s rows and name, nothing of Brand Alpha', () => {
-    for (const locale of ['it', 'en'] as const) {
-      const html = render(locale, 'print')
-      expect(scanText(html, BRAND_ALPHA), locale).toEqual([])
-      expect(html.match(/\bBA-PO-\d+/)?.[0] ?? null, locale).toBeNull()
-      expect(html, locale).toContain('Brand Beta GmbH')
-      const body = (screen.cases.find((item) => item.id === 'print')!.model as CustomerCaseBuilder)(locale).body as unknown as { model: { rows: unknown; partyName: string } }
-      const data = JSON.stringify(body.model)
-      expect(scanText(data, BRAND_ALPHA), locale).toEqual([])
-      expect(data).toContain('BETA-PO-')
-    }
+    expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id))).toBe(false)
   })
 
   it('every case of the list draws its own numbers, never the office’s order numbers', () => {
@@ -500,96 +410,13 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
       expect(html.match(/\bSO-2026-\d+/)?.[0] ?? null, entry.id).toBeNull()
     }
   })
-})
 
-// ---- B-TH-238 (P-CUS-ORD-LIST.tiles-F01; wall W05, W10): the tiles — We need something from you · Open requests · Open orders ----
-describe('B-TH-238 — the tiles of Orders & requests', () => {
-  const screen = listScreen as unknown as DesignScreen<unknown>
-  const render = (locale: 'it' | 'en', id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
-  const counts = requestCountsOf(REQUESTS)
-
-  it('three tiles from the customer’s own reads: the first is Home’s number (the same read), each a filter of the list', () => {
-    const read = ordersRead('OPEN')
-    expect(listTiles({ counts }, read)).toEqual([
-      { chip: NEEDS_YOU, value: counts.needsYou },
-      { chip: OPEN_REQUESTS, value: counts.open },
-      { chip: OPEN_ORDERS, value: read.chips.find((entry) => entry.chip === 'OPEN')!.count },
-    ])
-    // Unknown is "—", never 0.
-    expect(listTiles(null, null).map((tile) => tile.value)).toEqual([null, null, null])
-    // Each tile's rows: the requests that need the customer, the open requests, the open orders (no request among them).
-    expect(requestsInChip(NEEDS_YOU, REQUESTS).map((row) => row.state.code)).toEqual(['NEED_INFO'])
-    expect(requestsInChip(OPEN_REQUESTS, REQUESTS)).toHaveLength(counts.open)
-    expect(requestsInChip(OPEN_ORDERS, REQUESTS)).toEqual([])
-    expect([ordersInChip(NEEDS_YOU), ordersInChip(OPEN_REQUESTS), ordersInChip(OPEN_ORDERS)]).toEqual([false, false, true])
-    expect([apiChipOf(OPEN_ORDERS), apiChipOf(NEEDS_YOU), apiChipOf('IN_PRODUCTION'), apiChipOf(null)]).toEqual(['OPEN', null, 'IN_PRODUCTION', null])
-    for (const chip of TILE_CHIPS) {
-      expect(isListChip(chip, ['OPEN'])).toBe(true)
-      expect(listQuery(chip, '')).toBe(`?chip=${chip}`)
-      for (const locale of ['it', 'en'] as const) {
-        expect(has(locale, `tiles.${chip}`), `${locale} ${chip}`).toBe(true)
-        expect(has(locale, `tiles.hint.${chip}`), `${locale} ${chip} hint`).toBe(true)
-      }
-    }
-  })
-
-  it('on screen: the tiles above the list, a pressed tile shows its rows only; Brand Beta’s alone, no office series', () => {
-    const list = render('en', 'th-223-list')
-    for (const words of ['We need something from you', 'Open requests', 'Open orders']) expect(list).toContain(words)
-    expect(list).toContain('nds-metric btn')
-    expect(list).not.toContain('nds-metric btn active')
-    const needs = render('en', 'th-238-needs-you')
-    expect(needs).toContain('nds-metric btn active')
-    // The list is a grid: its rows draw in the browser only. A pressed tile hands the grid its own rows (listRows on the case's reads).
-    const tileRows = (id: string) => {
-      const built = (screen.cases.find((item) => item.id === id)!.model as CustomerCaseBuilder)('en')
-      if (built.body.kind !== 'list') return []
-      const model = built.body.model
-      return listRowsOf(model.group, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, 'en')
-    }
-    const subjects = tileRows('th-238-needs-you').map((row) => (row.kind === 'request' ? row.request.subject : null))
-    expect(subjects).toContain('Rain jackets like last spring, 40 pieces')
-    expect(subjects).not.toContain('Winter gloves for the shop, sizes S to XL')
-    expect(tileRows('th-238-needs-you').every((row) => row.kind === 'request' && row.request.state.needsYou)).toBe(true)
-    for (const id of ['th-238-needs-you', 'th-238-open-requests', 'th-238-open-orders']) {
-      for (const locale of ['it', 'en'] as const) {
-        const html = render(locale, id)
-        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
-        expect(html.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, `${id} (${locale})`).toBeNull()
-      }
-    }
-    expect(render('it', 'th-223-list')).toContain('Ci serve qualcosa da voi')
-  })
-
-  it('W05/W10: customer B’s tiles never move with customer A’s requests or orders (two customers, each its own reads)', async () => {
-    type Json = Record<string, unknown>
-    const world: Record<'alpha' | 'beta', { requests: Json[]; orders: ReturnType<typeof ordersRead> }> = {
-      alpha: { requests: [{ ...requestRow(1, 'NEED_INFO'), id: BRAND_ALPHA.ids.order, customerRef: BRAND_ALPHA.customerRef }], orders: ordersRead('OPEN') },
-      beta: { requests: [...REQUESTS], orders: ordersRead('OPEN') },
-    }
-    const apiOf = (key: 'alpha' | 'beta') =>
-      ({
-        get: async (path: string, options: { schema: { parse: (value: unknown) => unknown } }) => {
-          const own = world[key]
-          if (path === '/portal/inquiries') return options.schema.parse({ rows: own.requests, counts: requestCountsOf(own.requests as unknown as typeof REQUESTS), complete: true })
-          if (path === '/portal/sales-orders') return own.orders
-          throw new Error(`unexpected GET ${path}`)
-        },
-      }) as unknown as ApiClient
-    const tilesOf = async (key: 'alpha' | 'beta') => {
-      const api = apiOf(key)
-      return listTiles(await fetchRequests(api, { state: 'ALL', limit: 200 }), await fetchOrders(api, { chip: 'OPEN' }))
-    }
-    const before = await tilesOf('beta')
-    const alphaBefore = await tilesOf('alpha')
-    // Customer A moves: two more requests wait for it, and it has more open orders.
-    world.alpha.requests.push({ ...requestRow(2, 'NEED_INFO'), id: BRAND_ALPHA.ids.file }, { ...requestRow(3, 'SENT'), id: BRAND_ALPHA.ids.thread })
-    world.alpha.orders = { ...world.alpha.orders, chips: world.alpha.orders.chips.map((entry) => (entry.chip === 'OPEN' ? { ...entry, count: entry.count + 5 } : entry)) }
-    expect(await tilesOf('beta')).toEqual(before)
-    expect(await tilesOf('alpha')).not.toEqual(alphaBefore)
+  it('the model the page hands the list: a group (or everything open), never a chip, a tile or a selection', () => {
+    const body = (screen.cases.find((item) => item.id === 'th-223-requests')!.model as CustomerCaseBuilder)('en').body as { kind: 'list'; model: OrdersListViewModel }
+    expect(body.model.group).toBe('REQUESTS')
+    expect(Object.keys(body.model)).not.toEqual(expect.arrayContaining(['chip', 'tiles', 'selected', 'transit']))
   })
 })
-// ---- end B-TH-238
 
 // ── B-TH-246 (threads plan TH-4, picture 28; SHEET-G10, Owner decision 13; features SHEET.portal-sheet, portal-sheet-F07; wall W10,
 // W17, W39): the customer's own sheet — the ticked columns only, read-only, every cell its own page, "Download all" by the server ──

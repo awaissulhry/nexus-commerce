@@ -259,62 +259,7 @@
   gap: var(--nds-space-8);
 }
 
-/* ── tab:print ── */
-.fw-pord-print {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-12);
-  min-width: 0;
-}
-
-.fw-pord-print-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-12);
-}
-
-.fw-pord-print-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  padding-bottom: var(--nds-space-12);
-  border-bottom: 2px solid var(--nds-border-strong);
-}
-
-.fw-pord-print-title {
-  margin: 0;
-  font-size: var(--nds-font-size-xl);
-  font-weight: var(--nds-font-weight-semibold);
-}
-
-.fw-pord-print-meta {
-  margin: 0;
-  color: var(--nds-text-2);
-}
-
-/* On paper only the sheet: the portal's frame and the toolbar are left out (only on the page that holds the sheet). */
-@media print {
-  body:has(.fw-pord-print) * {
-    visibility: hidden;
-  }
-
-  body:has(.fw-pord-print) .fw-pord-print,
-  body:has(.fw-pord-print) .fw-pord-print * {
-    visibility: visible;
-  }
-
-  .fw-pord-print {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-  }
-
-  .fw-pord-print-toolbar {
-    display: none;
-  }
-}
+/* pg-t (Z8): the list's print view (tab:print) left with Print this list. */
 
 /* ---- F-PR-12c: Quality and photos (the Overview's pair B, level Quality & photos). Its parts a little apart; each final inspection
    under a rule; the shared photos as rows; one photo full size in its dialog. */
