@@ -28,6 +28,7 @@ import { OverviewTab } from './view/OverviewTab'
  */
 
 const NOW = Date.parse(at(0))
+const PREFIX_BETA = `/p/${BRAND_BETA.code}`
 
 function modelOf(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): OrderRecordViewModel {
   return {
@@ -222,12 +223,18 @@ describe('PW-O01 — every Overview view model of every design case: no office k
   it('Brand Beta’s Overview holds nothing of Brand Alpha (its own order, its own production read), in both languages', () => {
     const beta = orderRecord({ yourNumber: customerNumberOf('ORDER', 4), customerRef: BRAND_BETA.customerRef, status: 'IN_PRODUCTION', shipTo: { name: `${BRAND_BETA.legalName} — Lager`, line1: BRAND_BETA.address.line1, postalCode: BRAND_BETA.address.postalCode, city: BRAND_BETA.address.city, country: BRAND_BETA.address.country } })
     const read = productionReadOf({ order: { ...productionReadOf().order, customerRef: BRAND_BETA.customerRef, number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4) } })
+    // pp-fx1: Brand Beta's page has Brand Beta's own address (the live page: waitingHrefOf(frame.prefix), OrderPage) — the case once
+    // borrowed the Alpha design prefix and drew `/p/BRAND-ALPHA/waiting`: a fixture's leak, caught here.
+    const own = { prefix: PREFIX_BETA, waitingHref: `${PREFIX_BETA}/waiting` }
     for (const locale of ['en', 'it'] as const) {
-      const html = draw(beta, { production: { state: 'ready', read }, requests: { state: 'ready', items: requestsOf().map((item) => ({ ...item, customerRef: BRAND_BETA.customerRef })) } }, locale)
+      const html = draw(beta, { ...own, production: { state: 'ready', read }, requests: { state: 'ready', items: requestsOf().map((item) => ({ ...item, customerRef: BRAND_BETA.customerRef })) } }, locale)
+      expect(html, locale).toContain(`href="${PREFIX_BETA}/waiting"`)
       expect(scanText(html, BRAND_ALPHA), locale).toEqual([])
       expect(html).not.toContain(BRAND_BETA.numbers.order)
       expect(html.match(OFFICE_SERIES)?.[0] ?? null, locale).toBeNull()
-      expect(forbiddenKeysIn(overviewOf(inputOf(beta, { production: { state: 'ready', read } }, locale), NOW)), locale).toEqual([])
+      const models = overviewOf(inputOf(beta, { ...own, production: { state: 'ready', read } }, locale), NOW)
+      expect(forbiddenKeysIn(models), locale).toEqual([])
+      expect(scanText(JSON.stringify(models), BRAND_ALPHA), locale).toEqual([])
     }
   })
 })
