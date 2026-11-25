@@ -120,16 +120,28 @@
   gap: var(--nds-space-24);
 }
 
-@media (max-width: 899px) {
-  .fw-pord-tracker {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .fw-pord-promise {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-4);
+}
+
+/* pp-fx4 (walk W-09; the picture's rule): by the CARD's room, never the window's — at 1440 with the dock open the card is ≈680 px, and
+   the steps stood vertical beside the promise. Narrower than 900 px of card: the six steps keep the whole width (horizontal), the
+   promise is one row under them. */
+@container fw-so-ov-card (max-width: 899px) {
+  .fw-pord-tracker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-pord-promise {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nds-space-4) var(--nds-space-12);
+    padding-top: var(--nds-space-12);
+    border-top: 1px solid var(--nds-border-subtle);
+  }
 }
 
 .fw-pord-promise-label {

@@ -192,6 +192,17 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
     expect(view).toContain('{pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (')
   })
 
+  // pp-fx4 (walk W-09): at 1440 with the dock open the steps stood vertical (≈360 px) beside the promise, ≈450×300 px empty under it —
+  // the rule read the WINDOW. It reads the card now (the picture's rule): under 900 px of card, the steps keep the whole width
+  // (the DS tracker is horizontal from 40 rem of its own) and the promise is one row under them.
+  it('W-09: the steps and the promise by the card’s room — under 900 px of card, the promise is a row under horizontal steps', () => {
+    const css = readFileSync(new URL('./orders.css', import.meta.url), 'utf8')
+    expect(css).not.toMatch(/@media \(max-width: 899px\) \{\s*\.fw-pord-tracker/)
+    const narrow = css.indexOf('@container fw-so-ov-card (max-width: 899px) {')
+    expect(narrow).toBeGreaterThan(css.indexOf('.fw-pord-promise {\n  display: flex;\n  flex-direction: column;'))
+    expect(css.slice(narrow, narrow + 500)).toMatch(/\.fw-pord-tracker \{\s*grid-template-columns: minmax\(0, 1fr\);\s*\}\s*\.fw-pord-promise \{\s*flex-direction: row;/)
+  })
+
   // pp-fx4 (walk W-12): "Next dates" held only "Requested date —" (orders 5 and 7): a card that says nothing is left out.
   it('W-12: Next dates with nothing to say (no requested date, no plan, no gate, no line in words) is left out', () => {
     const bare = orderRecord({ status: 'CONFIRMED', requestedDate: null })
