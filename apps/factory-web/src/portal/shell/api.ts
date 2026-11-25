@@ -123,15 +123,47 @@ export const searchPortal = (api: ApiClient, q: string, signal?: AbortSignal): P
 // TH-5 follow-up (B-TH-253): + the record's date as its partner view gives it (a project's target date), kept, not dropped.
 const partnerRecord = z.object({ type: z.string(), id: z.string(), theirRef: z.string().nullable(), ourRef: z.string().nullable(), subtitle: z.string().nullable(), status: z.string().nullable(), date: z.string().nullable().optional() })
 export type PartnerRecord = z.infer<typeof partnerRecord>
+// ---- pt-w2 W2.1 (lane pt-, S1, S6): what the server's partner read sends besides (apps/factory-api platform/threads/partner/contract.ts)
+// — a file's kind, type, state and lock; the shared message a message answers or corrects and the newest that corrects it (their quote
+// as THIS reader may read it: who wrote it by kind, erased, mine, the files it may open). Every new field optional: an older answer
+// still reads. The schema names no office field (no author id, no audience, no mail, no amount): zod drops what it does not name.
+const partnerLink = z.object({
+  id: z.string(),
+  authorName: z.string().nullable(),
+  excerpt: z.string(),
+  at: z.string(),
+  authorKind: z.string().optional(),
+  erased: z.boolean().optional(),
+  mine: z.boolean().optional(),
+  fileCount: z.number().int().optional(),
+  firstFile: z.object({ id: z.string(), kind: z.string(), contentType: z.string() }).nullable().optional(),
+})
+export type PartnerLinkRead = z.infer<typeof partnerLink>
+// ---- end pt-w2 W2.1
 const partnerMessage = z.object({
   id: z.string(),
   side: z.enum(['COMPANY', 'PARTNER']),
   channel: z.string(),
   author: z.object({ name: z.string().nullable(), mine: z.boolean() }),
   body: z.string(),
-  attachments: z.array(z.object({ id: z.string(), originalName: z.string(), sizeBytes: z.number() })),
+  attachments: z.array(
+    z.object({
+      id: z.string(),
+      originalName: z.string(),
+      sizeBytes: z.number(),
+      // pt-w2 W2.1: its kind, type and state; `locked` (PRICED, MEASUREMENTS): counted "locked", never named, never opened.
+      kind: z.string().optional(),
+      contentType: z.string().optional(),
+      status: z.string().optional(),
+      locked: z.string().optional(),
+    }),
+  ),
   // B-TH-273 (B-TH-079, thread-G09): its writer was erased after a privacy request ("Message removed after a privacy request").
   erased: z.boolean().optional(),
+  // pt-w2 W2.1: the message it answers / corrects (its own links), the newest that corrects it.
+  replyTo: partnerLink.nullable().optional(),
+  corrects: partnerLink.nullable().optional(),
+  correctedBy: z.object({ id: z.string(), at: z.string() }).nullable().optional(),
   at: z.string(),
 })
 export type PartnerMessageRead = z.infer<typeof partnerMessage>
@@ -147,12 +179,16 @@ export const partnerThreadSchema = z.object({
 export type PartnerThreadRead = z.infer<typeof partnerThreadSchema>
 
 const recordPath = (type: string, id: string) => `/portal/threads/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
-export const fetchThread = (api: ApiClient, type: string, id: string, cursor?: string | null, signal?: AbortSignal) =>
-  api.get(recordPath(type, id), { query: { limit: 50, ...(cursor ? { cursor } : {}) }, schema: partnerThreadSchema, signal })
-export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string, options: { askFactoryDesigner?: boolean } = {}) =>
+/** The conversation's page (older pages on scroll). */
+export const THREAD_PAGE = 50
+/** A page of the conversation, newest first (pt-w2 W2.3: a jump reads pages of 200, the API's most). */
+export const fetchThread = (api: ApiClient, type: string, id: string, cursor?: string | null, signal?: AbortSignal, limit: number = THREAD_PAGE) =>
+  api.get(recordPath(type, id), { query: { limit, ...(cursor ? { cursor } : {}) }, schema: partnerThreadSchema, signal })
+export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string, options: { askFactoryDesigner?: boolean; replyToMessageId?: string | null } = {}) =>
   api.post(`${recordPath(type, id)}/messages`, {
     // F-CP-156 (B-CP-079): the ask rides on the post only when ticked (the body names no person: the slot is the office's).
-    body: options.askFactoryDesigner ? { body, askFactoryDesigner: true } : { body },
+    // pt-w2 W2.3 (S.6): Reply sends the message it answers (a refusal is a 409 in words, nothing written); never a correction.
+    body: { body, ...(options.askFactoryDesigner ? { askFactoryDesigner: true } : {}), ...(options.replyToMessageId ? { replyToMessageId: options.replyToMessageId } : {}) },
     schema: z.object({ message: partnerMessage, designerAsk: designerAskSchema.nullable().optional() }),
     idempotencyKey,
   })
