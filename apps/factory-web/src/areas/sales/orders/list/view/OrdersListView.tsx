@@ -42,6 +42,7 @@ import { DoorCell, FunnelButton, PeekCard, PeekLink, SheetChips, type SheetChip 
 // pg-w1: the shared order cells (lib/order-cells), imported after the sheet's parts (their css loads after the sheet's own).
 import { PromiseCell as SharedPromiseCell } from '../../../../../lib/order-cells/view/PromiseCell'
 import { ShippedCell as SharedShippedCell } from '../../../../../lib/order-cells/view/ShippedCell'
+import { OrderCard } from '../../../../../lib/order-cells/view/OrderCard'
 import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224: the one customer filter
 // F-SA-212: the ONE picture part (the cell, the phone card's aside and the picture large).
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
@@ -440,16 +441,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         promised: { role: 'hidden' as const },
         whereItIs: {
           role: 'subtitle' as const,
+          // pg-w1: the card's block is the shared phone card (lib/order-cells OrderCard: the portal's list draws it too) — the same DOM.
           draw: (row: OrderRow) => (
-            <span className="fw-sheet-card">
-              <span className="fw-sheet-card-pic">{picture(row)}</span>
-              <span className="fw-sheet-card-lines">
-                <span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>
-                <span className="fw-sheet-card-chips">
+            <OrderCard
+              picture={picture(row)}
+              sub={<span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>}
+              chips={
+                <>
                   {where(row, 'chips')}
                   {urgency(row)}
-                </span>
-                <span className="fw-sheet-card-promise">
+                </>
+              }
+              promise={
+                <>
                   {row.promiseDate ? (
                     <span>
                       {t('col.promised')} <b>{formatDate(dayInstant(row.promiseDate), { locale })}</b>
@@ -458,9 +462,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <span>{t('list.noPromise')}</span>
                   )}
                   {where(row, 'pieces')}
-                </span>
-              </span>
-            </span>
+                </>
+              }
+            />
           ),
         },
       }

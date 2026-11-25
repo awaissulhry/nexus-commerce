@@ -129,6 +129,53 @@
   width: 100%;
 }
 
+/* ---- moved from sheet/chips.css: the phone card's frame (OrderCard) ---- */
+/* ---- cw fx5 (walk W-13), cw fx6 (re-walk R-3): the customer page's phone card — ONE block under the number: the picture at the left
+   and its lines beside it (the PO, the chips, "Promised" with the pieces line). cw fx7: the Thread door is the card's own, in its
+   top row beside ⋯. Layout only, tokens only. ---- */
+.fw-sheet-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-sheet-card-pic {
+  display: inline-flex;
+  flex: none;
+}
+.fw-sheet-card-lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+  min-width: 0;
+}
+/* The stage's chips and the customer's urgency in ONE flow: the urgency chips stand beside the stage's while the line has room
+   and wrap whole to the next line when it has not (each group's own box gives way: its chips are the flow's items). */
+.fw-sheet-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-3) var(--nds-space-4);
+  min-width: 0;
+}
+.fw-sheet-card-chips > .fw-sheet-wi.is-card,
+.fw-sheet-card-chips > .fw-sheet-urg {
+  display: contents;
+}
+.fw-sheet-card-promise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-10);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.fw-sheet-card-promise b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
 /* ---- pg-w1 (10-design § 1.4): the customer face of Promised — the day (its door) over one quiet line: "was …" (the warning words,
    one fact one place: Z4), "date asked", "wanted". Tokens only. ---- */
 .fw-oc-stack {

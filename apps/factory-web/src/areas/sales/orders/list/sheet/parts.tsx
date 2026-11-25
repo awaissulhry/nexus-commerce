@@ -16,6 +16,7 @@ import { StateChip } from '../../../../../lib/order-cells/view/StateChip'
 import { MarkChip } from '../../../../../lib/order-cells/view/MarkChip'
 import { tailWhole } from '../../../../../lib/order-cells/tail-whole'
 export { DoorCell, tailWhole }
+export { MessagesHeader, NewMessagesBubble } from '../../../../../lib/last-message-cell/view/NewMessagesBubble' // pg-w1 (Z10): the bubble on both faces
 // ---- end pg-w1
 // ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
 import { HealthPill } from '../../../../../lib/production/view/HealthPill'
@@ -27,11 +28,9 @@ import type { OrderRow } from '../../api'
 import { STATUS_TONE } from '../../model'
 import { answerHrefOf, supervisorCellOf, waitingItemsOf, type WaitingMark } from './model'
 // ---- end F-SA-275
-// ---- F-CW-102: the row's chips (Where it is, Customer urgency) and the New messages bubble ----
+// ---- F-CW-102: the row's chips (Where it is, Customer urgency); pg-w1: the New messages bubble is the shared cell's (re-exported above) ----
 import { Banknote, CirclePause, Hourglass, Lock, MessageSquare } from 'lucide-react'
 import { romeToday } from '../../model'
-import { cellOf as unreadCellOf, type Unread } from '../../../../../lib/last-message-cell/model'
-import { dockClick } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { healthChipOf, orderHref, piecesPartsOf, priorityChipOf, stageChipOf, stopChipOf, urgencyChipOf, type PiecesPart, type StopChip } from './model'
 import { PHASE_ICON } from '../../../../../lib/order-groups/groups' // pg-w1: the group marks of both faces
 // ---- end F-CW-102
@@ -427,52 +426,15 @@ export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = f
   )
 }
 
-/**
- * F-CW-102 (10-design §3.5; lead settle S33): New messages as a count bubble — the reader's own new messages on the order ("2",
- * "99+"), a door to its thread at the first new one (a link; on a page with a dock, a button that docks it — ⌘ / Ctrl keeps the new
- * tab); nothing new: an empty cell with its words for a screen reader. The words are the shared cell's own (`last-message`).
- */
-export function NewMessagesBubble({ unread, href, record, onOpen, l }: { unread: Unread | undefined; href: string | null; record: string; onOpen?: (() => void) | null; l: Translate }) {
-  const cell = unreadCellOf(unread)
-  if (cell.kind === 'empty') return <span className="nds-vh">{l('cell.none')}</span>
-  const label = l('cell.label', { count: cell.count, record })
-  const count = cell.key === 'cell.many' ? '99+' : String(cell.count)
-  if (onOpen)
-    return (
-      <button type="button" className="fw-sheet-msgs" aria-label={label} title={label} data-door="" onClick={(event) => dockClick(event, href, onOpen)} onAuxClick={(event) => event.button === 1 && href && window.open(href, '_blank', 'noopener')}>
-        {count}
-      </button>
-    )
-  if (!href)
-    return (
-      <span className="fw-sheet-msgs" title={label}>
-        {count}
-      </span>
-    )
-  return (
-    <Link className="fw-sheet-msgs" href={href} aria-label={label} title={label} data-door="">
-      {count}
-    </Link>
-  )
-}
+// pg-w1: NewMessagesBubble and MessagesHeader are the shared message cell's (lib/last-message-cell/view/NewMessagesBubble.tsx), re-exported above.
 
-/** F-CW-102 (S33): the New messages column's header in a narrow column — the message mark; the column's name stays its accessible name. */
-export function MessagesHeader({ displayName }: { displayName?: string }) {
-  return (
-    <span className="fw-sheet-hicon" title={displayName}>
-      <MessageSquare size={14} aria-hidden />
-      <span className="nds-vh">{displayName}</span>
-    </span>
-  )
-}
+// cw fx5 (walk W-7): tailWhole — words that end with a time keep the time whole — is the shared cells' (lib/order-cells/tail-whole.ts).
 
 /**
  * Waiting on: the most urgent of a request to answer (a real link to the review window — on the customer page its door, else the
  * order's Changes), a reply that waits on us ("Reply waits · 4 h"), who acts next as the keeper keeps it ("Waiting on supplier ·
  * 2 d"); "+1 more" when more than one. Nothing waits: "—".
  */
-// cw fx5 (walk W-7): tailWhole — words that end with a time keep the time whole — is the shared cells' (lib/order-cells/tail-whole.ts).
-
 export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: OrderRow; mark?: WaitingMark | null; prefix: string; doorHref?: ((requestId: string) => string) | null; s: Translate; now: number }) {
   const w = useProductionWords()
   const items = waitingItemsOf(row, mark)

@@ -62,8 +62,12 @@ describe('F-CW-103: wide by the room the tab really has (S11)', () => {
 
   it('the tab measures its OWN root and hands the sheet its room — never the window, no change in the record frame', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))') // cw fx8: how many columns the room holds
-    expect(tab).toContain('const observer = new ResizeObserver(measure)')
+    // pg-w1: the measuring moved to the shared room part (lib/order-cells/use-room-width); the tab hands it its own rule.
+    expect(tab).toContain('const { ref, value: joined } = useRoomWidth(workJoinedOf, 0)') // cw fx8: how many columns the room holds
+    const room = readFileSync(new URL('../../../../lib/order-cells/use-room-width.ts', import.meta.url), 'utf8')
+    expect(room).toContain('const measure = () => setValue(of(node.getBoundingClientRect().width))')
+    expect(room).toContain('const observer = new ResizeObserver(measure)')
+    expect(room).not.toMatch(/matchMedia|innerWidth|min-width/)
     expect(tab).toContain('<div className="fw-cw" ref={workRoom.ref')
     expect(tab).toContain("workRoom.room === 'widest',")
     expect(tab).toContain('workRoom.joined /* F-CW-103; cw fx8: the columns join one at a time */),')
