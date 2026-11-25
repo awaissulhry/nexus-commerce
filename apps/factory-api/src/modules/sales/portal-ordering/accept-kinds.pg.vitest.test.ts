@@ -360,7 +360,8 @@ const stored = async (id: string): Promise<Json> => (await admin('SELECT status:
 describe('od-ts: the office confirms a customer’s draft — send and accept in one command', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('WS-OD-12 confirm sends and accepts in one command; ACCEPTED names one order; the choices are in the line’s note as words; the customer’s note is in the internal note only, labelled', async () => {
     const note = 'Made-up: the same red as last season, please.'
-    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { subject: 'Made-up team jackets', note }, 201)
+    // od-fx4: SEED-C1's terms ask its PO number on every order (the order rule, not the draft's): the customer types it on the draft.
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { subject: 'Made-up team jackets', note, customerRef: 'PO-OD-WS12' }, 201)
     const id = made.request.id as string
     const row = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: { description: 'Made-up team jackets in leather', quantity: 4, choices: leather } })
     const lineId = row.request.customLines[0].id as string
@@ -402,7 +403,8 @@ describe('od-ts: the office confirms a customer’s draft — send and accept in
   })
 
   it('R3: a Confirm body fills every open cell of a fully open row', async () => {
-    const made = await ok('aBuyer', 'POST', '/portal/order-requests', {}, 201)
+    // od-fx4: the PO number SEED-C1's terms ask on an order (nothing else on the draft: the row is fully open).
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { customerRef: 'PO-OD-R3' }, 201)
     const id = made.request.id as string
     // The customer's default delivery address (seed/parties: P1's workshop) is the draft's.
     expect(made.request.shipToAddressId).toBe(seedUuid(NS, 'party-address:P1:workshop'))

@@ -342,11 +342,14 @@ export function customLineShapeProblems(line: CustomLineInput): string[] {
   const out: string[] = []
   const sizes = line.sizes ?? []
   const byPerson = line.kind === 'MADE_TO_MEASURE' ? true : line.byPerson === true
-  // od-s s.4 (addendum R3): a described row may have no words yet; a made-to-measure row no garment type yet.
+  // od-s s.4 (addendum R3): a described row may have no words yet; a made-to-measure row no garment type yet. od-fx4: left out
+  // (absent or null) is "not decided yet"; given but blank is refused (one way to say "none": null).
+  if (line.description !== undefined && line.description !== null && line.description.trim() === '') out.push('Say in your words what you need (1 to 2000 characters), or leave the words out for now.')
   if (filled(line.description) && line.description!.trim().length > CUSTOM_LINE_LIMITS.description) out.push(`A description is at most ${CUSTOM_LINE_LIMITS.description} characters.`)
   if (filled(line.colourText) && line.colourText!.trim().length > CUSTOM_LINE_LIMITS.colourText) out.push(`The colours in words are at most ${CUSTOM_LINE_LIMITS.colourText} characters.`)
   if (line.kind === 'MADE_TO_MEASURE') {
     if (filled(line.garmentType) && line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push(`A garment type is at most ${CUSTOM_LINE_LIMITS.garmentType} characters.`)
+    if (line.garmentType !== undefined && line.garmentType !== null && line.garmentType.trim() === '') out.push('Choose the garment type to make to measure, or leave it out for now.') // od-fx4
     if (line.byPerson === false) out.push('A made-to-measure line is always by person.')
     if (line.quantity !== undefined && line.quantity !== null) out.push('A made-to-measure line counts its people, not a total.')
   } else if (line.quantity !== undefined && line.quantity !== null && (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CUSTOM_LINE_LIMITS.total)) {
