@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
@@ -38,6 +38,7 @@ import type { DockLink } from '../quotes-tab/links' // F-CQ-305: the dock's door
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { useRoomWidth } from '../../../../../lib/order-cells/use-room-width' // pg-w1: the shared room measure
 import { pendingAskOf, sameRecord } from '../../../../_shared/record-frame/model' // F-OP-212: the dock follows an ask's record
 import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
@@ -311,19 +312,10 @@ function presetOf(joined: number, waits: boolean): WorkPreset {
  */
 // cw fx8: `joined` — how many of the extra columns this room holds (they join one at a time); `room` — the last of the four measured
 // rooms reached (what the sheet's `wide` flag and the Money columns read, as before).
+// pg-w1: the measuring is the shared room part (lib/order-cells/use-room-width: a ResizeObserver on the root, never the window); the
+// tab keeps its name, its answer and its thresholds (workJoinedOf).
 export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>; readonly room: WorkRoom; readonly joined: number } {
-  const ref = useRef<HTMLDivElement>(null)
-  const [joined, setJoined] = useState(0)
-  useLayoutEffect(() => {
-    const node = ref.current
-    if (!node) return
-    const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
+  const { ref, value: joined } = useRoomWidth(workJoinedOf, 0)
   return { ref, room: workRoomOfJoined(joined), joined }
 }
 // ---- end F-CW-103

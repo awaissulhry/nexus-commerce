@@ -7,6 +7,7 @@ import type { OrderAbilities } from '../../model'
 import type { OrderPhase } from '../../api' // F-CW-101
 import type { OrderStatus } from '../../api' // F-CW-102
 import { isAfterProduction, officeStripStateOf, orderPhaseOf } from '@nexus/factory-domain/production-brand/stages' // F-CW-102: the ONE phase rule
+import type { Door, Phrase } from '../../../../../lib/order-cells/model' // pg-w1: the shared cells' door
 
 /**
  * B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24; Owner rule 2026-11-16 "every cell is a door", features
@@ -19,12 +20,8 @@ import { isAfterProduction, officeStripStateOf, orderPhaseOf } from '@nexus/fact
 export const NAMESPACE = 'orders-sheet'
 
 /** A cell's door: its address, or the reason it is plain text (a right the reader does not hold), or nothing to open. */
-export type Door = { readonly href: string; readonly tip: Phrase } | { readonly held: Phrase } | null
-
-export interface Phrase {
-  readonly key: string
-  readonly params?: Readonly<Record<string, string | number>>
-}
+// pg-w1: the door and its words are the shared order cells' (lib/order-cells/model.ts); the sheet's importers keep these names.
+export type { Door, Phrase }
 
 const seg = encodeURIComponent
 
@@ -293,16 +290,8 @@ export const noteTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'p
 // ── end F-SA-280 ──
 
 // ── F-CW-101 (customer Work tab; lead settles S2, S3, S17; 10-design §2): the phase's words — ONE word for one thing ──
-/**
- * A phase in words, for its chip above the sheet, the band's group and its door: the approved rows words where they exist (In
- * production, Ready to ship, Shipped, Cancelled: the `orders` catalogue's `rows.*`, `orders: true`), and this catalogue's own for
- * the three new groups (Not sent to the factory, Production not started, Done). SHIPPED holds partly shipped and shipped; DONE holds
- * delivered and closed (the domain's PHASE_STATUSES).
- */
-export function phasePhrase(phase: OrderPhase): Phrase & { readonly orders?: true } {
-  if (phase === 'IN_PRODUCTION' || phase === 'READY' || phase === 'SHIPPED' || phase === 'CANCELLED') return { key: `rows.${phase}`, orders: true }
-  return { key: `phase.${phase}` }
-}
+// pg-w1: the rule lives with the groups of both faces (lib/order-groups/groups.ts); the sheet's importers keep this name.
+export { phasePhrase } from '../../../../../lib/order-groups/groups'
 // ── end F-CW-101 ──
 
 // ── F-CW-102 (customer Work tab plan §1; 10-design §3.5; lead settles S3, S6, S13, S15, S31, S38; the API's B-CW-010…015, 020) ──

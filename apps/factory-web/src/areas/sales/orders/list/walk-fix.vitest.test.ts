@@ -256,11 +256,14 @@ describe('walk W-5, W-6, W-7, W-16: the row keeps its words in the four rooms (8
     expect(tailWhole('Waiting on customer', null)).toBe('Waiting on customer')
     expect(tailWhole('Asked production · now', '16 d')).toBe('Asked production · now') // not its tail: untouched
     const css = read('./sheet/chips.css')
-    expect(css).toMatch(/\.fw-sheet-wraps,[^{]*\{\s*white-space: normal;/)
+    // pg-w1: the wrapping words moved verbatim to the shared cells' css (Promised, a shared cell, draws them).
+    expect(read('../../../../lib/order-cells/order-cells.css')).toMatch(/\.fw-sheet-wraps,[^{]*\{\s*white-space: normal;/)
     expect(css).toMatch(/\.fw-sheet-sub\.fw-sheet-wraps \{[^}]*-webkit-line-clamp: 2;/)
     const view = read('./view/OrdersListView.tsx')
     // "No promise" / "Nessuna data promessa", the PO line ("Senza ordine del cliente") and "nothing requested".
-    expect(view).toContain(`<span className="fw-sheet-wraps is-quiet">{door(linesDoor(prefix, data, true), t('list.noPromise'))}</span>`)
+    const promise = read('../../../../lib/order-cells/view/PromiseCell.tsx')
+    expect(promise).toMatch(/<span className="fw-sheet-wraps is-quiet">\s*<DoorCell door=\{cell\.door\} t=\{t\}>\s*\{words\.orders\('list\.noPromise'\)\}\s*<\/DoorCell>\s*<\/span>/)
+    expect(view).toContain("data ? <SharedPromiseCell cell={{ face: 'office', day: data.promiseDate ? day(data.promiseDate) : null, door: linesDoor(prefix, data, true), lateDays: whereShown ? null : data.daysLate }} t={s} /> : null")
     expect(view.match(/<span className="fw-sheet-sub fw-sheet-wraps">\{data\.customerRef \? t\('list\.customerRef'/g)?.length).toBe(2)
     expect(view).toMatch(/<span className="fw-sheet-sub fw-sheet-wraps">\{data\.requestedDate \?/)
     expect(read('./sheet/parts.tsx').match(/<span className="fw-sheet-wraps">/g)?.length).toBe(3) // the three Waiting on forms that end with a time
@@ -427,9 +430,11 @@ describe('walk W-15, W-26, W-32: the foot, the "Waiting for <customer>" window, 
     expect(win.indexOf("t('customers.work.band.beforeNote')")).toBeGreaterThan(0)
     expect(win.indexOf('href={model.workOrdersHref}')).toBeGreaterThan(win.indexOf("t('customers.work.band.beforeNote')"))
     expect(win).toContain("{t('customers.band.workOrders', { customer })}")
-    expect(band).toContain('window: { title: all, notes: windowNotes')
+    // pg-w1: the Work band hands its window lines to the ONE groups band (office face), which gives them to the band's window.
+    expect(band).toContain('window: windowNotes },')
+    expect(read('../../../../lib/order-groups/view/GroupsBand.tsx')).toContain('window: { title: all, notes: office ? model.officeFacts?.window : customerWindow')
     // The phone (the band's own room < 720): the notes line folds away; the window says it.
-    expect(read('../../customers/record/band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
+    expect(read('../../../../lib/customer-band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
     for (const locale of LOCALES) expect(words(locale, 'parties')('customers.band.workOrders', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
   })
 })
@@ -552,11 +557,16 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
     const view = read('./view/OrdersListView.tsx')
     expect(view).toContain("picture: { role: 'hidden' as const },")
     expect(view).toContain("promised: { role: 'hidden' as const },")
-    const block = view.slice(view.indexOf('<span className="fw-sheet-card">'), view.indexOf('// eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model'))
-    const order = ['fw-sheet-card-pic', 'fw-sheet-card-lines', "t('list.customerRef'", 'fw-sheet-card-chips', "where(row, 'chips')", 'urgency(row)', 'fw-sheet-card-promise', "t('col.promised')", "where(row, 'pieces')"].map((part) => block.indexOf(part))
+    // pg-w1: the block is the shared phone card (lib/order-cells OrderCard): its frame there, the Work card's lines here, in order.
+    const block = view.slice(view.indexOf('<OrderCard'), view.indexOf('// eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model'))
+    const order = ['picture={picture(row)}', "t('list.customerRef'", "where(row, 'chips')", 'urgency(row)', "t('col.promised')", "where(row, 'pieces')"].map((part) => block.indexOf(part))
     expect(order.every((at) => at >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order) // nothing left out, in the picture's order
-    const css = read('./sheet/chips.css')
+    const card = read('../../../../lib/order-cells/view/OrderCard.tsx')
+    const frame = ['<span className="fw-sheet-card">', 'fw-sheet-card-pic', 'fw-sheet-card-lines', '{sub}', 'fw-sheet-card-chips', 'fw-sheet-card-promise'].map((part) => card.indexOf(part))
+    expect(frame.every((at) => at >= 0)).toBe(true)
+    expect([...frame].sort((a, b) => a - b)).toEqual(frame)
+    const css = read('../../../../lib/order-cells/order-cells.css')
     expect(css).toMatch(/\.fw-sheet-card-chips > \.fw-sheet-wi\.is-card,\s*\.fw-sheet-card-chips > \.fw-sheet-urg \{\s*display: contents;/)
     expect(css).toMatch(/\.fw-sheet-card \{[^}]*align-items: flex-start;/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
@@ -564,11 +574,17 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
   it('R-4: a failed read of the groups says so once (F-CQ-B: in the strip\'s place), with the retry the chips use', () => {
     const band = read('../../customers/record/view/WorkBand.tsx')
     // F-CQ-B: the ONE band part draws the host's `failed` words in the strip's place, once; the Work band hands it the chips' words.
+    // pg-w1: the groups band (both faces) says them with the same words and the host's retry; the Work band's retry reads the board ('late').
     const failed = band.slice(band.indexOf("const failedWords = t('customers.work.tile.failed')"), band.indexOf('const state = '))
-    expect(failed).toContain("onClick={() => actions.onRetry?.('late')}")
+    expect(failed).toContain("const onRetry = actions?.onRetry ? { onRetry: () => actions.onRetry?.('late') } : {}")
+    expect(band).toContain('actions={{ ...(actions?.onGroup ? { onGroup } : {}), ...onRetry }}')
+    const groups = read('../../../../lib/order-groups/view/GroupsBand.tsx')
+    const said = groups.slice(groups.indexOf("const failedWords = parties('customers.work.tile.failed')"), groups.indexOf('const chips = '))
+    expect(said).toContain('onClick={() => actions.onRetry?.()}')
+    expect(groups.match(/\bfailed,$/gm)?.length).toBe(1) // handed to the band frame once
     expect(band).toContain("const state = model.failed || picture.state === 'failed' ? 'failed'")
     expect(band.match(/model\.failed/g)?.length).toBe(1) // once
-    const part = read('../../customers/record/band/CustomerBand.tsx')
+    const part = read('../../../../lib/customer-band/CustomerBand.tsx')
     expect(part).toContain("model.state === 'failed' ? (")
     expect(part.match(/\{model\.failed\}/g)?.length).toBe(1) // said once
     expect(read('../../customers/record/view/WorkTab.tsx')).toContain("failed: work.reads.board.status === 'failed',")
@@ -633,13 +649,14 @@ describe('third look R-3, item 3: the Thread door in the card\'s top row; nothin
     const view = read('./view/OrdersListView.tsx')
     expect(view).toContain("cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,")
     expect(view).not.toMatch(/fw-sheet-card-door|cardDoorLabel/)
-    expect(read('./sheet/chips.css')).not.toContain('fw-sheet-card-door')
+    for (const css of ['./sheet/chips.css', '../../../../lib/order-cells/order-cells.css']) expect(read(css), css).not.toContain('fw-sheet-card-door')
     // The frame puts that door in the card's top row (its `aside`), and ⋯ in its actions.
     const frame = read('../../../../list-frame/ListFrame.tsx')
     expect(frame).toContain("{ [door.column]: { role: 'aside' as const, draw: (row: T) => <CardDoor label={door.label} onOpen={() => door.onOpen(row)} /> } }")
     // The rest of the card is as it was: one block under the number, the picture at its left.
     expect(view).toContain("picture: { role: 'hidden' as const },")
-    expect(view).toContain('<span className="fw-sheet-card-pic">{picture(row)}</span>')
+    expect(view).toContain('picture={picture(row)}')
+    expect(read('../../../../lib/order-cells/view/OrderCard.tsx')).toContain('<span className="fw-sheet-card-pic">{picture}</span>')
   })
   it('item 3: on orders with no portal the window draws the reason alone; quotes and requests keep their lines', () => {
     const dialog = read('./view/ReplyManyDialog.tsx')

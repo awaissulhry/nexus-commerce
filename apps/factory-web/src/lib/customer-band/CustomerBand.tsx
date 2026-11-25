@@ -4,7 +4,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { ChevronDown, Info } from 'lucide-react'
 import { MetricStrip } from '@nexus/ui/components'
 import { Button, FilterChip, Pill, Skeleton } from '@nexus/ui/primitives'
-import { Modal } from '../../../../../lib/i18n/ds-parts'
+import { Modal } from '../i18n/ds-parts'
 import { foldOf, metricsOf, oursOf, type BandChipItem, type BandTile } from './customer-band'
 import './customer-band.css'
 

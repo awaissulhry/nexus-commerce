@@ -66,7 +66,7 @@
   gap: var(--nds-space-8);
 }
 
-/* ---- the band (F-CQ-B: drawn by the customer page's ONE band part, band/customer-band.css): only its head is this tab's own (F-CQ-B
+/* ---- the band (F-CQ-B: drawn by the customer page's ONE band part, lib/customer-band/customer-band.css): only its head is this tab's own (F-CQ-B
    fx1: the open door is the Orders sheet's own chip). The closed doors of a list's foot (QuotesTabParts) keep their quiet look. ---- */
 .fw-bo-head {
   display: flex;
