@@ -197,6 +197,11 @@ describe('pt-w2 W2.3 — the portal thread’s host on the partner face', () => 
     const supplier = readFileSync(new URL('../../supplier/orders/OrderPage.tsx', import.meta.url), 'utf8')
     expect(supplier).toContain("help={[t('messages.priceTalk')]}")
     expect(supplier).not.toContain('<PriceTalkHint')
+    // pt-fx1 F-1: its design case draws it the same way (the old box is gone with its part and its class).
+    const supplierCase = readFileSync(new URL('../../supplier/orders/view/SupplierCase.tsx', import.meta.url), 'utf8')
+    expect(supplierCase).toContain("<ThreadView model={{ ...body.thread, help: [t('messages.priceTalk')] }} />")
+    expect(supplierCase).not.toContain('PriceTalkHint')
+    expect(readFileSync(new URL('../../supplier/orders/view/OrderRecordView.tsx', import.meta.url), 'utf8')).not.toContain('PriceTalkHint')
   })
 })
 // ---- end W2.3
