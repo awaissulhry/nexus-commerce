@@ -330,7 +330,7 @@
     "problems_one": "{count} problema da risolvere — Mostrami",
     "problems_other": "{count} problemi da risolvere — Mostrami",
     "mayNotOrder": "Solo i colleghi che possono ordinare iniziano un ordine: chiedete al vostro amministratore.",
-    "mayNotAsk": "Solo i colleghi che possono inviare richieste chiedono di un modello da qui: usate “Fai una domanda” nel menu ⋯."
+    "mayNotAsk": "Solo i colleghi che possono inviare richieste chiedono di un modello da qui: usate “Fate una domanda” nel menu ⋯."
   },
   "refusal": {
     "conflict": "Qualcuno ha cambiato questa bozza nello stesso momento: rileggetela e riprovate.",
@@ -371,7 +371,7 @@
     "goesTo": "Ufficio vendite di {company}",
     "closedTitle": "Gli ordini dal portale non sono ancora aperti",
     "closedBody": "Scrivete al vostro referente.",
-    "ask": "Fai una domanda",
+    "ask": "Fate una domanda",
     "openFailed": "Non è stato possibile leggere le vostre richieste.",
     "noRightTitle": "Solo i buyer della vostra azienda inviano ordini",
     "noRightAsk": "Il vostro amministratore può darvi il permesso: {names}.",

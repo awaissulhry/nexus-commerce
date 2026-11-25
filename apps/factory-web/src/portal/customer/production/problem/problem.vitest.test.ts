@@ -215,7 +215,7 @@ describe('the Report a problem dialog (it and en)', () => {
     expect(text).toContain("We answer in this order's messages.")
     expect(text).not.toMatch(/supervisor|Pelletteria Esempio signs|signed by/i)
     const italian = textOf(drawDialog({}, 'it'))
-    expect(italian).toContain('Segnala un problema')
+    expect(italian).toContain('Segnalate un problema') // pp-fx5 (walk W-19): voi
     expect(italian).toContain('Che cosa non va?')
     expect(italian).toContain('Rispondiamo nei messaggi di questo ordine.')
   })

@@ -28,9 +28,9 @@
   "band": {
     "updated": "Aggiornato alle {time}",
     "export": "Esporta questa vista (CSV)",
-    "change": "Chiedi una modifica…",
+    "change": "Chiedete una modifica…",
     "reconfirm": "Riconferma la versione {version}",
-    "cancel": "Chiedi di annullare…",
+    "cancel": "Chiedete di annullare…",
     "pay": "Paga l’acconto",
     "confirmation": "PDF della conferma d’ordine",
     "newOrder": "Nuovo ordine",
@@ -308,7 +308,7 @@
     "mtmUnitNone": "Un capo su misura.",
     "menu": "Azioni per la riga {seq}",
     "showSizes": "Mostra le taglie",
-    "askChange": "Chiedi una modifica su questa riga",
+    "askChange": "Chiedete una modifica su questa riga",
     "sizesTitle": "Taglie di ogni riga",
     "sizesOf": "Riga {seq} · {style} {colour}",
     "reorder": "Riordina questa riga"
@@ -579,7 +579,7 @@
     "waitingTitle": "Su questo ordine aspettiamo una vostra risposta",
     "waitingSince": "Dal {date}",
     "waitingLink": "Vedete cosa vi aspetta",
-    "ask": "Fai una domanda",
+    "ask": "Fate una domanda",
     "failed": "Impossibile caricare la produzione di questo ordine",
     "gates": {
       "planned": "Prevista",
@@ -904,7 +904,7 @@
   },
   "reported": {
     "label": "I problemi che avete segnalato su questo ordine",
-    "report": "Segnala un problema"
+    "report": "Segnalate un problema"
   },
   "priceCheck": {
     "title": "Verifica prezzi",

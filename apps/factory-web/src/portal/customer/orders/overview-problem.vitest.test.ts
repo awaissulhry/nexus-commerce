@@ -111,7 +111,7 @@ describe('the problems it reported on this order, and Report a problem', () => {
     expect(elsewhere).not.toContain('SO-2026-0913')
     const italian = textOf(draw({}, 'it'))
     expect(italian).toContain('Problema segnalato · Tocca a noi dal')
-    expect(italian).not.toContain('Segnala un problema')
+    expect(italian).not.toContain('Segnalate un problema') // pp-fx5 (walk W-19): the band's words, voi
   })
 
   it('no problem reported: no strip; the Overview never offers "Report a problem" (the band does, held with its words)', () => {

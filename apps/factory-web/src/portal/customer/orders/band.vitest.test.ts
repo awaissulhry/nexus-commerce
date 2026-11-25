@@ -42,7 +42,8 @@ const plain = (band: PortalBand) => JSON.stringify(band, (_key, value) => (typeo
 describe('w1.2 — ONE "Ask for a change…" in the band (O1-B1, O1-B2, O1-B7)', () => {
   it('the primary is the Ask dialog, held with its words; none on a cancelled or delivered order', () => {
     expect(bandOf().actions?.map((action) => [action.id, action.label, action.variant])).toEqual([['ask', 'Ask for a change…', 'primary']])
-    expect(bandOf({}, 'IN_PRODUCTION', 'it').actions?.[0]?.label).toBe('Chiedi una modifica…')
+    // pp-fx5 (walk W-19): the customer reads voi — "Chiedete una modifica…" (the picture's one tu word loses to the voi rule).
+    expect(bandOf({}, 'IN_PRODUCTION', 'it').actions?.[0]?.label).toBe('Chiedete una modifica…')
     expect(bandOf({ ask: { held: 'Asking is not part of your access.' } }).actions?.[0]?.heldReason).toBe('Asking is not part of your access.')
     expect(bandOf({}, 'CANCELLED').actions).toEqual([])
     expect(bandOf({}, 'DELIVERED').actions).toEqual([])
@@ -245,6 +246,22 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect([CATALOGUE.en.portal!['keys.or'], CATALOGUE.it.portal!['keys.or']]).toEqual(['or', 'o'])
     const view = readFileSync(new URL('../../shell/view/FrameDialogs.tsx', import.meta.url), 'utf8')
     expect(view).toContain("{index > 0 && keyJoinOf(entry.keys) !== 'press' ? <span className=\"fw-pkeys-then\"> {t(keyJoinOf(entry.keys) === 'or' ? 'keys.or' : 'keys.then')} </span> : null}")
+  })
+
+  // pp-fx5 (walk W-19; the voi rule wins over the picture's one tu word): the band's buttons said "Chiedi una modifica…", "Chiedi di
+  // annullare…", "Fai una domanda", "Segnala un problema" beside voi words. Every portal page that says them now says them with voi.
+  it('W-19: the customer reads voi — the Ask, cancel, question and problem words on every portal page that uses them', () => {
+    const voi: Record<string, Record<string, string>> = {
+      'portal-orders': { 'band.change': 'Chiedete una modifica…', 'band.cancel': 'Chiedete di annullare…', 'lines.askChange': 'Chiedete una modifica su questa riga', 'production.ask': 'Fate una domanda', 'reported.report': 'Segnalate un problema' },
+      portal: { 'band.ask': 'Fate una domanda' },
+      'portal-customer-home': { 'start.ask': 'Fate una domanda' },
+      'portal-documents': { 'pay.ask': 'Fate una domanda' },
+      'portal-ordering': { 'request.ask': 'Fate una domanda' },
+      'portal-production': { 'row.report': 'Segnalate un problema', 'problem.title': 'Segnalate un problema', 'bulk.report': 'Segnalate un problema' },
+      'portal-jobs': { 'problem.title': 'Segnalate un problema' },
+    }
+    for (const [ns, words] of Object.entries(voi)) for (const [key, value] of Object.entries(words)) expect(CATALOGUE.it[ns]![key], `${ns} ${key}`).toBe(value)
+    expect(CATALOGUE.it['portal-ordering']!['held.mayNotAsk']).toContain('“Fate una domanda”')
   })
 
   // pp-fx5 (walk W-14): at 1440 with the conversation hidden, "Messages (2 new)" pushed "Made from your request #1 ›" under the reference
