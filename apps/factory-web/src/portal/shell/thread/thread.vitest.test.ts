@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { ReaderProvider } from '../../../lib/i18n/provider'
-import { partnerMenuOf } from '../../../lib/record-thread/partner/model'
+import { partnerMenuOf, partnerUnreadOf, type PortalThreadMessage } from '../../../lib/record-thread/partner/model'
 import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { partnerThreadSchema } from '../api'
-import { portalMessageOf, replyRefusalKey } from '../thread-model'
+import { frameNewCount, portalMessageOf, replyRefusalKey } from '../thread-model'
 import { ThreadView, type ThreadViewModel } from '../view/ThreadView'
 
 /**
@@ -93,9 +93,31 @@ describe('pt-w2 W2.3 — the portal thread’s host on the partner face', () => 
   it('the docked conversation tells the button its count and marks messages read only while on screen (the face reports nothing it saw)', () => {
     expect(thread).toContain('const dockFrame = usePortalRecordFrame()')
     expect(thread).toContain("if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0 || !onScreen) return")
-    expect(thread).toContain('.then((answer) => reportNew?.(answer.reading.newCount))')
-    expect(thread).toContain("if (state === 'ready') reportNew?.(read?.reading?.newCount ?? 0)")
+    // pt-fx2 (W-01b): both reports say the face's own count (the band's rule), never the server's.
+    expect(thread).toContain('.then((answer) => reportNew?.(frameNewCount(loadedRef.current, answer.reading, newest)))')
+    expect(thread).toContain("if (state === 'ready') reportNew?.(frameNewCount([...(read?.messages ?? []), ...older], read?.reading))")
+    expect(thread).not.toMatch(/reportNew\?\.\((read\?\.reading\?|answer\.reading)\.newCount/)
     expect(`${thread}${view}`).not.toContain('onSeen')
+  })
+
+  it('pt-fx2 (W-01b): the frame’s new count leaves out the reader’s own messages (the same number as the band)', () => {
+    const one = (id: string, mine: boolean): Pick<PortalThreadMessage, 'id' | 'author'> => ({ id, author: { name: mine ? 'Lia Modello' : 'Bea Esempio', mine } })
+    // Newest first, as the API pages: m5 (hers) · m4 (ours) · m3 (hers) · m2 (hers) · m1 (ours).
+    const page = [one('m5', true), one('m4', false), one('m3', true), one('m2', true), one('m1', false)]
+    const oldestFirst = page.slice().reverse()
+    for (const reading of [{ firstNewMessageId: 'm2', newCount: 4 }, { firstNewMessageId: 'm0', newCount: 7 }, { firstNewMessageId: 'm4', newCount: 2 }]) {
+      const band = partnerUnreadOf(oldestFirst, { firstNewId: reading.firstNewMessageId, newCount: reading.newCount })
+      expect(frameNewCount(page, reading), reading.firstNewMessageId).toBe(band.newCount)
+    }
+    expect(frameNewCount(page, { firstNewMessageId: 'm2', newCount: 4 })).toBe(1)
+    // "Your order 2": the only new message is her own — the server says 1, the button says nothing new (no band either).
+    expect(frameNewCount(page, { firstNewMessageId: 'm5', newCount: 1 })).toBe(0)
+    expect(frameNewCount(page, null)).toBe(0)
+    // After her mark up to m4: m5 (hers) is all that is newer — nothing new; one of ours newer than the mark is.
+    expect(frameNewCount(page, { firstNewMessageId: 'm5', newCount: 1 }, 'm4')).toBe(0)
+    expect(frameNewCount([one('m6', false), ...page], { firstNewMessageId: 'm5', newCount: 2 }, 'm4')).toBe(1)
+    // Newer than the mark but not loaded yet: counted when its read arrives (the live re-read), never guessed.
+    expect(frameNewCount(page, { firstNewMessageId: 'm9', newCount: 1 }, 'm5')).toBe(0)
   })
 
   // Moved from record-frame.vitest (B-TH-079): the face says it in the office's words (A12: one word per place).

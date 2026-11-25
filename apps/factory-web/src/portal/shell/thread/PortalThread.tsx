@@ -17,7 +17,7 @@ import { usePortalFrame, usePortalLive, usePortalUnsaved } from '../frame'
 // conversation is marked read only while it is on screen (never behind the narrow page's button).
 import { usePortalRecordFrame } from '../record/PortalRecordFrame'
 // ---- end B-TH-273
-import { jumpWordsKey, portalMessageOf, replyRefusalKey, THREAD_BODY_LIMIT, threadHeldKey } from '../thread-model'
+import { frameNewCount, jumpWordsKey, portalMessageOf, replyRefusalKey, THREAD_BODY_LIMIT, threadHeldKey } from '../thread-model'
 import { ThreadView } from '../view/ThreadView'
 // ---- F-CP-156 (customer page plan C7, D12; B-CP-078, B-CP-079): "Ask <name>, factory designer" — the one name, the chip, the "@".
 import { issuePath } from '../../../lib/api/errors'
@@ -97,9 +97,12 @@ export function PortalThread({ type, id, focus = false, title, onRecord, onMissi
   const dockFrame = usePortalRecordFrame()
   const onScreen = dockFrame ? dockFrame.onScreen : true
   const reportNew = dockFrame?.reportNew
+  // pt-fx2 (W-01b): the button says the face's own count — the band's and the down button's (the reader's own messages never new).
+  const loadedRef = useRef<PartnerMessageRead[]>([])
+  loadedRef.current = [...(read?.messages ?? []), ...older]
   useEffect(() => {
-    if (state === 'ready') reportNew?.(read?.reading?.newCount ?? 0)
-  }, [state, read, reportNew])
+    if (state === 'ready') reportNew?.(frameNewCount([...(read?.messages ?? []), ...older], read?.reading))
+  }, [state, read, older, reportNew])
   // ---- end B-TH-273
 
   const load = useCallback(
@@ -152,10 +155,11 @@ export function PortalThread({ type, id, focus = false, title, onRecord, onMissi
     const later = () => {
       clearTimeout(timer)
       timer = setTimeout(() => {
-        // B-TH-273: the frame's button follows the count the API answers after the mark.
+        // B-TH-273: the frame's button follows the count the API answers after the mark — by the face's rule (pt-fx2: the
+        // server's count holds the reader's own messages).
         if (document.visibilityState === 'visible')
           void markThreadRead(frame.api, type, id, newest)
-            .then((answer) => reportNew?.(answer.reading.newCount))
+            .then((answer) => reportNew?.(frameNewCount(loadedRef.current, answer.reading, newest)))
             .catch(() => undefined)
       }, 1_000)
     }
