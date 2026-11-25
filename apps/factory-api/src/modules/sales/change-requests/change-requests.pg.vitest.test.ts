@@ -1288,3 +1288,59 @@ describe('B-OP-015: the office amends the delivery address — an ACTIVE one of 
   // ── end B-OL-020 ──
 })
 // ── end B-OP-015 ──
+
+// ── pp-s s.3 PG-O2, the rules half (O3-W2): a line's floor note ("For the floor — no prices", office only) and its close-short reason
+// never reach the customer's change pop-ups (GET …/change-requests/rules) nor its requests; another customer reads neither. The order,
+// the sheet and its file are pinned the same way in portal-orders.pg.vitest.test.ts. ──
+describe('PG-O2: the rules before the click hold no floor note and no close-short reason', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a line with a floor note, closed short with a reason: the rules and the requests hold neither; another customer reads none', async () => {
+    const so2 = await orderOf('SEED-SO-0002')
+    const line = await one<{ id: string; quantity: number; note: string | null; closeShortReason: string | null; closedShortQuantity: number | null; closedShortAt: Date | null }>(
+      'SELECT id, quantity, note, "closeShortReason", "closedShortQuantity", "closedShortAt" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1',
+      [so2.id],
+    )
+    const note = 'PGO2 floor note: stitch the cuffs twice, ask Lia Modello'
+    const reason = 'PGO2 close-short reason: the leather lot came short'
+    const markers = ['PGO2', 'stitch the cuffs', 'Lia Modello', 'leather lot came short']
+    // Written around the guards (a line closes short through the office's command): the reads are what is tested.
+    const planted = async (sql: string, values: unknown[]) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+        await h.db.admin.query(sql, values)
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    await planted('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = now() WHERE id = $1', [line.id, note, reason, line.quantity])
+    try {
+      // Not vacuous: the line holds both, and the rules read names that line.
+      expect(await one('SELECT note, "closeShortReason" FROM "SalesOrderLine" WHERE id = $1', [line.id])).toEqual({ note, closeShortReason: reason })
+      const rules = await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests/rules`)
+      const named = (rules.lines as Json[]).find((entry) => entry.lineId === line.id)!
+      expect(named).toBeDefined()
+      expect(named).not.toHaveProperty('note')
+      expect(named).not.toHaveProperty('closeShortReason')
+      const answers: [string, unknown][] = [
+        ['the rules (buyer)', rules],
+        ['the requests (buyer)', await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests`)],
+        ['the requests (viewer)', await ok(browsers.viewer, `/portal/sales-orders/${so2.id}/change-requests`)],
+      ]
+      for (const [what, answer] of answers) {
+        const text = JSON.stringify(answer)
+        for (const marker of markers) expect(text, `${what}: ${marker}`).not.toContain(marker)
+        expect(text, what).not.toContain('closeShortReason')
+      }
+      // Another customer: the order's rules and requests are as unknown as a wrong id.
+      const refused = [await browsers.other.get(`/portal/sales-orders/${so2.id}/change-requests/rules`), await browsers.other.get(`/portal/sales-orders/${so2.id}/change-requests`)]
+      expect(refused.map((answer) => answer.status)).toEqual([404, 404])
+      for (const answer of refused) for (const marker of markers) expect(JSON.stringify(answer.body), marker).not.toContain(marker)
+    } finally {
+      // The line as it was (no test leaves a planted fact behind).
+      await planted('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = $5 WHERE id = $1', [line.id, line.note, line.closeShortReason, line.closedShortQuantity, line.closedShortAt])
+    }
+  })
+})
+// ── end pp-s PG-O2 ──
