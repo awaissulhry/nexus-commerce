@@ -186,15 +186,18 @@ describe('B-CP-075: described and made-to-measure lines, and the people on them'
   // od-s s.4 (addendum R3, the products table): every cell is optional — a described row's words, a made-to-measure garment type.
   it('holds each kind to its shape before it is written: lengths and shapes, people for made to measure; words and a garment type may wait', () => {
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Team jackets, our logo on the back', quantity: 40 })).toEqual([])
-    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: '  ' })).toEqual([])
+    // od-fx4: left out is "not decided yet"; given but blank is refused.
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: '  ' })).toEqual(['Say in your words what you need (1 to 2000 characters), or leave the words out for now.'])
     expect(customLineShapeProblems({ kind: 'DESCRIBED' })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: null })).toEqual([])
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'x'.repeat(2001) })).toContain('A description is at most 2000 characters.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 0 })).toContain('A total is 1 to 100000 pieces.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', colourwayId: 'c1' })).toContain('A colour of ours goes with its style.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', byPerson: true, quantity: 12 })).toContain('A line by person takes its pieces from its people: no total and no sizes.')
     expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 4, sizes: [{ size: '50', quantity: 2 }, { size: '50', quantity: 2 }] })).toContain('Size 50 is asked twice on the line.')
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET' })).toEqual([])
-    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: '' })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: '' })).toEqual(['Choose the garment type to make to measure, or leave it out for now.'])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE' })).toEqual([])
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'X'.repeat(41) })).toEqual(['A garment type is at most 40 characters.'])
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false, quantity: 3 })).toEqual(expect.arrayContaining(['A made-to-measure line is always by person.', 'A made-to-measure line counts its people, not a total.']))
   })
