@@ -1120,6 +1120,15 @@ describe('B-SA-048: the customer\'s ask is its own message in the order\'s conve
     const beta = await browsers.other.get(`/portal/threads/SalesOrder/${design.order}`)
     expect(beta.status).toBe(404)
     expect(JSON.stringify(beta.body)).not.toContain(messageId)
+    // pg-s1 S1.4 (the pt- lane's L-1): the asker's own ask is never new to them (their mark moved to it); another customer counts nothing.
+    const unreadOf = async (browser: typeof browsers.buyer) => {
+      const answer = await browser.post('/threads/unread', { records: [{ recordType: 'SalesOrder', recordId: design.order }] }, { headers: { 'idempotency-key': `unread-${newId()}` } })
+      expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+      return (answer.body as { counts: { newCount: number; lastAt: string | null }[] }).counts[0]
+    }
+    expect(await unreadOf(browsers.buyer)).toMatchObject({ newCount: 0 })
+    expect(await unreadOf(browsers.other)).toMatchObject({ newCount: 0, lastAt: null })
+    expect(await admin('SELECT r."lastReadMessageId"::text AS message FROM "ThreadRead" r JOIN "Message" m ON m."threadId" = r."threadId" JOIN "User" u ON u.id = r."userId" WHERE m.id = $1 AND r."partyId" = $2 AND u.email = $3', [messageId, P1, people.buyer])).toEqual([{ message: messageId }])
   })
 
   it('the request\'s own thread is no second place to talk: the office reads its order\'s conversation there, and a note lands there', async () => {
