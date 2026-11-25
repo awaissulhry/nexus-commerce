@@ -136,9 +136,10 @@ function ClosedDoors({ tab, kind, lead, customer }: { tab: TabFacts; kind: 'quot
 
 /**
  * F-CQ-205 (10-design §3.5; settles C3, C14): "Customer is writing" — the section's head, folded under a door that is not WRITING, the
- * truth when the customer writes none; the drafts' list and their read-only window are the Work tab's own parts (the host hands them).
+ * truth when the customer writes none; the drafts' list is the Work tab's own part (the host hands it; od-w2.3: a row opens the office
+ * draft page, editable — the read-only window went).
  */
-export function DraftsFrame({ customer, tab, children, window }: { customer: string; tab: TabFacts; children?: ReactNode; window?: ReactNode }) {
+export function DraftsFrame({ customer, tab, children }: { customer: string; tab: TabFacts; children?: ReactNode }) {
   const t = useT('parties')
   const b = useT(BEFORE_ORDER_NS)
   const count = tab.counts?.byKind.drafts ?? null
@@ -150,7 +151,6 @@ export function DraftsFrame({ customer, tab, children, window }: { customer: str
         <p className="fw-qt-quiet">{b('sec.writingSub', { customer })}</p>
       </div>
       {!tab.terms.drafts ? <p className="fw-qt-quiet">{b('fold.drafts')}</p> : count === 0 ? <p className="fw-qt-quiet">{t('customers.drafts.empty', { customer })}</p> : children}
-      {window}
     </section>
   )
 }

@@ -122,7 +122,8 @@
     "savedBy": "Saved {time} by {name}",
     "savedByFactory": "Saved {time} by the factory",
     "shared": "The factory reads this draft from the first save.",
-    "untitled": "Draft order {date}"
+    "untitled": "Draft order {date}",
+    "title": "Draft order · {title}"
   },
   "lines": {
     "colour": "Colour",
@@ -185,7 +186,9 @@
   },
   "state": {
     "saving": "Saving…",
-    "OPEN": "Not decided yet"
+    "OPEN": "Not decided yet",
+    "DECIDED": "Decided",
+    "MISSING": "Missing"
   },
   "add": {
     "from": "Add from:",
@@ -221,7 +224,8 @@
       "needChoices": "Type at least two choices, one per row."
     },
     "save": {
-      "notYet": "Saves when you type"
+      "notYet": "Saves when you type",
+      "readonly": "You can read, not change: your role does not manage orders."
     },
     "siz": {
       "peopleFirst": "This row has people: remove them first, then pick Standard sizes."
@@ -231,6 +235,9 @@
     },
     "still": {
       "info": "Information only: the Confirm window asks what the order needs (style, colour, pieces by size, price)."
+    },
+    "cf": {
+      "quoteNext": "When the customer accepts the quote, it becomes the order."
     }
   },
   "col": {
@@ -297,17 +304,21 @@
     "date": "Requested delivery date",
     "label": "Row {seq}",
     "remove": "Remove product",
-    "shipTo": "Ship to"
+    "shipTo": "Ship to",
+    "style": "Style"
   },
   "save": {
     "changedByFactory": "Changed by the factory a moment ago.",
     "draftSaved": "Draft saved {time}",
-    "notYet": "Saves when you type"
+    "notYet": "Saves when you type",
+    "readonly": "This request was sent: our answer comes under Orders. To change it, withdraw it in Orders or ask us.",
+    "saving": "Saving…"
   },
   "send": {
     "body": "It says: this is our order — please price and confirm. Nothing is required: the factory asks what is still open.",
     "later": "A detail you decide later goes through the messages.",
-    "title": "Send to the factory"
+    "title": "Send to the factory",
+    "sent": "Request sent"
   },
   "siz": {
     "MADE_TO_MEASURE": "Custom size",
@@ -317,7 +328,13 @@
   "start": {
     "continue": "Continue a draft",
     "draftRow": "{open} still open · saved {when} by {name}",
-    "draftRowFactory": "{open} still open · saved {when} by the factory"
+    "draftRowFactory": "{open} still open · saved {when} by the factory",
+    "customer": "Customer",
+    "customerHeld": "Pick the customer first.",
+    "customerHint": "A draft order belongs to one customer.",
+    "prospect": "A prospect, not a customer yet?",
+    "request": "New request in Incoming",
+    "typed": "Type a catalogue order now"
   },
   "still": {
     "count_other": "{n} still open",
@@ -333,5 +350,58 @@
     "count_one": "{n} product",
     "empty": "No products yet.",
     "title": "Products"
+  },
+  "cf": {
+    "asksTitle": "The Confirm window asks",
+    "body": "Sends it for the customer if it is still a draft, and makes it an order. The window asks what the rows left open.",
+    "choices": "Open options go to the order line as words; you pick them on the order.",
+    "done": "Confirmed as order {number}.",
+    "doneQuote": "Confirmed as quote {number}.",
+    "fromDraft": "As in the draft",
+    "fromPeople": "From the {count} people",
+    "go": "Confirm order…",
+    "goQuote": "Confirm as a quote",
+    "heldRow": "Row {seq} still needs {list}: type it here, or ask the customer in the thread.",
+    "listPrice": "list price",
+    "noRows": "An order needs at least one product: add one first.",
+    "nothingAsked": "Nothing: every row is ready.",
+    "open": "Open the order",
+    "openQuote": "Open the quote",
+    "pickColour": "Choose a colour",
+    "pickStyle": "Choose a style",
+    "quote": "Row {seq} is a custom size: Confirm makes a quote first (made to measure starts as a quote).",
+    "quoteNext": "When you accept the quote, it becomes the order.",
+    "sizesAfterStyle": "Choose the style first: its sizes show here.",
+    "title": "Confirm order",
+    "travel": "On the order line as words: {words}",
+    "travelQuote": "On the quote line as words: {words}",
+    "unit": "Unit price",
+    "window": "Confirm {title} as an order",
+    "windowQuote": "Confirm {title} as a quote"
+  },
+  "dw": {
+    "make": "Make style draft",
+    "none": "No style draft yet.",
+    "seen": "The customer sees it under Quotes & samples by itself.",
+    "title": "Design work"
+  },
+  "line": {
+    "styleDraft": "Style draft {code} · {name} · {status}"
+  },
+  "need": {
+    "colour": "colour",
+    "pieces": "pieces by size",
+    "style": "style"
+  },
+  "pm": {
+    "noList": "No list price for a new style: you type it at Confirm.",
+    "theirs": "Their price (without VAT)",
+    "title": "Price"
+  },
+  "st": {
+    "draft": "Draft order"
+  },
+  "thread": {
+    "title": "Messages · this draft"
   }
 }

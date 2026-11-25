@@ -1204,7 +1204,15 @@ function NewOrderContainer() {
         },
         onRetrySave: () => void flush(),
         // ---- od-w1.2 (R2, R3): the mail's Attachments; the products table; a row's windows; a Still open item.
-        files: { onFiles: (list) => void addFiles('REFERENCE', list, null), onRemove: removeFile },
+        files: {
+          onFiles: (list) => void addFiles('REFERENCE', list, null),
+          onRemove: removeFile,
+          // od-w2.4: the Logo mark — the draft's version, one write (the artwork carry reads the logos).
+          onLogo: (file, on) => {
+            const id = recordRef.current?.request.id
+            if (id) void write(`logo:${file.id}:${on}`, (version, key) => port.markFile(id, file.id, { version, part: on ? 'LOGO' : 'REFERENCE' }, key))
+          },
+        },
         table: {
           onProduct: (rowId, value) => void writeRow(rowId, 'styleId' in value ? { styleId: value.styleId } : { description: value.words === '' ? null : value.words }),
           onSizing: (rowId, sizing) => void writeRow(rowId, { sizing }),

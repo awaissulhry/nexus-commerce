@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../../../lib/api/client'
-import { DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { DRAFT_LATER_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6, 12-portal-drafts-team §3): the customer's portal drafts as the office reads
@@ -19,7 +19,9 @@ export const officeDraftSchema = z.object({
   /** The first line's style; null: "Untitled draft". */
   title: z.string().nullable(),
   people: z.number(),
-  readiness: z.object({ parts: z.array(z.object({ part: z.enum(DRAFT_PARTS), state: z.enum(DRAFT_PART_STATES) })), done: z.number(), of: z.number(), problems: z.number() }),
+  // od-w2.3 (od-s): what is still open (information) and whether the order still needs something at Confirm — never the old checklist.
+  openCount: z.number().optional(),
+  confirmHeld: z.boolean().optional(),
   later: z.array(z.enum(DRAFT_LATER_PARTS)),
   /** Its conversation, for a reader of its thread (null: not one). */
   thread: z.object({ messages: z.number(), lastAt: z.string().nullable(), designerAsked: z.boolean() }).nullable(),

@@ -69,11 +69,8 @@ import { NewOrderWindow } from '../../orders/new/view/NewOrderView'
 // ---- F-CP-107: Drafts of <customer> (made-up portal drafts) and one in its read-only window ----
 import { CATALOGUE_RECORD } from '../../inquiries/demo/fixtures'
 import { REQUEST_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules' // cp-walk: a draft's own state words
-import { inquiriesCan } from '../../inquiries/model'
 import type { CatalogueRecord } from '../../inquiries/api' // cp-walk
 import type { DraftRow } from './drafts/api'
-import { draftTitle } from './drafts/model'
-import { DraftWindow } from './drafts/view/DraftWindow'
 // ---- cq W3 (F-CQ-303, T part 2): the drafts are Quotes & incoming's "Customer is writing" — that tab's own gallery parts, mounted here
 import { QuotesTabDesign, quotesTabFor, writingTabFor, type TabRole } from './quotes-tab/fixtures'
 // ---- end cq W3
@@ -291,8 +288,8 @@ const draftRowsOf = (party: Party, price: boolean): DraftRow[] => {
   const file = (id: string, locked = false) => ({ id, lineId: null, originalName: locked ? null : `${id}.pdf`, kind: 'ATTACHMENT', sizeBytes: 120000, status: 'READY', locked })
   const base = { status: 'DRAFT', party: { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }, customerRef: null, currency: 'EUR', ...(price ? { netShown: '18400.00' } : {}) }
   return [
-    { ...base, id: 'd0000000-0000-4000-8000-000000000701', number: null, requestedDate: '2026-12-15', lines: 3, pieces: 140, version: 6, draft: { startedBy: 'Giulia Verdi', startedAt: '2026-11-12T09:00:00.000Z', lastEditedBy: 'Giulia Verdi', lastEditedAt: '2026-11-19T10:42:00.000Z', title: 'STY-01 Giacca demo', people: 12, readiness: { parts: [], done: 5, of: price ? 7 : 6, problems: 1 }, later: ['PEOPLE'], thread: { messages: 4, lastAt: '2026-11-19T10:40:00.000Z', designerAsked: true }, files: { logos: [file('l1'), file('l2')], references: [], sheets: [file('s1', true)] } } },
-    { ...base, id: 'd0000000-0000-4000-8000-000000000702', number: null, requestedDate: null, lines: 0, pieces: 0, version: 1, draft: { startedBy: 'Luca Bianchi', startedAt: '2026-11-18T15:10:00.000Z', lastEditedBy: 'Luca Bianchi', lastEditedAt: '2026-11-18T15:20:00.000Z', title: null, people: 0, readiness: { parts: [], done: 1, of: price ? 7 : 6, problems: 0 }, later: [], thread: null, files: { logos: [file('l3')], references: [], sheets: [] } } },
+    { ...base, id: 'd0000000-0000-4000-8000-000000000701', number: null, requestedDate: '2026-12-15', lines: 3, pieces: 140, version: 6, draft: { startedBy: 'Giulia Verdi', startedAt: '2026-11-12T09:00:00.000Z', lastEditedBy: 'Giulia Verdi', lastEditedAt: '2026-11-19T10:42:00.000Z', title: 'STY-01 Giacca demo', people: 12, openCount: 2, confirmHeld: true, later: ['PEOPLE'], thread: { messages: 4, lastAt: '2026-11-19T10:40:00.000Z', designerAsked: true }, files: { logos: [file('l1'), file('l2')], references: [], sheets: [file('s1', true)] } } },
+    { ...base, id: 'd0000000-0000-4000-8000-000000000702', number: null, requestedDate: null, lines: 0, pieces: 0, version: 1, draft: { startedBy: 'Luca Bianchi', startedAt: '2026-11-18T15:10:00.000Z', lastEditedBy: 'Luca Bianchi', lastEditedAt: '2026-11-18T15:20:00.000Z', title: null, people: 0, openCount: 5, confirmHeld: true, later: [], thread: null, files: { logos: [file('l3')], references: [], sheets: [] } } },
   ]
 }
 
@@ -654,24 +651,12 @@ function WorkTools({ tools, children }: { tools: MemoryToolsModel; children?: Re
 /** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
 // ---- F-CQ-303 (T part 2): the customer's portal drafts on Quotes & incoming (the WRITING door): the same list, one open in its window ----
 function DraftsTabDesign({ work, party }: { work: WorkCase; party: Party }) {
-  const t = useT('parties')
   const name = party.tradeName ?? party.legalName
   const price = work.price !== false
   const rows = work.drafts === 'empty' ? [] : draftRowsOf(party, price)
   const role: TabRole = work.role === 'manager' ? 'production' : price ? 'owner' : 'sales'
-  const window =
-    work.drafts === 'window'
-      ? createElement(DraftWindow, {
-          model: {
-            customer: name,
-            title: draftTitle(draftRowsOf(party, true)[0]!, t('customers.drafts.untitled')),
-            nav: { ids: draftRowsOf(party, true).map((row) => row.id), current: draftRowsOf(party, true)[0]!.id },
-            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(price ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: draftRequestOf(party), may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
-          },
-        })
-      : null
   const drafts = { customer: name, read: { status: 'ready' as const, rows }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, wide: true }
-  return createElement(QuotesTabDesign, { model: writingTabFor({ id: party.id, name }, drafts, role, window) })
+  return createElement(QuotesTabDesign, { model: writingTabFor({ id: party.id, name }, drafts, role) })
 }
 // ---- end F-CQ-303
 
@@ -1264,7 +1249,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'work-drafts', label: 'F-CQ-303 · Quotes & incoming › Customer is writing: two portal drafts, read only (one live update waiting)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     { id: 'work-drafts-no-price', label: 'F-CQ-303 · Customer is writing as a Sales worker without prices: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     { id: 'work-drafts-empty', label: 'F-CQ-303 · Customer is writing: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
-    { id: 'work-drafts-window', label: 'F-CQ-303 · A draft open in its window (from Customer is writing): read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    { id: 'work-drafts-window', label: 'od-w2.3 · Customer is writing: each row opens the office draft page, editable (the read-only window went); N still open', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
     // ---- F-CP-114: "Set customer's price…" (row ⋯, or the Customer's price cell) — the ONE window, price holders only.
     { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },

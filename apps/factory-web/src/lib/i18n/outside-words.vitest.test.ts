@@ -88,8 +88,9 @@ describe('the portal reads voi, the office today’s word — the same key', () 
       expect(read(null, () => useT(namespace)(key)), `${namespace}:${key}`).toBe(CATALOGUE.it[namespace]?.[key])
       expect(read('office', () => useT(namespace)(key)), `${namespace}:${key}`).toBe(CATALOGUE.it[namespace]?.[key])
     }
-    // English: the same words for both (one register), but the portal's step-up code comes by e-mail, not from an app.
-    expect(read('outside', () => useT('last-message')('columnHint'), 'en')).toBe(CATALOGUE.en['last-message']?.columnHint)
+    // English: the portal says "conversation" (pg- G1-B8), the office keeps its own words; the portal's step-up code comes by e-mail.
+    expect(read('outside', () => useT('last-message')('columnHint'), 'en')).toBe('Your new messages since you last read the conversation. A click opens the conversation at the first new one.')
+    expect(read('office', () => useT('last-message')('columnHint'), 'en')).toBe(CATALOGUE.en['last-message']?.columnHint)
     expect(read('outside', () => useT('ds-words')('stepUp.codeHint'), 'en')).toBe('The 6-digit code we sent you by e-mail.')
     expect(read(null, () => useT('ds-words')('stepUp.codeHint'), 'en')).toBe('The 6-digit code from your authenticator app.')
   })

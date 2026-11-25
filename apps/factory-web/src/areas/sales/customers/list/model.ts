@@ -15,7 +15,8 @@ import { phasePhrase } from '../../orders/list/sheet/model' // F-CL-202: the Wor
 /** The list's own words (`messages/<locale>/customers-list.json`). */
 export const CUSTOMERS_LIST_NS = 'customers-list'
 /** F-CL-202: the catalogues the band and the work cells reuse (one word per thing): parties, orders, the sheet, the levels, "+n more". */
-export const WORK_WORDS: readonly string[] = Object.freeze(['parties', 'orders', 'orders-sheet', 'sales-orders-depth', 'home-tasks'])
+// od-w2.3: + 'order-draft' (lib/order-draft DRAFT_NS) — a draft row says what is still open in the draft part's own words.
+export const WORK_WORDS: readonly string[] = Object.freeze(['parties', 'orders', 'orders-sheet', 'sales-orders-depth', 'home-tasks', 'order-draft'])
 
 // ---- F-CL-102: the Customer cell ------------------------------------------------------------------------------------------
 

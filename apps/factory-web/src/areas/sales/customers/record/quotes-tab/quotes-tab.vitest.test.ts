@@ -270,10 +270,11 @@ describe('F-CQ-205: the drafts section', () => {
     expect(tab).toContain('{tab.rights.drafts && <DraftsSection {...sections} />}')
     expect(tab.indexOf('<QuotesSection {...sections} />')).toBeLessThan(tab.indexOf('<DraftsSection {...sections} />'))
     expect(tab).toContain('const showing = tab.terms.drafts && !hidden && count !== 0')
-    expect(tab).toContain('useCustomerDrafts(party.id, showing, untitled)')
-    // One list, no copy: the Work tab's list and window; no Views ▾ here; each draft's garment (the portalOrder picture source).
+    expect(tab).toContain('useCustomerDrafts(party.id, showing)')
+    // One list, no copy: the Work tab's list; no Views ▾ here; each draft's garment (the portalOrder picture source). od-w2.3: no
+    // read-only window — a row opens the office draft page, editable.
     expect(tab).toContain('<CustomerDraftsList')
-    expect(tab).toContain('<DraftWindow')
+    expect(tab).not.toContain('<DraftWindow')
     expect(tab).toContain("pictures: { read: readPictures, header: b('drafts.picture') }")
     const list = readFileSync(new URL('../drafts/view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
     expect(list).not.toContain('readonly views?:') // F-CQ-303: no Views ▾ at all (the Work tab's Drafts view left)
@@ -537,9 +538,8 @@ describe('cq fx2: the walk\'s gaps', () => {
     expect(heads).toContain('.ag-header-cell.fw-list-more .ag-header-cell-text')
   })
 
-  it('W-06: the draft window draws no decision, names the customer as the page does and shows the draft\'s garment', () => {
-    const window = src('../drafts/view/DraftWindow.tsx')
-    expect(window).toContain('customer: model.customer, ...(model.picture ? { picture: model.picture } : {})')
+  it('W-06 / od-w2.3: a draft opens the office draft page (the read-only window went); the pane still names the customer and its garment', () => {
+    expect(src('../drafts/use-customer-drafts.ts')).toContain('router.push(officeDraftHref(')
     const pane = src('../../../inquiries/view/pane/catalogue/CataloguePane.tsx')
     expect(pane).toContain('<span className="fw-rp-who">{model.draft?.customer ?? request.party.name}</span>')
     expect(pane).toContain('{model.draft?.picture ?? <ShoppingCart size={16} />}')

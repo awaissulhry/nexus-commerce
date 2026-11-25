@@ -138,8 +138,8 @@ const ENDED_INCOMING: IncomingRow[] = [incomingOf(requestRow(5), 'SEED-INQ-0004'
 
 const file = (id: string) => ({ id, lineId: null, originalName: `${id}.pdf`, kind: 'ATTACHMENT', sizeBytes: 120000, status: 'READY', locked: false })
 const DRAFTS: DraftRow[] = [
-  { id: 'd0000000-0000-4000-8000-0000000007c1', number: null, status: 'DRAFT', party: REF, customerRef: null, requestedDate: '2026-12-15', lines: 3, pieces: 140, netShown: '18400.00', currency: 'EUR', version: 6, draft: { startedBy: 'Seed Buyer One', startedAt: '2026-10-22T09:00:00.000Z', lastEditedBy: 'Seed Buyer One', lastEditedAt: '2026-10-28T10:42:00.000Z', title: 'SEED-STY-01 Touring jacket', people: 12, readiness: { parts: [], done: 5, of: 7, problems: 1 }, later: ['PEOPLE'], thread: { messages: 4, lastAt: '2026-10-28T10:40:00.000Z', designerAsked: true }, files: { logos: [file('l1')], references: [], sheets: [] } } },
-  { id: 'd0000000-0000-4000-8000-0000000007c2', number: null, status: 'DRAFT', party: REF, customerRef: null, requestedDate: null, lines: 0, pieces: 0, netShown: null, currency: 'EUR', version: 1, draft: { startedBy: 'Seed Buyer Two', startedAt: '2026-10-27T15:10:00.000Z', lastEditedBy: 'Seed Buyer Two', lastEditedAt: '2026-10-27T15:20:00.000Z', title: null, people: 0, readiness: { parts: [], done: 1, of: 7, problems: 0 }, later: [], thread: null, files: { logos: [], references: [], sheets: [] } } },
+  { id: 'd0000000-0000-4000-8000-0000000007c1', number: null, status: 'DRAFT', party: REF, customerRef: null, requestedDate: '2026-12-15', lines: 3, pieces: 140, netShown: '18400.00', currency: 'EUR', version: 6, draft: { startedBy: 'Seed Buyer One', startedAt: '2026-10-22T09:00:00.000Z', lastEditedBy: 'Seed Buyer One', lastEditedAt: '2026-10-28T10:42:00.000Z', title: 'SEED-STY-01 Touring jacket', people: 12, openCount: 2, confirmHeld: true, later: ['PEOPLE'], thread: { messages: 4, lastAt: '2026-10-28T10:40:00.000Z', designerAsked: true }, files: { logos: [file('l1')], references: [], sheets: [] } } },
+  { id: 'd0000000-0000-4000-8000-0000000007c2', number: null, status: 'DRAFT', party: REF, customerRef: null, requestedDate: null, lines: 0, pieces: 0, netShown: null, currency: 'EUR', version: 1, draft: { startedBy: 'Seed Buyer Two', startedAt: '2026-10-27T15:10:00.000Z', lastEditedBy: 'Seed Buyer Two', lastEditedAt: '2026-10-27T15:20:00.000Z', title: null, people: 0, openCount: 5, confirmHeld: true, later: [], thread: null, files: { logos: [], references: [], sheets: [] } } },
 ]
 
 // ---- the lists as the tab mounts them (the host's columns by the tab's room, Most urgent first, the customer's one name) -----------
@@ -196,11 +196,9 @@ export interface QuotesTabCase {
   readonly drafts: CustomerDraftsListModel
   /** Views ▾ / Export ▾ / Customise of the Quotes list, in memory. */
   readonly tools?: MemoryToolsModel
-  // ---- cq W3 (T part 2): the customer page's own gallery mounts this tab for ITS customer, with a draft open in its window
+  // ---- cq W3 (T part 2): the customer page's own gallery mounts this tab for ITS customer (od-w2.3: a draft opens the office draft page)
   /** The page's customer (absent: Seed Customer One). */
   readonly party?: { readonly id: string; readonly name: string }
-  /** A draft's read-only window (the page's gallery builds it). */
-  readonly window?: ReactNode
 }
 
 const ROOM = 1240
@@ -279,7 +277,7 @@ export function QuotesTabDesign({ model }: { model: QuotesTabCase }) {
   const incoming = hidden ? null : createElement(TabSection, { kind: 'incoming', customer: party.name, tab, every: incomingEvery }, createElement(InquiriesView, { model: { ...model.incoming, customerName: party.name, foot: createElement(SectionFoot, { kind: 'incoming', customer: party.name, tab, every: incomingEvery }) } }))
   const quotes = hidden ? null : createElement(TabSection, { kind: 'quotes', customer: party.name, tab, every: quotesEvery }, model.tools ? createElement(MemoryTools, { tools: model.tools }, quotesList) : quotesList)
   const picture = useT(BEFORE_ORDER_NS)('drafts.picture')
-  const drafts = hidden ? null : createElement(DraftsFrame, { customer: party.name, tab, window: model.window ?? null }, createElement(CustomerDraftsList, { model: { ...model.drafts, customer: party.name, room: model.room /* cq fx2 W-04 */, pictures: { read: NO_PICTURES, header: picture } } }))
+  const drafts = hidden ? null : createElement(DraftsFrame, { customer: party.name, tab }, createElement(CustomerDraftsList, { model: { ...model.drafts, customer: party.name, room: model.room /* cq fx2 W-04 */, pictures: { read: NO_PICTURES, header: picture } } }))
   const frame = createElement(QuotesTabFrame, { model: { partyId: party.id, customer: party.name, tab, band }, incoming, quotes, drafts })
   return createElement('div', { style: { maxWidth: model.room, margin: '0 auto' } }, createElement(WithMessages, { namespaces: ['parties', BEFORE_ORDER_NS] }, frame))
 }
@@ -302,9 +300,9 @@ const TOOLS: MemoryToolsModel = { pageKey: null, locale: 'en', answer: { views: 
 /** The tab as the page's busy case shows it, for the page's customer. */
 export const quotesTabFor = (party: { readonly id: string; readonly name: string }, role: TabRole = 'owner'): QuotesTabCase => ({ ...tabCase({ role }), party })
 /** "Customer is writing" (the WRITING door) for the page's customer: its drafts (the page's own made-up rows), one open in its window. */
-export function writingTabFor(party: { readonly id: string; readonly name: string }, drafts: CustomerDraftsListModel, role: TabRole, window: ReactNode = null): QuotesTabCase {
+export function writingTabFor(party: { readonly id: string; readonly name: string }, drafts: CustomerDraftsListModel, role: TabRole): QuotesTabCase {
   const count = drafts.read.status === 'ready' ? drafts.read.rows.length : 0
-  return { ...doorCase('WRITING', [], [], role), counts: countsOf({ ...BUSY, drafts: count }, role), drafts, party, ...(window ? { window } : {}) }
+  return { ...doorCase('WRITING', [], [], role), counts: countsOf({ ...BUSY, drafts: count }, role), drafts, party }
 }
 
 // ---- the cases -------------------------------------------------------------------------------------------------------------------

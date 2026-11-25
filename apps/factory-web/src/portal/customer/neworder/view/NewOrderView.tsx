@@ -328,6 +328,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
             {record.seesPrices && productRowsOf(record.request).length > 0 ? <PriceCard model={model} actions={actions} /> : null}
           </>
         ) : null,
+        actionBar: record ? <SendButton held={model.sendHeld} onSend={actions?.onSend} /> : null,
         continueSlot:
           model.start.state === 'loading' ? (
             <Loading rows={2} height={44} label={dw.t('start.continue')} />
@@ -356,6 +357,16 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
   )
 }
 
+/** The ONE Send button: in its card, and (od-w2.6) in the page's sticky bar on a phone. */
+function SendButton({ held, onSend, className }: { held: string | null; onSend?: () => void; className?: string }) {
+  const dw = useDraftWords()
+  return (
+    <Button variant="primary" heldReason={held} onClick={() => onSend?.()} {...(className ? { className } : {})}>
+      <Send size={14} aria-hidden /> {dw.t('send.title')}
+    </Button>
+  )
+}
+
 /** Send to the factory (R1): always on — nothing is required; held only for a colleague who may not order (their names), a preview, offline. */
 function SendCard({ held, onSend }: { held: string | null; onSend?: () => void }) {
   const dw = useDraftWords()
@@ -366,9 +377,7 @@ function SendCard({ held, onSend }: { held: string | null; onSend?: () => void }
           {dw.t('send.title')}
         </h2>
         <p className="fw-pno-quiet">{dw.t('send.body')}</p>
-        <Button variant="primary" heldReason={held} onClick={() => onSend?.()}>
-          <Send size={14} aria-hidden /> {dw.t('send.title')}
-        </Button>
+        <SendButton held={held} onSend={onSend} className="fw-od-hostgo" />
       </section>
     </Card>
   )

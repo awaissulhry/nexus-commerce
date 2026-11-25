@@ -444,6 +444,21 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       note: 'Saved on leaving the cell, with the draft’s version; “18,50” and “18.50” both read; a cell that is not a price says so and sends nothing.',
     },
     {
+      id: 'od-r1-draft',
+      label: 'R1: a mail and one products table — Still open informs, Send never held by a missing cell, saved by the factory',
+      model: page(() => ({
+        record: kindsRecord({
+          request: {
+            subject: 'Race team kit for 2027',
+            designStarted: true,
+            savedBy: { who: 'FACTORY' as const, name: null },
+            stillOpen: { openCount: 2, confirmHeld: true, items: [{ kind: 'PIECES', lineId: mtmLine().id, seq: mtmLine().seq, topic: null, state: 'NOT_DECIDED', confirmNeeds: true }, { kind: 'DATE', lineId: null, seq: null, topic: null, state: 'NOT_DECIDED', confirmNeeds: false }] },
+          },
+        }),
+      })),
+      note: 'od-tw (t.3): the R1 face of SCR-185 — the subject names the draft; "The factory reads this draft from the first save." · "The factory is working on the design."',
+    },
+    {
       id: 'od-pieces',
       label: 'A row’s Pieces (a centred window): by person — the roster',
       model: page(() => {
