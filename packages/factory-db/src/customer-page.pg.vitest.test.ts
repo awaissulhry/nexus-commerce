@@ -24,10 +24,14 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  *     moved with its line by a split, never changed), the line held by its row (Restrict), the partner role's grants (no
  *     enteredById), the brand wall;
  *   - PortalOrderRequestLine: CATALOGUE · DESCRIBED · MADE_TO_MEASURE shapes, the customer's own price frozen at Send, a
- *     by-person line keeps its people; Send counts a line's pieces by its kind;
- *   - PortalOrderRequest: the parts sent later each once, who saved it last with when, both only while DRAFT;
+ *     by-person line keeps its people; OD s.1 (schema wave "order start 1/1", …_order_start_guards; addendum R1-R3): every
+ *     cell optional (a catalogue line's colourway, a described line's words, a made-to-measure line's garment type may
+ *     wait), made to measure exactly when its sizing says so, its kind changes with its sizing; Send needs nothing (no line,
+ *     no pieces: was "Send counts a line's pieces by its kind");
+ *   - PortalOrderRequest: the parts sent later each once, who saved it last with when, the subject (OD s.1: 1 to 200 trimmed
+ *     characters), all only while DRAFT (OD s.1: the office edits a draft too, Owner's yes 1a);
  *   - PortalOrderRequestPerson: DRAFT only, on a by-person line of its own request, SIZE · SHEET · LATER, the sheet a
- *     MEASUREMENTS file of its own request (never Beta's), removed with its line;
+ *     MEASUREMENTS file of its own request (never Beta's), removed with its line; OD s.1: the office writes them too;
  *   - PortalSettings: the factory designer slot (active office people, a backup only beside a designer and never the same,
  *     a customer or a brand only), mtmDraftsOn on by default;
  *   - StoredFile.priced: changes on a live file, a superseded version and a deleted one; a superseded version still keeps
@@ -58,13 +62,17 @@ const MOVE = /moves to another order only with its line \(a split of the order\)
 const SOURCE_FILE = /the source of customer's price .* is a file of its own order/
 const TOTAL_IS_OURS = /the customer's total of order .* is the factory's to remove/
 // The portal draft
-const KIND_SHAPE = /names a style and colourway from the catalogue, the customer's words when described, a garment type and its people when made to measure; a colourway only with its style/
+// OD s.1 (addendum R3): every cell optional — a catalogue line's colourway, a described line's words, a garment type may wait.
+const KIND_SHAPE = /names its style when from the catalogue \(its colourway may wait\), its people when made to measure; a colourway only with its style/
+const SIZING_KIND = /is made to measure exactly when its sizing is MADE_TO_MEASURE/
+const SUBJECT = /has a subject of 1 to 200 trimmed characters, or none/
 const LINE_WORDS = /has words of up to 2000, colours in words of up to 200, a garment type of 1 to 40 trimmed characters, a total of 1 to 100000 pieces only when described, its own price of at least 0/
 const LINES_DRAFT = /the lines of order request .* change only while it is a DRAFT/
 const KEEPS_PEOPLE = /has its people; remove them before it is no longer by person/
-const SEND_PIECES = /is sent with at least one line, each with its pieces/
 const LATER_PARTS = /names the parts it sends later each once, and who saved it last together with when \(both or neither\)/
-const NOT_SENT_AGAIN = /moves DRAFT → SENT → ACCEPTED, REFUSED or WITHDRAWN, not SENT → SENT/
+// OD s.1 (…_order_start_guards): SENT → SENT is the office's move for the style drafts only; the customer changes nothing of it.
+const NOT_SENT_AGAIN = /was sent; only the office names the style drafts it made for it/
+const SENT_STYLES_ONLY = /\(SENT → SENT\) changes only styleIds, version, updatedAt/
 const PEOPLE_DRAFT = /the people of order request .* change only while it is a DRAFT/
 const BY_PERSON_LINE = /is on a by-person line of its own request/
 const PERSON_SHAPE = /has its place \(1 or more\), a name of 1 to 120 trimmed characters, a number of up to 10, a note of up to 1000/
@@ -211,7 +219,7 @@ const draftLine = (requestId: string, seq: number, extra: Record<string, unknown
 })
 /** A made-to-measure line of `requestId`; its id. */
 async function mtmLine(requestId: string, seq = 1): Promise<string> {
-  const row = draftLine(requestId, seq, { kind: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, garmentType: 'JACKET', byPerson: true })
+  const row = draftLine(requestId, seq, { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE' /* OD s.1 */, styleId: null, colourwayId: null, garmentType: 'JACKET', byPerson: true })
   expect(await insert(p1(), 'PortalOrderRequestLine', row)).toBe(1)
   return row.id as string
 }
@@ -440,17 +448,24 @@ describe("the customer's price of an order (OrderBrandPrice)", () => {
 
 // ---------------------------------------------------------------------------------------------------------------------------
 describe('the portal draft: line kinds, the parts sent later, Send', () => {
+  // OD s.1 (addendum R3): every cell optional — was also refused: a catalogue line without its colourway, a described one
+  // without words, a made-to-measure one without a garment type (each now inserts, below); made to measure exactly by its sizing.
   it('holds each kind of line to its shape', async () => {
     const draft = await newDraft()
     for (const extra of [
-      { colourwayId: null },
       { styleId: null, colourwayId: null },
-      { kind: 'DESCRIBED', description: null },
-      { kind: 'MADE_TO_MEASURE', garmentType: null, byPerson: true },
-      { kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false },
+      { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false },
       { kind: 'DESCRIBED', description: 'Our own jacket', styleId: null },
     ]) {
       expect(await refusalOf(insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1, extra))), JSON.stringify(extra)).toMatch(KIND_SHAPE)
+    }
+    for (const extra of [
+      { kind: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, garmentType: 'JACKET', byPerson: true },
+      { kind: 'MADE_TO_MEASURE', sizing: 'STANDARD', styleId: null, colourwayId: null, garmentType: 'JACKET', byPerson: true },
+      { sizing: 'MADE_TO_MEASURE' },
+      { kind: 'DESCRIBED', sizing: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, byPerson: true },
+    ]) {
+      expect(await refusalOf(insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1, extra))), JSON.stringify(extra)).toMatch(SIZING_KIND)
     }
     for (const extra of [
       { quantity: 10 },
@@ -459,7 +474,7 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
       { kind: 'DESCRIBED', description: 'x'.repeat(2001) },
       { kind: 'DESCRIBED', description: '  ' },
       { colourText: 'x'.repeat(201) },
-      { kind: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, garmentType: ' JACKET', byPerson: true },
+      { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, garmentType: ' JACKET', byPerson: true },
       { brandUnitPrice: '-1.000000' },
     ]) {
       expect(await refusalOf(insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1, extra))), JSON.stringify(extra)).toMatch(LINE_WORDS)
@@ -467,7 +482,31 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1, { brandUnitPrice: '399.000000' }))).toBe(1)
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 2, { kind: 'DESCRIBED', styleId: null, colourwayId: null, description: 'Thirty vests, our logo on the back', colourText: 'Navy and white', quantity: 30 }))).toBe(1)
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 3, { kind: 'DESCRIBED', description: 'In our own style, a shorter sleeve', colourwayId: null }))).toBe(1)
-    expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 4, { kind: 'MADE_TO_MEASURE', colourwayId: null, garmentType: 'JACKET', byPerson: true }))).toBe(1)
+    expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 4, { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', colourwayId: null, garmentType: 'JACKET', byPerson: true }))).toBe(1)
+    // OD s.1 (addendum R3): every cell optional — these were refused before the order start wave.
+    expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 5, { colourwayId: null, sizing: 'STANDARD' }))).toBe(1)
+    expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 6, { kind: 'DESCRIBED', styleId: null, colourwayId: null, description: null }))).toBe(1)
+    const mtm = draftLine(draft, 7, { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, garmentType: null, byPerson: true })
+    expect(await insert(p1(), 'PortalOrderRequestLine', mtm)).toBe(1)
+    // A line's kind changes with its sizing in one update, while DRAFT (nothing pins the kind); never one without the other.
+    expect(await update(p1(), 'PortalOrderRequestLine', mtm.id as string, `kind = 'DESCRIBED', sizing = NULL, version = version + 1`)).toBe(1)
+    expect(await refusalOf(update(p1(), 'PortalOrderRequestLine', mtm.id as string, `kind = 'MADE_TO_MEASURE', version = version + 1`))).toMatch(SIZING_KIND)
+    expect(await update(office(), 'PortalOrderRequestLine', mtm.id as string, `kind = 'MADE_TO_MEASURE', sizing = 'MADE_TO_MEASURE', version = version + 1`)).toBe(1)
+    expect(await admin(`SELECT kind::text AS kind, sizing::text AS sizing, "garmentType" FROM "PortalOrderRequestLine" WHERE id = $1::uuid`, [mtm.id])).toEqual([{ kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', garmentType: null }])
+  })
+
+  // OD s.1 (addendum R2): the draft's subject, as a mail's — a draft column of both doors, frozen at Send.
+  it('keeps a subject of 1 to 200 trimmed characters or none, written by both doors while it is a DRAFT', async () => {
+    const draft = await newDraft()
+    expect(await update(p1(), 'PortalOrderRequest', draft, `subject = $2, version = version + 1`, 'x'.repeat(200))).toBe(1)
+    expect(await update(office(), 'PortalOrderRequest', draft, `subject = 'Custom motorcycle suit for our race team', version = version + 1`)).toBe(1)
+    for (const subject of ['x'.repeat(201), ' Suits', 'Suits ', '']) {
+      expect(await refusalOf(update(p1(), 'PortalOrderRequest', draft, `subject = $2, version = version + 1`, subject)), JSON.stringify(subject)).toMatch(SUBJECT)
+    }
+    expect(await send(draft)).toBe(1)
+    expect(await refusalOf(update(p1(), 'PortalOrderRequest', draft, `subject = NULL, version = version + 1`))).toMatch(NOT_SENT_AGAIN)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `subject = NULL, version = version + 1`))).toMatch(SENT_STYLES_ONLY)
+    expect(await admin(`SELECT subject FROM "PortalOrderRequest" WHERE id = $1::uuid`, [draft])).toEqual([{ subject: 'Custom motorcycle suit for our race team' }])
   })
 
   it('names the parts sent later each once and who saved it last with when, both only while it is a DRAFT', async () => {
@@ -476,12 +515,16 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     for (const set of [`"laterParts" = ARRAY['LOGOS', 'LOGOS']::"PortalDraftPart"[]`, `"laterParts" = NULL`, `"lastEditedAt" = NULL`]) {
       expect(await refusalOf(update(p1(), 'PortalOrderRequest', draft, `${set}, version = version + 1`)), set).toMatch(LATER_PARTS)
     }
-    // The office reads a draft; it never edits one.
-    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY[]::"PortalDraftPart"[], version = version + 1`))).toMatch(/is the customer's; the office only sends it for the portal/)
+    // OD s.1 (Owner's yes 1a): the office edits a draft too — its draft columns only.
+    expect(await update(office(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY['REFERENCES']::"PortalDraftPart"[], "lastEditedById" = $2::uuid, "lastEditedAt" = now(), version = version + 1`, a.actorId)).toBe(1)
+    expect(await admin(`SELECT "laterParts"::text[] AS later, "lastEditedById"::text AS editor FROM "PortalOrderRequest" WHERE id = $1::uuid`, [draft])).toEqual([{ later: ['REFERENCES'], editor: a.actorId }])
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY['LOGOS', 'LOGOS']::"PortalDraftPart"[], version = version + 1`))).toMatch(LATER_PARTS)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"decidedAt" = now(), version = version + 1`))).toMatch(/\(DRAFT → DRAFT\) changes only source, customerRef/)
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1))).toBe(1)
     expect(await insert(p1(), 'PortalOrderRequestSize', { id: randomUUID(), partyId: P1, lineId: (await admin(`SELECT id::text AS id FROM "PortalOrderRequestLine" WHERE "requestId" = $1::uuid`, [draft]))[0]!.id, size: '52', quantity: 2 })).toBe(1)
     expect(await send(draft)).toBe(1)
     expect(await refusalOf(update(p1(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY[]::"PortalDraftPart"[], version = version + 1`))).toMatch(NOT_SENT_AGAIN)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY[]::"PortalDraftPart"[], version = version + 1`))).toMatch(SENT_STYLES_ONLY)
   })
 
   it("freezes the customer's own price at Send with the rest of the line", async () => {
@@ -495,19 +538,25 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     expect(await admin(`SELECT "brandUnitPrice"::text AS price FROM "PortalOrderRequestLine" WHERE id = $1::uuid`, [line.id])).toEqual([{ price: '405.000000' }])
   })
 
-  it("sends a line with its pieces by its kind: sizes, a described total, people, or a sheet on a by-person line", async () => {
+  // OD s.1 (…_order_start_guards; addendum R1 "we should not keep any requirements at all"): Send needs nothing — no line, no
+  // pieces (the office asks what the order needs at its Confirm). Was: "sends a line with its pieces by its kind" (a line
+  // without pieces, and a request without a line, were refused).
+  it('sends with no line, or lines with their pieces by their kind or not decided yet', async () => {
+    // No line at all: sent (OD s.1; was refused).
+    const none = await newDraft()
+    expect(await send(none)).toBe(1)
     // A described line with a total, no sizes.
     const described = await newDraft()
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(described, 1, { kind: 'DESCRIBED', styleId: null, colourwayId: null, description: 'Thirty vests', quantity: 30 }))).toBe(1)
     expect(await send(described)).toBe(1)
-    // A described line with neither: refused.
+    // A described line with neither (only the customer's words): sent (OD s.1; was refused).
     const wordsOnly = await newDraft()
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(wordsOnly, 1, { kind: 'DESCRIBED', styleId: null, colourwayId: null, description: 'Some vests' }))).toBe(1)
-    expect(await refusalOf(send(wordsOnly))).toMatch(SEND_PIECES)
-    // A made-to-measure line: refused without its people; sent with one person, or with a sheet on the line instead.
+    expect(await send(wordsOnly)).toBe(1)
+    // A made-to-measure line: sent without its people yet (OD s.1; was refused), with one person, or with a sheet on the line.
     const nobody = await newDraft()
     await mtmLine(nobody)
-    expect(await refusalOf(send(nobody))).toMatch(SEND_PIECES)
+    expect(await send(nobody)).toBe(1)
     const withPeople = await newDraft()
     const line = await mtmLine(withPeople)
     expect(await insert(p1(), 'PortalOrderRequestPerson', person(withPeople, line, 1, { measureBy: 'SIZE', size: '52' }))).toBe(1)
@@ -516,10 +565,11 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     const sheetLine = await mtmLine(withSheet)
     await p1File({ recordType: 'PortalOrderRequestLine', recordId: sheetLine, category: 'MEASUREMENTS' })
     expect(await send(withSheet)).toBe(1)
-    // A catalogue line still needs its sizes.
+    // A catalogue line without its sizes yet: sent (OD s.1; was refused).
     const noSizes = await newDraft()
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(noSizes, 1))).toBe(1)
-    expect(await refusalOf(send(noSizes))).toMatch(SEND_PIECES)
+    expect(await send(noSizes)).toBe(1)
+    expect(await admin(`SELECT status::text AS status FROM "PortalOrderRequest" WHERE id IN ($1::uuid, $2::uuid, $3::uuid, $4::uuid) ORDER BY id`, [none, wordsOnly, nobody, noSizes])).toEqual([{ status: 'SENT' }, { status: 'SENT' }, { status: 'SENT' }, { status: 'SENT' }])
   })
 })
 
@@ -592,12 +642,17 @@ describe('the people of a by-person line (PortalOrderRequestPerson)', () => {
     expect(await refusalOf(insert(p1(), 'PortalOrderRequestPerson', person(sent, sentLine, 2)))).toMatch(PEOPLE_DRAFT)
   })
 
-  it("the office reads them and writes none; Beta neither reads nor adds any of P1's", async () => {
+  // OD s.1 (Owner's yes 1a): the office writes them too (orders.manage, checked by the API); was "the office … writes none".
+  it("the office reads and writes them; Beta neither reads nor adds any of P1's", async () => {
     expect(await sql(office(), `SELECT seq, name, "measureBy"::text AS measure FROM "PortalOrderRequestPerson" WHERE "lineId" = $1::uuid ORDER BY seq`, cp.mtmLineId)).toEqual([
       { seq: 1, name: 'Rider One', measure: 'SIZE' },
       { seq: 2, name: 'Rider Two', measure: 'LATER' },
     ])
-    await expect(insert(office(), 'PortalOrderRequestPerson', person(cp.draftId, cp.mtmLineId, 9))).rejects.toThrow(DENIED)
+    const officeRider = person(cp.draftId, cp.mtmLineId, 9, { createdById: a.actorId })
+    expect(await insert(office(), 'PortalOrderRequestPerson', officeRider)).toBe(1)
+    expect(await update(office(), 'PortalOrderRequestPerson', officeRider.id as string, `"measureBy" = 'SIZE', size = '52', version = version + 1`)).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequestPerson', officeRider.id as string, `"measureBy" = 'SIZE', size = NULL, version = version + 1`))).toMatch(MEASURE)
+    expect(await remove(office(), 'PortalOrderRequestPerson', officeRider.id as string)).toBe(1)
     expect(await sql(beta(), `SELECT id FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid`, cp.draftId)).toEqual([])
     expect(await refusalOf(insert(beta(), 'PortalOrderRequestPerson', person(cp.draftId, cp.mtmLineId, 9)))).toMatch(RLS)
     expect(await refusalOf(insert(beta(), 'PortalOrderRequestPerson', person(cp.draftId, cp.mtmLineId, 9, { partyId: two.second.partyId })))).toMatch(FOREIGN)
