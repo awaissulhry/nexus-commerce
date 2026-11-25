@@ -8,7 +8,7 @@ import { changeRequestSchema, orderRecordSchema, rulesSchema, type OrderLine, ty
 import { orderBandOf, orderTabsOf, type OrderBandFacts } from './band'
 import { documentsRead, orderRecord, orderWords, PREFIX, progressRead, requestsOf, rulesOf, shellOf, shipmentsRead } from './design-data'
 import { RECORD_TABS, shownLinesOf, type RecordTab } from './model'
-import { CustomerCase } from './view/CustomerCase'
+import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 import type { OrderRecordViewModel } from './view/OrderRecordView'
 
 /**
@@ -72,7 +72,7 @@ function modelOf(record: OrderRecord, tab: RecordTab): OrderRecordViewModel {
   }
 }
 const draw = (record: OrderRecord, tab: RecordTab, locale: Locale) =>
-  render(createElement(CustomerCase, { model: (at: Locale) => ({ shell: shellOf(at, orderBandOf({ words: orderWords(at), record, prefix: PREFIX, facts: FACTS })), body: { kind: 'record', model: modelOf(record, tab), thread: null } }) }), locale)
+  render(createElement(CustomerCase, { model: (at: Locale): CustomerCaseModel => ({ shell: shellOf(at, orderBandOf({ words: orderWords(at), record, prefix: PREFIX, facts: FACTS })), body: { kind: 'record', model: modelOf(record, tab), thread: null } }) }), locale)
 
 describe('PW-O03 — an order with a charge line (FEE) loads', () => {
   it('the line schema takes every kind the API sends; a FEE line parses and stays a FEE line', () => {
