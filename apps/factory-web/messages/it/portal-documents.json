@@ -243,7 +243,7 @@
       "transfer": "Potete sempre pagare con bonifico: le nostre coordinate bancarie sono sulla fattura.",
       "transferDeposit": "Potete sempre pagare con bonifico: le nostre coordinate bancarie sono sul preventivo."
     },
-    "ask": "Fai una domanda",
+    "ask": "Fate una domanda",
     "askOf": "Chiedi della fattura {number}"
   },
   "method": {

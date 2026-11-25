@@ -16,6 +16,7 @@ import { bandChipsOf, bandHealthOf, bandProductionOf, orderBandOf, orderTabsOf, 
 import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './design-data'
 import { RECORD_TABS, tabOf } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+import { keyJoinOf } from '../../shell/view/FrameDialogs' // pp-fx5 (walk W-18)
 import { CustomerCase, type CustomerCaseModel } from './view/CustomerCase'
 
 /**
@@ -41,7 +42,8 @@ const plain = (band: PortalBand) => JSON.stringify(band, (_key, value) => (typeo
 describe('w1.2 — ONE "Ask for a change…" in the band (O1-B1, O1-B2, O1-B7)', () => {
   it('the primary is the Ask dialog, held with its words; none on a cancelled or delivered order', () => {
     expect(bandOf().actions?.map((action) => [action.id, action.label, action.variant])).toEqual([['ask', 'Ask for a change…', 'primary']])
-    expect(bandOf({}, 'IN_PRODUCTION', 'it').actions?.[0]?.label).toBe('Chiedi una modifica…')
+    // pp-fx5 (walk W-19): the customer reads voi — "Chiedete una modifica…" (the picture's one tu word loses to the voi rule).
+    expect(bandOf({}, 'IN_PRODUCTION', 'it').actions?.[0]?.label).toBe('Chiedete una modifica…')
     expect(bandOf({ ask: { held: 'Asking is not part of your access.' } }).actions?.[0]?.heldReason).toBe('Asking is not part of your access.')
     expect(bandOf({}, 'CANCELLED').actions).toEqual([])
     expect(bandOf({}, 'DELIVERED').actions).toEqual([])
@@ -213,6 +215,18 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(productionRowHref('/p/X', { id: 'o1' })).toBe('/p/X/orders/o1?tab=overview')
   })
 
+  // pp-fx5 (walk W-13): at 375 "Files 1" sat under the › arrow, "‹ ew" at the left — the strip's own width moved after the DS revealed the
+  // tab. The portal brings the tab you are on to the strip's middle whenever the strip or a tab changes size (sideways only, never the page).
+  it('W-13: the tab you are on is brought whole into view, sideways only, whenever the strip or a tab changes size', () => {
+    const html = render(createElement(recordScreen.view, { model: recordScreen.cases.find((item) => item.id === 'files')!.model }), 'en')
+    expect(html.search(/<div class="fw-pord-tabs">[\s\S]*?<nav[^>]*aria-label="Order"/)).toBeGreaterThanOrEqual(0)
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const tab = strip.querySelector<HTMLElement>('[aria-current=\"page\"]')")
+    expect(view).toContain('strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)')
+    expect(view).toContain('observer.observe(strip)')
+    expect(view).not.toMatch(/scrollIntoView\(/)
+  })
+
   it('G10: on a phone the band’s row 1 holds ‹ · the title · ⋯; the reference, the pills and Pages go to row 2 (one shell rule)', () => {
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
@@ -222,6 +236,61 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    flex-basis: 100%;\n  }')
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title:has(> .back) h1 {\n    flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));')
     expect(phone).not.toMatch(/\.nds-detailhdr-title h1 \{\s*flex-basis: calc\(/)
+    // pp-fx5 (walk W-07): the reference never breaks inside its number — whole, and row 2 wraps between its items (the meta takes its
+    // content's width, Pages goes under it when both do not fit; before, a zero basis squeezed the ref beside Pages).
+    expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {\n    order: 1;\n    flex: 1 1 auto;\n    min-width: 0;\n  }')
+    expect(phone).toContain('.fw-pband .nds-ref-value {\n    overflow-wrap: normal;\n    white-space: nowrap;\n  }')
+    expect(phone).not.toMatch(/\.nds-detailhdr-meta \{\s*order: 1;\s*flex: 1 1 0;/)
+  })
+
+  // pp-fx5 (walk W-18): the keys window said "⌘ then J", "⌘ then ↵", "← then →", "j then k" — "then" reads as a sequence.
+  it('W-18: ⌘J and ⌘↵ are ONE press (two keycaps side by side), ←/→ and j/k either one ("or"), only g h one after the other', () => {
+    const band = orderBandOf({ words: orderWords('en'), record: orderRecord({ status: 'IN_PRODUCTION' }), prefix: PREFIX, facts: { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null } })
+    expect(band.keys?.map((entry) => [entry.keys.join(' '), keyJoinOf(entry.keys)])).toEqual([
+      ['j k', 'or'],
+      ['← →', 'or'],
+      ['⌘ J', 'press'],
+      ['⌘ ↵', 'press'],
+      ['Esc', 'then'],
+    ])
+    expect(keyJoinOf(['g', 'h'])).toBe('then')
+    expect(keyJoinOf(['Ctrl', 'Enter'])).toBe('press')
+    expect([CATALOGUE.en.portal!['keys.or'], CATALOGUE.it.portal!['keys.or']]).toEqual(['or', 'o'])
+    const view = readFileSync(new URL('../../shell/view/FrameDialogs.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{index > 0 && keyJoinOf(entry.keys) !== 'press' ? <span className=\"fw-pkeys-then\"> {t(keyJoinOf(entry.keys) === 'or' ? 'keys.or' : 'keys.then')} </span> : null}")
+  })
+
+  // pp-fx5 (walk W-19; the voi rule wins over the picture's one tu word): the band's buttons said "Chiedi una modifica…", "Chiedi di
+  // annullare…", "Fai una domanda", "Segnala un problema" beside voi words. Every portal page that says them now says them with voi.
+  it('W-19: the customer reads voi — the Ask, cancel, question and problem words on every portal page that uses them', () => {
+    const voi: Record<string, Record<string, string>> = {
+      'portal-orders': { 'band.change': 'Chiedete una modifica…', 'band.cancel': 'Chiedete di annullare…', 'lines.askChange': 'Chiedete una modifica su questa riga', 'production.ask': 'Fate una domanda', 'reported.report': 'Segnalate un problema' },
+      portal: { 'band.ask': 'Fate una domanda' },
+      'portal-customer-home': { 'start.ask': 'Fate una domanda' },
+      'portal-documents': { 'pay.ask': 'Fate una domanda' },
+      'portal-ordering': { 'request.ask': 'Fate una domanda' },
+      'portal-production': { 'row.report': 'Segnalate un problema', 'problem.title': 'Segnalate un problema', 'bulk.report': 'Segnalate un problema' },
+      'portal-jobs': { 'problem.title': 'Segnalate un problema' },
+    }
+    for (const [ns, words] of Object.entries(voi)) for (const [key, value] of Object.entries(words)) expect(CATALOGUE.it[ns]![key], `${ns} ${key}`).toBe(value)
+    expect(CATALOGUE.it['portal-ordering']!['held.mayNotAsk']).toContain('“Fate una domanda”')
+  })
+
+  // pp-fx5 (walk W-14): at 1440 with the conversation hidden, "Messages (2 new)" pushed "Made from your request #1 ›" under the reference
+  // although 196 px stood free — the DS caps a dense band's pills at half the title's room. From 1280 px they take the room they need.
+  it('W-14: from 1280 px the band’s pills take the room they need (no half-room cap), down to their widest one — the band keeps one row', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-meta \{\s*flex: 0 1 auto;\s*min-width: min-content;\s*max-width: none;\s*\}/)
+  })
+
+  // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a
+  // wrapping COLUMN, put "Free for suppliers…" in a second column off the screen; the band's tab row sat 6 px past the edge.
+  it('W-15: at 375 the foot is one column (no wrap into a second column) and a band’s tab row scrolls inside itself', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
+    expect(phone).toMatch(/\.fw-pfoot \{[^}]*flex-direction: column;[^}]*flex-wrap: nowrap;/)
+    expect(phone).toContain('.fw-pfoot-free {\n    flex: 0 0 auto;\n  }')
+    expect(phone).toContain('.fw-ptabs {\n    min-width: 0;\n    max-width: 100%;\n    overflow-x: auto;\n  }')
   })
 })
 

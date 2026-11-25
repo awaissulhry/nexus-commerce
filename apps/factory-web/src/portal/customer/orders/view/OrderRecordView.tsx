@@ -1,8 +1,8 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { AlertCircle, WifiOff } from 'lucide-react'
-import { Banner, EmptyState, Tabs } from '@nexus/ui/components'
+import { Banner, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import type { ApprovalPage, ChangeRequest, DocumentsRead, OrderRecord, ProgressRead, ShipmentsRead } from '../api'
 import type { RecordTab } from '../model'
@@ -173,6 +173,38 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   }
 }
 
+/**
+ * pp-fx5 (walk W-13): the tab strip keeps the tab you are on whole in view — at 375 "Files 1" sat under the › arrow with "‹ ew" at the
+ * left. The DS strip reveals the active tab once its tabs change size; the strip's own width also moves (the frame settles, a count
+ * arrives), so the portal brings the active tab to the strip's middle again whenever the strip or a tab changes size — sideways only,
+ * never the page.
+ */
+function OrderTabs({ label, tabs, active }: { label: string; tabs: TabItem[]; active: string }) {
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const strip = root.current?.querySelector<HTMLElement>('.nds-tabs')
+    if (!strip) return
+    const reveal = () => {
+      const tab = strip.querySelector<HTMLElement>('[aria-current="page"]')
+      if (!tab) return
+      const box = strip.getBoundingClientRect()
+      const own = tab.getBoundingClientRect()
+      strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)
+    }
+    reveal()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(reveal)
+    observer.observe(strip)
+    strip.querySelectorAll<HTMLElement>('[data-tab-id]').forEach((tab) => observer.observe(tab))
+    return () => observer.disconnect()
+  }, [active, tabs.length])
+  return (
+    <div ref={root} className="fw-pord-tabs">
+      <Tabs ariaLabel={label} tabs={tabs} active={active} size="sm" overflow="scroll" linkAs={TabLink} />
+    </div>
+  )
+}
+
 export function OrderRecordView({ model, actions, children }: { model: OrderRecordViewModel; actions?: OrderRecordActions; children?: ReactNode }) {
   const words = useOrderWords()
   const { t, time, locale } = words
@@ -221,14 +253,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
     >
       <div className="fw-pord">
         {/* pp-w1 (w1.3; D2 a, D6 a): Overview · Lines · Shipments · Files in the body, `sm`, scrolling with its › arrow on a phone. */}
-        <Tabs
-          ariaLabel={t('tabs.label')}
-          tabs={orderTabsOf({ words, record, prefix: model.prefix, toConfirm: record.order.reconfirmNeeded && model.revision.state === 'ready' && !!model.revision.page?.content.revisedOrder, files: model.files?.read?.total ?? null })}
-          active={model.tab}
-          size="sm"
-          overflow="scroll"
-          linkAs={TabLink}
-        />
+        <OrderTabs label={t('tabs.label')} tabs={orderTabsOf({ words, record, prefix: model.prefix, toConfirm: record.order.reconfirmNeeded && model.revision.state === 'ready' && !!model.revision.page?.content.revisedOrder, files: model.files?.read?.total ?? null })} active={model.tab} />
         {/* pp-w1 (w1.4): the order's notices in the office's ONE notice slot (lib/record-frame RecordNotices): the most serious shows,
             the rest wait behind "N more notices" — a failure first, then the lost connection, then what was just sent. */}
         <RecordNotices>

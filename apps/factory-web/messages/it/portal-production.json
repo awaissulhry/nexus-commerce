@@ -74,7 +74,7 @@
     "markRegular": "Segna normale",
     "askUs": "Chiedeteci di renderlo urgente",
     "noName": "il vostro ordine",
-    "report": "Segnala un problema"
+    "report": "Segnalate un problema"
   },
   "group": {
     "URGENT": "Urgente",
@@ -140,7 +140,7 @@
     "failed": "Impossibile salvare l'ordine. Riprovate tra un momento."
   },
   "problem": {
-    "title": "Segnala un problema",
+    "title": "Segnalate un problema",
     "aboutOne": "Per {name}",
     "aboutMany": "Per {count} dei vostri ordini",
     "ordersLabel": "Gli ordini di questa segnalazione",
@@ -218,7 +218,7 @@
     "more": "Altro",
     "moreLabel_one": "Altre azioni per l'ordine che avete scelto",
     "moreLabel_other": "Altre azioni per i {count} ordini che avete scelto",
-    "report": "Segnala un problema",
+    "report": "Segnalate un problema",
     "reportHint": "Un messaggio nella conversazione di ogni ordine: vi rispondiamo lì.",
     "files": "Scarica i file",
     "filesHint": "Ciò che vi abbiamo condiviso su questi ordini, in un solo zip (le conferme d'ordine solo per i ruoli che vedono i prezzi).",
