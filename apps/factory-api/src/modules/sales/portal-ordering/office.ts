@@ -103,6 +103,8 @@ import type { CommandTools } from '../../../core/command'
 
 const LIST_MAX = 200
 const SCOPE = { company: 'companyId', party: 'partyId' } as const
+/** od-fx9 (walk W-25): the customer's name as office record bands show it — its trade name, else its legal name. */
+const nameOfParty = (party: { readonly legalName: string; readonly tradeName: string | null } | null | undefined): string => party?.tradeName ?? party?.legalName ?? ''
 
 async function namesOf(caller: CommandCaller, userIds: readonly (string | null)[]): Promise<Map<string, string>> {
   const ids = [...new Set(userIds.filter((id): id is string => id !== null))]
@@ -126,7 +128,7 @@ export async function listOfficeRequests(caller: CommandCaller, query: { readonl
   )
   const lines = await caller.withClient((client) => readLines(client, rows.map((row) => row.id)))
   const people = await caller.withClient((client) => readPeople(client, rows.map((row) => row.id))) // B-CP-075: a by-person line's pieces
-  const parties = await caller.withClient(async (client) => new Map((await client.party.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true } })).map((row) => [row.id, row])))
+  const parties = await caller.withClient(async (client) => new Map((await client.party.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true, tradeName: true } })).map((row) => [row.id, row])))
   const names = await namesOf(caller, rows.map((row) => row.sentById))
   return {
     requests: rows.map((row) => {
@@ -137,7 +139,7 @@ export async function listOfficeRequests(caller: CommandCaller, query: { readonl
         number: row.number,
         status: row.status as RequestStatus,
         source: row.source as RequestSource,
-        party: { id: row.partyId, code: parties.get(row.partyId)?.code ?? '', name: parties.get(row.partyId)?.legalName ?? '' },
+        party: { id: row.partyId, code: parties.get(row.partyId)?.code ?? '', name: nameOfParty(parties.get(row.partyId)) }, // od-fx9
         customerRef: row.customerRef,
         requestedDate: dayText(row.requestedDate),
         sentAt: iso(row.sentAt),
@@ -317,7 +319,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
  */
 async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string | undefined, typed: string | undefined) {
   if (!partyId) throw new ValidationError('Drafts are listed per customer.', [{ path: 'querystring/partyId', message: 'Drafts are listed per customer.' }])
-  const party = isUuid(partyId) ? await caller.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true } })) : null
+  const party = isUuid(partyId) ? await caller.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true, tradeName: true } })) : null
   if (!party || !can(actor, ORDERS_VIEW, { partyId })) throw new NotFoundError('Customer not found.')
   const scope = scopeWhere(actor, ORDERS_VIEW, SCOPE) as Prisma.PortalOrderRequestWhereInput
   const q = typed?.trim()
@@ -340,7 +342,7 @@ async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string |
         number: row.number,
         status: row.status as RequestStatus,
         source: row.source as RequestSource,
-        party: { id: party.id, code: party.code, name: party.legalName },
+        party: { id: party.id, code: party.code, name: nameOfParty(party) }, // od-fx9
         customerRef: row.customerRef,
         requestedDate: dayText(row.requestedDate),
         sentAt: null,
@@ -378,7 +380,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   // first (B-CP-077) and is shown by its kind there, not as a style it does not have (it counts in the totals).
   const listed = catalogueLines(lines)
   const catalogue = await caller.withClient((client) => readCatalogue(client, { companyId: row.companyId, partyId: row.partyId, day, styleIds: listed.map((line) => line.styleId) }))
-  const party = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { id: true, code: true, legalName: true } }))
+  const party = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { id: true, code: true, legalName: true, tradeName: true } }))
   const shipTo = row.shipToAddressId ? await caller.withClient((client) => client.partyAddress.findUnique({ where: { id: row.shipToAddressId! }, select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, status: true, approvalStatus: true } })) : null
   const names = await namesOf(caller, [row.sentById, row.decidedById, row.createdById])
   const salesOrder = row.salesOrderId ? await caller.withClient((client) => client.salesOrder.findUnique({ where: { id: row.salesOrderId! }, select: { id: true, number: true } })) : null
@@ -439,7 +441,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       status: row.status as RequestStatus,
       words: REQUEST_STATUS_WORDS[row.status as RequestStatus],
       source: row.source as RequestSource,
-      party: { id: row.partyId, code: party?.code ?? '', name: party?.legalName ?? '' },
+      party: { id: row.partyId, code: party?.code ?? '', name: nameOfParty(party) }, // od-fx9: the name office bands show
       customerRef: row.customerRef,
       requestedDate: dayText(row.requestedDate),
       note: row.note,

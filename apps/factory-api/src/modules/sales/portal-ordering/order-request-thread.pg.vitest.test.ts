@@ -341,6 +341,12 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     // OPEN and ALL never hold a draft.
     for (const status of ['OPEN', 'ALL'] as const) expect((await listOfficeRequests(persona('sales'), { status })).requests.map((entry) => entry.id)).not.toContain(draft)
     const view = await officeRequestView(persona('sales'), draft)
+    // od-fx9 (walk W-25): the office names the customer as its record bands do — the trade name, else the legal name.
+    const names = (await admin<{ legalName: string; tradeName: string | null }>('SELECT "legalName", "tradeName" FROM "Party" WHERE id = $1', [world.p1]))[0]!
+    expect(names.tradeName).not.toBeNull()
+    expect(view.request.party).toMatchObject({ id: world.p1, name: names.tradeName })
+    expect(view.request.party.name).not.toBe(names.legalName)
+    expect(row.party.name).toBe(names.tradeName)
     expect(view.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ title: row.draft!.title }) })
     // od-s s.3 (Owner yes 2a, 4a): Sales confirms a draft (orders.manage); Make style draft is held (no product.styles.manage).
     expect(view.may).toEqual({ order: false, quote: false, refuse: false, confirm: true, styleDraft: false })
