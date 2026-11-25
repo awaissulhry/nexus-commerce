@@ -14,6 +14,7 @@ import { readSheet, SheetError } from '../../../platform/imports/sheet'
 import { templateFile } from '../../../platform/imports/templates/template'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader } from '../portal-orders/access'
+import { portalWriter } from './writer' // od-s s.2: the draft's reads and its 409 through the portal's writer
 import { readCatalogue, uploadIndexOf } from './catalogue'
 import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView } from './requests'
 // B-CP-075: who saved the draft, and a 409 that names the colleague who changed it meanwhile.
@@ -72,7 +73,8 @@ const unreadable = (message: string, issues: readonly { path: string; message: s
 
 export async function uploadSheet(app: FastifyInstance, request: FastifyRequest, requestId: string, body: UploadBody, idempotencyKey?: string) {
   const reader = portalReader(app, request)
-  const row = await ownRequest(request, reader, requestId)
+  const writer = portalWriter(app, request)
+  const row = await ownRequest(writer, requestId)
   if (row.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
   if (body.apply && body.version === undefined) throw new ValidationError('Adding the rows needs the draft\'s version.', [{ path: 'body/version', message: 'Required to add the rows.' }])
   const bytes = Buffer.from(body.content, 'base64')
@@ -126,7 +128,7 @@ export async function uploadSheet(app: FastifyInstance, request: FastifyRequest,
     draftChanged(tools, row) // B-CP-071
     return outcome
   }).catch(async (error: unknown) => {
-    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
+    throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error // B-CP-075
   })
-  return { dryRun, applied: true as const, added: result.added.length, merged: [...result.merged], kept: [...result.kept], record: await requestView(app, request, reader, await ownRequest(request, reader, requestId)) }
+  return { dryRun, applied: true as const, added: result.added.length, merged: [...result.merged], kept: [...result.kept], record: await requestView(writer, await ownRequest(writer, requestId)) }
 }

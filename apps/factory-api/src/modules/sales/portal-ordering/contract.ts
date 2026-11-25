@@ -47,9 +47,15 @@ const ownPriceText = () => z.string().regex(/^\d{1,12}(\.\d{1,6})?$/, 'A price o
 // ---- end B-CP-076
 
 // ---- B-CP-072 (customer page plan C5): a draft's files, as the customer reads them -------------------------------------------
-const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at })
+// od-s s.2: on the office's draft page a measurement sheet the reader may not open (no sales.measurements.view) is `locked`, nameless.
+const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string().nullable(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at, locked: z.boolean() })
 const draftFiles = output({ logos: z.array(draftFile), references: z.array(draftFile), sheets: z.array(draftFile) })
 // ---- end B-CP-072
+
+// ---- od-s s.2 (order start, W2): who saved (or started) a draft, from the reader's side — YOU, COLLEAGUE (a person of the customer),
+// FACTORY (an office person: the portal never gets a name for it, the office always does).
+const savedBy = output({ who: z.enum(['YOU', 'COLLEAGUE', 'FACTORY']), name: z.string().nullable() })
+// ---- end od-s s.2
 
 // ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4): the described and made-to-measure lines and their people ------------
 /** A person of a by-person line: a measurement sheet the customer reads by name; the office without sales.measurements.view: locked, nameless. */
@@ -229,6 +235,8 @@ const requestBody = output({
   /** A draft's: whether it may hold made-to-measure lines, and the garment types it may choose (null once it is sent). */
   madeToMeasure: output({ open: z.boolean(), words: words.nullable(), garmentTypes: z.array(output({ code: z.string(), words })) }).nullable(),
   // ---- end B-CP-075
+  /** od-s s.2 (W2): who saved it last, from the reader's side ("Saved 10:52 by the factory" in the portal). */
+  savedBy,
 })
 
 const address = output({
@@ -287,6 +295,11 @@ export const listRequestsContract = defineContract({
           salesOrder: numbered.nullable(),
           quote: numbered.nullable(),
           version,
+          /**
+           * od-s s.2: a draft's "Continue a draft" facts (null once sent) — its title (line 1's own words, else its style), who started
+           * it and who saved it last (the reader's side: an office person is "the factory", never named), when.
+           */
+          draft: output({ title: z.string().nullable(), startedBy: savedBy, savedBy, savedAt: at }).nullable(),
         }),
       ),
       seesPrices: notMoney(z.boolean()),

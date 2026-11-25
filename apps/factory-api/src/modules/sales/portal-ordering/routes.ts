@@ -45,6 +45,7 @@ import {
   orderRequestPicturesContract, // B-CQ-030
 } from './contract'
 import { manifest } from './manifest'
+import { portalWriter } from './writer' // od-s s.2: the portal's draft commands take the portal's writer
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
@@ -71,28 +72,28 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.get('/portal/catalogue/:styleId', { schema: catalogueStyleContract }, async (request) => catalogueStyle(app, request, request.params.styleId))
 
   // Order requests.
-  app.get('/portal/order-requests', { schema: listRequestsContract }, async (request) => listRequests(app, request, request.query))
-  app.post('/portal/order-requests', { schema: createRequestContract }, async (request, reply) => reply.code(201).send(await createDraft(app, request, request.body, idempotencyKeyFrom(request))))
-  app.get('/portal/order-requests/:requestId', { schema: getRequestContract }, async (request) => getRequest(app, request, request.params.requestId))
-  app.patch('/portal/order-requests/:requestId', { schema: changeRequestContract }, async (request) => changeHeader(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraftWithFiles(processFiles, app, request, request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
-  app.post('/portal/order-requests/:requestId/lines', { schema: addLinesContract }, async (request) => addLines(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
-  app.put('/portal/order-requests/:requestId/lines/:lineId', { schema: changeLineContract }, async (request) => changeLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLineWithFiles(processFiles, app, request, request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
-  app.post('/portal/order-requests/:requestId/prices', { schema: pricesContract }, async (request) => takeTodaysPrices(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
+  app.get('/portal/order-requests', { schema: listRequestsContract }, async (request) => listRequests(portalWriter(app, request), request.query))
+  app.post('/portal/order-requests', { schema: createRequestContract }, async (request, reply) => reply.code(201).send(await createDraft(portalWriter(app, request), request.body, idempotencyKeyFrom(request))))
+  app.get('/portal/order-requests/:requestId', { schema: getRequestContract }, async (request) => getRequest(portalWriter(app, request), request.params.requestId))
+  app.patch('/portal/order-requests/:requestId', { schema: changeRequestContract }, async (request) => changeHeader(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraftWithFiles(processFiles, portalWriter(app, request), request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/lines', { schema: addLinesContract }, async (request) => addLines(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.put('/portal/order-requests/:requestId/lines/:lineId', { schema: changeLineContract }, async (request) => changeLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLineWithFiles(processFiles, portalWriter(app, request), request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/prices', { schema: pricesContract }, async (request) => takeTodaysPrices(portalWriter(app, request), request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   // B-CP-072: the draft's files.
-  app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), app, request, request.params.requestId, request.body, idempotencyKeyFrom(request))))
-  app.post('/portal/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => completeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => removeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request))))
+  app.post('/portal/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => completeDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => removeDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
   // B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line.
-  app.post('/portal/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => addCustomLine(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
-  app.put('/portal/order-requests/:requestId/custom-lines/:lineId', { schema: changeCustomLineContract }, async (request) => changeCustomLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
-  app.post('/portal/order-requests/:requestId/lines/:lineId/people', { schema: addPeopleContract }, async (request) => addPeople(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => addCustomLine(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.put('/portal/order-requests/:requestId/custom-lines/:lineId', { schema: changeCustomLineContract }, async (request) => changeCustomLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/lines/:lineId/people', { schema: addPeopleContract }, async (request) => addPeople(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
   app.put('/portal/order-requests/:requestId/lines/:lineId/people/:personId', { schema: changePersonContract }, async (request) =>
-    changePerson(app, request, request.params.requestId, request.params.lineId, request.params.personId, request.body, idempotencyKeyFrom(request)),
+    changePerson(portalWriter(app, request), request.params.requestId, request.params.lineId, request.params.personId, request.body, idempotencyKeyFrom(request)),
   )
   app.delete('/portal/order-requests/:requestId/lines/:lineId/people/:personId', { schema: removePersonContract }, async (request) =>
-    removePerson(app, request, request.params.requestId, request.params.lineId, request.params.personId, request.query.version, idempotencyKeyFrom(request)),
+    removePerson(portalWriter(app, request), request.params.requestId, request.params.lineId, request.params.personId, request.query.version, idempotencyKeyFrom(request)),
   )
   app.post('/portal/order-requests/:requestId/send', { schema: sendContract }, async (request) => sendRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))

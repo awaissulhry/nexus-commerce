@@ -399,10 +399,39 @@ export function customLineProblems(line: CustomLineFacts): Problem[] {
   return out
 }
 
-/** B-CP-075: the 409 of a draft a colleague changed meanwhile — it names them (the party's own person; never an office name). */
-export function draftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number }): Words {
+/**
+ * B-CP-075: the 409 of a draft a colleague changed meanwhile — it names them (the party's own person; never an office name).
+ * od-s s.2 (W2): `factory` — an office person saved it last: "the factory", never a worker's name.
+ */
+export function draftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number; readonly factory?: boolean | undefined }): Words {
   if (input.self) return { it: `Avete modificato questa bozza in un'altra finestra (ora versione ${input.version}): rileggetela.`, en: `You changed this draft in another window (now version ${input.version}): read it again.` }
+  if (input.factory === true) return { it: `La fabbrica ha modificato questa bozza dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `The factory changed this draft since you read it (now version ${input.version}): read it again.` }
   if (input.name !== null) return { it: `${input.name} ha modificato questa bozza dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `${input.name} changed this draft since you read it (now version ${input.version}): read it again.` }
   return { it: `Questa bozza è cambiata dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `This draft changed since you read it (now version ${input.version}): read it again.` }
 }
 // ---- end B-CP-075
+
+// ---- od-s s.2 (order start, 13-backend § 2; Owner yes 1a): the office writes a customer's draft --------------------------------
+/** The office's 409 of a draft changed meanwhile (the office voice, "tu"): it names whoever saved it (the customer's person or a colleague). */
+export function officeDraftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number }): Words {
+  if (input.self) return { it: `Hai modificato questa bozza in un'altra finestra (ora versione ${input.version}): rileggila.`, en: `You changed this draft in another window (now version ${input.version}): read it again.` }
+  if (input.name !== null) return { it: `${input.name} ha modificato questa bozza dopo che l'hai letta (ora versione ${input.version}): rileggila.`, en: `${input.name} changed this draft since you read it (now version ${input.version}): read it again.` }
+  return { it: `Questa bozza è cambiata dopo che l'hai letta (ora versione ${input.version}): rileggila.`, en: `This draft changed since you read it (now version ${input.version}): read it again.` }
+}
+
+/** The office's refusals on a customer's draft, in words (the API sends the English; the office page has both). */
+export const OFFICE_DRAFT_WORDS = Object.freeze({
+  /** A sent request: the customer reads it only; a late detail goes in the Confirm window or on the order. */
+  SENT: { it: 'Questa richiesta è stata inviata: scrivi un dettaglio tardivo nella finestra di conferma o sull’ordine.', en: 'This request was sent: type a late detail in the Confirm window or on the order.' },
+  /** Files on a draft that is no longer one. */
+  FILES_CLOSED: { it: 'Questa richiesta non è più una bozza: i file vanno sull’ordine.', en: 'This request is no longer a draft: files go on the order.' },
+  /** No files.upload over the customer. */
+  NO_UPLOAD: { it: 'Caricare file per questo cliente richiede il permesso sui file.', en: 'Uploading files for this customer needs the files right.' },
+  /** Discard: only a draft an office person started (Owner yes 1a). */
+  DISCARD_HELD: { it: 'Qui elimini solo una bozza iniziata in ufficio; il cliente elimina le proprie.', en: 'Only a draft started in the office is discarded here; the customer discards its own.' },
+  /** A measurement sheet named without sales.measurements.view (body data). */
+  SHEET_HELD: { it: 'Indicare una scheda misure richiede il permesso sulle misure.', en: 'Naming a measurement sheet needs the measurements right.' },
+  /** The customer's own price ("Your price") typed from the office (money wall: the customer types it). */
+  OWN_PRICE: { it: 'Il prezzo del cliente lo scrive il cliente.', en: "The customer's own price is typed by the customer." },
+})
+// ---- end od-s s.2

@@ -168,6 +168,8 @@ export function customLineData(line: CustomLineInput) {
     quantity: mtm ? null : (line.quantity ?? null),
     byPerson: mtm ? true : line.byPerson === true,
     note: blankToNull(line.note),
+    // od-s s.1 (the line guard): a made-to-measure line is sized MADE_TO_MEASURE (the guard refuses it otherwise).
+    ...(mtm ? { sizing: 'MADE_TO_MEASURE' as const } : {}),
   }
 }
 

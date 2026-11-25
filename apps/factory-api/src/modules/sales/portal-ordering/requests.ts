@@ -29,10 +29,18 @@ import type { CommandTools, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { portalOf } from '../../../platform/auth/portal/service'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
-import { portalReader, type PortalReader } from '../portal-orders/access'
+import { portalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
+// od-s s.2 (order start, 13-backend § 2): every draft command takes ONE writer (the portal's session, or an office person over the
+// draft's company and customer); the party reads name the writer's party (W1); who saved it (W2); who stamps the price (W4).
+import { portalWriter, type DraftWriter } from './writer'
+import { FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
+import { officeDraftStaleWords, OFFICE_DRAFT_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import type { SheetOf } from './people'
 import { dayText, dayValue, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type Reader, type RequestRow } from './store'
-import { catalogueLines, isCatalogueLine, type CatalogueLineRow } from './store' // B-CP-005
+import { catalogueLines, isCatalogueLine, ownWordsOf, type CatalogueLineRow } from './store' // B-CP-005
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
 // B-CP-070 (D11): who sends and who discards a draft.
@@ -45,7 +53,6 @@ import { portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads
 import { outsideUploadsWords } from '../../../platform/files/multipart/outside'
 // B-CP-075: every kind of line, the people of a by-person line, the parts sent later, who saved it last, a 409 that names them.
 import { StaleVersionError } from '../../../core/command'
-import { partnerLocaleOf } from '@nexus/factory-domain/threads/partner/rules'
 import { PEOPLE_LIMITS, PEOPLE_WORDS, personRow, personShapeProblems, type PersonInput } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { customLineProblems, draftStaleWords, MTM_CLOSED_WORDS, type CustomLineInput, type CustomLineKind } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { markEdited, PERSON_COLUMNS, readPeople, type PersonRow } from './store'
@@ -88,6 +95,11 @@ import { ownPriceView, type OwnPriced } from './people'
  * price, written with the line (add, change; a described or made-to-measure line too) by a person with the price grain — the
  * Buyer, the Admin; a Designer sends none (the grain filter refuses the field, 403) and reads none — frozen at Send with the line.
  * Accepted as an order, the office's accept carries it onto the order by its line map (OrderBrandPrice, source PORTAL).
+ *
+ * od-s s.2 (order start, Owner yes 1a): the office fills the SAME draft through the SAME commands (./writer.ts: the office writer
+ * over the draft's company and customer, orders.manage). The office starts a customer's draft, changes its header, lines, people
+ * and files, and discards only a draft an office person started; it never types the customer's own price (`brandUnitPrice`: 400,
+ * the office routes refuse it). The portal says "the factory" for every office save, never a worker's name (W2).
  */
 
 const MAX_DRAFTS = 20
@@ -98,12 +110,54 @@ const today = (app: FastifyInstance): BusinessDate => businessDate(appClock(app)
 
 // ---- reads -----------------------------------------------------------------------------------------------------------
 
-/** The request of the party in the portal's company, read in the partner scope, or 404. */
-export async function ownRequest(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
-  const row = await request.withClient((client) => readRequest(client, requestId))
-  if (!row || row.companyId !== reader.session.company.id) throw new NotFoundError('Order request not found.')
+/**
+ * The draft's request of the writer: of its company, read in its scope (portal: the party's rows by row-level security; od-s s.2
+ * office: the tenant's, so the customer is checked here — another customer's draft is not found, as a wrong id), or 404.
+ */
+export async function ownRequest(writer: DraftWriter, requestId: string): Promise<RequestRow> {
+  const row = await writer.scoped((client) => readRequest(client, requestId))
+  if (!row || row.companyId !== writer.companyId || row.partyId !== writer.partyId) throw new NotFoundError('Order request not found.')
   return row
 }
+
+// ---- od-s s.2 (W2): who saved the draft, said from the reader's side ------------------------------------------------------------
+/**
+ * "Saved 10:52 by …": YOU (the reader), COLLEAGUE (a person of the draft's customer), FACTORY (an office person). The portal never
+ * names a factory worker (FACTORY: name always null); the office names every person (a customer's person: the page adds the
+ * customer). null id (a draft saved before the column): COLLEAGUE with no name.
+ */
+export interface SavedBy {
+  readonly who: 'YOU' | 'COLLEAGUE' | 'FACTORY'
+  readonly name: string | null
+}
+
+/** Who saved (or started) a draft of `partyId`, for each of these people, read once (see SavedBy). */
+export async function savedByAll(writer: DraftWriter, partyId: string, userIds: readonly (string | null)[]): Promise<(userId: string | null) => SavedBy> {
+  const ids = [...new Set(userIds.filter((id): id is string => id !== null && isUuid(id)))]
+  const users = ids.length === 0 ? new Map<string, { displayName: string; audience: string; partyId: string | null }>() : await writer.inTenant(async (db) => new Map((await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true, audience: true, partyId: true } })).map((user) => [user.id, user])))
+  return (userId) => {
+    if (userId === null || !isUuid(userId)) return { who: 'COLLEAGUE', name: null }
+    const user = users.get(userId)
+    const customer = user !== undefined && user.audience === 'PARTNER' && user.partyId === partyId
+    if (writer.door === 'portal') {
+      if (!customer) return { who: 'FACTORY', name: null }
+      return { who: userId === writer.userId ? 'YOU' : 'COLLEAGUE', name: user.displayName }
+    }
+    if (userId === writer.userId) return { who: 'YOU', name: user?.displayName ?? null }
+    return { who: customer ? 'COLLEAGUE' : 'FACTORY', name: user?.displayName ?? null }
+  }
+}
+
+export async function savedByOf(writer: DraftWriter, partyId: string, userId: string | null): Promise<SavedBy> {
+  return (await savedByAll(writer, partyId, [userId]))(userId)
+}
+
+/** Whether an office person started the draft (od-s s.2, Owner yes 1a: the office discards only such a draft). */
+async function startedByOffice(writer: DraftWriter, createdById: string | null): Promise<boolean> {
+  if (createdById === null || !isUuid(createdById)) return false
+  return (await writer.inTenant((db) => db.user.count({ where: { id: createdById, audience: 'OFFICE' } }))) > 0
+}
+// ---- end od-s s.2
 
 export interface SourceFacts {
   readonly orderLineId: string
@@ -117,17 +171,18 @@ export interface SourceFacts {
 }
 
 /** The order lines reorder lines came from (the partner's own: price grain, never cost), with their revision number. */
-async function sourcesOf(request: FastifyRequest, reader: PortalReader, lines: readonly LineRow[]): Promise<Map<string, SourceFacts>> {
+async function sourcesOf(writer: DraftWriter, lines: readonly LineRow[]): Promise<Map<string, SourceFacts>> {
   const ids = [...new Set(lines.flatMap((line) => (line.sourceOrderLineId ? [line.sourceOrderLineId] : [])))]
   if (ids.length === 0) return new Map()
-  const rows = await request.withClient((client) =>
+  // od-s s.2 (W1): the draft's party's own order lines only (the office scope reads every customer's).
+  const rows = await writer.scoped((client) =>
     client.salesOrderLine.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, order: { partyId: writer.partyId } },
       select: { id: true, kind: true, unitPrice: true, styleRevisionId: true, order: { select: { id: true, number: true, customerRef: true, orderDate: true, customerSeq: true /* B-TH-304 */ } }, sizes: { select: { size: true, quantity: true } } },
     }),
   )
   const revisionIds = [...new Set(rows.flatMap((row) => (row.styleRevisionId ? [row.styleRevisionId] : [])))]
-  const revisions = revisionIds.length === 0 ? new Map<string, number>() : await reader.inTenant(async (db) => new Map((await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } })).map((row) => [row.id, row.revision])))
+  const revisions = revisionIds.length === 0 ? new Map<string, number>() : await writer.inTenant(async (db) => new Map((await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } })).map((row) => [row.id, row.revision])))
   // W2b-5 (B-W2b-280): a fee line is never a reorder's source.
   return new Map(
     rows.filter(isGoodsLine).map((row) => [
@@ -150,11 +205,14 @@ async function sourcesOf(request: FastifyRequest, reader: PortalReader, lines: r
   )
 }
 
-/** The party's delivery addresses (partner scope): every SHIP_TO one, active first. */
-export async function shipToAddresses(request: FastifyRequest) {
-  const rows = await request.withClient((client) =>
+/**
+ * The party's delivery addresses: every SHIP_TO one, active first. od-s s.2 (W1, 13-backend § 2): the writer's party by name — the
+ * partner scope keeps to it by itself, the office scope would read EVERY customer's addresses onto the draft's page.
+ */
+export async function shipToAddresses(writer: DraftWriter) {
+  const rows = await writer.scoped((client) =>
     client.partyAddress.findMany({
-      where: { kinds: { has: 'SHIP_TO' } },
+      where: { partyId: writer.partyId, kinds: { has: 'SHIP_TO' } },
       select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, contactName: true, phone: true, deliveryNotes: true, isDefaultShipTo: true, status: true, approvalStatus: true, refuseReason: true, version: true },
       orderBy: [{ status: 'asc' }, { isDefaultShipTo: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
     }),
@@ -204,10 +262,13 @@ function lineView(line: CatalogueLineRow, catalogue: CustomerCatalogue, source: 
 // B-CP-075: problemView (./people.ts) also names the part of the checklist and the person a problem is on.
 const NO_MTM: MadeToMeasure = { open: false, garmentTypes: [] }
 
-/** The request as the customer reads it (any status). */
-export async function requestView(app: FastifyInstance, request: FastifyRequest, reader: PortalReader, row: RequestRow) {
-  const day = today(app)
-  const lines = await request.withClient((client) => readLines(client, [row.id]))
+/**
+ * The request as the customer reads it (any status). od-s s.2: the SAME answer for the office's draft page (the office writer):
+ * grain-filtered alike; a measurement sheet named only with sales.measurements.view; who saved it from the reader's side.
+ */
+export async function requestView(writer: DraftWriter, row: RequestRow) {
+  const day = today(writer.app)
+  const lines = await writer.scoped((client) => readLines(client, [row.id]))
   // B-CP-005: the catalogue lines are read with the catalogue; a described or made-to-measure line is shown by its kind
   // (B-CP-075: `customLines`), not as a style it does not have (it still counts in the header and the totals).
   const listed = catalogueLines(lines)
@@ -215,26 +276,31 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
   // ---- B-CP-075: the lines of the customer's own kinds and their people; made to measure for it, who saved it last (the tenant's
   // scope: the catalogue, the measurement templates, the portal settings and the colleague's name are the office's rows).
   const custom = lines.filter(isCustomLine)
-  const people = await request.withClient((client) => readPeople(client, [row.id]))
+  const people = await writer.scoped((client) => readPeople(client, [row.id]))
   const styleIds = [...listed.map((line) => line.styleId), ...custom.flatMap((line) => (line.styleId ? [line.styleId] : []))]
-  const { catalogue, mtm, editedBy } = await reader.inTenant(async (db) => ({
+  const { catalogue, mtm, editedBy } = await writer.inTenant(async (db) => ({
     catalogue: await readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day, styleIds }),
     mtm: draft || custom.length > 0 ? await madeToMeasureOf(db, row.companyId, row.partyId) : NO_MTM,
     editedBy: await colleagueNameOf(db, row.partyId, row.lastEditedById),
   }))
   // ---- end B-CP-075
-  const sources = await sourcesOf(request, reader, lines)
-  const addresses = await shipToAddresses(request)
-  const views = listed.map((line) => lineView(line, catalogue, line.sourceOrderLineId ? (sources.get(line.sourceOrderLineId) ?? null) : null, reader.seesPrices))
+  // od-s s.2 (W2): who saved it, from the reader's side (the portal never names a factory worker; the office names every person).
+  const savedBy = await savedByOf(writer, row.partyId, row.lastEditedById)
+  const sources = await sourcesOf(writer, lines)
+  const addresses = await shipToAddresses(writer)
+  const views = listed.map((line) => lineView(line, catalogue, line.sourceOrderLineId ? (sources.get(line.sourceOrderLineId) ?? null) : null, writer.seesPrices))
   // end B-CP-005
   // B-CP-072: its files (the party's own, partner scope) by part; on live, files wait for the virus scanner (the e-mail way).
-  const stored = await request.withClient((client) => readDraftFiles(client, [row.id], lines.map((line) => line.id)))
+  const stored = await writer.scoped((client) => readDraftFiles(client, [row.id], lines.map((line) => line.id)))
   const files = draftFilesByPart(stored, row.id)
-  const closed = uploadsClosed(reader, row)
+  const closed = uploadsClosed(writer, row)
   // B-CP-075: a by-person line's people (a sheet named: the customer's own file); a sheet on a line stands for its roster.
+  // od-s s.2: the office names a measurement sheet only with sales.measurements.view (else locked, nameless: body data).
+  const sheetsLocked = writer.door === 'office' && !can(writer.actor, SALES_MEASUREMENTS_VIEW, { companyId: row.companyId, partyId: row.partyId })
   const sheetLines = sheetLinesOf(stored)
-  const sheetOf = ownSheetOf(stored)
+  const sheetOf: SheetOf = sheetsLocked ? (fileId) => (stored.some((file) => file.id === fileId) ? { id: fileId, originalName: null, locked: true } : null) : ownSheetOf(stored)
   const customViews = custom.map((line) => customLineView(line, people, sheetLines, catalogue, mtm, sheetOf))
+  const fileView = (file: Parameters<typeof draftFileView>[0]) => draftFileView(file, sheetsLocked && file.category === 'MEASUREMENTS')
   const shipTo = row.shipToAddressId ? addresses.find((address) => address.id === row.shipToAddressId) : undefined
   const problems = draft
     ? [
@@ -243,9 +309,9 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
         ...[...views, ...customViews].sort((a, b) => a.seq - b.seq).flatMap((line) => line.problems),
       ]
     : []
-  const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), reader.seesPrices)
-  const outcome = await outcomeOf(request, row)
-  const may = mayOn(reader, row) // B-CP-070
+  const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), writer.seesPrices)
+  const outcome = await outcomeOf(writer, row)
+  const may = await mayOn(writer, row) // B-CP-070; od-s s.2: the office's own rule
   return {
     request: {
       id: row.id,
@@ -276,28 +342,36 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
       // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
       may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard },
       // B-CP-072: logos, references and measurement sheets (the draft's own and its lines'); uploads open here, or why not.
-      files: { logos: files.logos.map(draftFileView), references: files.references.map(draftFileView), sheets: files.sheets.map(draftFileView) },
+      files: { logos: files.logos.map(fileView), references: files.references.map(fileView), sheets: files.sheets.map(fileView) },
       uploads: { open: closed === null, words: closed },
       // ---- B-CP-075
       customLines: customViews,
       laterParts: [...row.laterParts],
-      lastEditedBy: editedBy,
+      // od-s s.2 (W2): the portal names only its own people (never an office name); the office names whoever saved it.
+      lastEditedBy: writer.door === 'portal' ? editedBy : savedBy.name,
       lastEditedAt: iso(row.lastEditedAt),
       madeToMeasure: draft ? { open: mtm.open, words: mtm.open ? null : MTM_CLOSED_WORDS, garmentTypes: mtm.open ? [...mtm.garmentTypes] : [] } : null,
       // ---- end B-CP-075
+      savedBy, // od-s s.2 (W2)
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
-    seesPrices: reader.seesPrices,
+    seesPrices: writer.seesPrices,
   }
 }
 
 // ---- B-CP-070 (D11): who sends, who discards ------------------------------------------------------------------------------
 
-/** What the reader may do with the request beside filling a draft: order (send, withdraw), discard the draft. */
-function mayOn(reader: PortalReader, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById'>): { readonly order: boolean; readonly discard: boolean } {
-  if (reader.session.preview) return { order: false, discard: false }
-  const order = can(reader.actor, PORTAL_ORDER_REQUESTS_MANAGE, { companyId: row.companyId, partyId: row.partyId })
-  return { order, discard: order || row.createdById === reader.session.userId }
+/**
+ * What the reader may do with the request beside filling a draft: order (send, withdraw), discard the draft. od-s s.2 (Owner yes
+ * 1a): the office sends a draft only through its Confirm (`order` false here) and discards only a draft an office person started,
+ * with orders.manage over the customer.
+ */
+async function mayOn(writer: DraftWriter, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById'>): Promise<{ readonly order: boolean; readonly discard: boolean }> {
+  if (writer.preview) return { order: false, discard: false }
+  const scope = { companyId: row.companyId, partyId: row.partyId }
+  if (writer.door === 'office') return { order: false, discard: can(writer.actor, ORDERS_MANAGE, scope) && (await startedByOffice(writer, row.createdById)) }
+  const order = can(writer.actor, PORTAL_ORDER_REQUESTS_MANAGE, scope)
+  return { order, discard: order || row.createdById === writer.userId }
 }
 
 /** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
@@ -305,53 +379,72 @@ const DISCARD_HELD = 'Only the colleague who started this draft, or one who may 
 // ---- end B-CP-070
 
 /** B-CP-072: why files cannot go up onto this request now, in the person's words (null: they can) — said before one is dropped. */
-function uploadsClosed(reader: PortalReader, row: Pick<RequestRow, 'status' | 'companyId' | 'partyId'>): string | null {
+function uploadsClosed(writer: DraftWriter, row: Pick<RequestRow, 'status' | 'companyId' | 'partyId'>): string | null {
   const gate = outsideUploadsWords()
   if (gate !== null) return gate
-  if (row.status !== 'DRAFT') return portalUploadWords('REQUEST_CLOSED', reader.session.person.locale)
-  if (reader.session.preview) return 'A preview of the portal sends no file.'
-  return can(reader.actor, PORTAL_UPLOAD, { companyId: row.companyId, partyId: row.partyId }) ? null : portalUploadWords('NO_UPLOAD', reader.session.person.locale)
+  const scope = { companyId: row.companyId, partyId: row.partyId }
+  // od-s s.2: the office uploads onto a customer's draft with files.upload over it (Owner yes 1a), in its own words.
+  if (writer.door === 'office') return row.status !== 'DRAFT' ? OFFICE_DRAFT_WORDS.FILES_CLOSED.en : can(writer.actor, FILES_UPLOAD, scope) ? null : OFFICE_DRAFT_WORDS.NO_UPLOAD.en
+  if (row.status !== 'DRAFT') return portalUploadWords('REQUEST_CLOSED', writer.locale)
+  if (writer.preview) return 'A preview of the portal sends no file.'
+  return can(writer.actor, PORTAL_UPLOAD, scope) ? null : portalUploadWords('NO_UPLOAD', writer.locale)
 }
 
-/** B-CP-072: a draft's file as the customer reads it (its own party's: named, with its version for a removal). */
-export const draftFileView = (file: DraftFileRow & { readonly lineId: string | null }) => ({
+/**
+ * B-CP-072: a draft's file as the customer reads it (its own party's: named, with its version for a removal). od-s s.2: `locked` —
+ * a measurement sheet the office reader may not open (no sales.measurements.view): no name.
+ */
+export const draftFileView = (file: DraftFileRow & { readonly lineId: string | null }, locked = false) => ({
   id: file.id,
   lineId: file.lineId,
-  originalName: file.originalName,
+  originalName: locked ? null : file.originalName,
   kind: file.kind,
   contentType: file.contentType,
   sizeBytes: file.sizeBytes,
   status: file.status,
   version: file.version,
   createdAt: iso(file.createdAt)!,
+  locked,
 })
 
 /** The order or quote a request became (partner reads: their number). */
-async function outcomeOf(request: FastifyRequest, row: Pick<RequestRow, 'salesOrderId' | 'quoteId'>) {
-  const salesOrder = row.salesOrderId ? await request.withClient((client) => client.salesOrder.findUnique({ where: { id: row.salesOrderId! }, select: { id: true, number: true } })) : null
-  const quote = row.quoteId ? await request.withClient((client) => client.quote.findUnique({ where: { id: row.quoteId! }, select: { id: true, number: true } })) : null
+async function outcomeOf(writer: DraftWriter, row: Pick<RequestRow, 'salesOrderId' | 'quoteId'>) {
+  const salesOrder = row.salesOrderId ? await writer.scoped((client) => client.salesOrder.findUnique({ where: { id: row.salesOrderId! }, select: { id: true, number: true } })) : null
+  const quote = row.quoteId ? await writer.scoped((client) => client.quote.findUnique({ where: { id: row.quoteId! }, select: { id: true, number: true } })) : null
   return { salesOrder: salesOrder ?? null, quote: quote ?? null }
 }
 
-export async function listRequests(app: FastifyInstance, request: FastifyRequest, query: { readonly status: RequestStatus | 'ALL' }) {
-  const reader = portalReader(app, request)
-  const rows = await request.withClient((client) =>
+export async function listRequests(writer: DraftWriter, query: { readonly status: RequestStatus | 'ALL' }) {
+  const rows = await writer.scoped((client) =>
     client.portalOrderRequest.findMany({
-      where: { companyId: reader.session.company.id, ...(query.status === 'ALL' ? {} : { status: query.status }) },
+      where: { companyId: writer.companyId, partyId: writer.partyId, ...(query.status === 'ALL' ? {} : { status: query.status }) },
       select: REQUEST_COLUMNS,
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       take: LIST_MAX,
     }),
   )
   const ordered = [...rows.filter((row) => row.status === 'DRAFT'), ...rows.filter((row) => row.status !== 'DRAFT')]
-  const lines = await request.withClient((client) => readLines(client, ordered.map((row) => row.id)))
-  const people = await request.withClient((client) => readPeople(client, ordered.map((row) => row.id))) // B-CP-075: a by-person line's pieces are its people
-  const orders = await request.withClient((client) => client.salesOrder.findMany({ where: { id: { in: ordered.flatMap((row) => (row.salesOrderId ? [row.salesOrderId] : [])) } }, select: { id: true, number: true } }))
-  const quotes = await request.withClient((client) => client.quote.findMany({ where: { id: { in: ordered.flatMap((row) => (row.quoteId ? [row.quoteId] : [])) } }, select: { id: true, number: true } }))
+  const lines = await writer.scoped((client) => readLines(client, ordered.map((row) => row.id)))
+  const people = await writer.scoped((client) => readPeople(client, ordered.map((row) => row.id))) // B-CP-075: a by-person line's pieces are its people
+  const orders = await writer.scoped((client) => client.salesOrder.findMany({ where: { id: { in: ordered.flatMap((row) => (row.salesOrderId ? [row.salesOrderId] : [])) } }, select: { id: true, number: true } }))
+  const quotes = await writer.scoped((client) => client.quote.findMany({ where: { id: { in: ordered.flatMap((row) => (row.quoteId ? [row.quoteId] : [])) } }, select: { id: true, number: true } }))
+  // ---- od-s s.2 (W2): "Continue a draft" — each draft's title (line 1's own words, else its style), who started it and who saved
+  // it last, from the reader's side (an office person is "the factory", never named).
+  const drafts = ordered.filter((row) => row.status === 'DRAFT')
+  const firstLines = new Map(drafts.map((row) => [row.id, lines.filter((line) => line.requestId === row.id).sort((a, b) => a.seq - b.seq)[0]]))
+  const firstStyles = [...new Set([...firstLines.values()].flatMap((line) => (line && isCatalogueLine(line) ? [line.styleId] : [])))]
+  const styleNames = firstStyles.length === 0 ? new Map<string, string>() : await writer.inTenant(async (db) => new Map((await db.style.findMany({ where: { id: { in: firstStyles } }, select: { id: true, code: true, name: true } })).map((style) => [style.id, `${style.code} ${style.name}`.trim()])))
+  const whoSaved = await savedByAll(writer, writer.partyId, drafts.flatMap((row) => [row.createdById, row.lastEditedById]))
+  const draftOf = (row: RequestRow) => {
+    if (row.status !== 'DRAFT') return null
+    const first = firstLines.get(row.id)
+    return { title: first ? (isCatalogueLine(first) ? (styleNames.get(first.styleId) ?? null) : ownWordsOf(first)) : null, startedBy: whoSaved(row.createdById), savedBy: whoSaved(row.lastEditedById), savedAt: iso(row.lastEditedAt ?? row.updatedAt)! }
+  }
+  // ---- end od-s s.2
   return {
     requests: ordered.map((row) => {
       const own = lines.filter((line) => line.requestId === row.id)
-      const totals = draftTotals(own.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), reader.seesPrices)
+      const totals = draftTotals(own.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), writer.seesPrices)
       return {
         id: row.id,
         number: row.number,
@@ -371,15 +464,15 @@ export async function listRequests(app: FastifyInstance, request: FastifyRequest
         salesOrder: orders.find((order) => order.id === row.salesOrderId) ?? null,
         quote: quotes.find((quote) => quote.id === row.quoteId) ?? null,
         version: row.version,
+        draft: draftOf(row), // od-s s.2
       }
     }),
-    seesPrices: reader.seesPrices,
+    seesPrices: writer.seesPrices,
   }
 }
 
-export async function getRequest(app: FastifyInstance, request: FastifyRequest, requestId: string) {
-  const reader = portalReader(app, request)
-  return requestView(app, request, reader, await ownRequest(request, reader, requestId))
+export async function getRequest(writer: DraftWriter, requestId: string) {
+  return requestView(writer, await ownRequest(writer, requestId))
 }
 
 // ---- the draft's header ------------------------------------------------------------------------------------------------
@@ -393,11 +486,14 @@ export interface HeaderBody {
   readonly laterParts?: readonly ('LOGOS' | 'REFERENCES' | 'PEOPLE')[] | undefined
 }
 
-/** The header's own problems (400): an address of the party for deliveries, active; a date from today. */
-async function headerIssues(request: FastifyRequest, body: HeaderBody, day: BusinessDate): Promise<Issue[]> {
+/**
+ * The header's own problems (400): an address of the party for deliveries, active; a date from today. od-s s.2 (W1): the address
+ * of the writer's party by name (the office scope reads every customer's: another customer's address is "choose one of yours").
+ */
+async function headerIssues(writer: DraftWriter, body: HeaderBody, day: BusinessDate): Promise<Issue[]> {
   const issues: Issue[] = []
   if (body.shipToAddressId) {
-    const address = isUuid(body.shipToAddressId) ? await request.withClient((client) => client.partyAddress.findUnique({ where: { id: body.shipToAddressId! }, select: { status: true, kinds: true } })) : null
+    const address = isUuid(body.shipToAddressId) ? await writer.scoped((client) => client.partyAddress.findFirst({ where: { id: body.shipToAddressId!, partyId: writer.partyId }, select: { status: true, kinds: true } })) : null
     if (!address || address.status !== 'ACTIVE' || !address.kinds.includes('SHIP_TO')) issues.push({ path: 'body/shipToAddressId', message: 'Choose one of your active delivery addresses.' })
   }
   if (body.requestedDate && body.requestedDate < day) issues.push({ path: 'body/requestedDate', message: 'The requested delivery date is today or later.' })
@@ -415,34 +511,37 @@ const headerData = (body: HeaderBody) => ({
   ...(body.laterParts !== undefined ? { laterParts: [...body.laterParts] } : {}), // B-CP-075
 })
 
-export async function createDraft(app: FastifyInstance, request: FastifyRequest, body: HeaderBody & { readonly source?: RequestSource | undefined }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const { session } = reader
-  const day = today(app)
-  const issues = await headerIssues(request, body, day)
+export async function createDraft(writer: DraftWriter, body: HeaderBody & { readonly source?: RequestSource | undefined }, idempotencyKey?: string) {
+  const day = today(writer.app)
+  const issues = await headerIssues(writer, body, day)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  const drafts = await request.withClient((client) => client.portalOrderRequest.count({ where: { companyId: session.company.id, status: 'DRAFT' } }))
-  if (drafts >= MAX_DRAFTS) throw new ConflictError(`You keep ${drafts} drafts already: send or discard one first.`)
-  const currency = await reader.inTenant(async (db) => (await db.company.findUnique({ where: { id: session.company.id }, select: { currency: true } }))?.currency ?? 'EUR')
+  // od-s s.2 (W1): the cap counts this customer's drafts (the office scope would count every customer's).
+  const drafts = await writer.scoped((client) => client.portalOrderRequest.count({ where: { companyId: writer.companyId, partyId: writer.partyId, status: 'DRAFT' } }))
+  if (drafts >= MAX_DRAFTS) throw new ConflictError(writer.door === 'portal' ? `You keep ${drafts} drafts already: send or discard one first.` : `This customer keeps ${drafts} drafts already: one is sent, confirmed or discarded first.`)
+  const currency = await writer.inTenant(async (db) => (await db.company.findUnique({ where: { id: writer.companyId }, select: { currency: true } }))?.currency ?? 'EUR')
   const id = newId()
-  await commandOn(app, request, { name: 'portalOrdering.createDraft', idempotencyKey, input: { ...body } }, async (tools) => {
-    // The party's default delivery address when none is asked.
-    const shipTo = body.shipToAddressId === undefined ? ((await tools.tx.partyAddress.findFirst({ where: { status: 'ACTIVE', isDefaultShipTo: true, kinds: { has: 'SHIP_TO' } }, select: { id: true } }))?.id ?? null) : body.shipToAddressId
+  await commandOn(writer.app, writer.request, { name: 'portalOrdering.createDraft', idempotencyKey, input: { ...body } }, async (tools) => {
+    // The party's default delivery address when none is asked. od-s s.2 (W1): the writer's party by name.
+    const shipTo = body.shipToAddressId === undefined ? ((await tools.tx.partyAddress.findFirst({ where: { partyId: writer.partyId, status: 'ACTIVE', isDefaultShipTo: true, kinds: { has: 'SHIP_TO' } }, select: { id: true } }))?.id ?? null) : body.shipToAddressId
     await tools.tx.portalOrderRequest.create({
-      data: { id, companyId: session.company.id, partyId: session.partyId, source: body.source ?? 'PICKER', currency, ...headerData(body), shipToAddressId: shipTo, createdById: session.userId, createdAt: tools.now, updatedAt: tools.now, lastEditedById: session.userId, lastEditedAt: tools.now /* B-CP-075 */ },
+      data: { id, companyId: writer.companyId, partyId: writer.partyId, source: body.source ?? 'PICKER', currency, ...headerData(body), shipToAddressId: shipTo, createdById: writer.userId, createdAt: tools.now, updatedAt: tools.now, lastEditedById: writer.userId, lastEditedAt: tools.now /* B-CP-075 */ },
       select: { id: true },
     })
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: id, companyId: session.company.id, after: { status: 'DRAFT', source: body.source ?? 'PICKER', ...headerData(body), shipToAddressId: shipTo } })
-    draftChanged(tools, { id, companyId: session.company.id, partyId: session.partyId }) // B-CP-071
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: id, companyId: writer.companyId, after: { status: 'DRAFT', source: body.source ?? 'PICKER', ...headerData(body), shipToAddressId: shipTo, ...(writer.door === 'office' ? { byOffice: true } : {}) } })
+    draftChanged(tools, { id, companyId: writer.companyId, partyId: writer.partyId }) // B-CP-071
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, id))!)
+  return requestView(writer, (await ownRequest(writer, id))!)
 }
 
-/** The draft of the party, for a change by its own session: DRAFT, or 409 in words. */
-export async function ownDraft(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
-  const row = await ownRequest(request, reader, requestId)
-  if (row.status !== 'DRAFT') throw new InvalidStateError(row.status === 'SENT' ? 'This request was sent: withdraw it to change it, or ask us.' : 'This request is no longer a draft.')
+/** The draft of the party, for a change by the writer: DRAFT, or 409 in words. */
+export async function ownDraft(writer: DraftWriter, requestId: string): Promise<RequestRow> {
+  const row = await ownRequest(writer, requestId)
+  if (row.status !== 'DRAFT') {
+    // od-s s.2: after Send the customer reads only; the office types a late detail in the Confirm window or on the order.
+    if (writer.door === 'office') throw new InvalidStateError(row.status === 'SENT' ? OFFICE_DRAFT_WORDS.SENT.en : 'This request is no longer a draft.')
+    throw new InvalidStateError(row.status === 'SENT' ? 'This request was sent: withdraw it to change it, or ask us.' : 'This request is no longer a draft.')
+  }
   return row
 }
 
@@ -451,10 +550,10 @@ export async function ownDraft(request: FastifyRequest, reader: PortalReader, re
  * B-CP-075: every one names who of the customer saved it ("Saved 10:42 by Marta Bianchi"); a stale version is a 409 that names
  * the colleague who changed it meanwhile (`staleDraftError`).
  */
-export async function onDraft<Result>(app: FastifyInstance, request: FastifyRequest, name: `${string}.${string}`, row: RequestRow, version: number, input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools) => Promise<Result>) {
-  const editorId = portalReader(app, request).session.userId // B-CP-075: the portal person who saves (a link context has no actor id)
+export async function onDraft<Result>(writer: DraftWriter, name: `${string}.${string}`, row: RequestRow, version: number, input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools) => Promise<Result>) {
+  const editorId = writer.userId // B-CP-075: the person who saves (a link context has no actor id); od-s s.2: or the office person
   try {
-    return await commandOn(app, request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
+    return await commandOn(writer.app, writer.request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
       const current = await readRequest(tools.tx, row.id)
       if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
       const result = await work(tools)
@@ -463,19 +562,22 @@ export async function onDraft<Result>(app: FastifyInstance, request: FastifyRequ
       return result
     })
   } catch (error) {
-    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
+    throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error // B-CP-075
   }
 }
 
 // ---- B-CP-075: "Changed by Marta Bianchi a moment ago" -------------------------------------------------------------------------
-/** The 409 of a draft changed since the person read it: who of their party saved it last (never an office name), the version now. */
-export async function staleDraftError(app: FastifyInstance, request: FastifyRequest, requestId: string): Promise<DomainError> {
-  const reader = portalReader(app, request)
-  const current = await request.withClient((client) => readRequest(client, requestId))
+/**
+ * The 409 of a draft changed since the person read it: who saved it last, the version now. The portal names only its own people;
+ * od-s s.2 (W2): an office save is "the factory" there, never a worker's name. The office names whoever saved it.
+ */
+export async function staleDraftError(writer: DraftWriter, requestId: string): Promise<DomainError> {
+  const current = await writer.scoped((client) => readRequest(client, requestId))
   if (!current) return new NotFoundError('Order request not found.')
-  const self = current.lastEditedById !== null && current.lastEditedById === reader.session.userId
-  const name = self ? null : await reader.inTenant((db) => colleagueNameOf(db, current.partyId, current.lastEditedById))
-  const words = draftStaleWords({ name, self, version: current.version })[partnerLocaleOf(reader.session.person.locale)]
+  const saved = await savedByOf(writer, current.partyId, current.lastEditedById)
+  const self = saved.who === 'YOU'
+  const name = self ? null : saved.name
+  const words = writer.door === 'portal' ? draftStaleWords({ name, self, factory: saved.who === 'FACTORY', version: current.version })[writer.locale] : officeDraftStaleWords({ name, self, version: current.version }).en
   return new DomainError('conflict', words, [{ path: 'version', message: `The current version is ${current.version}.` }, ...(name ? [{ path: 'lastEditedBy', message: name }] : [])])
 }
 // ---- end B-CP-075
@@ -487,19 +589,18 @@ export function draftChanged(tools: Pick<CommandTools, 'emit'>, row: Pick<Reques
 }
 // ---- end B-CP-071
 
-export async function changeHeader(app: FastifyInstance, request: FastifyRequest, requestId: string, body: HeaderBody & { readonly version: number }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
+export async function changeHeader(writer: DraftWriter, requestId: string, body: HeaderBody & { readonly version: number }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
   const { version, ...header } = body
-  const issues = await headerIssues(request, header, today(app))
+  const issues = await headerIssues(writer, header, today(writer.app))
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  await onDraft(app, request, 'portalOrdering.changeDraft', row, version, { requestId, ...body }, idempotencyKey, async (tools) => {
+  await onDraft(writer, 'portalOrdering.changeDraft', row, version, { requestId, ...body }, idempotencyKey, async (tools) => {
     const data = headerData(header)
     if (Object.keys(data).length > 0) await tools.tx.portalOrderRequest.update({ where: { id: row.id }, data, select: { id: true } })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { customerRef: row.customerRef, shipToAddressId: row.shipToAddressId, requestedDate: dayText(row.requestedDate), note: row.note, laterParts: [...row.laterParts] /* B-CP-075 */ }, after: data })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 // ---- lines -------------------------------------------------------------------------------------------------------------
@@ -590,20 +691,19 @@ export function pricesFor(lines: readonly { readonly styleId: string; readonly c
 
 const trimmed = (lines: readonly NewLine[]): NewLine[] => lines.map((line) => ({ ...line, sizes: line.sizes.map((ask) => ({ size: ask.size.trim(), quantity: ask.quantity })) }))
 
-export async function addLines(app: FastifyInstance, request: FastifyRequest, requestId: string, body: { readonly version: number; readonly lines: readonly NewLine[] }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
+export async function addLines(writer: DraftWriter, requestId: string, body: { readonly version: number; readonly lines: readonly NewLine[] }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
   const lines = trimmed(body.lines.map((line) => ({ ...line, sourceOrderLineId: null })))
-  const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: lines.map((line) => line.styleId) }))
+  const catalogue = await writer.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(writer.app), styleIds: lines.map((line) => line.styleId) }))
   const issues = checkNewLines(lines, catalogue)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  const prices = pricesFor(lines, catalogue, reader.seesPrices)
-  await onDraft(app, request, 'portalOrdering.addLines', row, body.version, { requestId, lines }, idempotencyKey, async (tools) => {
-    const outcome = await addLinesInCommand(tools, row, lines, prices, reader.session.userId, false)
+  const prices = pricesFor(lines, catalogue, writer.stampsPrices) // od-s s.2 (W4): who stamps the price shown
+  await onDraft(writer, 'portalOrdering.addLines', row, body.version, { requestId, lines }, idempotencyKey, async (tools) => {
+    const outcome = await addLinesInCommand(tools, row, lines, prices, writer.userId, false)
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: outcome.added, lines: lines.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes, unitPriceShown: markMoney('price', prices.get(`${line.styleId}|${line.colourwayId}`) ?? null), brandUnitPrice: markMoney('price', line.brandUnitPrice ?? null) /* B-CP-076 */ })) } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 async function ownLine(tx: Reader, row: RequestRow, lineId: string): Promise<LineRow> {
@@ -622,18 +722,16 @@ async function ownCatalogueLine(tx: Reader, row: RequestRow, lineId: string): Pr
 // end B-CP-005
 
 export async function changeLine(
-  app: FastifyInstance,
-  request: FastifyRequest,
+  writer: DraftWriter,
   requestId: string,
   lineId: string,
   body: { readonly version: number; readonly colourwayId?: string | undefined; readonly sizes?: readonly SizeAsk[] | undefined; readonly note?: string | null | undefined } & OwnPriced /* B-CP-076 */,
   idempotencyKey?: string,
 ) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  const line = await request.withClient((client) => ownCatalogueLine(client, row, lineId)) // B-CP-005: a catalogue line
+  const row = await ownDraft(writer, requestId)
+  const line = await writer.scoped((client) => ownCatalogueLine(client, row, lineId)) // B-CP-005: a catalogue line
   const next: NewLine = { styleId: line.styleId, colourwayId: body.colourwayId ?? line.colourwayId, sizes: (body.sizes ?? sizesOf(line)).map((ask) => ({ size: ask.size.trim(), quantity: ask.quantity })), note: body.note === undefined ? line.note : body.note }
-  const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: [line.styleId] }))
+  const catalogue = await writer.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(writer.app), styleIds: [line.styleId] }))
   // Only a change of sizes or colour is checked against today's catalogue: a note alone keeps the line as it was.
   const touchesCatalogue = body.sizes !== undefined || body.colourwayId !== undefined
   const issues = touchesCatalogue ? checkNewLines([next], catalogue, 'body/line') : lineShapeProblems(next).filter((message) => message.includes('note')).map((message) => ({ path: 'body/note', message }))
@@ -641,16 +739,16 @@ export async function changeLine(
   const colourChanged = next.colourwayId !== line.colourwayId
   if (colourChanged) {
     // B-CP-005: a duplicate is another catalogue line of the same style and colour.
-    const duplicate = catalogueLines(await request.withClient((client) => readLines(client, [row.id]))).find((entry) => entry.id !== line.id && entry.styleId === line.styleId && entry.colourwayId === next.colourwayId)
+    const duplicate = catalogueLines(await writer.scoped((client) => readLines(client, [row.id]))).find((entry) => entry.id !== line.id && entry.styleId === line.styleId && entry.colourwayId === next.colourwayId)
     if (duplicate) throw new ValidationError('This colour is already on the request.', [{ path: 'body/colourwayId', message: `Already on line ${duplicate.seq}.` }])
   }
-  const price = colourChanged ? (pricesFor([next], catalogue, reader.seesPrices).get(`${next.styleId}|${next.colourwayId}`) ?? null) : priceOrNull(line.unitPriceShown)
-  await onDraft(app, request, 'portalOrdering.changeLine', row, body.version, { requestId, lineId, ...body }, idempotencyKey, async (tools) => {
+  const price = colourChanged ? (pricesFor([next], catalogue, writer.stampsPrices).get(`${next.styleId}|${next.colourwayId}`) ?? null) : priceOrNull(line.unitPriceShown) // od-s s.2 (W4)
+  await onDraft(writer, 'portalOrdering.changeLine', row, body.version, { requestId, lineId, ...body }, idempotencyKey, async (tools) => {
     const { tx, now } = tools
     const current = await ownLine(tx, row, lineId)
     if (body.sizes !== undefined) {
       await tx.portalOrderRequestSize.deleteMany({ where: { lineId } })
-      await tx.portalOrderRequestSize.createMany({ data: next.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size, quantity: ask.quantity, createdById: reader.session.userId, createdAt: now, updatedAt: now })) })
+      await tx.portalOrderRequestSize.createMany({ data: next.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size, quantity: ask.quantity, createdById: writer.userId, createdAt: now, updatedAt: now })) })
     }
     // B-CP-076: "Your price" with the line (absent keeps it, null clears it).
     const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {}
@@ -664,13 +762,12 @@ export async function changeLine(
     })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
-export async function removeLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  await onDraft(app, request, 'portalOrdering.removeLine', row, version, { requestId, lineId, version }, idempotencyKey, async (tools) => {
+export async function removeLine(writer: DraftWriter, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  await onDraft(writer, 'portalOrdering.removeLine', row, version, { requestId, lineId, version }, idempotencyKey, async (tools) => {
     const line = await ownLine(tools.tx, row, lineId)
     const people = await tools.tx.portalOrderRequestPerson.deleteMany({ where: { lineId } }) // B-CP-075: its roster goes with it
     // B-CP-075: its measurement sheets go too (draft-files.ts): a person of another line they measured is "sending later" again.
@@ -681,19 +778,18 @@ export async function removeLine(app: FastifyInstance, request: FastifyRequest, 
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { lineId, seq: line.seq, kind: line.kind, styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizesOf(line), people: people.count }, after: { lineId: null } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 /** "Prices changed since you started — Review": every line takes the customer's price today. */
-export async function takeTodaysPrices(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  if (!reader.seesPrices) throw new InvalidStateError('Prices are not part of your access: the factory confirms them.')
+export async function takeTodaysPrices(writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  if (!writer.seesPrices) throw new InvalidStateError('Prices are not part of your access: the factory confirms them.')
   // B-CP-005: a list price is a catalogue line's; a described or made-to-measure line has none to take.
-  const lines = catalogueLines(await request.withClient((client) => readLines(client, [row.id])))
-  const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: lines.map((line) => line.styleId) }))
+  const lines = catalogueLines(await writer.scoped((client) => readLines(client, [row.id])))
+  const catalogue = await writer.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(writer.app), styleIds: lines.map((line) => line.styleId) }))
   const prices = pricesFor(lines, catalogue, true)
-  await onDraft(app, request, 'portalOrdering.takePrices', row, version, { requestId, version }, idempotencyKey, async (tools) => {
+  await onDraft(writer, 'portalOrdering.takePrices', row, version, { requestId, version }, idempotencyKey, async (tools) => {
     const changed: { lineId: string; before: string | null; after: string | null }[] = []
     for (const line of catalogueLines(await readLines(tools.tx, [row.id]))) { // B-CP-005: catalogue lines only
       const now = prices.get(`${line.styleId}|${line.colourwayId}`) ?? null
@@ -705,14 +801,14 @@ export async function takeTodaysPrices(app: FastifyInstance, request: FastifyReq
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { prices: markMoney('price', changed) } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
-export async function discardDraft(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  if (!mayOn(reader, row).discard) throw new ForbiddenError(DISCARD_HELD) // B-CP-070
-  await commandOn(app, request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
+export async function discardDraft(writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  // B-CP-070; od-s s.2 (Owner yes 1a): the office discards only a draft an office person started (its own words).
+  if (!(await mayOn(writer, row)).discard) throw new ForbiddenError(writer.door === 'office' ? OFFICE_DRAFT_WORDS.DISCARD_HELD.en : DISCARD_HELD)
+  await commandOn(writer.app, writer.request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
     const current = await readRequest(tools.tx, row.id)
     if (!current || current.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
     if (current.version !== version) throw new StaleVersionError('PortalOrderRequest', row.id, current.version, version) // B-CP-075: named below
@@ -725,7 +821,7 @@ export async function discardDraft(app: FastifyInstance, request: FastifyRequest
     draftChanged(tools, row) // B-CP-071
     return null
   }).catch(async (error: unknown) => {
-    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
+    throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error // B-CP-075
   })
   return { discarded: true as const }
 }
@@ -739,7 +835,7 @@ async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly Line
   const listed = catalogueLines(lines)
   const custom = lines.filter(isCustomLine)
   const catalogue = await readCatalogue(tx, { companyId: row.companyId, partyId: row.partyId, day, styleIds: [...listed.map((line) => line.styleId), ...custom.flatMap((line) => (line.styleId ? [line.styleId] : []))] })
-  const shipTo = row.shipToAddressId ? await tx.partyAddress.findUnique({ where: { id: row.shipToAddressId }, select: { status: true } }) : null
+  const shipTo = row.shipToAddressId ? await tx.partyAddress.findFirst({ where: { id: row.shipToAddressId, partyId: row.partyId }, select: { status: true } }) : null // od-s s.2 (W1)
   const mtm = custom.length === 0 ? NO_MTM : await madeToMeasureOf(tx, row.companyId, row.partyId)
   const sheetLines = custom.length === 0 ? new Set<string>() : sheetLinesOf(await readDraftFiles(tx, [row.id], lines.map((line) => line.id)))
   return [
@@ -757,9 +853,10 @@ async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly Line
  */
 export async function sendRequest(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
   const reader = portalReader(app, request)
+  const writer = portalWriter(app, request) // od-s s.2: the draft's reads through the portal's writer
   const { session } = reader
-  const row = await ownDraft(request, reader, requestId)
-  if (row.version !== version) throw await staleDraftError(app, request, row.id) // B-CP-075: names who changed it
+  const row = await ownDraft(writer, requestId)
+  if (row.version !== version) throw await staleDraftError(writer, row.id) // B-CP-075: names who changed it
   const p = portalOf(app)
   const outcome = await p.auth.command(p.auth.contextFor(request, session.tenantId, session.userId), { name: 'portalOrdering.send', idempotencyKey, input: { requestId, version, sessionId: session.id } }, async (tools) => {
     const { tx, now } = tools
@@ -779,11 +876,11 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
     tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
     return { number: number.formatted }
   })
-  const sent = await ownRequest(request, reader, requestId)
+  const sent = await ownRequest(writer, requestId)
   const { number } = outcome.result
   const po = sent.customerRef
   return {
-    ...(await requestView(app, request, reader, sent)),
+    ...(await requestView(writer, sent)),
     sent: {
       number,
       // B-TH-041: no promise of when we confirm.
@@ -797,8 +894,8 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
 }
 
 export async function withdrawRequest(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownRequest(request, reader, requestId)
+  const writer = portalWriter(app, request) // od-s s.2
+  const row = await ownRequest(writer, requestId)
   const problem = withdrawProblem(row.status as RequestStatus)
   if (problem) throw new InvalidStateError(problem)
   await commandOn(app, request, { name: 'portalOrdering.withdraw', idempotencyKey, input: { requestId, version } }, async (tools) => {
@@ -810,7 +907,7 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
     tools.emit({ type: 'portal_order_request.withdrawn', subject: requestId, companyId: current.companyId, payload: { requestId, number: current.number!, partyId: current.partyId } })
     return null
   })
-  return requestView(app, request, reader, await ownRequest(request, reader, requestId))
+  return requestView(writer, await ownRequest(writer, requestId))
 }
 
 // ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2): described and made-to-measure lines, and the
@@ -823,37 +920,38 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
 //   POST   /portal/order-requests/:id/lines/:lineId/people                  people added to a by-person line (a pasted roster: many at once)
 //   PUT    /portal/order-requests/:id/lines/:lineId/people/:personId       a person changed (name, number, size / sheet / later, note)
 //   DELETE /portal/order-requests/:id/lines/:lineId/people/:personId?version=  a person off the line (the others keep their place)
+//
+// od-s s.2: the office's twins under /sales/order-requests/:id/… call these same commands with the office writer.
 
 export type CustomLineBody = Omit<CustomLineInput, 'kind'>
 
 /** The catalogue (the styles a custom line names) and made to measure for the customer, in the tenant's scope. */
-async function customFactsOf(app: FastifyInstance, reader: PortalReader, row: RequestRow, styleIds: readonly (string | null | undefined)[]) {
+async function customFactsOf(writer: DraftWriter, row: RequestRow, styleIds: readonly (string | null | undefined)[]) {
   const wanted = styleIds.filter((id): id is string => typeof id === 'string' && isUuid(id))
-  return reader.inTenant(async (db) => ({ catalogue: await readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: wanted }), mtm: await madeToMeasureOf(db, row.companyId, row.partyId) }))
+  return writer.inTenant(async (db) => ({ catalogue: await readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(writer.app), styleIds: wanted }), mtm: await madeToMeasureOf(db, row.companyId, row.partyId) }))
 }
 
 /** Made to measure switched off for the customer: a made-to-measure line or its people are not written (409 in its words). */
-function mtmClosed(reader: PortalReader): DomainError {
-  const words = MTM_CLOSED_WORDS[partnerLocaleOf(reader.session.person.locale)]
+function mtmClosed(writer: DraftWriter): DomainError {
+  const words = MTM_CLOSED_WORDS[writer.locale]
   return new DomainError('invalid_state', words, [{ path: 'refusal/MTM_CLOSED', message: words }])
 }
 
-export async function addCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, body: { readonly version: number; readonly line: CustomLineInput & OwnPriced /* B-CP-076 */ }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  const { catalogue, mtm } = await customFactsOf(app, reader, row, [body.line.styleId])
-  if (body.line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(reader)
+export async function addCustomLine(writer: DraftWriter, requestId: string, body: { readonly version: number; readonly line: CustomLineInput & OwnPriced /* B-CP-076 */ }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  const { catalogue, mtm } = await customFactsOf(writer, row, [body.line.styleId])
+  if (body.line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
   const issues = checkCustomLine(body.line, catalogue, mtm)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  await onDraft(app, request, 'portalOrdering.addCustomLine', row, body.version, { requestId, line: body.line }, idempotencyKey, async (tools) => {
+  await onDraft(writer, 'portalOrdering.addCustomLine', row, body.version, { requestId, line: body.line }, idempotencyKey, async (tools) => {
     const existing = await readLines(tools.tx, [row.id])
     if (existing.length >= ORDERING_LIMITS.lines) throw new ValidationError(`At most ${ORDERING_LIMITS.lines} lines per request.`, [{ path: 'body/line', message: `At most ${ORDERING_LIMITS.lines} lines per request.` }])
     const seq = existing.reduce((max, line) => Math.max(max, line.seq), 0) + 1
-    const id = await insertCustomLine(tools.tx, row, body.line, seq, reader.session.userId, tools.now)
+    const id = await insertCustomLine(tools.tx, row, body.line, seq, writer.userId, tools.now)
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: id, seq, kind: body.line.kind, ...customLineData(body.line), sizes: body.line.sizes ?? [], brandUnitPrice: markMoney('price', body.line.brandUnitPrice ?? null) /* B-CP-076 */ } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 /** The draft's described or made-to-measure line (a catalogue line keeps its own editor: PUT …/lines/:lineId). */
@@ -863,10 +961,9 @@ async function ownCustomLine(db: Reader, row: RequestRow, lineId: string): Promi
   return line
 }
 
-export async function changeCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: CustomLineBody & OwnPriced /* B-CP-076 */ & { readonly version: number }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  const line = await request.withClient((client) => ownCustomLine(client, row, lineId))
+export async function changeCustomLine(writer: DraftWriter, requestId: string, lineId: string, body: CustomLineBody & OwnPriced /* B-CP-076 */ & { readonly version: number }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  const line = await writer.scoped((client) => ownCustomLine(client, row, lineId))
   const keep = <T>(asked: T | undefined, now: T): T => (asked === undefined ? now : asked)
   const next: CustomLineInput = {
     kind: line.kind,
@@ -880,21 +977,21 @@ export async function changeCustomLine(app: FastifyInstance, request: FastifyReq
     sizes: body.sizes ?? sizesOf(line),
     note: keep(body.note, line.note),
   }
-  const { catalogue, mtm } = await customFactsOf(app, reader, row, [next.styleId])
-  if (line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(reader)
+  const { catalogue, mtm } = await customFactsOf(writer, row, [next.styleId])
+  if (line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
   // The shape always; against today's catalogue and garment types only what this change asks (a style that stopped being sold, or a
   // garment type no longer offered, stays a problem of the line to fix, never a refusal of an unrelated change).
   const styleAsked = body.styleId !== undefined || body.colourwayId !== undefined
   const issues = checkCustomLine(next, catalogue, mtm, 'body').filter((issue) => (styleAsked || !/\/(styleId|colourwayId)$/.test(issue.path)) && (body.garmentType !== undefined || !issue.path.endsWith('/garmentType')))
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  await onDraft(app, request, 'portalOrdering.changeCustomLine', row, body.version, { requestId, lineId, ...body }, idempotencyKey, async (tools) => {
+  await onDraft(writer, 'portalOrdering.changeCustomLine', row, body.version, { requestId, lineId, ...body }, idempotencyKey, async (tools) => {
     const { tx, now } = tools
     const current = await ownCustomLine(tx, row, lineId)
     const people = await tx.portalOrderRequestPerson.count({ where: { lineId } })
     if (current.byPerson && next.byPerson === false && people > 0) throw new InvalidStateError(`Line ${current.seq} has its people: take them off before it stops being by person.`)
     if (body.sizes !== undefined) {
       await tx.portalOrderRequestSize.deleteMany({ where: { lineId } })
-      if (body.sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: body.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size.trim(), quantity: ask.quantity, createdById: reader.session.userId, createdAt: now, updatedAt: now })) })
+      if (body.sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: body.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size.trim(), quantity: ask.quantity, createdById: writer.userId, createdAt: now, updatedAt: now })) })
     }
     const data = customLineData(next)
     const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {} // B-CP-076: absent keeps it, null clears it
@@ -908,41 +1005,44 @@ export async function changeCustomLine(app: FastifyInstance, request: FastifyReq
     })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 /** The draft's by-person line for its people (made to measure open for a made-to-measure line), or a refusal in words. */
-async function rosterLine(request: FastifyRequest, reader: PortalReader, row: RequestRow, lineId: string): Promise<LineRow> {
-  const line = await request.withClient((client) => ownLine(client, row, lineId))
+async function rosterLine(writer: DraftWriter, row: RequestRow, lineId: string): Promise<LineRow> {
+  const line = await writer.scoped((client) => ownLine(client, row, lineId))
   if (!line.byPerson) {
-    const words = PEOPLE_WORDS.NOT_BY_PERSON[partnerLocaleOf(reader.session.person.locale)]
+    const words = PEOPLE_WORDS.NOT_BY_PERSON[writer.locale]
     throw new DomainError('invalid_state', words, [{ path: 'refusal/NOT_BY_PERSON', message: words }])
   }
-  if (line.kind === 'MADE_TO_MEASURE' && !(await reader.inTenant((db) => madeToMeasureOf(db, row.companyId, row.partyId))).open) throw mtmClosed(reader)
+  if (line.kind === 'MADE_TO_MEASURE' && !(await writer.inTenant((db) => madeToMeasureOf(db, row.companyId, row.partyId))).open) throw mtmClosed(writer)
   return line
 }
 
-/** The person's shape (400) and its sheet: a measurement sheet of this very draft (another draft's, another customer's: not found). */
-async function checkPerson(request: FastifyRequest, row: RequestRow, person: PersonInput, at: string): Promise<void> {
+/**
+ * The person's shape (400) and its sheet: a measurement sheet of this very draft (another draft's, another customer's: not found).
+ * od-s s.2: the office names a sheet only with sales.measurements.view over the customer (body data; else 403 in words).
+ */
+async function checkPerson(writer: DraftWriter, row: RequestRow, person: PersonInput, at: string): Promise<void> {
   const issues = personShapeProblems(person).map((message) => ({ path: at, message }))
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
   const fileId = personRow(person).measurementFileId
   if (fileId !== null) {
-    const lineIds = (await request.withClient((client) => readLines(client, [row.id]))).map((line) => line.id)
-    if (!(await request.withClient((client) => isDraftSheet(client, row, lineIds, fileId)))) throw new NotFoundError('File not found.') // W-CP-3
+    if (writer.door === 'office' && !can(writer.actor, SALES_MEASUREMENTS_VIEW, { companyId: row.companyId, partyId: row.partyId })) throw new ForbiddenError(OFFICE_DRAFT_WORDS.SHEET_HELD.en)
+    const lineIds = (await writer.scoped((client) => readLines(client, [row.id]))).map((line) => line.id)
+    if (!(await writer.scoped((client) => isDraftSheet(client, row, lineIds, fileId)))) throw new NotFoundError('File not found.') // W-CP-3
   }
 }
 
-export async function addPeople(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: { readonly version: number; readonly people: readonly PersonInput[] }, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, row, lineId)
-  for (const [index, person] of body.people.entries()) await checkPerson(request, row, person, `body/people/${index}`)
-  await onDraft(app, request, 'portalOrdering.addPeople', row, body.version, { requestId, lineId, people: body.people.length }, idempotencyKey, async (tools) => {
+export async function addPeople(writer: DraftWriter, requestId: string, lineId: string, body: { readonly version: number; readonly people: readonly PersonInput[] }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  await rosterLine(writer, row, lineId)
+  for (const [index, person] of body.people.entries()) await checkPerson(writer, row, person, `body/people/${index}`)
+  await onDraft(writer, 'portalOrdering.addPeople', row, body.version, { requestId, lineId, people: body.people.length }, idempotencyKey, async (tools) => {
     const { tx, now } = tools
     const roster = await tx.portalOrderRequestPerson.findMany({ where: { lineId }, select: { seq: true } })
     if (roster.length + body.people.length > PEOPLE_LIMITS.perLine) {
-      const words = PEOPLE_WORDS.TOO_MANY[partnerLocaleOf(reader.session.person.locale)]
+      const words = PEOPLE_WORDS.TOO_MANY[writer.locale]
       throw new DomainError('conflict', words, [{ path: 'refusal/TOO_MANY', message: words }])
     }
     let seq = roster.reduce((max, person) => Math.max(max, person.seq), 0)
@@ -950,14 +1050,14 @@ export async function addPeople(app: FastifyInstance, request: FastifyRequest, r
     for (const person of body.people) {
       const id = newId()
       seq += 1
-      await tx.portalOrderRequestPerson.create({ data: { id, partyId: row.partyId, requestId: row.id, lineId, seq, ...personRow(person), createdById: reader.session.userId, createdAt: now, updatedAt: now }, select: { id: true } })
+      await tx.portalOrderRequestPerson.create({ data: { id, partyId: row.partyId, requestId: row.id, lineId, seq, ...personRow(person), createdById: writer.userId, createdAt: now, updatedAt: now }, select: { id: true } })
       ids.push(id)
     }
     // Who of the party added them and how they are measured; never the names (personal data stays in its own rows).
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { lineId, people: ids, measureBy: body.people.map((person) => person.measureBy) } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
 async function ownPerson(db: Reader, lineId: string, personId: string): Promise<PersonRow> {
@@ -967,18 +1067,16 @@ async function ownPerson(db: Reader, lineId: string, personId: string): Promise<
 }
 
 export async function changePerson(
-  app: FastifyInstance,
-  request: FastifyRequest,
+  writer: DraftWriter,
   requestId: string,
   lineId: string,
   personId: string,
   body: { readonly version: number; readonly name?: string | undefined; readonly number?: string | null | undefined; readonly measureBy?: PersonInput['measureBy'] | undefined; readonly size?: string | null | undefined; readonly measurementFileId?: string | null | undefined; readonly note?: string | null | undefined },
   idempotencyKey?: string,
 ) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, row, lineId)
-  const person = await request.withClient((client) => ownPerson(client, lineId, personId))
+  const row = await ownDraft(writer, requestId)
+  await rosterLine(writer, row, lineId)
+  const person = await writer.scoped((client) => ownPerson(client, lineId, personId))
   const measureBy = body.measureBy ?? person.measureBy
   // A new way of being measured starts from its own field (the other one is dropped: personRow keeps only the field of its way).
   const next: PersonInput = {
@@ -989,27 +1087,26 @@ export async function changePerson(
     measurementFileId: body.measurementFileId === undefined ? (measureBy === person.measureBy ? person.measurementFileId : null) : body.measurementFileId,
     note: body.note === undefined ? person.note : body.note,
   }
-  await checkPerson(request, row, next, 'body')
-  await onDraft(app, request, 'portalOrdering.changePerson', row, body.version, { requestId, lineId, personId, ...body }, idempotencyKey, async (tools) => {
+  await checkPerson(writer, row, next, 'body')
+  await onDraft(writer, 'portalOrdering.changePerson', row, body.version, { requestId, lineId, personId, ...body }, idempotencyKey, async (tools) => {
     const current = await ownPerson(tools.tx, lineId, personId)
     await tools.tx.portalOrderRequestPerson.update({ where: { id: personId }, data: { ...personRow(next), version: { increment: 1 } }, select: { id: true } })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { lineId, personId, measureBy: current.measureBy }, after: { lineId, personId, measureBy: next.measureBy } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 
-export async function removePerson(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, personId: string, version: number, idempotencyKey?: string) {
-  const reader = portalReader(app, request)
-  const row = await ownDraft(request, reader, requestId)
-  await request.withClient((client) => ownLine(client, row, lineId))
-  await onDraft(app, request, 'portalOrdering.removePerson', row, version, { requestId, lineId, personId, version }, idempotencyKey, async (tools) => {
+export async function removePerson(writer: DraftWriter, requestId: string, lineId: string, personId: string, version: number, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  await writer.scoped((client) => ownLine(client, row, lineId))
+  await onDraft(writer, 'portalOrdering.removePerson', row, version, { requestId, lineId, personId, version }, idempotencyKey, async (tools) => {
     const person = await ownPerson(tools.tx, lineId, personId)
     await tools.tx.portalOrderRequestPerson.delete({ where: { id: personId }, select: { id: true } })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { lineId, personId, seq: person.seq }, after: { personId: null } })
     return null
   })
-  return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
+  return requestView(writer, (await ownRequest(writer, requestId))!)
 }
 // ---- end B-CP-075
 
