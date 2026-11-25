@@ -14,7 +14,7 @@ import { COMPOSE_NS } from '../../../../lib/request-compose/model'
 import { heldProblem } from '../../../../lib/request-compose/files'
 import { contentTypeOf } from '../../../../lib/record-thread/attachments/model'
 import { putToStore, sha256Hex, StoreError } from '../../../../record-panels/store'
-import { changedByOf, choicesTyped, customLinesOf, draftFileCount, draftFilesOf, DRAFT_FILES_MAX, draftTitleOf, headerChanges, headerDirty, headerDraftOf, headerProblem, HEADER_FIELDS, optionHeld, personBody, personChanges, personDraftOf, personProblems, productRowsOf, sizesBody, todayIn, type HeaderDraft, type HeaderField, type PersonDraft } from '../../../../lib/order-draft/model'
+import { TYPING_PAUSE_MS, changedByOf, choicesTyped, customLinesOf, draftFileCount, draftFilesOf, DRAFT_FILES_MAX, draftTitleOf, headerChanges, headerDirty, headerDraftOf, headerProblem, HEADER_FIELDS, optionHeld, personBody, personChanges, personDraftOf, personProblems, productRowsOf, sizesBody, todayIn, type HeaderDraft, type HeaderField, type PersonDraft } from '../../../../lib/order-draft/model'
 import type { CustomLineFields, DraftChoice, DraftFile, DraftFilePart, DraftRecord, SavedBy } from '../../../../lib/order-draft/schema'
 import { DRAFT_NS, DraftDoorProvider, useDraftWords } from '../../../../lib/order-draft/words'
 import type { UploadRow } from '../../../../lib/order-draft/view/files'
@@ -137,6 +137,8 @@ function OfficeDraftContainer() {
   recordRef.current = record
   const headerRef = useRef(header)
   headerRef.current = header
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => (typingTimer.current ? clearTimeout(typingTimer.current) : undefined), [])
   const keys = useRef<Map<string, string>>(new Map())
   const keyFor = (name: string, body: unknown) => {
     const text = `${name}:${JSON.stringify(body)}`
@@ -629,6 +631,12 @@ function OfficeDraftContainer() {
         onHeader: (field, value) => {
           setHeader((now) => ({ ...now, [field]: value }))
           headerRef.current = { ...headerRef.current, [field]: value }
+          // od-fx12: the draft saves as you type — after a short pause (the first words make the draft), and again on leaving the box.
+          if (typingTimer.current) clearTimeout(typingTimer.current)
+          typingTimer.current = setTimeout(() => {
+            typingTimer.current = null
+            void saveHeader(field)
+          }, TYPING_PAUSE_MS)
         },
         onHeaderLeave: (field) => void saveHeader(field),
         onReload: () => void read(),

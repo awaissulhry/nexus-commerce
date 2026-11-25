@@ -149,8 +149,8 @@
   },
   "sent": {
     "title": "Order request sent",
-    "bodyNone": "You find it under Orders & requests as a catalogue order.",
-    "bodyYours": "Your PO {ref}: you find it under Orders & requests as a catalogue order.",
+    "bodyNone": "You find it under Orders & requests.",
+    "bodyYours": "Your PO {ref}: you find it under Orders & requests.",
     "next": "Until then you can follow it under Orders as To be confirmed by us.",
     "open": "Open the order",
     "newOrder": "New order"

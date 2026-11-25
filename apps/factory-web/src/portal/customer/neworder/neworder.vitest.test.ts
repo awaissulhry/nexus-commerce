@@ -511,7 +511,9 @@ describe('B-TH-304 — the catalogue door is open again: New order offers it, wi
     expect(JSON.stringify(pastRows.map((row) => [row.customerRef, row.yourNumber]))).not.toMatch(OFFICE)
     expect(scanText(JSON.stringify(pastRows.map((row) => [row.customerRef, row.yourNumber])), BRAND_ALPHA)).toEqual([])
     const sent = renderCase('en', 'th-304-sent')
-    expect(sent).toContain(`Your PO ${BRAND_BETA.customerRef}: you find it under Orders &amp; requests as a catalogue order.`)
+    // od-fx12: a draft of any kind is sent as an order request (a custom suit too) — never "as a catalogue order".
+    expect(sent).toContain(`Your PO ${BRAND_BETA.customerRef}: you find it under Orders &amp; requests.`)
+    expect(sent).not.toContain('catalogue order')
     expect(renderCase('en', 'th-304-accepted')).toContain('We confirmed this request as an order: open it to follow it.')
     // The old catalogue cases (read by Brand Alpha) draw no office series either.
     for (const id of ['reorder', 'reorder-order', 'sent', 'closed']) expect(renderCase('en', id).match(OFFICE)?.[0] ?? null, id).toBeNull()
