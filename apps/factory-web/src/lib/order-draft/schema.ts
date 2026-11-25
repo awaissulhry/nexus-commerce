@@ -1,6 +1,6 @@
 import { z } from 'zod'
 // F-CP-154 (B-CP-075, B-CP-076): the kinds of a draft line, how a person is measured, the parts of the checklist.
-import { DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { PROBLEM_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { MEASURE_BY } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { CUSTOM_LINE_KINDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { PROBLEM_CODES } from '@nexus/factory-domain/sales/portal-ordering/rules' // B-CP-075: the domain's codes, one source
@@ -46,7 +46,7 @@ export const problemSchema = z.object({
   lineId: z.string().nullable(),
   size: z.string().nullable(),
   // F-CP-154 (B-CP-075): the part of the checklist it holds and the person of a roster it is on (absent from an older answer).
-  part: z.enum(DRAFT_PARTS).optional(),
+  part: z.enum(PROBLEM_PARTS).optional(),
   personId: z.string().nullable().optional(),
 })
 export type Problem = z.infer<typeof problemSchema>
