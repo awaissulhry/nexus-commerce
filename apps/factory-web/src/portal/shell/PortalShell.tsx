@@ -41,6 +41,7 @@ import {
   kindsOf,
   noticesOf,
   portalKeyAction,
+  pageKeepsSlash, // pg-fx3 (walk W-01)
   portalLink,
   portalPathOf,
   portalPrefix,
@@ -490,6 +491,7 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
       const action = portalKeyAction(event.key, chordOpen.current !== null && Date.now() - chordOpen.current < 1500, chords)
       chordOpen.current = null
       if (!action) return
+      if (action.kind === 'search' && pageKeepsSlash(document)) return // pg-fx3 (walk W-01): the page's list search takes `/`
       event.preventDefault()
       if (action.kind === 'search' && can.has('portal.search')) open('search')
       if (action.kind === 'shortcuts') open('shortcuts')
