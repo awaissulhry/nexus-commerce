@@ -10,6 +10,7 @@ import { ThreadView, type ThreadViewModel } from '../view/ThreadView'
 import {
   accountConversationHref,
   askHref,
+  bandThreadOf,
   conversationHref,
   messagesButtonWords,
   opensOwnPage,
@@ -133,13 +134,15 @@ describe('B-TH-273 — the frame on the page', () => {
     expect(textOf(html)).not.toContain('Messages (')
   })
 
-  it('under 1280 px: the body leads with "Messages (2 new)" (the screen reader hears "Messages, 2 new"); the conversation waits', () => {
+  // pp-w1 (w1.1; 10-design § 4, P0-B4): the "Messages (2 new)" button left the body for the band (the frame sets it there).
+  it('under 1280 px: the body leads with no row of its own — the band holds "Messages (2 new)" (bandThreadOf); the conversation waits', () => {
     const html = frame('stacked', { newCount: 2 })
     expect(html).toContain('data-view="body"')
-    expect(textOf(html)).toContain('Messages (2 new)')
-    expect(html).toContain('aria-label="Messages, 2 new"')
-    const italian = frame('stacked', { newCount: 1 }, 'it')
-    expect(textOf(italian)).toContain('Messaggi (1 nuovo)')
+    expect(textOf(html)).not.toContain('Messages (')
+    expect(html).not.toContain('fw-prf-bar')
+    expect(bandThreadOf({ hasThread: true, mode: 'stacked', hidden: false, viewOpen: false, count: 2 })).toEqual({ count: 2 })
+    const source = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('usePortalBandThread(bandThread ? { count: bandThread.count, onClick: () => showThread(false) } : null)')
   })
 
   it('under 1280 px with the view open: the conversation alone, with Back; no button', () => {

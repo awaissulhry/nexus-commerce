@@ -41,6 +41,12 @@
       "lockedCount_other": "{count} documenti con prezzi — non potete aprirli"
     }
   },
+  "record-frame": {
+    "notices": {
+      "fewer_one": "Nascondete 1 avviso",
+      "fewer_other": "Nascondete {count} avvisi"
+    }
+  },
   "record-thread-card": {
     "menu": {
       "reply": "Rispondete",

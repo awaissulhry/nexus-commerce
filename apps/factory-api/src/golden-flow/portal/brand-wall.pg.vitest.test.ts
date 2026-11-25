@@ -498,6 +498,16 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     }
     expect(problems).toEqual([])
     expect(keys.filter((key) => !called.has(key) && !NOT_SWEPT[key])).toEqual([])
+    // ---- pg-s2 S2.2 (GAP-3): a read-POST is no GET, so the sweep above never calls it; it is named here, as T08 and T37 name POST
+    // /threads/unread, and has its own two-brand test (modules/sales/portal-orders/portal-pictures.pg). The pictures of Brand Alpha's
+    // orders asked as Brand Beta: none (absent, no error); Brand Alpha's own read answers only its own orders (the control).
+    const alphaOrders = ids.orderId!.slice(0, 200)
+    const asBeta = await asBrand(beta, seen, 'POST', '/portal/sales-orders/pictures', { orderIds: alphaOrders })
+    expect(asBeta.pictures).toEqual([])
+    expect(findMarkers(withoutEcho('/portal/sales-orders/pictures', asBeta), markers)).toEqual([])
+    const asAlpha = await asBrand(alpha, seen, 'POST', '/portal/sales-orders/pictures', { orderIds: alphaOrders })
+    expect((asAlpha.pictures as Json[]).every((row) => alphaOrders.includes(row.id) && row.fileId === null)).toBe(true)
+    // ---- end pg-s2 S2.2
     // Brand Alpha's own record answers its own portal (the control: the sweep's ids are real). pp-s s.1: by its id and its own
     // number — the office's series is in no customer's order.
     const alphaOrder = await asBrand(alpha, seen, 'GET', `/portal/sales-orders/${id('sales:SO1')}`)

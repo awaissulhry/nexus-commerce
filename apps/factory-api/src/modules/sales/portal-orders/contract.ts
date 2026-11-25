@@ -8,6 +8,7 @@ import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
+import { pictureIds } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids)
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075, SAL-076, SAL-080, SAL-081; design portal.customer.orders). Every
@@ -337,3 +338,34 @@ export const sheetDownloadContract = defineContract({
   response: {},
 })
 // ---- end B-TH-061
+
+// ---- pg-s2 S2.1 (portal grid D4, Z12, H6): the small pictures of the customer's own orders (the list's picture column) -----------
+/**
+ * POST /portal/sales-orders/pictures {orderIds 1–200, each once}: the office's batch answer shape (product/images/small-pictures
+ * smallPicturesView) for the customer's OWN orders only — an id that is not one of them is absent; never a file id (`fileId` null).
+ */
+export const picturesContract = defineContract({
+  body: input({ orderIds: pictureIds() }),
+  response: {
+    200: output({
+      pictures: z.array(
+        output({
+          /** One of the customer's own orders (another customer's, or an unknown id, is absent). */
+          id: id(),
+          styleId: id(),
+          styleCode: z.string(),
+          styleName: z.string(),
+          /** The order's distinct goods styles ("+2" beside the picture). */
+          styleCount: z.number().int(),
+          /** Always null: the portal never gets a file id it could open. */
+          fileId: z.null(),
+          contentType: z.string().nullable(),
+          /** A presigned GET of the ~320 px preview (60 seconds); null until it exists, or without a picture. */
+          small: output({ url: z.string(), expiresAt: instant() }).nullable(),
+        }),
+      ),
+      asOf: instant(),
+    }),
+  },
+})
+// ---- end pg-s2 S2.1

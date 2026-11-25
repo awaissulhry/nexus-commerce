@@ -120,12 +120,12 @@ describe('the bar: Approve and Ask ▾ (at most five actions)', () => {
     const use = { used: 1, max: 3, agreed: 0, left: 2, over: false, words: w('1 of 3 urgent used') }
     const facts = { urgencyOn: true, mayAsk: true, use }
     // F-MS-105: "from Cutting" is the floor's real cut (the API's cutStarted), never the stage.
-    expect(askUsHrefOf(`/p/${BRAND_BETA.code}`, row(B1, 1, { cutStarted: true }), facts)).toBe(`/p/${BRAND_BETA.code}/orders/${B1}?tab=status&ask=RUSH`)
+    expect(askUsHrefOf(`/p/${BRAND_BETA.code}`, row(B1, 1, { cutStarted: true }), facts)).toBe(`/p/${BRAND_BETA.code}/orders/${B1}?tab=overview&ask=RUSH`)
     expect(askUsHrefOf('/p/X', row(B1, 1, { cutStarted: false }), facts)).toBeNull() // Sewing on screen, nothing cut: Mark urgent acts at once
     expect(askUsHrefOf('/p/X', row(B1, 1), facts)).toBeNull() // an answer before the field: not started
-    expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null }, cutStarted: true }), facts)).toBe(`/p/X/orders/${B1}?tab=status&ask=RUSH`)
+    expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null }, cutStarted: true }), facts)).toBe(`/p/X/orders/${B1}?tab=overview&ask=RUSH`)
     expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null } }), facts)).toBeNull()
-    expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null } }), { ...facts, use: { ...use, used: 3, left: 0 } })).toBe(`/p/X/orders/${B1}?tab=status&ask=RUSH`)
+    expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null } }), { ...facts, use: { ...use, used: 3, left: 0 } })).toBe(`/p/X/orders/${B1}?tab=overview&ask=RUSH`)
     expect(askUsHrefOf('/p/X', row(B1, 1, { urgency: urgency({ locked: true }) }), facts)).toBeNull()
     expect(askUsHrefOf('/p/X', row(B1, 1, { urgency: urgency({ asked: true }) }), facts)).toBeNull()
     expect(askUsHrefOf('/p/X', row(B1, 1), { ...facts, mayAsk: false })).toBeNull()
@@ -212,7 +212,7 @@ describe('Approve N: one list, ticked one by one, one typed name, no Undo', () =
 // ---- Ask N ---------------------------------------------------------------------------------------------------------------------
 const betaRules = (over: Partial<ChangeRules> = {}): ChangeRules =>
   rulesOf({
-    order: { ...rulesOf().order, number: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef },
+    order: { ...rulesOf().order, customerRef: BRAND_BETA.customerRef },
     addresses: [],
     openRequestId: null,
     cancel: { possible: true, code: 'FREE', day: null, words: w('Free') },
