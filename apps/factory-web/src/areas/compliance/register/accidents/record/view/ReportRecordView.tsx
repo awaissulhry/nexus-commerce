@@ -19,7 +19,7 @@ import type { ReportRecordActions, ReportRecordModel } from '../view-model'
 import { RecordDialogs } from './RecordDialogs'
 // ---- B-TH-267: the safety report on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../../lib/record-frame/RecordNotices'
 
 /**
  * SCR-421-record — a product-safety report in the office (B-W2b-357 on B-W2b-351's API; SAL-414, SAL-415, SAL-423), on RecordFrame

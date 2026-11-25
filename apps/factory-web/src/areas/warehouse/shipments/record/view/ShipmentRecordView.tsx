@@ -16,7 +16,7 @@ import { DEPTH_NS } from '../../queue/shared/depth'
 import { DOOR_NS } from '../../queue/shared/door-words' // F-OS-203
 // ---- B-TH-264: the shipment on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 // B-W2b-410: the record's parts in depth (holds, split, cartons, how it travels, label prints, papers, delivery, notice).
 import type { ShipmentDepthSlots } from '../../queue/record-depth'

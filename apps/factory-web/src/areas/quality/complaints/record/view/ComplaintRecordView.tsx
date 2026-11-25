@@ -17,7 +17,7 @@ import type { ComplaintRecordActions, ComplaintRecordModel, FactsDraft, RecordDi
 import { AnswerTab, InvestigationTab, SendBody, sendReviewHeld } from './AnswerTabs'
 // ---- B-TH-266: the complaint on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 /**
  * A complaint's record (SCR-113; design quality.complaints › Complaint, `?tab=complaint|investigation|answer|linked`), on RecordFrame

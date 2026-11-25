@@ -22,7 +22,7 @@ import '../../../../_shared/buying/buying.css'
 import '../record.css'
 // ---- B-TH-263: the subcontract order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
 

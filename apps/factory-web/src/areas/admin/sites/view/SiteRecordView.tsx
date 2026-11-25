@@ -13,7 +13,7 @@ import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, FrameState, ListKeysHelp, ListState, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 // ---- B-TH-269: the site on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
 import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../lib/record-frame/RecordNotices'
 import {
   archiveUses,
   floorDraft,

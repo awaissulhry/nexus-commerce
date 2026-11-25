@@ -21,7 +21,7 @@ import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import type { DepthActions, DepthModel } from '../../depth/view/types'
 // ---- B-TH-267: the register entry on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 /** B-W2b-271: the depth parts as the record mounts them (absent: a W1 record, as before). */
 export interface EntryDepth {

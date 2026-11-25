@@ -106,7 +106,7 @@ describe('F-PT-301: one strip rule on both tabs', () => {
     expect(links.match(/t\('links\.gate\.open'\)/g)?.length).toBe(1)
     // F-CO-K2: the row is the kit's Strip — its anchor is the row's id (the kit's part draws `id={anchor}`).
     expect(links).toContain('anchor={anchors[index]}')
-    expect(readFileSync(new URL('../../../../_shared/record-overview/Overview.tsx', import.meta.url), 'utf8')).toContain('id={anchor} tabIndex={anchor === undefined ? undefined : -1}')
+    expect(readFileSync(new URL('../../../../../lib/record-overview/Overview.tsx', import.meta.url), 'utf8')).toContain('id={anchor} tabIndex={anchor === undefined ? undefined : -1}')
     // The page notice: drawn for every tab (no tab condition in front of it), inside the page's notices.
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toMatch(/\n\s*<GateNotices model=\{model\.links\} prefix=\{model\.prefix\} \/>/)
