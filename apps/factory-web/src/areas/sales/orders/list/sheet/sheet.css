@@ -1,39 +1,7 @@
 /* B-TH-225 / B-TH-226 — the Orders sheet's own parts (threads plan TH-1a, pictures 23 + 24). DS tokens only. Three targets never
    look alike: a door (link colour, underline on hover), a funnel (a value that narrows the sheet), an editable cell (pencil). */
 
-.fw-sheet-door {
-  color: var(--nds-text-link);
-  font-weight: var(--nds-font-weight-medium);
-  text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-radius: var(--nds-radius-sm);
-}
-.fw-sheet-door.strong {
-  font-weight: var(--nds-font-weight-semibold);
-}
-.fw-sheet-door:hover,
-.fw-sheet-door:focus-visible {
-  text-decoration: underline;
-}
-.fw-sheet-door:focus-visible,
-.fw-sheet-held:focus-visible,
-.fw-sheet-funnel:focus-visible {
-  outline: 2px solid var(--nds-primary);
-  outline-offset: 1px;
-}
-.fw-sheet-held,
-.fw-sheet-plain {
-  color: var(--nds-text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fw-sheet-held {
-  border-bottom: 1px dotted var(--nds-border-subtle);
-  border-radius: var(--nds-radius-sm);
-}
+/* pg-w1: the door cell's rules (.fw-sheet-door, .fw-sheet-held, .fw-sheet-plain) moved verbatim to lib/order-cells/order-cells.css. */
 
 .fw-sheet-funnel {
   all: unset;
