@@ -17,7 +17,7 @@ import type { ThreadViewModel } from './view/ThreadView'
 // ---- B-TH-273 / B-TH-274
 import { createElement } from 'react'
 import { Card } from '@nexus/ui/components'
-import type { PortalFrameMode } from './record/model'
+import { bandThreadOf, type PortalFrameMode } from './record/model'
 import type { RecordSummaryModel } from './view/RecordView'
 // ---- end B-TH-273 / B-TH-274
 
@@ -51,6 +51,15 @@ const BADGES = [
   { area: 'documents', count: 1, words: { it: '1 richiesto', en: '1 requested' } },
   { area: 'quotes', count: 1, words: { it: '1 da approvare', en: '1 to approve' } },
 ]
+
+/**
+ * pp-w1 (w1.1; pp-fx1: shared by every record host's design case): the design review's band with the record frame's thread button ("Messages (2 new)" while the conversation is not on
+ * screen) — the live frame puts it in the band itself (usePortalBandThread); a design case has no frame state to do it.
+ */
+export function withThreadButton(band: PortalBand, frame: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly hidden?: boolean } | null | undefined): PortalBand {
+  const thread = frame ? bandThreadOf({ hasThread: true, mode: frame.mode, hidden: frame.hidden ?? false, viewOpen: frame.viewOpen ?? false, count: frame.newCount ?? 0 }) : null
+  return thread ? { ...band, thread: { count: thread.count, onClick: () => undefined } } : band
+}
 
 function shell(locale: Locale, over: Partial<PortalShellViewModel> = {}): PortalShellViewModel {
   return {

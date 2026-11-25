@@ -6,6 +6,7 @@ import { at, complaintRecord, PREFIX, returnRecord, returnWords, shellOf, thread
 import { cancelHeld, photosHeld, type RecordTab } from '../model'
 import type { CaseDialog, CaseRecordViewModel } from '../view/CaseRecordView'
 import { ReturnsCase, type ReturnsCaseBuilder } from '../view/ReturnsCase'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 
 /**
  * SCR-187 › one case (design portal.customer.returns rec "Return"; B-TH-275, picture 22: Request and Status beside the case's
@@ -62,7 +63,7 @@ function returnCase(build: (locale: Locale) => { record: ReturnRecord; tab?: Rec
         creditNotes: input.record.progress.creditNotes.map((note) => ({ id: note.id, label: note.number ?? '—' })),
       },
     })
-    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275: docked beside every tab */ } }
+    return { shell: shellOf(locale, withThreadButton(band, model.frame), { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275: docked beside every tab */ } }
   }
 }
 
@@ -90,7 +91,7 @@ function complaintCase(build: (locale: Locale) => { record: ComplaintRecord; tab
       ...input.over,
     }
     return {
-      shell: shellOf(locale, complaintBandOf({ words: returnWords(locale), record: input.record, tab, prefix: PREFIX, photosHeld: held })),
+      shell: shellOf(locale, withThreadButton(complaintBandOf({ words: returnWords(locale), record: input.record, tab, prefix: PREFIX, photosHeld: held }), model.frame)),
       body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275 */ },
     }
   }

@@ -5,6 +5,7 @@ import { at, PREFIX, shellOf, words as returnsWords } from '../design-data'
 // B-TH-275: the repair's own conversation, docked beside both tabs.
 import { threadOf } from '../design-data'
 import type { PortalFrameMode } from '../../../shell/record/model'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 import type { Repair } from './api'
 import { repairBandOf } from './band'
 import { answerHeldKey, NS, photosHeldKey } from './model'
@@ -145,7 +146,7 @@ function repairCase(build: (locale: Locale) => Build): RepairCaseBuilder {
       model.state === 'ready'
         ? repairBandOf({ t, listTitle: returnsWords(locale)('list.title'), repair: input.repair, tab: model.tab, prefix: PREFIX, photosHeld })
         : { title: model.state === 'missing' ? t('portal.record.missing') : returnsWords(locale)('list.title'), back: { href: `${PREFIX}/returns`, label: returnsWords(locale)('list.title') } }
-    return { shell: shellOf(locale, band, { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275 */ } }
+    return { shell: shellOf(locale, withThreadButton(band, model.frame), { path: '/returns', preview: input.preview ?? false }), body: { kind: 'record', model, thread: threadOf(locale) /* B-TH-275 */ } }
   }
 }
 
