@@ -113,13 +113,6 @@
 }
 
 /* ── the record ── */
-/* pp-fx4 (walk W-11): the Overview's rows at the base size (13 px), as the Owner-approved picture and the office draw the SAME kit — on
-   the portal's comfortable page they inherited 16 px. A portal-side wrapper only: no class of the kit is restyled, the office does not
-   change, and the controls keep the comfortable size (their targets). */
-.fw-pord-ov {
-  font-size: var(--nds-font-size-base);
-}
-
 .fw-pord-tracker {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(200px, auto);
