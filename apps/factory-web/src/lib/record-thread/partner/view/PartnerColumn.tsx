@@ -137,6 +137,7 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
   }
 
   const pins = useMemo(() => partnerPinsOf(model.pins ?? [], names, new Set(model.messages.filter((message) => message.author.mine).map((message) => message.id))), [model.pins, names, model.messages])
+  const pinned = useMemo(() => new Set(pins.filter((pin) => !pin.removed).map((pin) => pin.messageId)), [pins])
   // The reply bar: the message the box answers, said as its quote would say it (the author rule, one line, the person's colour).
   const target = model.replyTo ? feed.find((message) => message.id === model.replyTo) : undefined
   const replyBar = target ? { who: partnerWho(target.source, names), line: target.source.erased ? card('quote.removed') : excerptOf(target.source.body), tone: tones.get(target.senderKey) ?? 'slate', at: target.at } : null
@@ -163,7 +164,7 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
           return (
             <div key={row.key} className="fw-rt-feed-item" data-day={dayText(dayOf(message.at), today, locale, feedWords)}>
               <MessageRow
-                message={partnerRowOf(message, { names, tones, label: words(email ? 'row.labelEmail' : 'row.label', { who, time }) })}
+                message={partnerRowOf(message, { names, tones, label: words(email ? 'row.labelEmail' : 'row.label', { who, time }), pinned: pinned.has(message.id) })}
                 context={{ tones }}
                 actions={{ onJump: quotes ? actions?.onJump : undefined, onOpenFile: open }}
                 run={row.run}

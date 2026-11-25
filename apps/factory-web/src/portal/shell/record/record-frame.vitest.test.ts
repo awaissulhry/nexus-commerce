@@ -88,7 +88,7 @@ describe('B-TH-273 — where the conversation sits, and how wide', () => {
     expect(messagesButtonWords(140)).toMatchObject({ key: 'record.frame.messagesMany', count: 99 })
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale].portal ?? {}
-      for (const key of ['record.frame.messages', 'record.frame.messagesNew_one', 'record.frame.messagesNew_other', 'record.frame.messagesMany', 'record.frame.messagesNewLabel_other', 'record.frame.back', 'thread.erased', 'email.defaultInstant']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['record.frame.messages', 'record.frame.messagesNew_one', 'record.frame.messagesNew_other', 'record.frame.messagesMany', 'record.frame.messagesNewLabel_other', 'record.frame.back', 'email.defaultInstant']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
     expect(CATALOGUE.en.portal!['record.frame.messagesNew_other']).toBe('Messages ({count} new)')
   })
@@ -168,7 +168,6 @@ describe('B-TH-273 — the frame on the page', () => {
 
 describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, else opens the conversation as a page', () => {
   const shell = readFileSync(new URL('../PortalShell.tsx', import.meta.url), 'utf8')
-  const thread = readFileSync(new URL('../thread/PortalThread.tsx', import.meta.url), 'utf8')
 
   it('from another page: a record whose own page docks it opens there with its box focused; any other its conversation page', () => {
     expect(askHref(PREFIX, { type: 'SalesOrder', id: 's-7' }, '/orders/s-7')).toBe(`${PREFIX}/orders/s-7?tab=messages`)
@@ -184,16 +183,8 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
     expect(shell).not.toMatch(/<Modal\b/)
     expect(shell).not.toContain('<PortalThread')
   })
-
-  it('the docked conversation tells the button its count and marks messages read only while on screen', () => {
-    expect(thread).toContain('const dockFrame = usePortalRecordFrame()')
-    expect(thread).toContain("if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0 || !onScreen) return")
-    expect(thread).toContain('.then((answer) => reportNew?.(answer.reading.newCount))')
-  })
-
-  it('a message removed after a privacy request says so in the portal too (B-TH-079); a files-only message keeps its empty text', () => {
-    expect(thread).toContain("body: message.erased ? t('thread.erased') : message.body,")
-  })
+  // pt-w2 W2.3: the docked conversation's own tests (its count, read only while on screen, a removed message) live with the thread now:
+  // portal/shell/thread/thread.vitest.test.ts.
 })
 
 describe('B-TH-274 — the portal’s generic page: a record’s conversation as its own page, the account conversation', () => {
@@ -281,35 +272,4 @@ describe('B-TH-274 — the portal’s generic page: a record’s conversation as
   })
 })
 
-// ---- B-TH-286 (B-TH-091; T2-F07; wall W08): the customer sees the pins of messages shared with it, above the conversation ---------
-describe('B-TH-286 — pins in the portal conversation', () => {
-  const pins = [
-    { id: 'm2', author: 'Marco Prova', words: 'We confirm the new chart for #7.', date: '16/11/2026' },
-    { id: 'm9', author: null, words: 'Message removed after a privacy request', date: '10/11/2026' },
-  ]
-
-  it('draws one line per pin (who, when, one line of its words) in it and en; nothing when nothing is pinned', () => {
-    for (const locale of ['en', 'it'] as const) {
-      const html = render(createElement(ThreadView, { model: betaThread({ pins }) }), locale)
-      const text = textOf(html)
-      expect(text).toContain(locale === 'en' ? '2 pinned messages' : '2 messaggi fissati')
-      expect(text).toContain('We confirm the new chart for #7.')
-      // A pin with no author (removed) names the factory, never someone made up.
-      expect(text).toContain('Pelletteria Esempio · 10/11/2026')
-      expect(text).not.toMatch(/\bthread\.pins\./)
-      expect(scanText(text, BRAND_ALPHA)).toEqual([])
-    }
-    expect(render(createElement(ThreadView, { model: betaThread() }))).not.toContain('fw-pthread-pins')
-    expect(render(createElement(ThreadView, { model: betaThread({ pins: [] }) }))).not.toContain('fw-pthread-pins')
-  })
-
-  it('reads the pins through the API’s partner answer only (its own customer’s, never an office note’s, never who pinned)', () => {
-    const api = readFileSync(new URL('../api.ts', import.meta.url), 'utf8')
-    const block = api.slice(api.indexOf('---- B-TH-286'), api.indexOf('---- end B-TH-286'))
-    expect(block).toContain('/pins')
-    expect(block).not.toMatch(/pinnedBy|audience/)
-    const thread = readFileSync(new URL('../thread/PortalThread.tsx', import.meta.url), 'utf8')
-    expect(thread).toContain('fetchPins(frame.api, type, id, signal)')
-  })
-})
-// ---- end B-TH-286
+// ---- B-TH-286: the portal conversation's pins moved with the thread's tests (portal/shell/thread/thread.vitest.test.ts, pt-w2 W2.3).

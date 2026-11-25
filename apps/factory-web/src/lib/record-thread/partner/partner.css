@@ -12,10 +12,10 @@
   line-height: 1.45;
 }
 
-/* The designer chip held: focusable, never greyed out of reach — its lock and quieter words say it (the reason is its tooltip). */
+/* The designer chip held (walk L3): focusable and in its own colour — never the disabled grey; its lock says it, the reason is its
+   tooltip and its description; a click changes nothing. */
 .fw-rtp-designer.is-held {
   cursor: default;
-  color: var(--nds-text-muted);
 }
 
 /* A shared file ticked to go with a link guest's message, in the chips row. */

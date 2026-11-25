@@ -1,3 +1,6 @@
+import type { PortalQuote, PortalThreadMessage } from '../../lib/record-thread/partner/model'
+import type { PartnerLinkRead, PartnerMessageRead } from './api'
+
 /**
  * The record conversation's rules the frame says in its own words (B-W2b-168's composer reasons; pure, held by
  * model.vitest.test.ts against factory-domain's constants: the domain's thread rules reach `node:crypto`, so a browser module
@@ -88,3 +91,71 @@ export function designerAskedOf(answer: { readonly asked: boolean; readonly name
   return answer.asked && answer.name ? { key: 'thread.designer.asked', name: answer.name } : { key: 'thread.designer.capped' }
 }
 // ---- end F-CP-156
+
+// ---- pt-w2 W2.3 (lane pt-, S1, S6; ONE SHARED THREAD): the read as the partner face draws it; a refused reply ---------------------------
+
+const QUOTE_KINDS: readonly NonNullable<PortalQuote['authorKind']>[] = ['USER', 'PARTY', 'WORKER', 'SYSTEM']
+
+/** A quote as the server sent it for this reader (its own link): who wrote it by kind (an unknown kind: ours), erased, mine, its files. */
+export function portalQuoteOf(link: PartnerLinkRead): PortalQuote {
+  const kind = QUOTE_KINDS.find((one) => one === link.authorKind)
+  return {
+    id: link.id,
+    authorName: link.authorName,
+    ...(kind ? { authorKind: kind } : {}),
+    excerpt: link.excerpt,
+    at: link.at,
+    ...(link.erased ? { erased: true } : {}),
+    ...(link.mine ? { mine: true } : {}),
+    ...(link.fileCount !== undefined ? { fileCount: link.fileCount } : {}),
+    ...(link.firstFile !== undefined ? { firstFile: link.firstFile } : {}),
+  }
+}
+
+/**
+ * A message of the read as the face draws it: the sides and channel in its words, the reader's own flag, the text, its files (a locked
+ * one — a price for a reader without prices — counted, never named, no link; the others open at `/api/files/:id/download`), the quote
+ * from its own link, the newest that corrects it, erased.
+ */
+export function portalMessageOf(message: PartnerMessageRead, locale: string): PortalThreadMessage {
+  return {
+    id: message.id,
+    side: message.side === 'COMPANY' ? 'company' : 'partner',
+    channel: message.channel === 'EMAIL' ? 'email' : message.channel === 'PORTAL' ? 'portal' : 'app',
+    author: message.author,
+    body: message.body,
+    attachments: message.attachments.map((file) =>
+      file.locked
+        ? { id: file.id, name: '', locked: true }
+        : { id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, size: sizeText(file.sizeBytes, locale), contentType: file.contentType, href: `/api/files/${encodeURIComponent(file.id)}/download` },
+    ),
+    at: message.at,
+    replyTo: message.replyTo ? portalQuoteOf(message.replyTo) : null,
+    correctedBy: message.correctedBy ?? null,
+    erased: message.erased === true,
+  }
+}
+
+/** S.6: the API refused a reply (409, nothing written: the text and the reply bar stay) by its issues' paths, as the words' key. */
+export function replyRefusalKey(issuePaths: readonly string[]): string | null {
+  return issuePaths.map((path) => path.replace(/\./g, '/')).includes('refusal/REPLY_REFUSED') ? 'thread.reply.refused' : null
+}
+
+/** Why a jump did not reach its message (lib/record-thread/jump `jumpRefusal`), in the portal's words. */
+export function jumpWordsKey(refusal: { readonly key: string }): string {
+  if (refusal.key === 'older.failed') return 'thread.failed.more'
+  return refusal.key === 'notice.messageGone' ? 'thread.jump.tooFar' : 'thread.jump.outOfReach'
+}
+
+/** A file's size in the page's language ("673 KB"). */
+export function sizeText(bytes: number, locale: string): string {
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  return `${new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'it-IT', { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(value)} ${units[unit]}`
+}
+// ---- end pt-w2 W2.3

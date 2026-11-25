@@ -361,7 +361,7 @@
     "requests": "What we ask for"
   },
   "messages": {
-    "priceTalk": "Questions about prices belong here: this conversation is only between you and us."
+    "priceTalk": "Questions about prices belong here: these messages are only between you and us."
   },
   "unsaved": {
     "answer": "Your answer to this order is not sent yet."

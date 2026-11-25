@@ -342,7 +342,7 @@ describe('B-TH-275 — returns, complaints and repairs dock their conversation',
     expect(html).toContain('id="messages"')
     expect(html).toContain('data-mode="docked"')
     const page = readFileSync(new URL('./repair/RepairPage.tsx', import.meta.url), 'utf8')
-    expect(page).toContain('<PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} showRecord={false} />')
+    expect(page).toContain('<PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} />') // pt-w2 W2.3: no showRecord (the record pair went)
     const bandSource = readFileSync(new URL('./repair/band.ts', import.meta.url), 'utf8')
     expect(bandSource).toContain("ask: { type: 'RepairOrder', id: repair.id, label: repair.number }")
     expect(typeof repairBandOf).toBe('function')

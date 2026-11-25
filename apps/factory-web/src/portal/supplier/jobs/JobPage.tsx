@@ -288,7 +288,7 @@ function JobContainer({ id }: { id: string }) {
   }
 
   return (
-    <PortalRecordFrame thread={job && state === 'ready' ? <PortalThread type="SubcontractOrder" id={job.id} showRecord={false} headingLevel={2} /> : null} threadLabel={t('thread.label', { number: job?.number ?? '' })}>
+    <PortalRecordFrame thread={job && state === 'ready' ? <PortalThread type="SubcontractOrder" id={job.id} /> : null} threadLabel={t('thread.label', { number: job?.number ?? '' })}>
       <JobRecordView
         model={model}
         actions={{

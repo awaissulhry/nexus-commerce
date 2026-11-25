@@ -1,0 +1,31 @@
+/*
+ * pt-w2 W2.3 (lane pt-, A6; ONE SHARED THREAD): the portal thread's place. In a record frame it fills the dock (the frame's height
+ * rules: record-frame.css); on a page of its own — a project, a request, a record page — the column is BOUNDED, so its list scrolls
+ * itself: it opens at the new messages (else the newest), the down button and older-on-scroll work there too, and the box stays on
+ * screen. Layout only, no colour.
+ */
+.fw-pthr {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fw-pthr > .fw-rtp {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.fw-pthr.is-bounded {
+  height: clamp(440px, calc(100vh - 200px), 1000px);
+  height: clamp(440px, calc(100dvh - 200px), 1000px);
+}
+
+/* The phone: the column is the window less the band, at least 420 px; never a sideways scroll. */
+@media (max-width: 719px) {
+  .fw-pthr.is-bounded {
+    height: max(420px, calc(100vh - 140px));
+    height: max(420px, calc(100dvh - 140px));
+  }
+}

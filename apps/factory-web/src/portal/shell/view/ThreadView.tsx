@@ -1,147 +1,90 @@
 'use client'
 
-import { Pin } from 'lucide-react'
-import { RefPair } from '@nexus/ui/components/RefPair/index'
-import { PartnerThread, type PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
-import { useDsWords } from '../../../lib/i18n/ds-parts'
+import type { ReactNode } from 'react'
 import { useT } from '../../../lib/i18n/provider'
-// F-CP-156: "Ask <name>, factory designer" under the thread (the DS PartnerThread unchanged).
-import { AtSign } from 'lucide-react'
-import { Checkbox, FilterChip } from '@nexus/ui/primitives'
-// F-CP-156 (cp-fx14, walk L3): the held box says why beside it (a lock and the words), never a disabled grey.
-import { Lock } from 'lucide-react'
-import { useId } from 'react'
+import type { PartnerKind, PortalThreadMessage } from '../../../lib/record-thread/partner/model'
+import { PartnerColumn, type PartnerColumnActions } from '../../../lib/record-thread/partner/view/PartnerColumn'
+import type { PartnerWidth } from '../../../lib/record-thread/partner/view/PartnerHead'
 
 /**
- * Ask a question / Messages (design portal.frame › thread; COL-059, COL-060): ONE conversation per record, shared with us —
- * our messages and files and theirs, never an internal note; a reply by e-mail lands in the same thread and the composer
- * says so ("You can also answer our e-mails"). When the person may not write, the reason in place of the box and one line
- * that says who can (design access-rules). The DS PartnerThread draws it (oldest first, plain text, Ctrl / ⌘ + Enter sends).
+ * Messages (design portal.frame › thread; COL-059, COL-060): ONE conversation per record, shared with us — our messages and theirs,
+ * never an internal note. pt-w2 W2.3 (lane pt-, A1): the portal's thin ADAPTER onto the ONE partner face (lib/record-thread/partner) —
+ * the office's row, list, composer row and pinned bar. Its model keeps its shape (the design fixtures fit as they are); what the live
+ * host adds is optional.
  */
-
 export interface ThreadViewModel {
   state: 'loading' | 'error' | 'ready'
   title?: string
-  /** The record: their reference first, ours second. Null: the account (a question with no record). */
+  /** The record: their reference first, ours second (names the column). Null: the account. */
   record: { theirs: string | null; ours: string | null } | null
   companyName: string
   /** Oldest first. */
-  messages: readonly PartnerMessage[]
+  messages: readonly PortalThreadMessage[]
   composer: { value: string; busy: boolean; heldReason: string | null; hint: string | null; limit: number } | null
+  /** Older messages exist (read as the person scrolls up); busy: one is read. */
   loadMore: { busy: boolean } | null
-  /** Who can do what this person cannot ("Ask your admin, Anna Rossi, …"); null: nothing to say. */
+  /** Who can do what this person cannot ("…ask your admin (Ugo Test)"): the ONE held line; null: nothing to say. */
   accessLine: string | null
-  /** The last post failed, in words (the typed text stays). */
+  /** The last act failed, in words (the typed text stays). */
   failed: string | null
-  /** B-TH-286 (B-TH-091): the messages pinned for everyone on the record that this customer may read; empty: no line. */
-  pins?: readonly { readonly id: string; readonly author: string | null; readonly words: string; readonly date: string }[]
-  /**
-   * F-CP-156 (customer page plan C7, D12): "Ask <name>, factory designer" — the one name the customer may ask, whether the box is
-   * ticked, whether the ONE "@" chip shows (an "@" being typed), why it cannot be ticked now (words), or null: no box (no name, or a
-   * record the customer cannot ask on). Never who read it.
-   */
+  /** B-TH-286: the pins of messages shared with this customer (never who pinned). */
+  pins?: readonly { readonly id: string; readonly author: string | null; readonly words: string; readonly date: string; readonly pinnedAt?: string; readonly files?: number; readonly removed?: boolean }[]
+  /** F-CP-156: "Ask <name>, factory designer" — ticked, an "@" being typed (the chip completes it), why it cannot be ticked now. */
   designer?: { readonly name: string; readonly ask: boolean; readonly chip: boolean; readonly held: string | null } | null
+  // ---- pt-w2 W2.3: the live host's (every one optional)
+  kind?: PartnerKind
+  older?: 'idle' | 'loading' | 'failed'
+  reading?: { readonly firstNewId: string | null; readonly newCount: number } | null
+  flash?: { readonly id: string; readonly seq: number } | null
+  replyTo?: string | null
+  /** What the last post said ("We asked Dora Campione."), in the ONE bar. */
+  said?: string | null
+  /** More sentences for the ⓘ (the supplier's price talk). */
+  help?: readonly string[]
+  width?: PartnerWidth | null
 }
 
-export interface ThreadViewProps {
+export interface ThreadViewProps extends Omit<PartnerColumnActions, 'onOlder' | 'onAskDesigner' | 'onDesignerChip'> {
   model: ThreadViewModel
-  onChange?: (value: string) => void
-  onSend?: () => void
   onMore?: () => void
-  onRetry?: () => void
-  headingLevel?: 2 | 3
-  /** F-CP-156: the box ticked or not; the "@" chip pressed (the name goes into the text and the box is ticked). */
   onAskDesigner?: (ask: boolean) => void
   onDesignerChip?: () => void
 }
 
-export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLevel = 2, onAskDesigner, onDesignerChip }: ThreadViewProps) {
+export function ThreadView({ model, onMore, ...actions }: ThreadViewProps): ReactNode {
   const t = useT('portal')
-  const ds = useDsWords()
-  const pins = model.pins ?? []
-  // F-CP-156 (cp-fx14, walk L3): the box's held words (null: it may be ticked) and the id the box is described by.
-  const held = model.designer?.held ?? null
-  const hintId = useId()
+  const title = model.title ?? t('thread.title')
+  const designer = model.designer ?? null
+  const hint = designer ? `${t('thread.designer.hint', { name: designer.name })} ${t('thread.designer.typeAt', { name: designer.name })}` : null
   return (
-    <div className="fw-pthread">
-      {/* B-TH-286 (T2-F07): what was pinned on this record, above the conversation; nothing when nothing is pinned (T2-F09). */}
-      {pins.length > 0 && (
-        <section className="fw-pthread-pins" aria-label={t('thread.pins.title', { count: pins.length })}>
-          <p className="fw-pthread-pins-title">
-            <Pin size={13} aria-hidden /> {t('thread.pins.title', { count: pins.length })}
-          </p>
-          <ul className="fw-pthread-pins-list">
-            {pins.map((pin) => (
-              <li key={pin.id}>
-                <span className="fw-pthread-pins-words">{pin.words}</span>
-                <span className="fw-pthread-pins-meta">{[pin.author ?? model.companyName, pin.date].join(' · ')}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <PartnerThread
-        title={model.title ?? t('thread.title')}
-        headingLevel={headingLevel}
-        record={model.record ? <RefPair theirs={model.record.theirs} ours={model.record.ours} size="sm" labels={ds.refPair} /> : undefined}
-        companyName={model.companyName}
-        messages={model.messages}
-        state={model.state}
-        onRetry={onRetry}
-        empty={model.record ? t('thread.empty') : t('thread.emptyAccount')}
-        loadMore={model.loadMore && onMore ? { onClick: onMore, busy: model.loadMore.busy } : null}
-        composer={
-          model.composer
-            ? {
-                value: model.composer.value,
-                onChange: (value) => onChange?.(value),
-                onSend: () => onSend?.(),
-                busy: model.composer.busy,
-                heldReason: model.composer.heldReason,
-                hint: model.composer.hint,
-                limit: model.composer.limit,
-              }
-            : null
-        }
-        labels={ds.partnerThread}
-        textareaLabels={ds.textarea}
-      />
-      {/* F-CP-156: under the DS thread — the ONE "@" chip while an "@" is typed, then the box and its hint. */}
-      {model.designer && model.composer ? (
-        <div className="fw-pthread-designer" data-held={held !== null ? '' : undefined}>
-          {model.designer.chip ? (
-            <FilterChip className="fw-pthread-designer-chip" onClick={() => onDesignerChip?.()}>
-              <AtSign size={12} aria-hidden /> {t('thread.designer.chip', { name: model.designer.name })}
-            </FilterChip>
-          ) : null}
-          {/* F-CP-156 (cp-fx14, walk L3): held, not disabled — the box stays focusable with a readable label, says why in words
-              beside it (aria-describedby) and does not change; the DS Checkbox has no held state (packages/ui as it is). */}
-          <Checkbox
-            checked={model.designer.ask}
-            aria-disabled={held !== null ? true : undefined}
-            aria-describedby={hintId}
-            onChange={(event) => {
-              if (held === null) onAskDesigner?.(event.target.checked)
-            }}
-            label={<strong>{t('thread.designer.ask', { name: model.designer.name })}</strong>}
-          />
-          <p className="fw-pthread-designer-hint" id={hintId}>
-            {held !== null ? (
-              <>
-                <Lock size={12} aria-hidden /> <span>{held}</span>
-              </>
-            ) : (
-              `${t('thread.designer.hint', { name: model.designer.name })} ${t('thread.designer.typeAt', { name: model.designer.name })}`
-            )}
-          </p>
-        </div>
-      ) : null}
-      {model.failed ? (
-        <p className="fw-pdialog-failed" role="alert">
-          {model.failed}
-        </p>
-      ) : null}
-      {model.accessLine ? <p className="fw-paccess-line">{model.accessLine}</p> : null}
-    </div>
+    <PartnerColumn
+      model={{
+        kind: model.kind ?? 'record',
+        state: model.state,
+        title,
+        recordName: model.record?.theirs ?? model.record?.ours ?? title,
+        companyName: model.companyName,
+        messages: model.messages,
+        more: model.loadMore !== null,
+        older: model.loadMore?.busy ? 'loading' : (model.older ?? 'idle'),
+        reading: model.reading ?? null,
+        flash: model.flash ?? null,
+        pins: (model.pins ?? []).map((pin) => ({ messageId: pin.id, pinnedAt: pin.pinnedAt ?? pin.date, authorName: pin.author, excerpt: pin.words, files: pin.files ?? 0, removed: pin.removed ?? false })),
+        composer: model.composer
+          ? {
+              value: model.composer.value,
+              busy: model.composer.busy,
+              held: model.accessLine ?? model.composer.heldReason,
+              said: model.said ?? null,
+              designer: designer && hint ? { ask: t('thread.designer.ask', { name: designer.name }), on: designer.ask, hint, held: designer.held, completes: designer.chip } : null,
+            }
+          : null,
+        replyTo: model.replyTo ?? null,
+        help: [...(model.composer?.hint ? [model.composer.hint] : []), ...(hint ? [hint] : []), ...(model.help ?? [])],
+        notice: model.failed,
+        width: model.width ?? null,
+      }}
+      actions={{ ...actions, onOlder: onMore }}
+    />
   )
 }

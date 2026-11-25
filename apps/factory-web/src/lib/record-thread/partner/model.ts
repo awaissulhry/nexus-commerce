@@ -210,7 +210,7 @@ export function partnerFeedOf(messages: readonly PortalThreadMessage[], names: P
  * The shared row of one portal message: the side by the reader, the name by the author rule (with our company's name beside our
  * people's — the company shows when it is not the reader's own), the words or "erased", the quote from its own link, its files.
  */
-export function partnerRowOf(message: PartnerFeedMessage, input: { readonly names: PartnerNames; readonly tones?: ReadonlyMap<string, SenderTone> | undefined; readonly label: string }): RowModel {
+export function partnerRowOf(message: PartnerFeedMessage, input: { readonly names: PartnerNames; readonly tones?: ReadonlyMap<string, SenderTone> | undefined; readonly label: string; readonly pinned?: boolean | undefined }): RowModel {
   const source = message.source
   const who = partnerWho(source, input.names)
   const counted = partnerFilesOf(source.attachments)
@@ -227,5 +227,6 @@ export function partnerRowOf(message: PartnerFeedMessage, input: { readonly name
     replyTo: message.replyTo,
     correctedBy: source.correctedBy ?? null,
     files: cardFiles(message.files, true, true, { priced: counted.locked }),
+    ...(input.pinned ? { pinned: true } : {}),
   }
 }

@@ -88,7 +88,7 @@ export function RecordPage({ type, id }: { type: string; id: string }) {
         void loadSummary()
       }}
     >
-      <PortalThread type={type} id={id} onRecord={setRecord} onMissing={() => setMissing(true)} showRecord={false} title={account ? t('thread.accountHeading') : undefined} />
+      <PortalThread type={type} id={id} onRecord={setRecord} onMissing={() => setMissing(true)} title={account ? t('thread.accountHeading') : undefined} />
     </RecordView>
   )
 }

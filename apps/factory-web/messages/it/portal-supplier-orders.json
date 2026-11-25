@@ -361,7 +361,7 @@
     "requests": "Cosa vi chiediamo"
   },
   "messages": {
-    "priceTalk": "Le domande sui prezzi vanno qui: questa conversazione è solo tra voi e noi."
+    "priceTalk": "Le domande sui prezzi vanno qui: questi messaggi sono solo tra voi e noi."
   },
   "unsaved": {
     "answer": "La vostra risposta a questo ordine non è ancora inviata."

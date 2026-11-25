@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
+import { ReaderProvider } from '../../../lib/i18n/provider'
+import { partnerMenuOf } from '../../../lib/record-thread/partner/model'
+import { render, textOf } from '../../../lib/record-thread/parts/testing'
+import { scanText } from '../../../lib/testing/brand-scan'
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { partnerThreadSchema } from '../api'
+import { portalMessageOf, replyRefusalKey } from '../thread-model'
+import { ThreadView, type ThreadViewModel } from '../view/ThreadView'
 
 /**
  * pt-w2 (lane pt-, ONE SHARED THREAD): the portal's thread — its reads (W2.1), its host (W2.3). The thread tests of the portal frame
@@ -54,3 +62,137 @@ describe('pt-w2 W2.1 — the portal thread’s reads', () => {
   })
 })
 // ---- end W2.1
+
+// ---- W2.3: the host ------------------------------------------------------------------------------------------------------------------
+describe('pt-w2 W2.3 — the portal thread’s host on the partner face', () => {
+  const thread = readFileSync(new URL('./PortalThread.tsx', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('../view/ThreadView.tsx', import.meta.url), 'utf8')
+  const betaThread = (over: Partial<ThreadViewModel> = {}): ThreadViewModel => ({
+    state: 'ready',
+    title: 'Messages',
+    record: null,
+    companyName: 'Pelletteria Esempio',
+    messages: [
+      { id: 'm1', side: 'partner', channel: 'portal', author: { name: BRAND_BETA.portalPerson.name, mine: true }, body: BRAND_BETA.message, attachments: [{ id: BRAND_BETA.ids.file, name: BRAND_BETA.fileName, size: '84 KB', href: '#f' }], at: '2026-11-16T09:00:00Z', atText: '16/11/2026 10:00' },
+      { id: 'm2', side: 'company', channel: 'email', author: { name: 'Marco Prova', mine: false }, body: 'We confirm the new chart for #7.', attachments: [], at: '2026-11-16T10:00:00Z', atText: '16/11/2026 11:00' },
+    ],
+    composer: { value: '', busy: false, heldReason: null, hint: null, limit: 20_000 },
+    loadMore: null,
+    accessLine: null,
+    failed: null,
+    ...over,
+  })
+  const draw = (model: ThreadViewModel, locale: 'en' | 'it' = 'en') => render(createElement(ReaderProvider, { reader: 'outside' }, createElement(ThreadView, { model })), locale)
+
+  // Moved from portal/shell/record/record-frame.vitest.test.ts (B-TH-273), same strictness.
+  it('the docked conversation tells the button its count and marks messages read only while on screen (the face reports nothing it saw)', () => {
+    expect(thread).toContain('const dockFrame = usePortalRecordFrame()')
+    expect(thread).toContain("if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0 || !onScreen) return")
+    expect(thread).toContain('.then((answer) => reportNew?.(answer.reading.newCount))')
+    expect(thread).toContain("if (state === 'ready') reportNew?.(read?.reading?.newCount ?? 0)")
+    expect(`${thread}${view}`).not.toContain('onSeen')
+  })
+
+  // Moved from record-frame.vitest (B-TH-079): the face says it in the office's words (A12: one word per place).
+  it('a message removed after a privacy request says so in the portal too; a files-only message keeps its empty text', () => {
+    const read = partnerThreadSchema.parse({ record: { type: 'SalesOrder', id: 'o1', theirRef: null, ourRef: null, subtitle: null, status: null }, thread: null, messages: [{ id: 'm9', side: 'COMPANY', channel: 'APP', author: { name: null, mine: false }, body: '', attachments: [], erased: true, at: '2026-11-16T08:00:00Z' }], nextCursor: null, composer: { canPost: true, reason: null, words: null, replyByEmail: false, hint: null } })
+    const erased = portalMessageOf(read.messages[0]!, 'en')
+    expect(erased).toMatchObject({ erased: true, body: '' })
+    for (const [locale, words] of [['en', 'Message removed after a privacy request'], ['it', 'Messaggio rimosso dopo una richiesta di privacy']] as const) {
+      expect(textOf(draw(betaThread({ messages: [erased] }), locale)), locale).toContain(words)
+    }
+    expect(portalMessageOf({ ...read.messages[0]!, erased: false }, 'en')).toMatchObject({ erased: false, body: '' })
+  })
+
+  // Moved from record-frame.vitest (B-TH-286), re-pointed to the pinned bar.
+  it('WALL: the portal reads pins through the partner answer only — never who pinned', () => {
+    const api = readFileSync(new URL('../api.ts', import.meta.url), 'utf8')
+    const block = api.slice(api.indexOf('---- B-TH-286'), api.indexOf('---- end B-TH-286'))
+    expect(block).toContain('/pins')
+    expect(block).not.toMatch(/pinnedBy|audience/)
+    expect(thread).toContain('fetchPins(frame.api, type, id, signal)')
+    expect(thread).not.toMatch(/pinnedBy|pin\.by\b/)
+    const pins = [
+      { id: 'm2', author: 'Marco Prova', words: 'We confirm the new chart for #7.', date: '2026-11-16T10:05:00Z', pinnedAt: '2026-11-16T10:05:00Z' },
+      { id: 'm9', author: null, words: '', date: '2026-11-10T08:00:00Z', pinnedAt: '2026-11-10T08:00:00Z', removed: true },
+      { id: 'm8', author: null, words: 'Ours, unnamed.', date: '2026-11-09T08:00:00Z', pinnedAt: '2026-11-09T08:00:00Z' },
+    ]
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(betaThread({ pins }), locale)
+      expect(html, locale).toContain('class="fw-rt-pinbar"')
+      // The newest pin first, its writer by the author rule; a pin's marks when there are 2+; never who pinned.
+      expect(textOf(html), locale).toContain('Marco Prova: We confirm the new chart for #7.')
+      expect(html, locale).toContain('class="fw-rt-pinmarks"')
+      expect(textOf(html), locale).not.toMatch(/pinned (it|a message)|ha fissato/i)
+      expect(scanText(textOf(html), BRAND_ALPHA), locale).toEqual([])
+    }
+    expect(draw(betaThread())).not.toContain('fw-rt-pinbar')
+    expect(draw(betaThread({ pins: [] }))).not.toContain('fw-rt-pinbar')
+  })
+
+  it('WALL: a jump reads the same portal page read (no new route), pages of 200, at most 1,000', () => {
+    expect(thread).toContain('readPage: (from: string, size: number) => fetchThread(frame.api, type, id, from, undefined, size),')
+    expect(thread).toContain('page: JUMP_PAGE,')
+    expect(thread).toContain('limit: JUMP_LIMIT,')
+    expect(thread).toContain('requestAnimationFrame(() => lightRow(messageId))')
+    expect(thread).not.toMatch(/scrollIntoView\(|\bfetch\(|api\.get\(/)
+    // The only routes the portal thread reads are its page, its post, its mark and its pins.
+    const api = readFileSync(new URL('../api.ts', import.meta.url), 'utf8')
+    expect([...threadBlock.matchAll(/`([^`]*\/portal\/threads[^`]*)`/g)].map((found) => found[1])).toEqual(['/portal/threads/${encodeURIComponent(type)}/${encodeURIComponent(id)}'])
+    expect(api).toContain('`${recordPath(type, id)}/messages`')
+  })
+
+  it('Reply sends replyToMessageId only; Correct is never offered; a refused reply keeps the text and the bar, the words say why', () => {
+    expect(thread).toContain('{ askFactoryDesigner: asking, replyToMessageId: replyTo }')
+    expect(thread).not.toMatch(/corrects?MessageId|onCorrect/)
+    expect(view).not.toContain('onCorrect')
+    expect(partnerMenuOf({ body: 'x' }, { reply: true })).not.toContain('correct')
+    expect(replyRefusalKey(['refusal/REPLY_REFUSED'])).toBe('thread.reply.refused')
+    expect(replyRefusalKey(['refusal.REPLY_REFUSED'])).toBe('thread.reply.refused')
+    expect(replyRefusalKey(['body'])).toBeNull()
+    // Refused: nothing written — the key goes (a new try is a new post), the draft and the reply bar stay.
+    const refused = thread.slice(thread.indexOf('const refused = replyTo'), thread.indexOf('// ---- F-CP-156: the ask refused'))
+    expect(refused).toContain("setFailed(t(refused))")
+    expect(refused).not.toMatch(/setDraft|setReplyTo/)
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(betaThread({ replyTo: 'm2', failed: locale === 'en' ? 'That message cannot be answered here.' : 'A quel messaggio non si può rispondere qui.' }), locale)
+      expect(html, locale).toContain('class="fw-rt-cx-bar is-link fw-rt-tone-')
+      expect(html, locale).toContain('class="fw-rt-notice" role="alert"')
+    }
+  })
+
+  it('a live hint or a Send keeps the older pages loaded (A7): the newest page merges, the cursor stays at the oldest page read', () => {
+    const load = thread.slice(thread.indexOf('const load = useCallback('), thread.indexOf('usePortalLive('))
+    expect(load).toContain('setOlder((now) => now.filter((message) => !newest.has(message.id)))')
+    expect(load).toContain('if (!olderRead.current) setCursor(answer.nextCursor)')
+    expect(load.slice(0, load.indexOf('useEffect('))).not.toContain('setOlder([])')
+    expect(thread).toContain('await load()')
+  })
+
+  it('A6: off a record frame the column is bounded (its list scrolls itself); the frame’s dock it fills', () => {
+    expect(thread).toContain("<div ref={box} className={dockFrame ? 'fw-pthr' : 'fw-pthr is-bounded'}>")
+    const css = readFileSync(new URL('./thread.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-pthr\.is-bounded \{\s*height: clamp\(440px, calc\(100vh - 200px\), 1000px\);/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
+    const frameCss = readFileSync(new URL('../record/record-frame.css', import.meta.url), 'utf8')
+    expect(frameCss).toContain('.fw-prf .fw-prf-thread > .fw-rtp {')
+    expect(frameCss).not.toMatch(/nds-pthread|fw-pthread/)
+  })
+
+  it('every mount draws the ONE face: no showRecord, no DS PartnerThread draw in the portal or the links page', () => {
+    const mounts = ['../record/RecordPage.tsx', '../../supplier/orders/OrderPage.tsx', '../../supplier/jobs/JobPage.tsx', '../../supplier/deliveries/NoticePage.tsx', '../../guest/accountant/AccountantPage.tsx', '../../customer/projects/ProjectPage.tsx', '../../customer/requests/RequestPage.tsx', '../../customer/returns/CasePage.tsx', '../../customer/returns/repair/RepairPage.tsx', '../../customer/orders/OrderPage.tsx', '../../customer/neworder/NewOrderPage.tsx']
+    for (const file of mounts) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(source, file).toContain('<PortalThread ')
+      expect(source, file).not.toContain('showRecord')
+    }
+    expect(thread).not.toContain('showRecord')
+    for (const file of ['../view/ThreadView.tsx', './PortalThread.tsx', '../../../links/invite/view/InviteView.tsx']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/patterns\/PartnerThread/)
+    // A19: the supplier's price talk is said inside the column, in its ⓘ — never a box above it.
+    const supplier = readFileSync(new URL('../../supplier/orders/OrderPage.tsx', import.meta.url), 'utf8')
+    expect(supplier).toContain("help={[t('messages.priceTalk')]}")
+    expect(supplier).not.toContain('<PriceTalkHint')
+  })
+})
+// ---- end W2.3
+

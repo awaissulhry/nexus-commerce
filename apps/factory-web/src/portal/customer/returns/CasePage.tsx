@@ -325,7 +325,7 @@ function CaseContainer({ type, id }: { type: CaseType; id: string }) {
       }}
     >
       {/* B-TH-275: the case's ONE conversation, docked by the frame beside both tabs. */}
-      {record ? <PortalThread type={threadTypeOf(type)} id={record.id} showRecord={false} /> : null}
+      {record ? <PortalThread type={threadTypeOf(type)} id={record.id} /> : null}
     </CaseRecordView>
   )
 }

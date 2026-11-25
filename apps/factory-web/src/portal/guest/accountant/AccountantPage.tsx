@@ -267,5 +267,5 @@ function Container() {
   }
 
   // B-TH-276 (P-ACC.thread [P2]): Ask finance — the firm's account conversation — docked beside the room (one place per page).
-  return <AccountantView model={model} actions={actions} thread={value ? <PortalThread type="Party" id={value.access.firm.id} title={t('ask.title')} showRecord={false} /> : null} />
+  return <AccountantView model={model} actions={actions} thread={value ? <PortalThread type="Party" id={value.access.firm.id} title={t('ask.title')} /> : null} />
 }

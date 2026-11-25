@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
+import type { PortalThreadMessage } from '../../../lib/record-thread/partner/model'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
@@ -99,7 +99,7 @@ function RequestContainer({ id }: { id: string }) {
     onReconnect: () => void load(),
   }, allowed)
 
-  const onMessages = useCallback((read: readonly PartnerMessage[]) => {
+  const onMessages = useCallback((read: readonly PortalThreadMessage[]) => {
     setMessages(read.map((message) => ({ id: message.id, side: message.side, body: message.body, at: message.at })))
   }, [])
 
@@ -182,7 +182,7 @@ function RequestContainer({ id }: { id: string }) {
             setWithdrawing(null)
           },
         }}
-        thread={state === 'missing' ? null : <PortalThread type="Inquiry" id={id} title={t('thread.title')} showRecord={false} onMissing={() => setState('missing')} onMessages={onMessages} />}
+        thread={state === 'missing' ? null : <PortalThread type="Inquiry" id={id} title={t('thread.title')} onMissing={() => setState('missing')} onMessages={onMessages} />}
       />
     </div>
   )
