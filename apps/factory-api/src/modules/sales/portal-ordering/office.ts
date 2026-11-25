@@ -301,7 +301,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       // B-CP-076: each line at the price shown, else the customer's own, × its pieces — only for a price holder.
       draftValueAmount: asMoney('price', seesPrice ? draftValueOf(own.map((line) => ({ priceShown: isCatalogueLine(line) ? priceOrNull(line.unitPriceShown) : null, brandUnitPrice: priceOrNull(line.brandUnitPrice), pieces: piecesOfLine(line, roster) })), row.currency) : null),
       // od-s s.4 (lead addition B)
-      ...openFacts(draftStillOpen(own, roster, row, row.shipToAddressId === null ? defaults.has(row.partyId) : addresses.get(row.shipToAddressId) === 'ACTIVE', day)),
+      ...openFacts(draftStillOpen(own, roster, row, row.shipToAddressId === null ? defaults.has(row.partyId) : addresses.get(row.shipToAddressId) === 'ACTIVE', day, undefined, sheetLines)),
       savedBy: savers(row.partyId, row.lastEditedById ?? row.createdById),
       savedAt: iso(row.lastEditedAt ?? row.updatedAt)!,
     })

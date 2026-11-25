@@ -373,7 +373,7 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       // ---- end B-CP-075
       savedBy, // od-s s.2 (W2)
       // od-s s.4: what is not decided yet (information only; `confirmHeld`: the office's Confirm window will ask what the order needs).
-      stillOpen: draftStillOpen(lines, people, row, shipToInUseOf(row, addresses), day),
+      stillOpen: draftStillOpen(lines, people, row, shipToInUseOf(row, addresses), day, undefined, sheetLines),
       // od-s s.3 (L5): the portal reads only whether the factory works on the design, never a style id (the office reads its own styles).
       ...(writer.door === 'portal' ? { designStarted: await designStartedOf(writer, row.id) } : {}),
     },

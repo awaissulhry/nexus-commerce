@@ -68,7 +68,9 @@ const choiceInput = input({
 })
 const choicesInput = z.array(choiceInput).max(CHOICE_LIMITS.perLine).nullish()
 const stillOpen = output({
-  items: z.array(output({ kind: z.enum(STILL_OPEN_KINDS), lineId: id().nullable(), seq: z.number().int().nullable(), topic: z.string().nullable(), state: z.enum(STILL_OPEN_STATES), confirmNeeds: z.boolean() })),
+  // od-fx7 (walk W-04): `state` is the customer's view (words, a total, people decide it); `confirmReady` says whether what the
+  // ORDER needs (`confirmNeeds`: a style, a colour of ours, pieces by size; an address) is there — the Confirm card asks the rest.
+  items: z.array(output({ kind: z.enum(STILL_OPEN_KINDS), lineId: id().nullable(), seq: z.number().int().nullable(), topic: z.string().nullable(), state: z.enum(STILL_OPEN_STATES), confirmNeeds: z.boolean(), confirmReady: z.boolean() })),
   /** Items not DECIDED. */
   openCount: z.number().int(),
   /** An item the order needs is open: the office's Confirm window asks it (never a hold on Send). */
