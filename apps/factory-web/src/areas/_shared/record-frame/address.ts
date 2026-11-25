@@ -1,4 +1,4 @@
-import { DOCK_FROM } from './model'
+import { DOCK_FROM } from '../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core
 
 /**
  * F-OP-209 (order page plan N4; 11-dock §4; review R-19, RC4, RC5) — the record page's address, ONE writer of `thread=`.

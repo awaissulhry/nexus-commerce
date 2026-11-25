@@ -12,7 +12,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { Freshness, Section } from '../../../../quality/_shared/parts'
 // ---- B-TH-259: the return on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import type { ReturnLine } from '../../api'
 import {
   creditsBlind, // F-CP-160

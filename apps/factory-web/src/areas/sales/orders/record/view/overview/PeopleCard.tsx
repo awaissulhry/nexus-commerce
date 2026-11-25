@@ -22,8 +22,8 @@ import { FollowersDoor } from '../Discuss' // F-SA-266
 import { askPresetOf, askStarterOf } from '../../production/asks' // F-PT-103b: the ready ask
 import { readOf } from '../../overview/model' // F-PT-103b: the promise the starter names
 import './people.css' // F-OO-131: the supervisor's own doors (F-CO-K2: the list is the kit's)
-import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
-import { Row, RowList } from '../../../../../_shared/record-overview/Overview' // F-CO-K2: its rows are the kit's ONE list
+import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+import { Row, RowList } from '../../../../../../lib/record-overview/Overview' // F-CO-K2: its rows are the kit's ONE list
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx unchanged.

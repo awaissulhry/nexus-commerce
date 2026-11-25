@@ -27,7 +27,7 @@ import {
 import { AddressModal, ArchiveModal, BlockModal, ContactModal, EditPartyModal, IdentityModal } from './dialogs'
 import { dash, NoticeBanner, ReadState, StatusPill, ViesMark } from './parts'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../lib/record-frame/RecordNotices'
 import type { PartyRecordActions } from './PartyRecordView'
 
 /**

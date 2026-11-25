@@ -27,7 +27,7 @@ import { SplitDialog } from '../../depth/view/SplitDialog'
 import { ReportsCard, TraceReportDialog } from '../../depth/view/TraceReportDialog'
 // ---- B-TH-264: the lot on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 
 export type { LotRecordActions, LotRecordModel } from '../../model'
 

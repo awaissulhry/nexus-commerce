@@ -27,7 +27,7 @@ import { yesDoorOf } from '../../depth/model'
 import { rowWordsOf, type WaitingDoor, type WaitingRow } from '../overview/model'
 import { rowActsOf } from '../../../../../lib/production/work-order-acts/model' // F-OP-116: the row's own Lift rule
 // F-CO-K2: a row of Overview's card and its age are the shared overview kit's (GroupRow, RowAge); the order's RowAge is its words over it
-import { GroupRow, RowAge as KitRowAge } from '../../../../_shared/record-overview/Overview'
+import { GroupRow, RowAge as KitRowAge } from '../../../../../lib/record-overview/Overview'
 
 /** The words the request card's lines are written with (Home › Approvals' own: `approvals` customerRequest.*). */
 const APPROVALS_NS = 'approvals'

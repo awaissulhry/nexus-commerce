@@ -1,0 +1,30 @@
+/*
+ * pp-k1 k1.2 — the record's ONE notice (B-TH-214: at most one banner in the body column, the rest behind "N more notices"):
+ * RecordNotices' own rules, moved as they were out of the office frame's record-frame.css (areas/_shared/record-frame) with the
+ * part. RecordNotices loads them; the office RecordFrame loads them right after its own, where they stood (the same cascade).
+ * Class names kept (fw-rcf-notices*). Design-system tokens only.
+ */
+
+.fw-rcf-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* No notice to say: no box (and no gap in the body column) from the first paint. */
+.fw-rcf-notices:not(:has(> .fw-rcf-notices-list > *)) {
+  display: none;
+}
+
+.fw-rcf-notices-list {
+  display: contents;
+}
+
+.fw-rcf-notices:not(.is-open) .fw-rcf-notices-list > :not(:first-child) {
+  display: none;
+}
+
+.fw-rcf-notices-more {
+  align-self: flex-start;
+}

@@ -276,7 +276,7 @@ describe('F-OO-207: source and css — one count rule, the band\'s own door rule
     expect(view).toContain('actions?.onCreateShipment?.()')
     expect(read('../view/OverviewTab.tsx')).toMatch(/<LinkedCard order=\{order\} model=\{model\} actions=\{actions/)
     // Its rules are the kit's list block (record-overview.css), the quiet line's span included.
-    const kit = read('../../../../_shared/record-overview/record-overview.css')
+    const kit = read('../../../../../lib/record-overview/record-overview.css')
     const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the ONE list"), kit.indexOf('/* ── end F-CO-K2 (the ONE list) ── */'))
     expect(css.length).toBeGreaterThan(100)
     expect(css).toMatch(/\.fw-so-ov-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)

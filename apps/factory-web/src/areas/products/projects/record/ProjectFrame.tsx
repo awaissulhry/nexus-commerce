@@ -12,7 +12,7 @@ import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useBandSlot } from '../../../../shell/office/band-slot'
 import { usePrintMode } from '../../../../shell/print/print-mode'
-import { FRAME_NS } from '../../../_shared/record-frame/RecordFrame'
+import { FRAME_NS } from '../../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core
 import { FRAME_KEYS } from '../../../_shared/record-frame/model'
 import '../../../_shared/record-frame/record-frame.css'
 import { DETAILS_PARAM, RECORD_NS } from './model'

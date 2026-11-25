@@ -17,7 +17,7 @@ import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHe
 import { ScopePicker } from '../../../shared/view/ScopePicker'
 // ---- B-TH-269: the person on RecordFrame (the band in the shell's row, the thread docked CLOSED — R-10 —, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import { endReach, giveRoleProblems, lifecycleHeld, raises, type GiveRoleDraft, type UserDialog, type UserRecordModel, type UserTab } from '../model'
 import { assignmentColumns } from './columns'
 

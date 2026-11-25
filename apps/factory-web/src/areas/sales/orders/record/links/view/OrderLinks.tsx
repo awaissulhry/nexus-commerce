@@ -14,7 +14,7 @@ import type { OrderGate, OrderRePromise } from '../api'
 import '../links.css'
 import { declineHeld, decideHeld, gateHref, type LinksActions, type LinksModel } from '../model'
 import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's anchor its gate's own id)
-import { Strip } from '../../../../../_shared/record-overview/Overview' // F-CO-K2: a gate row is the shared overview kit's strip
+import { Strip } from '../../../../../../lib/record-overview/Overview' // F-CO-K2: a gate row is the shared overview kit's strip
 
 /**
  * B-TH-256 — what points at the order, drawn (O-SAL-ORD-REC.notice-F04, -F06, .body-F07; picture 29):

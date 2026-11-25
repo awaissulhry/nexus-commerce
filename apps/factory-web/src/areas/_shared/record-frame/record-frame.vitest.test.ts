@@ -3,7 +3,8 @@ import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { render, textOf } from '../../../lib/record-thread/parts/testing'
-import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, THIRD_BELOW, threadPixels } from './model'
+import { arrivalOf, dockWidth, FRAME_KEYS } from './model'
+import { DOCK_COLUMNS, DOCK_FROM, frameMode, isThreadKey, PHONE_BELOW, THIRD_BELOW, threadPixels } from '../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core
 // B-TH-229 / B-TH-230
 import { threadButtonWords } from './model'
 // B-TH-264 follow-up
@@ -12,8 +13,9 @@ import { RecordFrame } from './RecordFrame'
 import { foldedOf } from './RecordFrame' // F-OP-302
 import { applyFold, type FoldItem } from './RecordFrame' // op-fx11
 // F-SA-263
-import { defaultWidthAt, showsOnArrival } from './model'
-import { RecordNotices } from './RecordNotices'
+import { showsOnArrival } from './model'
+import { defaultWidthAt } from '../../../lib/record-frame/model' // pp-k1 k1.2: the frame's core
+import { RecordNotices } from '../../../lib/record-frame/RecordNotices' // pp-k1 k1.2: the one notice is the lib's
 // B-TH-280: the print view of the custom fields
 import { PrintModeProvider } from '../../../shell/print/print-mode'
 
