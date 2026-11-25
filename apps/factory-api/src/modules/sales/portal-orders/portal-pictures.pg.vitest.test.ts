@@ -122,7 +122,7 @@ async function picture(styleId: string, colourwayId: string | null, name: string
 }
 
 beforeAll(async () => {
-  h = await startHarness('portal_order_pictures')
+  h = await startHarness('portal_pictures')
   h.clock.set(new Date())
   usePortalOptions({ answerFloorMs: 0 })
   await seedCore({ db: h.database, namespace: NS })
