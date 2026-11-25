@@ -2,7 +2,7 @@
 
 import { forwardRef, useMemo, useState, type MouseEvent, type ReactNode, type Ref, type UIEvent } from 'react'
 import Link from 'next/link'
-import { Bell, Keyboard, LogOut, MessageCircleQuestion, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown, ChevronRight } from 'lucide-react'
+import { Bell, Keyboard, LogOut, MessageCircleQuestion, MessageSquare, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { Banner, Menu, SearchTrigger, Tabs, type MenuItemDef } from '@nexus/ui/components'
 import { BottomBar, type BottomBarLinkProps } from '@nexus/ui/components/BottomBar/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
@@ -20,6 +20,7 @@ import type { LiveState } from '../../../shell/live/bus'
 import type { PortalBand } from '../frame'
 import type { BadgeWords, PortalNotice } from '../model'
 import { portalPlace, translatePortalNav } from '../nav/portal-nav'
+import { messagesButtonWords } from '../record/model' // pp-w1 (w1.1): the band's thread button words
 import { PortalRail } from './PortalRail'
 import '../portal-shell.css'
 
@@ -135,6 +136,8 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
     { id: 'sep-2', separator: true },
     { id: 'sign-out', label: t('menu.signOut'), icon: <LogOut size={15} aria-hidden />, onSelect: onSignOut },
   ]
+  // pp-w1 (w1.1): the record frame's "Messages (2 new)" (the conversation not on screen); on a phone its icon alone, named.
+  const threadWords = band.thread ? messagesButtonWords(band.thread.count) : null
   const moreItems: MenuItemDef[] = [...(band.more ?? []), ...(band.more?.length ? [{ id: 'sep-ask', separator: true } as MenuItemDef] : []), { id: 'ask', label: t('band.ask'), icon: <MessageCircleQuestion size={15} aria-hidden />, onSelect: onAsk }]
 
   const liveStatus =
@@ -281,6 +284,11 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
                       ),
                     )}
                   </span>
+                  {band.thread && threadWords ? (
+                    <Button size="sm" variant="tonal" className="fw-pband-thread" aria-controls="messages" aria-keyshortcuts="Meta+J Control+J" aria-label={threadWords.label ? t(threadWords.label.key, { count: threadWords.label.count }) : t(threadWords.key)} onClick={band.thread.onClick}>
+                      <MessageSquare size={14} aria-hidden /> <span className="fw-pband-thread-words">{t(threadWords.key, threadWords.count === undefined ? undefined : { count: threadWords.count })}</span>
+                    </Button>
+                  ) : null}
                   <Menu className="fw-pmore" align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('band.more') }} items={moreItems} />
                 </span>
               }

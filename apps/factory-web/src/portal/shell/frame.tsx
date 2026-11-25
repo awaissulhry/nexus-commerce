@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { TabItem } from '@nexus/ui/components'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
@@ -112,6 +112,17 @@ export interface PortalBand {
    * customer's own urgency and the record it was made from. Data only; absent: none (every other page draws as before).
    */
   chips?: PortalBandChips | null
+  /**
+   * pp-w1 (w1.1; 10-design § 4): the record frame's thread button before the ⋯ — "Messages (2 new)" while the conversation is not on
+   * screen (hidden, or narrower with its view closed). Set by PortalRecordFrame (`usePortalBandThread`), never by a page.
+   */
+  thread?: PortalBandThread | null
+}
+
+/** pp-w1 (w1.1): the band's thread button: the person's own new messages and what a click does (shows or opens the conversation). */
+export interface PortalBandThread {
+  readonly count: number
+  readonly onClick: () => void
 }
 
 /** pp-w1 (w1.2): the band's chips. Customer-safe by shape: no note, no person, no amount. */
@@ -126,9 +137,48 @@ export interface PortalBandChips {
 
 type BandSetter = (band: PortalBand | null) => void
 const BandContext = createContext<BandSetter | null>(null)
+// pp-w1 (w1.1): the record frame's own part of the band (its thread button), set apart from the page's and drawn with it.
+type BandThreadSetter = (thread: PortalBandThread | null) => void
+const BandThreadContext = createContext<BandThreadSetter | null>(null)
 
 export function PortalBandProvider({ set, children }: { set: BandSetter; children?: ReactNode }) {
-  return <BandContext.Provider value={set}>{children}</BandContext.Provider>
+  const page = useRef<PortalBand | null>(null)
+  const thread = useRef<PortalBandThread | null>(null)
+  const push = useCallback(() => set(page.current && thread.current ? { ...page.current, thread: thread.current } : page.current), [set])
+  const setPage = useCallback<BandSetter>(
+    (band) => {
+      page.current = band
+      push()
+    },
+    [push],
+  )
+  const setThread = useCallback<BandThreadSetter>(
+    (next) => {
+      thread.current = next
+      push()
+    },
+    [push],
+  )
+  return (
+    <BandContext.Provider value={setPage}>
+      <BandThreadContext.Provider value={setThread}>{children}</BandThreadContext.Provider>
+    </BandContext.Provider>
+  )
+}
+
+/**
+ * pp-w1 (w1.1): the record frame puts its thread button in the band (null takes it away; it leaves with the frame). The band is set
+ * again only when the count or the button's presence changes; a click always reaches the frame's latest one.
+ */
+export function usePortalBandThread(thread: PortalBandThread | null): void {
+  const set = useContext(BandThreadContext)
+  const latest = useRef(thread)
+  latest.current = thread
+  const count = thread ? thread.count : null
+  useEffect(() => {
+    set?.(count === null ? null : { count, onClick: () => latest.current?.onClick() })
+  }, [set, count])
+  useEffect(() => () => set?.(null), [set])
 }
 
 /**

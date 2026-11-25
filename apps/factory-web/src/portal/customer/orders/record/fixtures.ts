@@ -21,6 +21,7 @@ import {
   threadOf,
   TODAY,
   withoutPrices,
+  withThreadButton,
   words,
 } from '../design-data'
 import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
@@ -110,7 +111,7 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
       ...(input.facts?.(locale) ?? {}),
     }
     return {
-      shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
+      shell: shellOf(locale, withThreadButton(orderBandOf({ words: orderWords(locale), record, prefix: PREFIX, facts }), model.frame), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
       // B-TH-275: the order's ONE conversation docks beside every tab.
       body: { kind: 'record', model, thread: { ...threadOf(locale), ...(input.thread?.(locale) ?? {}) } /* F-CP-158 */ },
     }

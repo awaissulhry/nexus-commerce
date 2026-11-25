@@ -216,16 +216,7 @@
       "messagesMany": "Messages ({count}+ new)",
       "messagesNewLabel_one": "Messages, {count} new",
       "messagesNewLabel_other": "Messages, {count} new",
-      "back": "Back",
-      "width": "Width",
-      "third": "A third",
-      "forty": "40 %",
-      "half": "Half",
-      "hide": "Hide the conversation",
-      "show": "Show the conversation",
-      "showNew_one": "Show the conversation ({count} new)",
-      "showNew_other": "Show the conversation ({count} new)",
-      "showMany": "Show the conversation ({count}+ new)"
+      "back": "Back"
     },
     "summary": {
       "title": "About this record",

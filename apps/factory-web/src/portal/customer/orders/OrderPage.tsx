@@ -1087,8 +1087,6 @@ function OrderContainer({ id }: { id: string }) {
         shipments,
         documents,
         files: orderFiles.model, // F-SA-238
-        // F-SA-246: "Ask for a change" above the order's conversation, held like "Ask us…" (a preview, no right to ask, offline).
-        askDoor: mayAsk || preview ? { held: askHeldWords(null) } : null,
         fileHeld,
         // B-W2b-374 (XF3:04): the lines' options and the artwork the office shows here.
         options: record ? createElement(PortalLineOptions, { api, orderId: id, fileHeld, refreshKey: loadedAt ?? '' }) : null,
@@ -1146,7 +1144,6 @@ function OrderContainer({ id }: { id: string }) {
         },
         onRetryFiles: orderFiles.reload,
         // ---- end F-SA-238
-        onAskChange: () => openAsk(), // F-SA-246: the conversation's "Ask for a change"
         onDownload: download,
         onDismissNotice: () => setNotice(null),
         // ---- F-PR-12a

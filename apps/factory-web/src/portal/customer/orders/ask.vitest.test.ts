@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
@@ -372,15 +373,15 @@ describe('F-SA-246: step 3 — what it means, never a guessed date', () => {
 })
 
 describe('F-SA-246: the doors, the request card and the words', () => {
-  it('"Ask for a change" above the order’s conversation (the frame; PartnerThread untouched), held with why', () => {
-    const draw = (held: string | null) => render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, door: { label: 'Ask for a change', held, onOpen: () => undefined }, children: createElement('div', null, 'body') }))
-    const html = draw(null)
-    expect(textOf(html)).toContain('Ask for a change')
-    // F-SA-264 gave the dock "Hide the conversation" above both: the door is measured against the conversation itself.
-    expect(html.indexOf('<p>the conversation</p>')).toBeGreaterThan(0)
-    expect(html.indexOf('Ask for a change')).toBeLessThan(html.indexOf('<p>the conversation</p>'))
-    expect(textOf(draw('You are looking at a preview.'))).toContain('Ask for a change')
-    expect(render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'x'), threadLabel: 'Messages', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))).not.toContain('Ask for a change')
+  // pp-w1 (w1.1; reverses F-SA-246's door, plan § 7): the order's ask is the band's ONE "Ask for a change…" (O1-B1, O1-B2).
+  it('no "Ask for a change" above the order’s conversation any more: the band’s ONE ask opens this dialog', () => {
+    const html = render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))
+    expect(html).toContain('<p>the conversation</p>')
+    expect(textOf(html)).not.toContain('Ask for a change')
+    expect(html).not.toContain('fw-prf-door')
+    expect(readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')).not.toMatch(/\bdoor\??:/)
+    const band = orderBandOf({ words: orderWords('en'), record: orderRecord({ status: 'IN_PRODUCTION' }), prefix: PREFIX, facts: { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null } })
+    expect(band.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask for a change…']])
   })
 
   it('the request card knows the design change (the domain’s kinds, its word in both languages)', () => {

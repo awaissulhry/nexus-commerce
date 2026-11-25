@@ -41,7 +41,7 @@ import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-1
  * "Ask for a change…", the ⋯ (Re-confirm version N, Ask to cancel, Pay the deposit, the order confirmation PDF, Report a problem,
  * Ask a question); this view draws the four tabs under the band (D6 a, as the office), the tab and the pop-ups
  * beside the order's ONE conversation, docked by the portal record frame (`children`: PortalThread live, ThreadView in the design;
- * from 1280 px ~40 % on the right, narrower behind "Messages (2 new)"). Each part reads on its own: a part that failed says so with
+ * from 1280 px on the right — a third below 1600 px, 40 % from 1600 — narrower behind the band's "Messages (2 new)"). Each part reads on its own: a part that failed says so with
  * Try again, never as an empty part. Loading, a failed read and a missing order draw no conversation.
  */
 
@@ -126,8 +126,6 @@ export interface OrderRecordViewModel {
   /** The Report a problem dialog, open. */
   report?: ReportProblemModel | null
   // ---- end F-PR-24
-  /** F-SA-246: "Ask for a change" above the order's conversation (the Ask dialog), held with why; absent or null: not offered. */
-  askDoor?: { readonly held: string | null } | null
   // ---- F-CP-143 (customer page plan C3, D2): the customer's own price check on the Lines tab — a price holder's (its Buyer, Finance,
   // Admin); absent or null: none (anyone else reads "Prices are not part of your access.", and no call is made).
   priceCheck?: PriceCheckModel | null
@@ -161,8 +159,6 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onAsk?: () => void
   // F-PR-24: Report a problem on this order; its dialog.
   onReportProblem?: () => void
-  /** F-SA-246: the conversation's "Ask for a change" (the Ask dialog). */
-  onAskChange?: () => void
   report?: ReportProblemActions
   /** F-CP-143: "Your prices…", its window, read again. */
   priceCheck?: PriceCheckActions
@@ -212,9 +208,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
     <PortalRecordFrame
       thread={children ?? null}
       threadLabel={t('messages.label', { name: orderNameOf(record.order, locale, t) })}
-      design={model.frame}
-      // F-SA-246: the order's ask beside its conversation (the same Ask dialog as the band's "Ask us…").
-      door={model.askDoor ? { label: t('band.change'), held: model.askDoor.held, onOpen: () => actions?.onAskChange?.() } : null}
+      design={model.frame /* pp-w1 (w1.1): no door beside the conversation — the band's ONE "Ask for a change…" (O1-B2) */}
     >
       <div className="fw-pord">
         {/* pp-w1 (w1.3; D2 a, D6 a): Overview · Lines · Shipments · Files in the body, `sm`, scrolling with its › arrow on a phone. */}
