@@ -73,8 +73,9 @@ export async function orderSheet(app: FastifyInstance, request: FastifyRequest, 
     ...band, // pg-s1 S1.2: groups, open, needsYou
     // The contract's arrays are mutable; the shared read's are readonly (copied at this boundary).
     columns: columns.map((column) => ({ ...column, options: column.options && [...column.options] })),
-    // Plan §0.5: an order shows the customer's own number only (`yourNumber`), never the office's series.
-    items: list.items.map((item) => ({ ...item, number: item.kind === 'ORDER' ? null : item.number, values: rows.get(item.id) ?? {} })),
+    // Plan §0.5: a row shows the customer's own number only (`yourNumber`), never the office's series (pg-s1 S1.3: the list answers
+    // `number: null` for an order and a request alike).
+    items: list.items.map((item) => ({ ...item, values: rows.get(item.id) ?? {} })),
   }
 }
 

@@ -29,7 +29,10 @@ const yourNumber = output({ seq: z.number().int(), words }).nullable()
 
 const nextShipment = output({
   id: id(),
-  number: z.string(),
+  /** pg-s1 S1.3 (Owner D6): never the office's shipment series — a shipment is named by its order ("Your order 12 · parcel 1"). */
+  number: z.null(),
+  /** pg-s1 S1.3 (D6): which of the order's shipments that left it is (1-based, by the moment it left); a packed one not left yet: the next. */
+  parcel: z.number().int(),
   status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
   words,
   date: day.nullable(),
@@ -40,14 +43,15 @@ const nextShipment = output({
 
 const row = output({
   /**
-   * ORDER, or REQUEST: a portal order request sent and not decided yet (its number is the request's). fix-portal-numbers-1
-   * (B-TH-303): an order's `number` is null — the customer reads its own `yourNumber`, never the office's series.
+   * ORDER, or REQUEST: a portal order request sent and not decided yet. fix-portal-numbers-1 (B-TH-303): an order's `number` is
+   * null — the customer reads its own `yourNumber`, never the office's series; pg-s1 S1.3 (G3-B1): a request's too (its RQ-… is
+   * the company's series: it would tell how much the others ask; the search still finds the row by it).
    */
   kind: z.enum(['ORDER', 'REQUEST']),
   id: id(),
   /** Their purchase order number (first in the row). */
   customerRef: z.string().nullable(),
-  number: z.string().nullable(),
+  number: z.null(),
   /** B-TH-105 (Owner decision PR-06): "Your order 12", the customer's own count beside our number (a request: null). */
   yourNumber,
   orderedOn: day.nullable(),
@@ -73,7 +77,10 @@ const row = output({
 export const listContract = defineContract({
   querystring: input({
     chip: z.enum(ORDER_CHIPS).default('OPEN'),
-    /** Their PO number, our order number, or a style's code or name. */
+    /**
+     * Their PO number, our order number, or a style's code or name. pg-s1 S1.3: a number alone ("12", "#12") is their own number,
+     * matched exactly ("Your order 12", never 112), or (without "#") a PO holding it.
+     */
     q: z.string().trim().max(80).optional(),
     /** The production progress % of the page's first 10 rows (Home's next deliveries), when shared. */
     progress: z.enum(['true', 'false']).default('false'),
@@ -330,7 +337,7 @@ export const sheetContract = defineContract({
       // ---- end pg-s1 S1.2
       /** The portal columns: every customer's fields shown in the portal and this customer's own. */
       columns: z.array(portalColumn),
-      /** The list's rows (an order's `number` is null: the customer reads its own `yourNumber`), each with its cells by column id. */
+      /** The list's rows (`number` null: the customer reads its own `yourNumber`, never an office series), each with its cells by column id. */
       items: z.array(row.extend({ values: z.record(z.string(), portalCell) })),
       live,
     }),
