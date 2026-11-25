@@ -28,7 +28,9 @@ export const events = [
     type: 'portal_order_request.sent',
     context: 'portal-ordering',
     description: 'A customer sent an order request from the portal (picked styles, a reorder or an uploaded sheet): it waits for the office to make the order or a quote from it, or to refuse it.',
-    payload: z.strictObject({ ...ids, source: z.enum(['PICKER', 'REORDER', 'UPLOAD']), lines: z.number().int().min(1), pieces: z.number().int().min(1) }),
+    // od-fx1: Send needs nothing (the Owner's addendum R1 of 2026-11-25): a request may be sent with no line (lines 0; pieces stays
+    // at least one, as the send counts it).
+    payload: z.strictObject({ ...ids, source: z.enum(['PICKER', 'REORDER', 'UPLOAD']), lines: z.number().int().min(0), pieces: z.number().int().min(1) }),
     live,
   }),
   defineEvent({
