@@ -94,9 +94,15 @@ function scrollerOf(element: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-function focusBox(dock: HTMLElement | null): void {
-  dock?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+/** The conversation's box takes the focus; false while the thread has not drawn it yet (or it is still disabled). */
+function focusBox(dock: HTMLElement | null): boolean {
+  const box = dock?.querySelector<HTMLTextAreaElement>('textarea:not([disabled])') ?? null
+  box?.focus()
+  return box !== null
 }
+
+/** pp-fx4 (walk W-03): how long an asked focus waits for the thread to draw its box. */
+const BOX_WAIT_MS = 10_000
 
 // F-SA-264: this device's storage, or none (a private window that refuses it, the server).
 const storageOf = (): Storage | null => {
@@ -244,14 +250,38 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
   // The box takes the focus once it is on screen (after the full-width view opened).
   // F-SA-264: a hidden docked conversation is not on screen (it marks nothing read).
   const onScreen = (mode === 'docked' && !dockHidden) || viewOpen
+  // pp-fx4 (walk W-03): on arrival (`?tab=messages`) the conversation still loads — no box yet. The ask waits for the box (it takes the
+  // focus the moment the thread draws it), unless the person moved the focus meanwhile; it gives up after BOX_WAIT_MS.
   useEffect(() => {
     if (!focusAsked || !onScreen) return
-    const timer = setTimeout(() => {
-      dock.current?.scrollIntoView({ block: 'nearest' })
-      focusBox(dock.current)
+    const element = dock.current
+    let observer: MutationObserver | null = null
+    const settle = (): boolean => {
+      if (!focusBox(element)) return false
+      element?.scrollIntoView({ block: 'nearest' })
+      return true
+    }
+    const done = () => {
+      observer?.disconnect()
       setFocusAsked(false)
+    }
+    const timer = setTimeout(() => {
+      if (settle()) return done()
+      if (!element || typeof MutationObserver === 'undefined') return done()
+      const waitingFrom = document.activeElement
+      observer = new MutationObserver(() => {
+        const active = document.activeElement
+        if (active !== waitingFrom && active && active !== document.body && !element.contains(active)) return done() // the person moved on
+        if (settle()) done()
+      })
+      observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] })
     }, 0)
-    return () => clearTimeout(timer)
+    const giveUp = setTimeout(done, BOX_WAIT_MS)
+    return () => {
+      clearTimeout(timer)
+      clearTimeout(giveUp)
+      observer?.disconnect()
+    }
   }, [focusAsked, onScreen])
 
   // Back from the full-width view: the body as it was (the same tab and scroll); into it: from its top.
@@ -276,12 +306,19 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
     const measure = () => {
       const scroller = scrollerOf(element)
       const band = scroller?.querySelector<HTMLElement>(':scope > .fw-pband') ?? null
-      const bars = [...document.querySelectorAll<HTMLElement>('.nds-bottombar, .nds-pab:not(.inline)')].reduce((sum, bar) => sum + (getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().height : 0), 0)
+      // pp-fx4 (walk W-06): the room ends where the page stops being visible — the scroller's foot, or the top of a phone's fixed bar
+      // over it. The action bar's spacer already shortens the scroller: its bar is not counted twice (the open view was 391 px, its
+      // list 188 px). A bar not drawn (from 720 px, or stepped aside) has no box and counts for nothing.
+      const scrollerTop = scroller?.getBoundingClientRect().top ?? 0
+      const visibleFoot = [...document.querySelectorAll<HTMLElement>('.nds-bottombar, .nds-pab:not(.inline)')].reduce((foot, bar) => {
+        const box = bar.getBoundingClientRect()
+        return box.height > 0 && box.top > scrollerTop ? Math.min(foot, box.top) : foot
+      }, scrollerTop + (scroller?.clientHeight ?? window.innerHeight))
       const sticky = (band?.getBoundingClientRect().height ?? 0) + 16
       const shown = dock.current && getComputedStyle(dock.current).display !== 'none' ? dock.current : null
-      const real = shown && scroller ? shown.getBoundingClientRect().top - scroller.getBoundingClientRect().top : sticky
+      const real = shown && scroller ? shown.getBoundingClientRect().top - scrollerTop : sticky
       const top = Math.max(sticky, real)
-      const room = (scroller?.clientHeight ?? window.innerHeight) - top - 16 - bars
+      const room = visibleFoot - scrollerTop - top - 16
       element.style.setProperty('--fw-prf-top', `${Math.round(sticky)}px`)
       element.style.setProperty('--fw-prf-h', `${Math.max(360, Math.round(room))}px`)
     }
@@ -289,6 +326,12 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     const scroller = scrollerOf(element)
     if (scroller) observer?.observe(scroller)
+    // pp-fx4 (walk W-04): the dock's top moves after the first measure — the page fills the band after mounting (a supplier order's band
+    // grows by its tabs row, 47 px), and the body above the frame loads (notices). The band and the main are watched too.
+    const band = scroller?.querySelector<HTMLElement>(':scope > .fw-pband') ?? null
+    if (band) observer?.observe(band)
+    const main = element.closest('main')
+    if (main) observer?.observe(main)
     window.addEventListener('resize', measure)
     return () => {
       observer?.disconnect()

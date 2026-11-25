@@ -11,7 +11,7 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import type { ChangeRequest, OrderRecord } from './api'
 import { approvalPage, at, dayAt, documentsRead, orderRecord, orderWords, PREFIX, productionReadOf, progressRead, requestsOf, shipmentsRead, withoutPrices } from './design-data'
-import { datesOf, factsOf, overviewOf, payOf, progressOf, requestsOf as requestsModelOf, whereOf, type OverviewInput } from './overview/model'
+import { datesOf, factsOf, overviewOf, pairsOf, payOf, progressOf, requestsOf as requestsModelOf, whereOf, type OverviewInput } from './overview/model'
 import { designScreen } from './record/fixtures'
 import type { CustomerCaseModel } from './view/CustomerCase'
 import type { OrderRecordViewModel } from './view/OrderRecordView'
@@ -153,6 +153,64 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
     expect(JSON.stringify(pay)).not.toContain('door')
   })
 
+  // pp-fx4 (walk W-10): "Your order 7" (shipped) said €488 total and €288 still to pay with no Paid row: €200 unexplained.
+  it('W-10: Paid is what the read says was paid (the total less still to pay), with or without deposits; a missing figure is said', () => {
+    const words = orderWords('en')
+    const shipped = payOf(inputOf(orderRecord({ status: 'SHIPPED', grossAmount: 48800, stillToPay: 28800 }, { deposits: [] })))!
+    expect(shipped.rows.map((row) => row.id)).toEqual(['total', 'paid', 'still'])
+    expect(shipped.rows.map((row) => row.value)).toEqual([words.money(48800, 'EUR'), words.money(20000, 'EUR'), words.money(28800, 'EUR')])
+    const unread = payOf(inputOf(orderRecord({ status: 'IN_PRODUCTION', grossAmount: 48800, stillToPay: null }, { deposits: [] })))!
+    expect(unread.rows.map((row) => [row.id, row.value, row.hint ?? null])).toEqual([
+      ['total', words.money(48800, 'EUR'), null],
+      ['paid', '—', 'Not known yet'],
+      ['still', '—', 'Not known yet'],
+    ])
+  })
+
+  // pp-fx4 (walk W-16): one fact, one word — the Overview's total and what is left to pay are Lines › Totals' own words.
+  it('W-16: What you pay says the total and what is left to pay with the words of Lines › Totals', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const pay = payOf(inputOf(orderRecord({ status: 'IN_PRODUCTION', grossAmount: 48800, stillToPay: 28800 }), {}, locale))!
+      const catalogue = CATALOGUE[locale]['portal-orders']!
+      expect(pay.rows.find((row) => row.id === 'total')!.label, locale).toBe(catalogue['totals.gross'])
+      expect(pay.rows.find((row) => row.id === 'still')!.label, locale).toBe(catalogue['totals.toPay'])
+      expect(catalogue['overview.total'], locale).toBeUndefined()
+      expect(catalogue['overview.still'], locale).toBeUndefined()
+    }
+  })
+
+  // pp-fx4 (walk W-08): a card whose partner was left out took a whole row ("What you pay" ≈430 px of content in 749–1620 px), and Order
+  // facts stood alone below it. The pairs are built from the cards that are present, in the picture's order.
+  it('W-08: the pairs come from the cards that are present, in the picture’s order — a left-out card’s partner pairs with the next', () => {
+    expect(pairsOf(['dates', 'requests', null, 'pay', 'facts'])).toEqual([['dates', 'requests'], ['pay', 'facts']])
+    expect(pairsOf([null, 'requests', 'quality', 'pay', 'facts'])).toEqual([['requests', 'quality'], ['pay', 'facts']])
+    expect(pairsOf(['dates', 'requests', null, null, 'facts'])).toEqual([['dates', 'requests'], ['facts']])
+    // Seed-like order: Next dates, Requests & changes, What you pay, Order facts (no Quality) — two full pairs, no lone card.
+    const html = draw(IN_PRODUCTION(), { requests: { state: 'ready', items: [] } })
+    expect(html.match(/class="fw-so-ov-pair"/g)?.length).toBe(2)
+    const view = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (')
+  })
+
+  // pp-fx4 (walk W-09): at 1440 with the dock open the steps stood vertical (≈360 px) beside the promise, ≈450×300 px empty under it —
+  // the rule read the WINDOW. It reads the card now (the picture's rule): under 900 px of card, the steps keep the whole width
+  // (the DS tracker is horizontal from 40 rem of its own) and the promise is one row under them.
+  it('W-09: the steps and the promise by the card’s room — under 900 px of card, the promise is a row under horizontal steps', () => {
+    const css = readFileSync(new URL('./orders.css', import.meta.url), 'utf8')
+    expect(css).not.toMatch(/@media \(max-width: 899px\) \{\s*\.fw-pord-tracker/)
+    const narrow = css.indexOf('@container fw-so-ov-card (max-width: 899px) {')
+    expect(narrow).toBeGreaterThan(css.indexOf('.fw-pord-promise {\n  display: flex;\n  flex-direction: column;'))
+    expect(css.slice(narrow, narrow + 500)).toMatch(/\.fw-pord-tracker \{\s*grid-template-columns: minmax\(0, 1fr\);\s*\}\s*\.fw-pord-promise \{\s*flex-direction: row;/)
+  })
+
+  // pp-fx4 (walk W-12): "Next dates" held only "Requested date —" (orders 5 and 7): a card that says nothing is left out.
+  it('W-12: Next dates with nothing to say (no requested date, no plan, no gate, no line in words) is left out', () => {
+    const bare = orderRecord({ status: 'CONFIRMED', requestedDate: null })
+    expect(datesOf(inputOf(bare, { production: { state: 'hidden', read: null } }))).toBeNull()
+    expect(overviewOf(inputOf(bare, { production: { state: 'hidden', read: null } })).dates).toBeNull()
+    expect(datesOf(inputOf(orderRecord({ status: 'CONFIRMED' }), { production: { state: 'hidden', read: null } }))!.rows.map((row) => row.id)).toEqual(['requested'])
+  })
+
   it('Order facts: PO, ordered on, the delivery address as its lines only (a stray key of the free ship-to never reaches it), terms, currency', () => {
     const record = orderRecord({ shipTo: { name: 'Bea Esempio', line1: 'Via Esempio 12', city: 'Seedville', country: 'IT', internalNote: 'office words only', priority: 'TOP' } })
     const facts = factsOf(inputOf(record))
@@ -179,7 +237,9 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
   it('the new words exist in both languages with the same placeholders; the Italian speaks "voi"', () => {
     const holes = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
     const keys = Object.keys(CATALOGUE.en['portal-orders']!).filter((key) => key.startsWith('overview.') || key.startsWith('strip.'))
-    expect(keys.length).toBeGreaterThanOrEqual(15)
+    // pp-fx4 (W-16): overview.total and overview.still went (Lines › Totals' words say them), overview.notRead came (W-10): 15 → 14.
+    expect(keys.length).toBeGreaterThanOrEqual(14)
+    expect(keys).toContain('overview.notRead')
     for (const key of keys) {
       expect(CATALOGUE.it['portal-orders']![key], key).toBeTruthy()
       expect(holes(CATALOGUE.it['portal-orders']![key]!), key).toEqual(holes(CATALOGUE.en['portal-orders']![key]!))

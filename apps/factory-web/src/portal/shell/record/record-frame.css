@@ -59,6 +59,14 @@
   flex: 1 1 auto;
 }
 
+/* pp-fx4 (walk W-06, G3; the picture: nothing under the conversation): while the full-width view is open, the page's foot and the
+   phone's action bar step aside — the view takes the window less the top bar, the band and the bottom bar, and the page does not scroll.
+   Back (or ⌘J) brings both back. */
+.fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .fw-pfoot,
+.fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .nds-pab-host {
+  display: none;
+}
+
 /* From 1280 px: docked beside the body, sticky, its messages scrolling inside, the box at its foot. */
 .fw-prf.has-thread[data-mode='docked'] {
   grid-template-columns: var(--fw-prf-cols, minmax(0, 3fr) minmax(0, 2fr));

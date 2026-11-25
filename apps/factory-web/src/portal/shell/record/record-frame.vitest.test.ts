@@ -186,6 +186,36 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
     expect(shell).not.toMatch(/<Modal\b/)
     expect(shell).not.toContain('<PortalThread')
   })
+
+  // pp-fx4 (walk W-03): `?tab=messages` arrives before the conversation has loaded — the box is not drawn yet. The asked focus waits for
+  // it (the frame watches the dock until a box that is not disabled appears), unless the person moved the focus meanwhile; then gives up.
+  it('an asked focus waits for the box the thread draws later (arrival, a loading conversation); never steals a focus moved meanwhile', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("dock?.querySelector<HTMLTextAreaElement>('textarea:not([disabled])')")
+    expect(frame).toContain("observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] })")
+    expect(frame).toContain('if (active !== waitingFrom && active && active !== document.body && !element.contains(active)) return done()')
+    expect(frame).toContain('const giveUp = setTimeout(done, BOX_WAIT_MS)')
+    expect(frame).toContain('if (asked.focus) setFocusAsked(true)')
+  })
+  // pp-fx4 (walk W-04): a supplier order's band grows by its tabs row after the first measure (the page fills the band after mounting): the
+  // dock's height is measured again whenever the band or the main changes size, so Send is on screen at first load on every host (G2).
+  it('G2 on every host: the dock is measured again when the band or the main changes size, not only the scroller', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('if (scroller) observer?.observe(scroller)')
+    expect(frame).toContain('if (band) observer?.observe(band)')
+    expect(frame).toContain('if (main) observer?.observe(main)')
+  })
+  // pp-fx4 (walk W-06, G3): at 375 the open view was a 391 px box (the action bar counted twice: its spacer already shortens the scroller)
+  // with the page's foot under it. The room now ends at the visible foot (the scroller's, or a fixed bar's top); foot and action bar step
+  // aside while the view is open (the picture: nothing under the conversation).
+  it('G3: the open full-width view ends at the visible foot (no bar counted twice); the foot and the action bar step aside while it is open', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('return box.height > 0 && box.top > scrollerTop ? Math.min(foot, box.top) : foot')
+    expect(frame).toContain('const room = visibleFoot - scrollerTop - top - 16')
+    expect(frame).not.toMatch(/- 16 - bars/)
+    const css = readFileSync(new URL('./record-frame.css', import.meta.url), 'utf8')
+    expect(css).toContain(".fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .fw-pfoot,\n.fw-portal:has(.fw-prf[data-mode='stacked'][data-view='thread']) .nds-pab-host {\n  display: none;")
+  })
   // pt-w2 W2.3: the docked conversation's own tests (its count, read only while on screen, a removed message) live with the thread now:
   // portal/shell/thread/thread.vitest.test.ts.
 })

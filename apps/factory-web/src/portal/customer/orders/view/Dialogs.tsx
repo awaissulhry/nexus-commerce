@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type KeyboardEvent } from 'react'
+import { useMemo } from 'react'
 import { Banner, ChangeReview, Field, KeyValue, type KeyValueItem } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import { PaymentPanel, type PaymentState } from '@nexus/ui/components/PaymentPanel/index'
@@ -86,25 +86,93 @@ export interface ChangeDialogActions {
   onRetryImpact?: () => void
   /** F-PR-23b (B-PR-27a): a line in another colourway of its style ('' keeps its own). */
   onColourway?: (lineId: string, colourwayId: string) => void
+  /** pp-fx4 (walk W-05): back to the Ask's step 1 ("What you would like"); absent: Cancel closes. */
+  onWhat?: () => void
 }
 
-export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; actions?: ChangeDialogActions }) {
+/**
+ * pp-fx4 (walk W-05; plan § 1.3 "one Ask, the same pop-up"): a change is steps 2 and 3 of the ONE Ask dialog (AskDialog draws the frame —
+ * its title, its step words, its Modal — so the band's "Ask for a change…" and a line's ⋯ open the same pop-up). Its body: the lines and
+ * their sizes (only the chosen line when a line's ⋯ opened it), the date, the address and the note; then what it means.
+ */
+export function ChangeStep({ model, actions }: { model: ChangeDialogModel; actions?: ChangeDialogActions }) {
   const words = useOrderWords()
   const { t, locale, day } = words
   const copy = useSizeCopy(t)
   const rules = model.rules
   const review = model.draft.step === 'review'
-  const held = model.held ? t(model.held, { words: rules?.change.words[locale] ?? '' }) : null
-  const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (review && event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !held) {
-      event.preventDefault()
-      actions?.onSend?.()
-    }
-  }
-  const footer =
-    model.state !== 'ready' || !rules ? (
-      <Button onClick={() => actions?.onClose?.()}>{t('dialog.close')}</Button>
-    ) : review ? (
+  // A line's ⋯ chose its line: only that one is drawn (the band's ask draws them all).
+  const shown = rules ? rules.lines.filter((line) => model.draft.focusLine === null || line.lineId === model.draft.focusLine) : []
+  if (model.state === 'loading') return <Loading rows={3} height={56} />
+  if (model.state === 'error' || !rules) return <ReadFailed title={t('change.failed')} onRetry={actions?.onRetry} />
+  if (!rules.change.possible) return <Banner tone="warning" title={rules.change.words[locale]} />
+  if (review) return <ChangeReviewStep model={model} rules={rules} words={words} onRetryImpact={actions?.onRetryImpact} />
+  return (
+    <>
+      <p className="fw-pord-hint">{t('change.hint')}</p>
+      {shown.map((line) => (
+        <section key={line.lineId} className="fw-pord-change-line" aria-label={lineTitle(line, t)} data-focus={model.draft.focusLine === line.lineId ? '' : undefined}>
+          <h3 className="fw-pord-h3">{lineTitle(line, t)}</h3>
+          {line.change.possible ? (
+            <SizeGridEditor
+              layout="auto"
+              colours={[{ key: line.lineId, label: line.colourway?.name ?? line.style?.code ?? '—', offered: line.sizes.filter((size) => size.offered || size.quantity > 0).map((size) => size.size) }]}
+              sizes={line.sizes.map((size) => ({ key: size.size, label: size.size }))}
+              value={{ [line.lineId]: wantedSizes(line, model.draft) }}
+              onChange={(next) => actions?.onCells?.(line.lineId, next[line.lineId] ?? {})}
+              issues={changedCells({ lines: [line] }, model.draft).map((cell) => ({ colour: line.lineId, size: cell.size, message: t('change.was', { count: cell.before }), tone: 'warning' as const }))}
+              caption={lineTitle(line, t)}
+              locale={INTL_LOCALE[locale]}
+              copy={copy}
+            />
+          ) : (
+            <p className="fw-pord-held">{line.change.words[locale]}</p>
+          )}
+          {/* F-PR-23b (B-PR-27a): another colourway of the line's style, when its style has one. */}
+          {line.change.possible && (line.colourways?.length ?? 0) > 0 ? (
+            <Field label={t('change.colourway')} hint={t('change.colourwayHint')}>
+              <Select value={model.draft.colourways?.[line.lineId] ?? ''} onChange={(event) => actions?.onColourway?.(line.lineId, event.target.value)}>
+                <option value="">{t('change.colourwayKeep', { colour: line.colourway?.name ?? '—' })}</option>
+                {(line.colourways ?? []).map((colourway) => (
+                  <option key={colourway.id} value={colourway.id}>
+                    {[colourway.code, colourway.name].filter(Boolean).join(' ')}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+        </section>
+      ))}
+      <div className="fw-pord-fields">
+        <Field label={t('change.date')} hint={rules.order.requestedDate ? t('change.dateNow', { date: day(rules.order.requestedDate) }) : t('change.dateNone')}>
+          <DateField value={model.draft.requestedDate} min={model.today} onChange={(value) => actions?.onDate?.(value)} clearable />
+        </Field>
+        <Field label={t('change.shipTo')} hint={model.shipTo.length > 0 ? t('change.shipToNow', { address: model.shipTo.join(', ') }) : t('change.newAddress')}>
+          <Select value={model.draft.shipToAddressId} onChange={(event) => actions?.onShipTo?.(event.target.value)}>
+            <option value="">{t('change.shipToSame')}</option>
+            {rules.addresses.map((address) => (
+              <option key={address.id} value={address.id}>
+                {address.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <div className="fw-pord-note">
+        <Field label={t('change.note')} hint={t('change.noteHint')} error={model.draft.note.length > MAX_NOTE ? t('change.problem.long') : undefined}>
+          <Textarea value={model.draft.note} rows={3} maxLength={MAX_NOTE + 200} onChange={(event) => actions?.onNote?.(event.target.value)} />
+        </Field>
+      </div>
+    </>
+  )
+}
+
+/** pp-fx4 (walk W-05): the change steps' buttons in the Ask dialog's foot — Back to "What you would like", Check, Back, Send. */
+export function ChangeStepFooter({ model, actions, held }: { model: ChangeDialogModel; actions?: ChangeDialogActions; held: string | null }) {
+  const { t } = useOrderWords()
+  if (model.state !== 'ready' || !model.rules) return <Button onClick={() => actions?.onClose?.()}>{t('dialog.close')}</Button>
+  if (model.draft.step === 'review')
+    return (
       <>
         <Button onClick={() => actions?.onBack?.()} heldReason={model.busy ? t('held.busy') : null}>
           {t('change.back')}
@@ -113,106 +181,37 @@ export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; act
           {model.busy ? <Spinner size={14} /> : null} {t('change.send')}
         </Button>
       </>
-    ) : (
-      <>
-        <Button onClick={() => actions?.onClose?.()}>{t('dialog.cancel')}</Button>
-        <Button variant="primary" heldReason={held} onClick={() => actions?.onReview?.()}>
-          {t('change.review')}
-        </Button>
-      </>
     )
   return (
     <>
-      <Modal open sheet size="lg" onClose={() => actions?.onClose?.()} title={t('change.title', { number: model.number })} subtitle={review ? t('change.reviewStep') : t('change.editStep')} footer={footer} closeHeld={model.busy ? t('held.busy') : null}>
-        <div className="fw-pord-dialog" onKeyDown={onKey}>
-          {model.state === 'loading' ? (
-            <Loading rows={3} height={56} />
-          ) : model.state === 'error' || !rules ? (
-            <ReadFailed title={t('change.failed')} onRetry={actions?.onRetry} />
-          ) : !rules.change.possible ? (
-            <Banner tone="warning" title={rules.change.words[locale]} />
-          ) : review ? (
-            <ChangeReviewStep model={model} rules={rules} words={words} onRetryImpact={actions?.onRetryImpact} />
-          ) : (
-            <>
-              <p className="fw-pord-hint">{t('change.hint')}</p>
-              {rules.lines.map((line) => (
-                <section key={line.lineId} className="fw-pord-change-line" aria-label={lineTitle(line, t)} data-focus={model.draft.focusLine === line.lineId ? '' : undefined}>
-                  <h3 className="fw-pord-h3">{lineTitle(line, t)}</h3>
-                  {line.change.possible ? (
-                    <SizeGridEditor
-                      layout="auto"
-                      colours={[{ key: line.lineId, label: line.colourway?.name ?? line.style?.code ?? '—', offered: line.sizes.filter((size) => size.offered || size.quantity > 0).map((size) => size.size) }]}
-                      sizes={line.sizes.map((size) => ({ key: size.size, label: size.size }))}
-                      value={{ [line.lineId]: wantedSizes(line, model.draft) }}
-                      onChange={(next) => actions?.onCells?.(line.lineId, next[line.lineId] ?? {})}
-                      issues={changedCells({ lines: [line] }, model.draft).map((cell) => ({ colour: line.lineId, size: cell.size, message: t('change.was', { count: cell.before }), tone: 'warning' as const }))}
-                      caption={lineTitle(line, t)}
-                      locale={INTL_LOCALE[locale]}
-                      copy={copy}
-                    />
-                  ) : (
-                    <p className="fw-pord-held">{line.change.words[locale]}</p>
-                  )}
-                  {/* F-PR-23b (B-PR-27a): another colourway of the line's style, when its style has one. */}
-                  {line.change.possible && (line.colourways?.length ?? 0) > 0 ? (
-                    <Field label={t('change.colourway')} hint={t('change.colourwayHint')}>
-                      <Select value={model.draft.colourways?.[line.lineId] ?? ''} onChange={(event) => actions?.onColourway?.(line.lineId, event.target.value)}>
-                        <option value="">{t('change.colourwayKeep', { colour: line.colourway?.name ?? '—' })}</option>
-                        {(line.colourways ?? []).map((colourway) => (
-                          <option key={colourway.id} value={colourway.id}>
-                            {[colourway.code, colourway.name].filter(Boolean).join(' ')}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                  ) : null}
-                </section>
-              ))}
-              <div className="fw-pord-fields">
-                <Field label={t('change.date')} hint={rules.order.requestedDate ? t('change.dateNow', { date: day(rules.order.requestedDate) }) : t('change.dateNone')}>
-                  <DateField value={model.draft.requestedDate} min={model.today} onChange={(value) => actions?.onDate?.(value)} clearable />
-                </Field>
-                <Field label={t('change.shipTo')} hint={model.shipTo.length > 0 ? t('change.shipToNow', { address: model.shipTo.join(', ') }) : t('change.newAddress')}>
-                  <Select value={model.draft.shipToAddressId} onChange={(event) => actions?.onShipTo?.(event.target.value)}>
-                    <option value="">{t('change.shipToSame')}</option>
-                    {rules.addresses.map((address) => (
-                      <option key={address.id} value={address.id}>
-                        {address.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-              <div className="fw-pord-note">
-                <Field label={t('change.note')} hint={t('change.noteHint')} error={model.draft.note.length > MAX_NOTE ? t('change.problem.long') : undefined}>
-                  <Textarea value={model.draft.note} rows={3} maxLength={MAX_NOTE + 200} onChange={(event) => actions?.onNote?.(event.target.value)} />
-                </Field>
-              </div>
-            </>
-          )}
-          {model.problem ? <Banner tone="danger" title={t(model.problem)} /> : null}
-        </div>
-      </Modal>
-      {model.discard ? (
-        <Modal
-          open
-          size="sm"
-          onClose={() => actions?.onStay?.()}
-          title={t('discard.title')}
-          footer={
-            <>
-              <Button onClick={() => actions?.onStay?.()}>{t('discard.stay')}</Button>
-              <Button variant="danger" onClick={() => actions?.onDiscard?.()}>
-                {t('discard.go')}
-              </Button>
-            </>
-          }
-        >
-          <p className="fw-pord-hint">{t('discard.body')}</p>
-        </Modal>
-      ) : null}
+      {actions?.onWhat ? <Button onClick={() => actions.onWhat?.()}>{t('change.back')}</Button> : <Button onClick={() => actions?.onClose?.()}>{t('dialog.cancel')}</Button>}
+      <Button variant="primary" heldReason={held} onClick={() => actions?.onReview?.()}>
+        {t('change.review')}
+      </Button>
     </>
+  )
+}
+
+/** A typed change, closed (Esc, Close) or left for step 1: Discard or Stay. */
+export function ChangeDiscard({ actions }: { actions?: ChangeDialogActions }) {
+  const { t } = useOrderWords()
+  return (
+    <Modal
+      open
+      size="sm"
+      onClose={() => actions?.onStay?.()}
+      title={t('discard.title')}
+      footer={
+        <>
+          <Button onClick={() => actions?.onStay?.()}>{t('discard.stay')}</Button>
+          <Button variant="danger" onClick={() => actions?.onDiscard?.()}>
+            {t('discard.go')}
+          </Button>
+        </>
+      }
+    >
+      <p className="fw-pord-hint">{t('discard.body')}</p>
+    </Modal>
   )
 }
 
