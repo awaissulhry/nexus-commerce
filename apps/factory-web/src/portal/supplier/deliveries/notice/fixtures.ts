@@ -6,6 +6,7 @@ import { at, HIDES, leatherLine, liningLine, noticePage, PREFIX, shellOf, words 
 import { DeliveriesCase, type DeliveriesCaseBuilder, type DeliveriesCaseThread } from '../view/DeliveriesCase'
 // B-TH-277: the order's conversation docked beside the notice (made-up, the same as the PO page's).
 import { threadOf } from '../../orders/design-data'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 import type { CancelModel } from '../view/Dialogs'
 import type { NoticeViewModel } from '../view/NoticeView'
 
@@ -24,7 +25,7 @@ function noticeCase(build: (locale: Locale) => { page?: NoticePage; over?: Parti
     const view: NoticeViewModel = { state: 'ready', page, prefix: PREFIX, dialog: null, problem: null, ...over }
     // B-TH-277: the order's conversation docks once the notice is read (none while it loads, fails or is not here).
     const thread = view.page && view.state === 'ready' ? { model: threadOf(locale), number: view.page.notice.purchaseOrder.number } : null
-    return { shell: shellOf(locale, { band: noticeBandOf({ t, locale, prefix: PREFIX, page, stepping: false, changeHeld: held ? t(held) : null }) }), body: { kind: 'notice', model: view, thread, ...(frame ? { frame } : {}) } }
+    return { shell: shellOf(locale, { band: withThreadButton(noticeBandOf({ t, locale, prefix: PREFIX, page, stepping: false, changeHeld: held ? t(held) : null }), thread ? frame : null) }), body: { kind: 'notice', model: view, thread, ...(frame ? { frame } : {}) } }
   }
 }
 
