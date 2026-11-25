@@ -219,7 +219,11 @@ describe('od-fx10 — re-walk 1 of the shared part (W-12, W-17, W-19, W-22, W-27
     expect(css).toContain('@container (max-width: 639px)')
     expect(css).toContain("'sizing sizing sizing sizing'")
     expect(css).toContain('box-sizing: border-box;')
-    expect(css).toContain('.fw-od-hostrow > .fw-od-pricecard {\n  grid-column: 1 / -1;')
+    // od-fx11 W-33: a wrapping flex row (every line fills its width), the price card the widest of its line.
+    expect(css).toMatch(/\.fw-od-hostrow \{\n  display: flex;\n  flex-wrap: wrap;/)
+    expect(css).toContain('.fw-od-hostrow > * {\n  flex: 1 1 260px;')
+    expect(css).toContain('.fw-od-hostrow > .fw-od-pricecard {\n  flex: 2 1 420px;')
+    expect(css).not.toContain('grid-column: 1 / -1;\n}\n/* ---- end od-fx10')
   })
 })
 

@@ -539,11 +539,19 @@
 }
 
 /* The host's own cards: ONE row under Still open (auto-fit collapses empty tracks, so 1, 2 or 3 cards fill it). */
+/* od-fx11 W-33: a wrapping flex row — every line of cards fills its width whatever the cards (Send alone, Send + Your price, Confirm +
+   Design work (+ Price)): a card grows from 260 px, a price card twice as much from 420 px (its product names whole, W-17), and a
+   card that no longer fits goes to the next line, which it fills. No empty strip at any width. */
 .fw-od-hostrow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--nds-space-16);
   align-items: stretch;
+}
+
+.fw-od-hostrow > * {
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 /* The Options window. */
@@ -664,8 +672,8 @@
 }
 /* ---- end od-fx8 */
 
-/* ---- od-fx10 W-17: a price card takes the whole row under the other cards (its product names whole beside the price column). */
+/* ---- od-fx10 W-17 / od-fx11 W-33: a price card is the widest of its line (its product names whole beside the price column). */
 .fw-od-hostrow > .fw-od-pricecard {
-  grid-column: 1 / -1;
+  flex: 2 1 420px;
 }
 /* ---- end od-fx10 */
