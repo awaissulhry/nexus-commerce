@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -9,7 +10,6 @@ import { draftSendHeld } from '../../portal/customer/neworder/model'
 import { choiceWords, draftViewOf, headerDraftOf, productRowsOf, savedByWords } from './model'
 import { DRAFT_NS } from './words'
 import { DraftPage, type DraftPageModel } from './view/DraftPage'
-import { OptionsWindow } from './view/RowWindows'
 
 /**
  * THE SIMPLE ORDER START (od-tw t.2) — the ONE draft order's pins, for both doors:
@@ -96,13 +96,10 @@ describe('"Not decided yet" is an answer', () => {
     expect(choiceWords({ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }, td('en'))).toBe('Leather: Not decided yet')
     expect(choiceWords({ topic: 'Pelle', options: ['Vacchetta', 'Canguro'], picked: null }, td('it'))).toBe('Pelle: Non ancora deciso')
     const record = kindsRecord({ custom: [describedLine({ choices: [{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }], description: null, colourText: null, quantity: null, pieces: 0 })] })
-    const row = productRowsOf(record.request).find((entry) => entry.choices.length > 0)!
-    const window = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', [DRAFT_NS, 'ds-words']) }, createElement(OptionsWindow, { model: { row, topic: '', typed: '', addHeld: null, busy: false, failed: null, writeHeld: null } })))
-    const cowhide = window.indexOf('Cowhide')
-    const open = window.indexOf(td('en')('state.OPEN'), cowhide)
-    expect(cowhide).toBeGreaterThan(-1)
-    expect(open).toBeGreaterThan(window.indexOf('Kangaroo'))
+    expect(productRowsOf(record.request).some((entry) => entry.choices.some((choice) => choice.picked === null))).toBe(true)
     expect(page('portal', { draft: draftViewOf(record) })).toContain(td('en')('state.OPEN'))
+    // The Options window (a DS Modal: it draws only once hydrated, so pinned in its source): "Not decided yet" is the LAST choice.
+    expect(readFileSync(new URL('./view/RowWindows.tsx', import.meta.url), 'utf8')).toMatch(/\[\.\.\.choice\.options\.map\([^\n]*\), \{ value: OPEN, label: t\('state\.OPEN'\)/)
   })
 })
 

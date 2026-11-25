@@ -448,7 +448,7 @@ function ConfirmWindow({ model, actions, record }: { model: OfficeDraftModel; ac
                     {offered.length > 0 && colour ? (
                       <SizeGridEditor
                         layout="auto"
-                        colours={[{ key: row.id, label: colour.name, offered }]}
+                        colours={[{ key: row.id, label: colour.name, offered: [...offered] }]}
                         sizes={offered.map((size) => ({ key: size, label: size }))}
                         value={{ [row.id]: cellsOf(entry.sizesText) }}
                         onChange={(next) => actions?.confirm?.onEntry?.(row.id, { sizesText: sizesTextOf(next[row.id] ?? {}) })}

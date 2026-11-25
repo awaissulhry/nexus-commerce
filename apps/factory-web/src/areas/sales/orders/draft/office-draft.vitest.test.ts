@@ -58,7 +58,9 @@ describe('the start and the draft, drawn (it, en)', () => {
       expect(sales, locale).not.toContain(td(locale)('pm.theirs'))
       expect(sales, locale).not.toMatch(/€|EUR/)
     }
-    expect(draw('confirm-window')).toContain(td('en')('cf.unit'))
+    // The Confirm window (a DS Modal: drawn only once hydrated, so pinned in its source): its price fields only with the grain.
+    expect(src('./view/OfficeDraftView.tsx').match(/record\.seesPrices \? \(\s*<Field label=\{[^}]*t\('cf\.unit'\)/g)).toHaveLength(2)
+    expect(src('./view/OfficeDraftView.tsx')).toContain("{record.seesPrices && rows.length > 0 ? <PriceCard")
   })
 
   it('a custom-size row makes the draft a quote ("Confirm as a quote", said why); without one, an order', () => {
@@ -66,7 +68,7 @@ describe('the start and the draft, drawn (it, en)', () => {
     expect(owner).toContain(td('en')('cf.goQuote'))
     expect(owner).toContain(td('en')('cf.quote', { seq: 2 }))
     expect(draw('draft-order')).toContain(td('en')('cf.go'))
-    expect(draw('confirm-window')).toContain(td('en')('cf.windowQuote', { title: 'Race team kit for 2027' }))
+    expect(src('./view/OfficeDraftView.tsx')).toContain("title={t(quote ? 'cf.windowQuote' : 'cf.window', { title })}")
   })
 })
 
