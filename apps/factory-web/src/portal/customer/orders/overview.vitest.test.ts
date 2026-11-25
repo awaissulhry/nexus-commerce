@@ -203,6 +203,17 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
     expect(css.slice(narrow, narrow + 500)).toMatch(/\.fw-pord-tracker \{\s*grid-template-columns: minmax\(0, 1fr\);\s*\}\s*\.fw-pord-promise \{\s*flex-direction: row;/)
   })
 
+  // pp-fx4 (walk W-11): the same kit rows were 16 px in the portal (its comfortable page), 13 px in the office and the picture. A
+  // portal-side wrapper sets the Overview's text at the base size; no kit class is restyled, so the office cannot change.
+  it('W-11: the portal Overview’s rows at the base size (13 px) through its own wrapper; no class of the kit is restyled', () => {
+    const html = draw(IN_PRODUCTION())
+    expect(html.indexOf('class="fw-pord-ov"')).toBeGreaterThanOrEqual(0)
+    expect(html.indexOf('class="fw-pord-ov"')).toBeLessThan(html.indexOf('class="fw-so-overview"'))
+    const css = readFileSync(new URL('./orders.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-pord-ov \{\s*font-size: var\(--nds-font-size-base\);\s*\}/)
+    expect(css).not.toMatch(/\.fw-(so|ro)-[a-z-]+[^{]*\{/)
+  })
+
   // pp-fx4 (walk W-12): "Next dates" held only "Requested date —" (orders 5 and 7): a card that says nothing is left out.
   it('W-12: Next dates with nothing to say (no requested date, no plan, no gate, no line in words) is left out', () => {
     const bare = orderRecord({ status: 'CONFIRMED', requestedDate: null })

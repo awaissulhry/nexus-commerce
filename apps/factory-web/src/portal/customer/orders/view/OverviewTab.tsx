@@ -30,13 +30,16 @@ export function OverviewTab({ model, record, actions }: { model: OrderRecordView
   const requests = cards.requests ? <RequestsCard key="requests" model={cards.requests} items={model.requests.items} actions={actions} /> : null
   const pay = cards.pay ? <PayCard key="pay" model={cards.pay} /> : null
   return (
-    <Overview>
-      <WhereCard model={cards.where} page={model.revision.page} actions={actions} />
-      {cards.progress ? <ProgressCard model={cards.progress} onRetry={cards.progress.from === 'progress' ? actions?.onRetryProgress : actions?.onRetryProduction} /> : null}
-      {/* pp-fx4 (walk W-08): the pairs are built from the cards that are present, in the picture's order (no lone card beside dead space). */}
-      {pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (
-        <OverviewPair key={index}>{pair}</OverviewPair>
-      ))}
-    </Overview>
+    // pp-fx4 (walk W-11): the Overview's text at the picture's 13 px (orders.css `.fw-pord-ov`), the kit's own classes untouched.
+    <div className="fw-pord-ov">
+      <Overview>
+        <WhereCard model={cards.where} page={model.revision.page} actions={actions} />
+        {cards.progress ? <ProgressCard model={cards.progress} onRetry={cards.progress.from === 'progress' ? actions?.onRetryProgress : actions?.onRetryProduction} /> : null}
+        {/* pp-fx4 (walk W-08): the pairs are built from the cards that are present, in the picture's order (no lone card beside dead space). */}
+        {pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (
+          <OverviewPair key={index}>{pair}</OverviewPair>
+        ))}
+      </Overview>
+    </div>
   )
 }
