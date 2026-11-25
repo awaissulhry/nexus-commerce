@@ -11,8 +11,8 @@ import type { SalesOrderStatus } from '../orders/orders'
  *               is SHIPPED, or DELIVERED once every shipment that left arrived); a SENT portal order request that has no
  *               order yet is REQUESTED
  *   chips       the list's saved filters: Open (default: everything not delivered or cancelled, requests included),
- *               Requested, In production, Ready, Shipped (partly or all), Delivered, Cancelled, All, and Date moved
- *               (the promise changed in the last 14 days)
+ *               Requested, Confirmed (pg-s1), In production, Ready, Shipped (partly or all), Delivered, Cancelled, All, and Date
+ *               moved (the promise changed in the last 14 days)
  *   milestones  the six steps, each DONE (with the day it happened when known), PARTLY (shipped in part), TODO (with the
  *               day expected when one is promised) or SKIPPED (a cancelled order's steps it never reached)
  */
@@ -65,12 +65,14 @@ export function customerStatusOf(status: SalesOrderStatus, shipments: LeftShipme
 
 // ---- the list's chips ------------------------------------------------------------------------------------------------------
 
-export const ORDER_CHIPS = ['OPEN', 'REQUESTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'ALL', 'DATE_MOVED'] as const
+// pg-s1 S1.1 (portal grid Z3): CONFIRMED, the band's Confirmed group as a chip (its rows: `inChip`'s default branch).
+export const ORDER_CHIPS = ['OPEN', 'REQUESTED', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'ALL', 'DATE_MOVED'] as const
 export type OrderChip = (typeof ORDER_CHIPS)[number]
 
 export const CHIP_WORDS: Readonly<Record<OrderChip, Words>> = Object.freeze({
   OPEN: { it: 'Aperti', en: 'Open' },
   REQUESTED: { it: 'Richiesti', en: 'Requested' },
+  CONFIRMED: { it: 'Confermati', en: 'Confirmed' }, // pg-s1 S1.1
   IN_PRODUCTION: { it: 'In produzione', en: 'In production' },
   READY: { it: 'Pronti', en: 'Ready' },
   SHIPPED: { it: 'Spediti', en: 'Shipped' },

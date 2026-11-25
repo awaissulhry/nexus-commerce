@@ -8,6 +8,7 @@ import { customerPromiseHistory, PROMISE_REASON_CODES, promiseReasonOf, promiseR
 import { AUTOMATIC_REASONS } from '../amendments/reasons' // B-OL-004
 import { customerShipmentStatusOf, shipmentMilestonesOf, stillToShipOf } from './shipments'
 import { chipCounts, customerStatusOf, inChip, isStillToShip, milestonesOf, weekOf, type MilestoneFacts } from './status'
+import { CHIP_WORDS, ORDER_CHIPS } from './status' // pg-s1 S1.1
 
 const facts = (overrides: Partial<MilestoneFacts>): MilestoneFacts => ({
   status: 'CONFIRMED',
@@ -55,8 +56,13 @@ describe('the status in customer words (SAL-075)', () => {
       { status: 'IN_PRODUCTION', movedLately: true },
       { status: 'DELIVERED', movedLately: false },
     ])
-    expect(Object.fromEntries(counts.map((entry) => [entry.chip, entry.count]))).toEqual({ OPEN: 2, REQUESTED: 0, IN_PRODUCTION: 1, READY: 0, SHIPPED: 0, DELIVERED: 1, CANCELLED: 0, ALL: 3, DATE_MOVED: 1 })
+    // pg-s1 S1.1: + CONFIRMED (the band's Confirmed group), right after REQUESTED.
+    expect(Object.fromEntries(counts.map((entry) => [entry.chip, entry.count]))).toEqual({ OPEN: 2, REQUESTED: 0, CONFIRMED: 1, IN_PRODUCTION: 1, READY: 0, SHIPPED: 0, DELIVERED: 1, CANCELLED: 0, ALL: 3, DATE_MOVED: 1 })
     expect(counts[0]!.words).toEqual({ it: 'Aperti', en: 'Open' })
+    expect(ORDER_CHIPS.slice(1, 3)).toEqual(['REQUESTED', 'CONFIRMED'])
+    expect(CHIP_WORDS.CONFIRMED).toEqual({ it: 'Confermati', en: 'Confirmed' })
+    expect(inChip('CONFIRMED', 'CONFIRMED', false)).toBe(true)
+    expect(inChip('CONFIRMED', 'IN_PRODUCTION', false)).toBe(false)
   })
 
   it('knows the week of a day (Monday to Sunday) and which orders still have pieces to leave', () => {
