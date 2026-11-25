@@ -22,6 +22,14 @@ import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with the
  *   requests     P1's DRAFT (two styles picked from the catalogue, the prices it was shown), its SENT reorder of
  *                SEED-SO-0001's BLK line (SEED-RQ-0001, waiting for the office), an ACCEPTED request the office made
  *                SEED-SO-0002 from (SEED-RQ-0002) and a REFUSED one (SEED-RQ-0003: a size run below the minimum).
+ *                OD t.4 (order start; addendum R1-R3: a draft is a mail and ONE products table, nothing required): P1's
+ *                DRAFT "Race team kit for 2027", its buyer's (a subject, a message, three rows: a custom race suit made to
+ *                measure for six riders, five by size and one later, its leather and protection class not decided yet;
+ *                a SEED-JKT-02 BLK jacket by size; team gloves in words only), and a DRAFT the office's Sales person
+ *                (seed/auth.ts "Seed Member", sales in seed/roles.ts) started for P1 ("Winter jackets reorder": one row in
+ *                words, standard sizes, 20 pieces). The office names SEED-JKT-05 (P1's own label, tenant-wide: seed/options.ts) as
+ *                the style draft it made for the race kit, when that seed ran first, as the CLI runs it (name order); a
+ *                world seeded without it keeps the race kit's list empty.
  *   changes      P1 asks SEED-SO-0002 for one more BLK 52 and no BLK 54 (OPEN); asked SEED-SO-0003's cancel (REFUSED in
  *                words: the leather was cut); and the date move SEED-SO-0001's amendment 1 made (ACCEPTED, naming it).
  *   payments     company A's FAKE card payment account; P1's card payment of FT-2026-00001's open 410.00 (CREATED) and
@@ -53,6 +61,11 @@ const T = {
   answered: new Date('2026-11-04T16:00:00.000Z'),
   paid: new Date('2026-11-04T10:00:00.000Z'),
   declined: new Date('2026-11-04T10:02:00.000Z'),
+  // OD t.4 (order start): the race kit P1's buyer started and saved, the draft the office started and saved for P1.
+  raceKit: new Date('2026-11-12T09:00:00.000Z'),
+  raceKitSaved: new Date('2026-11-12T09:40:00.000Z'),
+  officeDrafted: new Date('2026-11-13T10:00:00.000Z'),
+  officeSaved: new Date('2026-11-13T10:20:00.000Z'),
   // After company A's public notice came into force (2026-11-14, seed/privacy.ts).
   linkMade: seedAt('2026-11-17T08:00:00.000Z'),
   noticeShown: seedAt('2026-11-18T09:40:00.000Z'),
@@ -86,6 +99,20 @@ export interface PortalSalesSeed {
   readonly invoiceId: string
   readonly depositRequestId: string
   readonly publicNoticeId: string
+  /**
+   * OD t.4 (order start): P1's DRAFT "Race team kit for 2027" and its three rows (1 the custom race suit with its six riders,
+   * 2 the catalogue jacket, 3 the team gloves), the DRAFT the office started for P1 and its row, the office person who started
+   * it, and the style draft the office named on the race kit (SEED-JKT-05; null when seed/options.ts did not run first).
+   */
+  readonly orderStart: {
+    readonly raceKit: string
+    readonly raceKitLines: readonly [string, string, string]
+    readonly riderIds: readonly string[]
+    readonly officeDraft: string
+    readonly officeDraftLine: string
+    readonly officeStartedById: string
+    readonly styleDraftId: string | null
+  }
 }
 
 export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
@@ -131,7 +158,9 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     const order = (number: string) => client.salesOrder.findFirstOrThrow({ where: { companyId: companyA, number }, select: { id: true, lines: { select: { id: true, seq: true, styleId: true, colourwayId: true, sizes: { select: { size: true, quantity: true }, orderBy: { size: 'asc' } } }, orderBy: { seq: 'asc' } } } })
     const style = (code: string) => client.style.findFirstOrThrow({ where: { code }, select: { id: true, colourways: { select: { id: true, code: true }, orderBy: { code: 'asc' } } } })
     const shipTo = await client.partyAddress.findFirstOrThrow({ where: { partyId: P1, kinds: { has: 'SHIP_TO' }, status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } })
-    return { so1: await order('SEED-SO-0001'), so2: await order('SEED-SO-0002'), so3: await order('SEED-SO-0003'), jkt02: await style('SEED-JKT-02'), jkt03: await style('SEED-JKT-03'), shipToId: shipTo.id }
+    // OD t.4: seed/options.ts's configurable jacket, when that seed ran first (the CLI runs it first, by name).
+    const jkt05 = await client.style.findFirst({ where: { code: 'SEED-JKT-05' }, select: { id: true } })
+    return { so1: await order('SEED-SO-0001'), so2: await order('SEED-SO-0002'), so3: await order('SEED-SO-0003'), jkt02: await style('SEED-JKT-02'), jkt03: await style('SEED-JKT-03'), jkt05, shipToId: shipTo.id }
   })
   const colourway = (style: { colourways: { id: string; code: string }[] }, code: string): string => style.colourways.find((entry) => entry.code === code)!.id
   const so1Blk = known.so1.lines[0]!
@@ -148,7 +177,8 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     createdById: buyerId,
     ...data,
   })
-  const line = (lineId: string, requestId: string, seq: number, styleId: string, colourwayId: string, price: string | null, more: Partial<Prisma.PortalOrderRequestLineCreateManyInput> = {}): Prisma.PortalOrderRequestLineCreateManyInput => ({
+  // OD t.4: a row of the products table may name no style (made to measure, or in the customer's words).
+  const line = (lineId: string, requestId: string, seq: number, styleId: string | null, colourwayId: string | null, price: string | null, more: Partial<Prisma.PortalOrderRequestLineCreateManyInput> = {}): Prisma.PortalOrderRequestLineCreateManyInput => ({
     id: lineId,
     partyId: P1,
     requestId,
@@ -176,6 +206,25 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     accepted: id('portal-sales:request:accepted:line:1'),
     refused: id('portal-sales:request:refused:line:1'),
   }
+  // OD t.4 (order start): the race kit P1's buyer starts like a mail, and the draft the office's Sales person starts for P1.
+  const salesPersonId = id('user:member') // seed/auth.ts "Seed Member": sales over company A (seed/roles.ts)
+  const orderStart = {
+    raceKit: id('portal-sales:request:race-kit'),
+    raceKitLines: [id('portal-sales:request:race-kit:line:1'), id('portal-sales:request:race-kit:line:2'), id('portal-sales:request:race-kit:line:3')] as const,
+    officeDraft: id('portal-sales:request:office-draft'),
+    officeDraftLine: id('portal-sales:request:office-draft:line:1'),
+  }
+  /** The race suit's riders (made-up names and numbers): five by a size of the jacket range, one sends later. */
+  const riders: readonly { readonly name: string; readonly number: string; readonly size: string | null; readonly note?: string }[] = [
+    { name: 'Bea Esempio', number: '3', size: '50' },
+    { name: 'Carlo Prova', number: '14', size: '52' },
+    { name: 'Dora Bozza', number: '22', size: '54' },
+    { name: 'Enzo Modulo', number: '35', size: '52' },
+    { name: 'Fina Fittizio', number: '41', size: '50' },
+    { name: 'Gino Collaudo', number: '68', size: null, note: 'Seed: sends his measurements after the test day.' },
+  ]
+  const riderIds = riders.map((_, index) => id(`portal-sales:request:race-kit:line:1:person:${index + 1}`))
+  const raceKitStamp = { createdAt: T.raceKit, updatedAt: T.raceKit } as const
   await db.withScope(asBuyer, (client) =>
     client.$transaction(async (tx) => {
       await tx.portalOrderRequest.createMany({
@@ -184,6 +233,17 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
           draft(requests.sent, { source: 'REORDER', customerRef: 'PO-SEED-7001', shipToAddressId: known.shipToId, requestedDate: seedAt('2026-12-18T00:00:00.000Z') }),
           draft(requests.accepted, { source: 'PICKER', customerRef: 'PO-SEED-7002', requestedDate: seedAt('2026-12-04T00:00:00.000Z') }),
           draft(requests.refused, { source: 'UPLOAD', customerRef: 'PO-SEED-7003' }),
+          // OD t.4: started like a mail, a subject and a message; nothing else is needed to keep it or send it.
+          draft(orderStart.raceKit, {
+            source: 'PICKER',
+            subject: 'Race team kit for 2027',
+            note: 'Seed: the kit for our six riders next season; we have not chosen the leather yet.',
+            laterParts: [],
+            createdAt: T.raceKit,
+            updatedAt: T.raceKitSaved,
+            lastEditedById: buyerId,
+            lastEditedAt: T.raceKitSaved,
+          }),
         ],
         skipDuplicates: true,
       })
@@ -194,6 +254,22 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
           line(lineIds.sent, requests.sent, 1, so1Blk.styleId, so1Blk.colourwayId, '420.000000', { sourceOrderLineId: so1Blk.id }),
           line(lineIds.accepted, requests.accepted, 1, so2Blk.styleId, so2Blk.colourwayId, '410.000000'),
           line(lineIds.refused, requests.refused, 1, known.jkt02.id, colourway(known.jkt02, 'RED'), '410.000000'),
+          // OD t.4: the race kit's products table, one row of each sizing (addendum R3; every cell optional): a custom race
+          // suit made to measure (by person, no garment type yet, two choices not decided yet), a catalogue jacket by size,
+          // team gloves in the customer's words only (sizing not decided yet, no pieces yet).
+          line(orderStart.raceKitLines[0], orderStart.raceKit, 1, null, null, null, {
+            kind: 'MADE_TO_MEASURE',
+            sizing: 'MADE_TO_MEASURE',
+            byPerson: true,
+            description: 'Custom race suit',
+            choices: [
+              { topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null },
+              { topic: 'Protection class', options: ['AA', 'AAA'], picked: null },
+            ],
+            ...raceKitStamp,
+          }),
+          line(orderStart.raceKitLines[1], orderStart.raceKit, 2, known.jkt02.id, colourway(known.jkt02, 'BLK'), '410.000000', { kind: 'CATALOGUE', sizing: 'STANDARD', ...raceKitStamp }),
+          line(orderStart.raceKitLines[2], orderStart.raceKit, 3, null, null, null, { kind: 'DESCRIBED', description: 'Team gloves', ...raceKitStamp }),
         ],
         skipDuplicates: true,
       })
@@ -205,7 +281,29 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
           ...so1Blk.sizes.map((entry) => size(id(`portal-sales:request:sent:line:1:${entry.size}`), lineIds.sent, entry.size, entry.quantity)),
           ...so2Blk.sizes.map((entry) => size(id(`portal-sales:request:accepted:line:1:${entry.size}`), lineIds.accepted, entry.size, entry.quantity)),
           size(id('portal-sales:request:refused:line:1:54'), lineIds.refused, '54', 1),
+          // OD t.4: the race kit's catalogue jacket, a small size run.
+          { ...size(id('portal-sales:request:race-kit:line:2:50'), orderStart.raceKitLines[1], '50', 1), ...raceKitStamp },
+          { ...size(id('portal-sales:request:race-kit:line:2:52'), orderStart.raceKitLines[1], '52', 2), ...raceKitStamp },
+          { ...size(id('portal-sales:request:race-kit:line:2:54'), orderStart.raceKitLines[1], '54', 1), ...raceKitStamp },
         ],
+        skipDuplicates: true,
+      })
+      // OD t.4: the race suit's riders (its pieces are its people).
+      await tx.portalOrderRequestPerson.createMany({
+        data: riders.map((rider, index): Prisma.PortalOrderRequestPersonCreateManyInput => ({
+          id: riderIds[index]!,
+          partyId: P1,
+          requestId: orderStart.raceKit,
+          lineId: orderStart.raceKitLines[0],
+          seq: index + 1,
+          name: rider.name,
+          number: rider.number,
+          measureBy: rider.size === null ? 'LATER' : 'SIZE',
+          size: rider.size,
+          note: rider.note ?? null,
+          createdById: buyerId,
+          ...raceKitStamp,
+        })),
         skipDuplicates: true,
       })
     }),
@@ -231,6 +329,44 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
       })
     }),
   )
+
+  // --- OD t.4: a draft the office starts for P1 (Owner's yes 1a: one draft, both doors), and the race kit's style draft -----
+  // The seed's Sales person starts and saves it in the office scope: a subject and one row in words, standard sizes, 20 pieces.
+  const asSales = { audience: 'office', tenantId, actorId: salesPersonId } as const
+  await db.withScope(asSales, (client) =>
+    client.$transaction(async (tx) => {
+      await tx.portalOrderRequest.createMany({
+        data: [draft(orderStart.officeDraft, { subject: 'Winter jackets reorder', createdAt: T.officeDrafted, updatedAt: T.officeSaved, createdById: salesPersonId, lastEditedById: salesPersonId, lastEditedAt: T.officeSaved })],
+        skipDuplicates: true,
+      })
+      await tx.portalOrderRequestLine.createMany({
+        data: [
+          line(orderStart.officeDraftLine, orderStart.officeDraft, 1, null, null, null, {
+            kind: 'DESCRIBED',
+            sizing: 'STANDARD',
+            description: 'Winter jackets, black, as last season',
+            quantity: 20,
+            createdAt: T.officeDrafted,
+            updatedAt: T.officeDrafted,
+            createdById: salesPersonId,
+          }),
+        ],
+        skipDuplicates: true,
+      })
+    }),
+  )
+  // The style draft the office made for the race kit (Make style draft), named in the office scope only (the partner role has
+  // no grant on styleIds): after the insert (a new request names none), while it is a DRAFT, once. Dated at the write, as the
+  // follow at the end of this seed (never ahead of today).
+  const styleDraftId = known.jkt05?.id ?? null
+  if (styleDraftId) {
+    await db.withScope(office, (client) =>
+      client.portalOrderRequest.updateMany({
+        where: { id: orderStart.raceKit, status: 'DRAFT', styleIds: { isEmpty: true } },
+        data: { styleIds: [styleDraftId], version: { increment: 1 }, updatedAt: new Date() },
+      }),
+    )
+  }
 
   // --- Change and cancel requests: P1 asks in the portal, the office answers ---------------------------------------------
   const so2Size = (code: string) => so2Blk.sizes.find((entry) => entry.size === code)!
@@ -470,5 +606,6 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     invoiceId: pricing.money.sampleInvoiceId,
     depositRequestId: pricing.money.sales.depositRequestId,
     publicNoticeId: privacy.publicNoticeId,
+    orderStart: { ...orderStart, riderIds, officeStartedById: salesPersonId, styleDraftId },
   }
 }

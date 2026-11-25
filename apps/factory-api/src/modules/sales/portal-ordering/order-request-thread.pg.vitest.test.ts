@@ -8,6 +8,8 @@ import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard } from '../../../platform/auth/portal/testing/portal'
 import { startHarness, type Browser, type Harness } from '../../../platform/auth/sessions/testing/harness'
+// od-ts (order start walls WS-OD-1, WS-OD-8): office people of the ready-made roles signed in through the app, every customer or one.
+import { addUser, Browser as OfficeBrowser, enrolTotp, START } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import { partnerFanOut } from '../../../platform/portal/notifications/fan-out'
 import { unsubscribeKeyOf } from '../../../platform/portal/notifications/mail'
@@ -63,6 +65,31 @@ const office = (permissions = ['threads.read', 'threads.post']) =>
 const thread = (browser: Browser, id: string) => browser.get(`/portal/threads/PortalOrderRequest/${id}`)
 const post = (browser: Browser, id: string, body: string) => browser.send('POST', `/portal/threads/PortalOrderRequest/${id}/messages`, { body }, { headers: { 'idempotency-key': `th040-${newId()}` } })
 const search = (browser: Browser, q: string) => browser.get(`/portal/search?q=${encodeURIComponent(q)}`)
+
+// ---- od-ts (order start walls): an office person of a ready-made role signed in through the app (its can(), its grain filter);
+// `parties` limits the role to those customers (a sales rep's accounts), none: every customer. Its display name as the office reads it.
+async function officeDesk(email: string, roleKey: string, parties: string[] = []): Promise<{ browser: OfficeBrowser; id: string; name: string }> {
+  const user = await addUser(h, { id: world.tenantId, slug: NS, companies: [{ id: world.companyA, code: world.companyCode }] }, { email })
+  await inTenant(h, world, async (client) => {
+    const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key: roleKey } }, select: { id: true } })
+    await client.roleAssignment.create({ data: { id: newId(), userId: user.id, roleId: role.id, allCompanies: true, partyIds: parties, validFrom: new Date(START) }, select: { id: true } })
+  })
+  const browser = new OfficeBrowser(h.app)
+  const signed = await browser.signIn(NS, user.email, user.password)
+  expect(signed.status, JSON.stringify(signed.body)).toBe(200)
+  await enrolTotp(h, browser)
+  const [named] = await admin<{ displayName: string }>('SELECT "displayName" FROM "User" WHERE id = $1', [user.id])
+  return { browser, id: user.id, name: named!.displayName }
+}
+/** What any change of a draft would move: its version, its rows, its own files, its style drafts. */
+const draftFacts = async (id: string) =>
+  (
+    await admin<{ version: number; lines: number; files: number; styles: number }>(
+      `SELECT r.version, (SELECT count(*)::int FROM "PortalOrderRequestLine" l WHERE l."requestId" = r.id) AS lines, (SELECT count(*)::int FROM "StoredFile" f WHERE f."recordType" = 'PortalOrderRequest' AND f."recordId" = r.id) AS files, cardinality(r."styleIds") AS styles FROM "PortalOrderRequest" r WHERE r.id = $1`,
+      [id],
+    )
+  )[0]!
+// ---- end od-ts
 
 let sent = ''
 let draft = ''
@@ -245,6 +272,44 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     expect(JSON.stringify((await buyerB.get('/portal/notifications')).body)).not.toContain(draft)
   })
 
+  // ---- od-ts (order start, 13-backend § 7, wall W5/L7): the office's inside note and its people stay in the office.
+  it('WS-OD-8: no office note and no office person’s name on any portal read of the draft', async () => {
+    const desk = await officeDesk(`otto.desk.${NS}@example.com`, 'sales')
+    // The buyer's own new draft (the seed's draft stays as the cases around read it).
+    const made = await buyerA.send('POST', '/portal/order-requests', { subject: 'Made-up: the spring team kit' }, { headers: { 'idempotency-key': `od8-${newId()}` } })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const id = made.body.request.id as string
+    // An office note in the draft's thread (inside only), written by the office person ...
+    const NOTE = 'Made-up office note: the margin on this kit is thin, ask the planner first.'
+    await command(office(), { name: 'test.officeNoteOnDraft', input: { id } }, async (tools) => {
+      const { thread: row } = await ensureThread(tools, { type: 'PortalOrderRequest', id }, world.officeId)
+      return (await writeMessage(tools, row, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: desk.id, name: desk.name }, bodyText: NOTE })).id
+    })
+    // ... and the office person saves the draft through the office door (the office names them: the name exists to leak).
+    const saved = await desk.browser.send('PATCH', `/sales/order-requests/${id}`, { version: made.body.request.version, note: 'Made-up: delivery in the mornings only.' })
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200)
+    expect(saved.body.request.savedBy).toEqual({ who: 'YOU', name: desk.name })
+    expect((await readThread(office(), { type: 'PortalOrderRequest', id }, { limit: 50 })).messages.map((message) => message.body)).toContain(NOTE)
+    // Every portal read of the draft: its record, the drafts list, its thread.
+    const read = await buyerA.get(`/portal/order-requests/${id}`)
+    expect(read.status, JSON.stringify(read.body)).toBe(200)
+    expect(read.body.request).toMatchObject({ note: 'Made-up: delivery in the mornings only.', savedBy: { who: 'FACTORY', name: null }, lastEditedBy: null })
+    const listed = await buyerA.get('/portal/order-requests')
+    expect(listed.status, JSON.stringify(listed.body)).toBe(200)
+    expect((listed.body.requests as Json[]).find((row) => row.id === id)?.draft).toMatchObject({ savedBy: { who: 'FACTORY', name: null } })
+    for (const answer of [read.body, listed.body]) {
+      const text = JSON.stringify(answer)
+      expect(text).not.toContain(NOTE)
+      expect(text).not.toContain('margin on this kit')
+      expect(text).not.toContain(desk.name)
+      expect(text).not.toContain(desk.id)
+      expect(text).not.toMatch(/"styleIds"/)
+    }
+    const opened = await thread(buyerA, id)
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200)
+    expect(JSON.stringify(opened.body)).not.toContain('margin on this kit')
+  })
+
   it('W-CP-1: customer B (and a supplier) never opens, posts to, lists, counts or finds A’s draft; search never finds a draft', async () => {
     const opened = await thread(buyerB, draft)
     expect(opened.status).toBe(404)
@@ -298,6 +363,46 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     await expect(readThread(limited(), { type: 'PortalOrderRequest', id: draft }, { limit: 50 })).rejects.toThrow(/Record not found/)
     expect((await unreadCounts(limited(), [{ type: 'PortalOrderRequest', id: draft }], { readable: true })).counts).toEqual([expect.objectContaining({ newCount: 0, readable: false })])
     expect((await listWaiting(limited(), { side: 'CUSTOMER' })).rows.map((entry) => entry.recordId)).not.toContain(draft)
+  })
+
+  // ---- od-ts (order start, 13-backend § 7, wall W1): W-CP-2 on the office's new doors to a draft, through the app.
+  it('WS-OD-1: a person limited to customer B starts, edits, uploads to, makes a style on and confirms none of customer A’s drafts: 404 on every new route', async () => {
+    const limited = await officeDesk(`lina.limited.${NS}@example.com`, 'sales', [P3])
+    const before = await draftFacts(draft)
+    const { version } = before
+    const [line] = await admin<{ id: string }>('SELECT id FROM "PortalOrderRequestLine" WHERE "requestId" = $1 ORDER BY seq LIMIT 1', [draft])
+    const lineId = line?.id ?? newId()
+    // Starting a draft for customer A: as a customer that does not exist.
+    const started = await limited.browser.send('POST', '/sales/order-requests', { companyId: world.companyA, partyId: world.p1, subject: 'Made-up: not my customer' })
+    expect(started.status, JSON.stringify(started.body)).toBe(404)
+    expect(started.body.error.message).toBe('Customer not found.')
+    // Every door to A's draft: as a draft that does not exist, never a word of it.
+    const base = `/sales/order-requests/${draft}`
+    const sha = createHash('sha256').update('made-up logo of the WS-OD-1 test').digest('hex')
+    for (const [method, path, body] of [
+      ['GET', `${base}/draft`, undefined],
+      ['PATCH', base, { version, note: 'Made-up: not mine' }],
+      ['DELETE', `${base}?version=${version}`, undefined],
+      ['POST', `${base}/custom-lines`, { version, line: { description: 'Made-up: not mine', quantity: 1 } }],
+      ['PUT', `${base}/custom-lines/${lineId}`, { version, note: 'Made-up: not mine' }],
+      ['PUT', `${base}/lines/${lineId}`, { version, note: 'Made-up: not mine' }],
+      ['DELETE', `${base}/lines/${lineId}?version=${version}`, undefined],
+      ['POST', `${base}/lines/${lineId}/people`, { version, people: [{ name: 'Made-up Rider', measureBy: 'SIZE', size: '50' }] }],
+      ['POST', `${base}/files`, { part: 'LOGO', originalName: 'made-up-logo.png', contentType: 'image/png', sizeBytes: 32, sha256: sha }],
+      ['POST', `${base}/style-draft`, { version, code: 'ODTS-W1-NOT-MINE', productType: 'JACKET' }],
+      ['POST', `${base}/confirm`, { version, as: 'ORDER' }],
+    ] as const) {
+      const answer = await limited.browser.send(method, path, body)
+      expect(answer.status, `${method} ${path}: ${JSON.stringify(answer.body)}`).toBe(404)
+      expect(answer.body.error.message, `${method} ${path}`).toBe('Order request not found.')
+      expect(JSON.stringify(answer.body), `${method} ${path}`).not.toMatch(/PO-SEED-7004|SEED-JKT/)
+    }
+    // Nothing of A's draft moved.
+    expect(await draftFacts(draft)).toEqual(before)
+    // The wall is the customer, not the doors: the same person starts and reads a draft of customer B.
+    const own = await limited.browser.send('POST', '/sales/order-requests', { companyId: world.companyA, partyId: P3, subject: 'Made-up: a kit for customer B' })
+    expect(own.status, JSON.stringify(own.body)).toBe(201)
+    expect((await limited.browser.send('GET', `/sales/order-requests/${own.body.request.id}/draft`)).status).toBe(200)
   })
 
   it('M-CP-1: the office draft read and list “as Sales worker / as Production manager”: no price, total, difference, ≠ or “Your price” part', async () => {

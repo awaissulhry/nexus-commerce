@@ -31,7 +31,12 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  *   - PortalOrderRequest: the parts sent later each once, who saved it last with when, the subject (OD s.1: 1 to 200 trimmed
  *     characters), all only while DRAFT (OD s.1: the office edits a draft too, Owner's yes 1a);
  *   - PortalOrderRequestPerson: DRAFT only, on a by-person line of its own request, SIZE · SHEET · LATER, the sheet a
- *     MEASUREMENTS file of its own request (never Beta's), removed with its line; OD s.1: the office writes them too;
+ *     MEASUREMENTS file of its own request (never Beta's), removed with its line; OD s.1: the office writes them too, and
+ *     the floor reads none of them (WS-OD-7);
+ *   - od-ts (the order start's walls, design order-start-2026-11-25 13-backend §7; each case titled with its WS-OD id): a line's
+ *     open choices (WS-OD-11); SENT → SENT the office's move for the style drafts only (WS-OD-11); the style drafts made for
+ *     a draft (PortalOrderRequest.styleIds): only added, each once, at most 50, none at insert, never another customer's
+ *     own label (WS-OD-3), office only — the partner role neither reads nor writes them (WS-OD-4);
  *   - PortalSettings: the factory designer slot (active office people, a backup only beside a designer and never the same,
  *     a customer or a brand only), mtmDraftsOn on by default;
  *   - StoredFile.priced: changes on a live file, a superseded version and a deleted one; a superseded version still keeps
@@ -73,6 +78,16 @@ const LATER_PARTS = /names the parts it sends later each once, and who saved it 
 // OD s.1 (…_order_start_guards): SENT → SENT is the office's move for the style drafts only; the customer changes nothing of it.
 const NOT_SENT_AGAIN = /was sent; only the office names the style drafts it made for it/
 const SENT_STYLES_ONLY = /\(SENT → SENT\) changes only styleIds, version, updatedAt/
+const DECIDED_FROZEN = /is REFUSED; it never changes again/
+// OD s.1 (…_order_start_guards): a line's open choices (factory_portal_draft_choices_ok).
+const CHOICES = /has its open choices as 1 to 10 entries, each a topic of 1 to 60 trimmed characters, 2 to 6 distinct options of 1 to 60 trimmed characters, and the one picked \(one of them\) or none yet; no choice at all is null/
+// OD s.1: the style drafts made for a request (PortalOrderRequest_guard, factory_portal_order_request_style_drafts_check).
+const STYLES_NONE_AT_START = /starts with no style draft made for it yet/
+const STYLES_AT_MOST = /are at most 50 styles, each once/
+const STYLES_ONLY_ADDED = /are only added, after the ones named before; none is taken off or moved/
+const STYLE_OF_TENANT = /which is not a style of the tenant, as a style draft made for it/
+const STYLE_OF_COMPANY = /of another company as a style draft made for it/
+const STYLE_PRIVATE_LABEL = /names another customer's private-label style as a style draft made for it; a private-label style is made only for its own customer/
 const PEOPLE_DRAFT = /the people of order request .* change only while it is a DRAFT/
 const BY_PERSON_LINE = /is on a by-person line of its own request/
 const PERSON_SHAPE = /has its place \(1 or more\), a name of 1 to 120 trimmed characters, a number of up to 10, a note of up to 1000/
@@ -236,6 +251,20 @@ const person = (requestId: string, lineId: string, seq: number, extra: Record<st
 /** P1's portal sends `requestId` (its number and when), as the portal does. */
 const send = (requestId: string) =>
   update(p1(), 'PortalOrderRequest', requestId, `status = 'SENT', number = $2, "sentAt" = now(), "sentById" = $3::uuid, version = version + 1`, tag('T-RQ'), portal.userIds.p1Buyer)
+/** P1's own label: the product seed's jacket SEED-JKT-01 (tenant-wide, its brand P1). */
+const OWN_LABEL = key('product:style:JKT-01')
+/**
+ * A style copied from SEED-JKT-01 in the office scope, as the style library makes one: our own collection (no brand), tenant-wide,
+ * unless `changes` say otherwise; its id.
+ */
+async function newStyle(changes: Record<string, unknown> = {}): Promise<string> {
+  const id = randomUUID()
+  const row = { id, code: tag('T-STY'), brandPartyId: null, soldUnderOurName: false, replacedById: null, ...changes }
+  expect(await run(office(), `INSERT INTO "Style" SELECT * FROM jsonb_populate_record(NULL::"Style", (SELECT to_jsonb(r) || $1::jsonb FROM "Style" r WHERE r.id = $2::uuid))`, JSON.stringify(row), OWN_LABEL)).toBe(1)
+  return id
+}
+/** The style drafts named on request `requestId`, read as the owner. */
+const styleIdsOf = async (requestId: string): Promise<string[]> => (await admin(`SELECT "styleIds"::text[] AS ids FROM "PortalOrderRequest" WHERE id = $1::uuid`, [requestId]))[0]!.ids as string[]
 
 beforeAll(async () => {
   db = await migratedDatabase('custpage')
@@ -509,7 +538,7 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     expect(await admin(`SELECT subject FROM "PortalOrderRequest" WHERE id = $1::uuid`, [draft])).toEqual([{ subject: 'Custom motorcycle suit for our race team' }])
   })
 
-  it('names the parts sent later each once and who saved it last with when, both only while it is a DRAFT', async () => {
+  it('WS-OD-11: names the parts sent later each once and who saved it last with when, both only while it is a DRAFT; the office edits a draft too', async () => {
     const draft = await newDraft()
     expect(await update(p1(), 'PortalOrderRequest', draft, `"laterParts" = ARRAY['LOGOS', 'PEOPLE']::"PortalDraftPart"[], "lastEditedById" = $2::uuid, "lastEditedAt" = now(), version = version + 1`, portal.userIds.p1Buyer)).toBe(1)
     for (const set of [`"laterParts" = ARRAY['LOGOS', 'LOGOS']::"PortalDraftPart"[]`, `"laterParts" = NULL`, `"lastEditedAt" = NULL`]) {
@@ -541,7 +570,7 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
   // OD s.1 (…_order_start_guards; addendum R1 "we should not keep any requirements at all"): Send needs nothing — no line, no
   // pieces (the office asks what the order needs at its Confirm). Was: "sends a line with its pieces by its kind" (a line
   // without pieces, and a request without a line, were refused).
-  it('sends with no line, or lines with their pieces by their kind or not decided yet', async () => {
+  it('WS-OD-11: sends with nothing at all (no line), or lines with their pieces by their kind or not decided yet', async () => {
     // No line at all: sent (OD s.1; was refused).
     const none = await newDraft()
     expect(await send(none)).toBe(1)
@@ -570,6 +599,148 @@ describe('the portal draft: line kinds, the parts sent later, Send', () => {
     expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(noSizes, 1))).toBe(1)
     expect(await send(noSizes)).toBe(1)
     expect(await admin(`SELECT status::text AS status FROM "PortalOrderRequest" WHERE id IN ($1::uuid, $2::uuid, $3::uuid, $4::uuid) ORDER BY id`, [none, wordsOnly, nobody, noSizes])).toEqual([{ status: 'SENT' }, { status: 'SENT' }, { status: 'SENT' }, { status: 'SENT' }])
+  })
+
+  // WS-OD-11 (OD s.1 (1) of the line guard, factory_portal_draft_choices_ok; 13-backend §1a, §1d): a line's open choices
+  // ("Leather: Cowhide · Kangaroo · Not decided yet"), names only — none (null) or 1 to 10 {topic, options, picked}; '[]' is
+  // refused (none is null, one way only). Written by both doors while it is a DRAFT, frozen at Send.
+  it("WS-OD-11: a line's open choices are none (null) or 1 to 10 {topic, options, picked}; a bad shape fails", async () => {
+    const draft = await newDraft()
+    const leather = { topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }
+    const protection = { topic: 'Protection class', options: ['AA', 'AAA'], picked: 'AAA' }
+    const eleven = Array.from({ length: 11 }, (_, index) => ({ topic: `Choice ${index + 1}`, options: ['Yes', 'No'], picked: null }))
+    for (const choices of [
+      [],
+      eleven,
+      [{ ...leather, options: ['Cowhide', 'Cowhide'] }],
+      [{ ...leather, picked: 'Goat' }],
+      [{ ...leather, picked: 'cowhide' }],
+      [{ ...leather, options: ['Cowhide'] }],
+      [{ ...leather, options: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] }],
+      [{ ...leather, options: ['Cowhide', 'Kangaroo '] }],
+      [{ ...leather, options: ['Cowhide', ''] }],
+      [{ ...leather, options: ['Cowhide', 'x'.repeat(61)] }],
+      [{ ...leather, options: ['Cowhide', 7] }],
+      [{ ...leather, topic: '' }],
+      [{ ...leather, topic: ' Leather' }],
+      [{ ...leather, topic: 'x'.repeat(61) }],
+      [{ ...leather, picked: 7 }],
+      [{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'] }],
+      // Names only: no other key beside them (a price).
+      [{ ...leather, price: '10.000000' }],
+      [leather, 'Protection class'],
+      { ...leather },
+      'Leather',
+    ]) {
+      expect(await refusalOf(insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 1, { choices }))), JSON.stringify(choices)).toMatch(CHOICES)
+    }
+    const line = draftLine(draft, 1, { choices: [leather, protection] })
+    expect(await insert(p1(), 'PortalOrderRequestLine', line)).toBe(1)
+    expect(await admin(`SELECT choices FROM "PortalOrderRequestLine" WHERE id = $1::uuid`, [line.id])).toEqual([{ choices: [leather, protection] }])
+    // At the limits: ten choices, six options each, a topic and an option of 60 characters.
+    const limits = Array.from({ length: 10 }, (_, index) => ({ topic: index === 0 ? 'x'.repeat(60) : `Choice ${index + 1}`, options: ['A', 'B', 'C', 'D', 'E', index === 0 ? 'y'.repeat(60) : 'F'], picked: index === 0 ? 'y'.repeat(60) : null }))
+    expect(await insert(p1(), 'PortalOrderRequestLine', draftLine(draft, 2, { choices: limits }))).toBe(1)
+    // The office writes them too (OD s.1: both doors); none is null.
+    expect(await update(office(), 'PortalOrderRequestLine', line.id as string, `choices = $2::jsonb, version = version + 1`, JSON.stringify([{ ...leather, picked: 'Kangaroo' }]))).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequestLine', line.id as string, `choices = '[]'::jsonb, version = version + 1`))).toMatch(CHOICES)
+    expect(await update(p1(), 'PortalOrderRequestLine', line.id as string, `choices = NULL, version = version + 1`)).toBe(1)
+    expect(await update(p1(), 'PortalOrderRequestLine', line.id as string, `choices = $2::jsonb, version = version + 1`, JSON.stringify([leather]))).toBe(1)
+    // Frozen at Send with the rest of the line, for both doors.
+    expect(await send(draft)).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequestLine', line.id as string, `choices = NULL, version = version + 1`))).toMatch(LINES_DRAFT)
+    expect(await refusalOf(update(p1(), 'PortalOrderRequestLine', line.id as string, `choices = $2::jsonb, version = version + 1`, JSON.stringify([protection])))).toMatch(LINES_DRAFT)
+    expect(await admin(`SELECT choices FROM "PortalOrderRequestLine" WHERE id = $1::uuid`, [line.id])).toEqual([{ choices: [leather] }])
+  })
+
+  // WS-OD-11 (OD s.1 (1)-(2) of the request guard; 13-backend §1c): the office edits a DRAFT (its draft columns and the style
+  // drafts in one write); SENT → SENT is the office's move for the style drafts only (design work goes on after the customer's
+  // Send): nothing else of a sent request changes, beside them or alone, and the customer changes nothing of it; decided, frozen.
+  it('WS-OD-11: office SENT → SENT changes only styleIds; the customer changes nothing of a sent request; decided, nothing changes', async () => {
+    const draft = await newDraft()
+    expect(await update(office(), 'PortalOrderRequest', draft, `subject = 'Made-up team jackets', "styleIds" = ARRAY[$2::uuid], version = version + 1`, OWN_LABEL)).toBe(1)
+    expect(await send(draft)).toBe(1)
+    expect(await update(office(), 'PortalOrderRequest', draft, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, catalogue.styleId)).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `note = 'Office words after the Send.', version = version + 1`))).toMatch(SENT_STYLES_ONLY)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"styleIds" = "styleIds" || $2::uuid, "customerRef" = 'PO-T-LATE', version = version + 1`, await newStyle()))).toMatch(SENT_STYLES_ONLY)
+    // A sent request names no other customer's own label either (the style drafts check reads every added style).
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, two.styleId))).toMatch(STYLE_PRIVATE_LABEL)
+    for (const set of [`note = 'Later words.'`, `subject = 'Another subject'`, `"customerRef" = 'PO-T-LATE'`]) {
+      expect(await refusalOf(update(p1(), 'PortalOrderRequest', draft, `${set}, version = version + 1`)), set).toMatch(NOT_SENT_AGAIN)
+    }
+    expect(await styleIdsOf(draft)).toEqual([OWN_LABEL, catalogue.styleId])
+    expect(await admin(`SELECT status::text AS status, subject, note, "customerRef" AS ref FROM "PortalOrderRequest" WHERE id = $1::uuid`, [draft])).toEqual([{ status: 'SENT', subject: 'Made-up team jackets', note: null, ref: null }])
+    // Decided (refused in words): frozen, its style drafts too.
+    expect(await update(office(), 'PortalOrderRequest', draft, `status = 'REFUSED', "refuseReason" = 'Made-up: not this season.', "decidedAt" = now(), "decidedById" = $2::uuid, version = version + 1`, a.actorId)).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', draft, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, await newStyle()))).toMatch(DECIDED_FROZEN)
+    expect(await styleIdsOf(draft)).toEqual([OWN_LABEL, catalogue.styleId])
+  })
+})
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// OD s.1 (schema wave "order start 1/1", …_order_start_guards; 13-backend §1a, §1c, §7 W6): the style drafts the office makes
+// for a customer's draft (Make style draft) are named in PortalOrderRequest.styleIds — office only, only added, each once, at
+// most 50, none at insert; each a style of the tenant, of the request's company or tenant-wide, our own collection or the
+// request's customer's own label, never another customer's (factory_intake_style_allowed: the brand wall).
+describe('the style drafts made for a draft (PortalOrderRequest.styleIds)', () => {
+  it("WS-OD-3: a draft names no other customer's own-label style; our own or the customer's own label pass; only added, each once, at most 50, none at insert", async () => {
+    const ours = await newStyle()
+    const ofCompanyA = await newStyle({ companyId: companyA })
+    const otherCompany = await newStyle({ companyId: key('company:B') })
+    // None at insert, from either door (OD s.1: the office starts a draft too).
+    const started = randomUUID()
+    const officeDraft = { id: started, companyId: companyA, partyId: P1, currency: 'EUR', createdById: a.actorId }
+    expect(await refusalOf(insert(office(), 'PortalOrderRequest', { ...officeDraft, styleIds: [OWN_LABEL] }))).toMatch(STYLES_NONE_AT_START)
+    expect(await insert(office(), 'PortalOrderRequest', officeDraft)).toBe(1)
+    expect(await styleIdsOf(started)).toEqual([])
+    // Seed Brand Two's own label is never named on P1's draft; the words name no customer.
+    const words = await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, two.styleId))
+    expect(words).toMatch(STYLE_PRIVATE_LABEL)
+    await expectNeutral(words)
+    // P1's own label and our own collection (tenant-wide, or of the request's company): named, in the order they were made.
+    expect(await update(office(), 'PortalOrderRequest', started, `"styleIds" = ARRAY[$2::uuid], version = version + 1`, OWN_LABEL)).toBe(1)
+    expect(await update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || ARRAY[$2::uuid, $3::uuid], version = version + 1`, ours, ofCompanyA)).toBe(1)
+    expect(await styleIdsOf(started)).toEqual([OWN_LABEL, ours, ofCompanyA])
+    // Beta's own label after the ones named: still refused (every added style is checked).
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, two.styleId))).toMatch(STYLE_PRIVATE_LABEL)
+    // Only added: none taken off, none moved, none named twice, never cleared.
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = ARRAY[$2::uuid, $3::uuid], version = version + 1`, OWN_LABEL, ours))).toMatch(STYLES_ONLY_ADDED)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = ARRAY[$2::uuid, $3::uuid, $4::uuid], version = version + 1`, ours, OWN_LABEL, ofCompanyA))).toMatch(STYLES_ONLY_ADDED)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = ARRAY[]::uuid[], version = version + 1`))).toMatch(STYLES_ONLY_ADDED)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, ours))).toMatch(STYLES_AT_MOST)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = NULL, version = version + 1`))).toMatch(STYLES_AT_MOST)
+    // Of the request's company or tenant-wide, and a style of the tenant.
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, otherCompany))).toMatch(STYLE_OF_COMPANY)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', started, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, randomUUID()))).toMatch(STYLE_OF_TENANT)
+    expect(await styleIdsOf(started)).toEqual([OWN_LABEL, ours, ofCompanyA])
+    // The same wall the other way: on Seed Brand Two's own draft its own label is named, P1's never.
+    const betaDraft = randomUUID()
+    expect(await insert(office(), 'PortalOrderRequest', { ...officeDraft, id: betaDraft, partyId: two.second.partyId })).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', betaDraft, `"styleIds" = ARRAY[$2::uuid], version = version + 1`, OWN_LABEL))).toMatch(STYLE_PRIVATE_LABEL)
+    expect(await update(office(), 'PortalOrderRequest', betaDraft, `"styleIds" = ARRAY[$2::uuid, $3::uuid], version = version + 1`, two.styleId, ours)).toBe(1)
+    // At most 50.
+    const many = await newDraft()
+    const fiftyOne: string[] = []
+    for (let index = 0; index < 51; index++) fiftyOne.push(await newStyle())
+    expect(await update(office(), 'PortalOrderRequest', many, `"styleIds" = $2::uuid[], version = version + 1`, fiftyOne.slice(0, 50))).toBe(1)
+    expect(await refusalOf(update(office(), 'PortalOrderRequest', many, `"styleIds" = "styleIds" || $2::uuid, version = version + 1`, fiftyOne[50]))).toMatch(STYLES_AT_MOST)
+    expect(await styleIdsOf(many)).toEqual(fiftyOne.slice(0, 50))
+  })
+
+  // WS-OD-4 (DB half; 13-backend §1b, §7): the partner role has no column grant on styleIds (ownership/portal-sales.json
+  // hiddenColumns). The generated isolation tests read every hidden column of every model; this is the explicit case.
+  it('WS-OD-4: the partner role can neither select nor write styleIds', async () => {
+    const draft = await newDraft()
+    expect(await update(office(), 'PortalOrderRequest', draft, `"styleIds" = ARRAY[$2::uuid], version = version + 1`, OWN_LABEL)).toBe(1)
+    await expect(sql(p1(), `SELECT "styleIds" FROM "PortalOrderRequest" WHERE id = $1::uuid`, draft)).rejects.toThrow(DENIED)
+    await expect(sql(p1(), `SELECT id FROM "PortalOrderRequest" WHERE cardinality("styleIds") > 0`)).rejects.toThrow(DENIED)
+    await expect(sql(p1(), `SELECT to_jsonb(r) AS row FROM "PortalOrderRequest" r WHERE r.id = $1::uuid`, draft)).rejects.toThrow(DENIED)
+    await expect(update(p1(), 'PortalOrderRequest', draft, `"styleIds" = ARRAY[]::uuid[], version = version + 1`)).rejects.toThrow(DENIED)
+    await expect(update(p1(), 'PortalOrderRequest', draft, `"styleIds" = ARRAY[$2::uuid, $3::uuid], version = version + 1`, OWN_LABEL, catalogue.styleId)).rejects.toThrow(DENIED)
+    await expect(insert(p1(), 'PortalOrderRequest', { id: randomUUID(), companyId: companyA, partyId: P1, currency: 'EUR', createdById: portal.userIds.p1Buyer, styleIds: [] })).rejects.toThrow(DENIED)
+    // Its other columns it reads and writes as before; the office's list stays as it was.
+    expect(await update(p1(), 'PortalOrderRequest', draft, `note = 'Our words.', version = version + 1`)).toBe(1)
+    expect(await sql(p1(), `SELECT id::text AS id, note, version FROM "PortalOrderRequest" WHERE id = $1::uuid`, draft)).toEqual([{ id: draft, note: 'Our words.', version: 3 }])
+    expect(await styleIdsOf(draft)).toEqual([OWN_LABEL])
   })
 })
 
@@ -656,6 +827,37 @@ describe('the people of a by-person line (PortalOrderRequestPerson)', () => {
     expect(await sql(beta(), `SELECT id FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid`, cp.draftId)).toEqual([])
     expect(await refusalOf(insert(beta(), 'PortalOrderRequestPerson', person(cp.draftId, cp.mtmLineId, 9)))).toMatch(RLS)
     expect(await refusalOf(insert(beta(), 'PortalOrderRequestPerson', person(cp.draftId, cp.mtmLineId, 9, { partyId: two.second.partyId })))).toMatch(FOREIGN)
+  })
+
+  // WS-OD-7 (DB half; 13-backend §7 "People: office reads, floor never"; the floor's no-grant case of the price describe above):
+  // the people an office person adds to a draft the office started (OD s.1) are read by the office and the customer, never by
+  // the floor — no grant on them, nor on the request or its lines they could be reached through.
+  it('WS-OD-7: office-written people are read by the office and the customer, never by the floor', async () => {
+    const draft = randomUUID()
+    expect(await insert(office(), 'PortalOrderRequest', { id: draft, companyId: companyA, partyId: P1, currency: 'EUR', createdById: a.actorId })).toBe(1)
+    const line = draftLine(draft, 1, { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', styleId: null, colourwayId: null, byPerson: true, createdById: a.actorId })
+    expect(await insert(office(), 'PortalOrderRequestLine', line)).toBe(1)
+    const rider = person(draft, line.id as string, 1, { name: 'Office Test Rider', number: '9', measureBy: 'SIZE', size: '52', createdById: a.actorId })
+    const later = person(draft, line.id as string, 2, { name: 'Office Later Rider', note: 'Made-up: measured at the fitting.', createdById: a.actorId })
+    for (const row of [rider, later]) expect(await insert(office(), 'PortalOrderRequestPerson', row)).toBe(1)
+    expect(await sql(office(), `SELECT seq, name, size, "createdById"::text AS creator FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid ORDER BY seq`, draft)).toEqual([
+      { seq: 1, name: 'Office Test Rider', size: '52', creator: a.actorId },
+      { seq: 2, name: 'Office Later Rider', size: null, creator: a.actorId },
+    ])
+    expect(await sql(p1(), `SELECT name FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid ORDER BY seq`, draft)).toEqual([{ name: 'Office Test Rider' }, { name: 'Office Later Rider' }])
+    // The floor: nothing of them, not even a count, nor the line or the request they sit on; it writes none either.
+    for (const [text, value] of [
+      [`SELECT name FROM "PortalOrderRequestPerson" WHERE id = $1::uuid`, rider.id],
+      [`SELECT count(*)::int AS n FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid`, draft],
+      [`SELECT id FROM "PortalOrderRequestLine" WHERE id = $1::uuid`, line.id],
+      [`SELECT id FROM "PortalOrderRequest" WHERE id = $1::uuid`, draft],
+    ] as const) {
+      await expect(sql(floor(), text, value), text).rejects.toThrow(DENIED)
+    }
+    await expect(update(floor(), 'PortalOrderRequestPerson', rider.id as string, `name = 'Floor words', version = version + 1`)).rejects.toThrow(DENIED)
+    await expect(insert(floor(), 'PortalOrderRequestPerson', person(draft, line.id as string, 3))).rejects.toThrow(DENIED)
+    // Another customer reads none of them.
+    expect(await sql(beta(), `SELECT id FROM "PortalOrderRequestPerson" WHERE "requestId" = $1::uuid`, draft)).toEqual([])
   })
 })
 

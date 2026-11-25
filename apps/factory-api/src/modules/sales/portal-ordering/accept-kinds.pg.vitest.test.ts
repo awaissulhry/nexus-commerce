@@ -7,7 +7,7 @@ import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { KIND_WORDS } from '@nexus/factory-domain/sales/incoming/rules'
-import { ACCEPT_WORDS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { ACCEPT_WORDS, decisionProblem } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { RECORD_TYPE_WORDS } from '@nexus/factory-domain/threads/summary'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { callerFor } from '../../../core/command'
@@ -19,7 +19,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/aut
 import { addUser, Browser, enrolTotp, startHarness, type Answer, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { processFiles } from '../../../platform/files/service'
 import { carryArtwork } from './accept-artwork'
-import { acceptRequest, officeRequestView } from './office'
+import { acceptRequest, confirmRequest, officeRequestView } from './office'
 
 /**
  * B-CP-077 (customer page plan C5, 12 §9 B-CP-062; lead notes 1–2; review E3, F4; walls: brand W-CP-3, money M-CP-1) on the local
@@ -42,6 +42,11 @@ import { acceptRequest, officeRequestView } from './office'
  *   - ARTWORK carried: a logo on the described line lands on each line made from it (QuoteLine / SalesOrderLine), a logo on the draft
  *     on the quote / order itself — category ARTWORK, naming its source, shared with customer A only; carried again, nothing doubles;
  *   - "Portal order": the record type and Incoming's kind in words (the code stays CATALOGUE_ORDER).
+ * od-ts (order start, 13-backend § 5 and § 7; addendum R1–R3): the office's Confirm of a customer's DRAFT (confirmRequest, called as the
+ * office person like acceptRequest): send and accept in ONE command (WS-OD-12: the number, sent by the office person, one order, the
+ * row's open choices in words on the order line, the customer's note labelled in the internal note only); a fully open row is filled
+ * by the Confirm body (held in words until then); a custom-size row makes it a quote (the wanted date in its internal note); no row
+ * and a decided request are refused.
  * Every name and figure is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-ordering/accept-kinds`.
  */
 
@@ -341,5 +346,123 @@ describe('B-CP-077: accept a described or made-to-measure request by its line ma
   it('"Portal order": the record type and Incoming’s kind in words (the code stays CATALOGUE_ORDER)', () => {
     expect(RECORD_TYPE_WORDS.PortalOrderRequest).toEqual({ it: 'Ordine dal portale', en: 'Portal order' })
     expect(KIND_WORDS.CATALOGUE_ORDER).toEqual({ it: 'Ordine dal portale', en: 'Portal order' })
+  })
+})
+
+// ---- od-ts (order start, 13-backend § 5, § 7 WS-OD-12; addendum R1–R3): Confirm = send (a draft) + accept, in ONE command -------------
+/** A row's open choice: "Leather: Cowhide · Kangaroo · Not decided yet". */
+const leather = [{ topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null }]
+/** A day `days` after the harness's today (the portal checks a wanted date against it), as a business date. */
+const daysOn = (days: number): string => new Date(h.clock.now().getTime() + days * 86_400_000).toISOString().slice(0, 10)
+/** The request as stored (nothing written by a refusal). */
+const stored = async (id: string): Promise<Json> => (await admin('SELECT status::text AS status, number, version FROM "PortalOrderRequest" WHERE id = $1', [id]))[0]!
+
+describe('od-ts: the office confirms a customer’s draft — send and accept in one command', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('WS-OD-12 confirm sends and accepts in one command; ACCEPTED names one order; the choices are in the line’s note as words; the customer’s note is in the internal note only, labelled', async () => {
+    const note = 'Made-up: the same red as last season, please.'
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { subject: 'Made-up team jackets', note }, 201)
+    const id = made.request.id as string
+    const row = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: { description: 'Made-up team jackets in leather', quantity: 4, choices: leather } })
+    const lineId = row.request.customLines[0].id as string
+    // Never sent: a DRAFT with no number; its row has an open choice.
+    expect(row.request).toMatchObject({ status: 'DRAFT', number: null, sentAt: null, note })
+    expect(row.request.customLines[0]).toMatchObject({ kind: 'DESCRIBED', quantity: 4, choices: leather })
+    const confirmed = await confirmRequest(office(), id, { version: row.request.version, as: 'ORDER', map: [{ lineId, into: [{ styleId: G.style, colourwayId: G.black, sizes: grid([['50', 2], ['52', 2]]) }] }] })
+    expect(confirmed.made).toMatchObject({ as: 'ORDER', quoteId: null, salesOrderId: expect.any(String) })
+    const number = confirmed.request.number!
+    // The PORTAL_REQUEST series (seed/numbering: RQ-{N:4}).
+    expect(number).toMatch(/^RQ-\d{4,}$/)
+    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', salesOrder: { id: confirmed.made.salesOrderId }, quote: null })
+    // Sent and decided by the office person, in the same command; ACCEPTED names ONE order.
+    const [request] = await admin(`SELECT status::text AS status, number, "sentById", "decidedById", "salesOrderId", "quoteId", "sentAt" = "decidedAt" AS "oneMoment" FROM "PortalOrderRequest" WHERE id = $1`, [id])
+    expect(request).toEqual({ status: 'ACCEPTED', number, sentById: ADA, decidedById: ADA, salesOrderId: confirmed.made.salesOrderId, quoteId: null, oneMoment: true })
+    // The customer's note: labelled as theirs in the order's internal note (the office-only note), on no order line.
+    const orders = await admin<{ id: string; internalNote: string | null }>(`SELECT id, "internalNote" FROM "SalesOrder" WHERE "internalNote" LIKE $1`, [`%(order request ${number})%`])
+    expect(orders).toEqual([{ id: confirmed.made.salesOrderId, internalNote: `Customer's note (order request ${number}): ${note}` }])
+    const orderLines = await admin<{ colourway: string; pieces: number; note: string | null }>(
+      `SELECT c.code AS colourway, l.quantity::int AS pieces, l.note FROM "SalesOrderLine" l JOIN "Colourway" c ON c.id = l."colourwayId" WHERE l."orderId" = $1 ORDER BY l.seq`,
+      [confirmed.made.salesOrderId],
+    )
+    expect(orderLines.map((line) => [line.colourway, line.pieces])).toEqual([['BLK', 4]])
+    // The row's open choice travels to the order line's note as words (the real option is picked later on the order).
+    expect(orderLines[0]!.note).toContain(`Request ${number}, line 1 (described): Made-up team jackets in leather`)
+    expect(orderLines[0]!.note).toContain('Leather: Cowhide or Kangaroo — not decided yet')
+    expect(JSON.stringify(orderLines)).not.toContain(note)
+    // The send's own audit row (by the office) and its event, beside the accept's.
+    const sentAudit = await admin<{ action: string; actorId: string; after: Json }>(`SELECT action, "actorId", after FROM "AuditLog" WHERE "recordType" = 'PortalOrderRequest' AND "recordId" = $1 AND after->>'status' = 'SENT'`, [id])
+    expect(sentAudit).toHaveLength(1)
+    expect(sentAudit[0]).toMatchObject({ action: 'portalOrdering.confirm', actorId: ADA, after: { status: 'SENT', number, lines: 1, pieces: 4, byOffice: true } })
+    expect(sentAudit[0]!.after).not.toHaveProperty('byPartner')
+    const sent = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'portal_order_request.sent' AND subject = $1`, [id])
+    expect(sent.map((event) => event.payload)).toEqual([expect.objectContaining({ requestId: id, number, partyId: partyA, lines: 1, pieces: 4 })])
+    expect(await admin(`SELECT 1 FROM "OutboxEvent" WHERE type = 'portal_order_request.accepted' AND subject = $1`, [id])).toHaveLength(1)
+    // The customer keeps reading its own note on its request, now accepted.
+    expect((await ok('aBuyer', 'GET', base(id))).request).toMatchObject({ status: 'ACCEPTED', number, note })
+    G.confirmed = { id, version: confirmed.request.version }
+  })
+
+  it('R3: a Confirm body fills every open cell of a fully open row', async () => {
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', {}, 201)
+    const id = made.request.id as string
+    // The customer's default delivery address (seed/parties: P1's workshop) is the draft's.
+    expect(made.request.shipToAddressId).toBe(seedUuid(NS, 'party-address:P1:workshop'))
+    const empty = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: {} })
+    const lineId = empty.request.customLines[0].id as string
+    expect(empty.request.customLines[0]).toMatchObject({ seq: 1, kind: 'DESCRIBED', sizing: null, description: null, style: null, colourway: null, quantity: null, sizes: [], byPerson: false, choices: null })
+    // Still open is information on the read: the row's style, sizing, colour, pieces and the date; never MISSING there.
+    expect(empty.request.stillOpen).toMatchObject({ openCount: 5, confirmHeld: true })
+    expect(empty.request.stillOpen.items.map((item: Json) => item.state)).not.toContain('MISSING')
+    // Confirmed with nothing typed for the row: held in words (409), each missing cell by its place; nothing is written.
+    const held = await thrown(confirmRequest(office(), id, { version: empty.request.version, as: 'ORDER' }))
+    expect(held).toEqual({
+      code: 'conflict',
+      message: 'Before it is confirmed, the order still needs: line 1 its style and its colour and its pieces by size.',
+      paths: ['refusal/CONFIRM_HELD', 'stillOpen/lines/1/PRODUCT', 'stillOpen/lines/1/COLOUR', 'stillOpen/lines/1/PIECES'],
+    })
+    expect(await stored(id)).toEqual({ status: 'DRAFT', number: null, version: empty.request.version })
+    // The body types the style, the colour and the pieces by size: an order of one line.
+    const confirmed = await confirmRequest(office(), id, { version: empty.request.version, as: 'ORDER', map: [{ lineId, into: [{ styleId: G.style, colourwayId: G.red, sizes: grid([['50', 1], ['52', 2]]) }] }] })
+    expect(confirmed.request.status).toBe('ACCEPTED')
+    expect(confirmed.made).toMatchObject({ as: 'ORDER', quoteId: null, lines: [{ requestLineId: lineId, requestSeq: 1, into: [expect.objectContaining({ seq: 10 })] }] })
+    const orderLines = await admin<{ colourway: string; pieces: number }>(`SELECT c.code AS colourway, l.quantity::int AS pieces FROM "SalesOrderLine" l JOIN "Colourway" c ON c.id = l."colourwayId" WHERE l."orderId" = $1 ORDER BY l.seq`, [confirmed.made.salesOrderId])
+    expect(orderLines).toEqual([{ colourway: 'RED', pieces: 3 }])
+  })
+
+  it('R3: a custom-size row makes it a quote — held as an order in today’s words; as a quote its internal note keeps the customer’s note and the wanted date (S4-B2)', async () => {
+    const note = 'Made-up: fitted suits for our two riders.'
+    const wanted = daysOn(60)
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { note, requestedDate: wanted }, 201)
+    const id = made.request.id as string
+    const tailored = await ok('aBuyer', 'POST', `${base(id)}/custom-lines`, { version: made.request.version, line: { sizing: 'MADE_TO_MEASURE' } })
+    const lineId = tailored.request.customLines[0].id as string
+    expect(tailored.request.customLines[0]).toMatchObject({ kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, garmentType: null })
+    const map = [{ lineId, into: [{ styleId: G.style, colourwayId: G.black, sizes: grid([['50', 1], ['52', 1]]) }] }]
+    // As an order: a made-to-measure row is a quote first (GATE-MTM), mapped or not; nothing is written.
+    const asOrder = await thrown(confirmRequest(office(), id, { version: tailored.request.version, as: 'ORDER', map }))
+    expect(asOrder).toEqual({ code: 'invalid_state', message: ACCEPT_WORDS.madeToMeasureOrder([1]), paths: ['request/lines/1'] })
+    expect(await stored(id)).toEqual({ status: 'DRAFT', number: null, version: tailored.request.version })
+    const confirmed = await confirmRequest(office(), id, { version: tailored.request.version, as: 'QUOTE', map })
+    const number = confirmed.request.number!
+    expect(confirmed.made).toMatchObject({ as: 'QUOTE', salesOrderId: null, quoteId: expect.any(String) })
+    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', quote: { id: confirmed.made.quoteId }, salesOrder: null })
+    const [quote] = await admin<{ internalNote: string | null }>('SELECT "internalNote" FROM "Quote" WHERE id = $1', [confirmed.made.quoteId])
+    expect(quote).toEqual({ internalNote: `Customer's note (order request ${number}): ${note} · Wanted by ${wanted}` })
+    const quoteLines = await admin<{ colourway: string; pieces: number }>(
+      `SELECT c.code AS colourway, l.quantity::int AS pieces FROM "QuoteLine" l JOIN "QuoteVersion" v ON v.id = l."versionId" JOIN "Colourway" c ON c.id = l."colourwayId" WHERE v."quoteId" = $1 ORDER BY l.seq`,
+      [confirmed.made.quoteId],
+    )
+    expect(quoteLines).toEqual([{ colourway: 'BLK', pieces: 2 }])
+  })
+
+  it('Confirm with no row is held in words (409); a decided request is refused (409)', async () => {
+    const made = await ok('aBuyer', 'POST', '/portal/order-requests', { subject: 'Made-up: to be filled' }, 201)
+    const none = await thrown(confirmRequest(office(), made.request.id, { version: made.request.version, as: 'ORDER' }))
+    expect(none).toMatchObject({ code: 'conflict', message: 'Add at least one product before it is confirmed.' })
+    expect(none.paths).toContain('refusal/CONFIRM_HELD')
+    expect(await stored(made.request.id)).toEqual({ status: 'DRAFT', number: null, version: made.request.version })
+    // The request WS-OD-12 confirmed: already accepted, in today's words.
+    const again = await thrown(confirmRequest(office(), G.confirmed.id, { version: G.confirmed.version, as: 'ORDER' }))
+    expect(again).toMatchObject({ code: 'invalid_state', message: decisionProblem('ACCEPTED') })
+    expect((await stored(G.confirmed.id)).status).toBe('ACCEPTED')
   })
 })

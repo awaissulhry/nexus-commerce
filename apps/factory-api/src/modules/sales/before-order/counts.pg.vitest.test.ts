@@ -194,11 +194,12 @@ describe('B-CQ-002 GET /sales/before-order/counts and the per-party helper', () 
     expect(await incoming('ORDERED')).toContain('SEED-RQ-0002')
     expect(await incoming('ENDED')).toContain('SEED-RQ-0003')
     expect(await incoming('QUOTED')).toContain('SEED-INQ-0004')
-    // P1's portal orders: one sent, one accepted as an order, one refused, one draft (the draft is no Incoming row).
+    // P1's portal orders: one sent, one accepted as an order, one refused, three drafts (no draft is an Incoming row). od-ts t.4: the
+    // seed's order start adds the buyer's race kit and the draft the office's Sales person started.
     expect(answer.byKind.portalOrders).toEqual({ TO_ANSWER: 1, WON: 1, MOVED: 0, LOST: 1 })
-    expect(answer.byKind.drafts).toBe(1)
-    const drafts = ((await get('owner', `/sales/order-requests?status=DRAFT&partyId=${P1}`)).requests as Json[]).map((row) => row.id)
-    expect(drafts).toEqual([portal.requests.draft])
+    expect(answer.byKind.drafts).toBe(3)
+    const drafts = ((await get('owner', `/sales/order-requests?status=DRAFT&partyId=${P1}`)).requests as Json[]).map((row) => row.id as string)
+    expect([...drafts].sort()).toEqual([portal.requests.draft, portal.orderStart.raceKit, portal.orderStart.officeDraft].sort())
     // P3's requests wait on us (the wall of case 3 hides real numbers, not empty ones).
     expect((await counts('owner', P3)).groups.TO_ANSWER).toBeGreaterThan(0)
   })

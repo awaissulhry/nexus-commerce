@@ -10,6 +10,7 @@ import {
   announceDraftFileContract,
   completeDraftFileContract,
   removeDraftFileContract,
+  moveDraftFileContract, // od-ts t.6
   addLinesContract,
   addressesContract,
   addressMoveContract,
@@ -51,6 +52,7 @@ import {
 import { manifest } from './manifest'
 import { portalWriter } from './writer' // od-s s.2: the portal's draft commands take the portal's writer
 // od-s s.3: the office's door to a customer's draft (the SAME commands through the office writer), and Make style draft.
+import { officeMoveFile } from './office-drafts' // od-ts t.6
 import { officeAddCustomLine, officeAddPeople, officeAnnounceFile, officeChangeCustomLine, officeChangeHeader, officeChangeLine, officeChangePerson, officeCompleteFile, officeDiscard, officeDraftView, officeRemoveFile, officeRemoveLine, officeRemovePerson, officeStartDraft } from './office-drafts'
 import { styleDraftOfRequest } from './style-draft'
 import { acceptRequest, confirmRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
@@ -58,7 +60,7 @@ import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
 import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
 // B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
-import { announceDraftFile, completeDraftFile, discardDraftWithFiles, removeDraftFile, removeLineWithFiles } from './draft-files'
+import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, removeLineWithFiles } from './draft-files'
 import { orderTemplate, uploadSheet } from './upload'
 // B-W2b-374 (XF3:04): an option's artwork in the portal.
 import { processFiles } from '../../../platform/files/service'
@@ -92,6 +94,8 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request))))
   app.post('/portal/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => completeDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
   app.delete('/portal/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => removeDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
+  // od-ts t.6: the "Logo" toggle — a file moved between the draft's logos and references.
+  app.patch('/portal/order-requests/:requestId/files/:fileId', { schema: moveDraftFileContract }, async (request) => moveDraftFile(portalWriter(app, request), request.params.requestId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
   // B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line.
   app.post('/portal/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => addCustomLine(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.put('/portal/order-requests/:requestId/custom-lines/:lineId', { schema: changeCustomLineContract }, async (request) => changeCustomLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
@@ -147,6 +151,7 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/sales/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await officeAnnounceFile(processFiles(), app, request, request.params.requestId, request.body, idempotencyKeyFrom(request))))
   app.post('/sales/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => officeCompleteFile(processFiles(), app, request, request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
   app.delete('/sales/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => officeRemoveFile(processFiles(), app, request, request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
+  app.patch('/sales/order-requests/:requestId/files/:fileId', { schema: moveDraftFileContract }, async (request) => officeMoveFile(app, request, request.params.requestId, request.params.fileId, request.body, idempotencyKeyFrom(request))) // od-ts t.6
   app.post('/sales/order-requests/:requestId/style-draft', { schema: styleDraftContract }, async (request) => styleDraftOfRequest(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
   // od-s s.4: Confirm — send (if still a draft) + accept, in one command (13-backend § 5).
   app.post('/sales/order-requests/:requestId/confirm', { schema: confirmContract }, async (request) => confirmRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))

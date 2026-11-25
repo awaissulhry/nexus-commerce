@@ -5,7 +5,8 @@ import { OFFICE_DRAFT_WORDS } from '@nexus/factory-domain/sales/portal-ordering/
 import { DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
-import { DRAFT_FILE_CATEGORY, DRAFT_FILE_RECORDS, DRAFT_FILES_MAX, draftFilePartOf, draftFileWords, type DraftFilePart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import { DRAFT_FILE_CATEGORY, DRAFT_FILE_RECORDS, DRAFT_FILES_MAX, draftFilePartOf, draftFileWords, type DraftFilePart, type MovableDraftFilePart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { portalFileKindOf, portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
 import type { CommandCaller } from '../../../core/command'
 import { completeUpload, deleteFile, requestUpload } from '../../../platform/files/files'
@@ -19,6 +20,10 @@ import { discardDraft, draftChanged, draftFileView, ownDraft, removeLine, reques
 import { DRAFT_FILE_COLUMNS, draftFilesWhere, readLines, type RequestRow } from './store'
 import { markEdited } from './store' // B-CP-075: who saved the draft
 import type { CommandTools } from '../../../core/command'
+// od-ts t.6: a file moved between the draft's parts (the "Logo" toggle).
+import { StaleVersionError } from '../../../core/command'
+import { readRequest } from './store'
+import { staleDraftError } from './requests'
 
 /**
  * B-CP-072 (customer page plan C5, 12 §2 parts 2–4; D14 — O7, the virus scanner's spend, is NOT approved): the files of a draft
@@ -162,6 +167,44 @@ export async function removeDraftFile(files: FilesRuntime, writer: DraftWriter, 
   await recordOnDraft(writer, row, 'portalOrdering.removeDraftFile', idempotencyKey, { fileId, lineId, removed: true }, (tools) => sheetPeopleLater(tools, row, fileId)) // B-CP-075
   return requestView(writer, await ownDraft(writer, requestId))
 }
+
+// ---- od-ts t.6 (the Owner's picture: a "Logo" toggle on each attachment) -----------------------------------------------------
+/**
+ * PATCH /portal/order-requests/:requestId/files/:fileId and PATCH /sales/order-requests/:requestId/files/:fileId {version, part}: one
+ * of the draft's files moves between its logos (filed as ARTWORK) and its references (no category), while the request is a DRAFT —
+ * the same rights as that door's file upload (portal: the drafts right + portal.upload; office: orders.manage + files.upload over the
+ * draft's company and customer; a file or a draft out of reach is not found). A measurement sheet stays one (409 in words). ONE
+ * command as the files' system caller over the draft's company and party (the partner role writes no file): the draft's version
+ * checked and moved, the file's category, who saved it, the audit row and portal_order_request.draft_changed. Already in that
+ * part: nothing changes (no version move).
+ */
+export async function moveDraftFile(writer: DraftWriter, requestId: string, fileId: string, body: { readonly version: number; readonly part: MovableDraftFilePart }, idempotencyKey?: string) {
+  const row = await filePlace(writer, requestId)
+  const mover = uploaderOf(writer, row)
+  const { file, lineId } = await draftFile(mover, row, fileId)
+  const from = draftFilePartOf(file.category)
+  if (from === 'SHEET') {
+    const words = writer.door === 'office' ? OFFICE_DRAFT_WORDS.SHEET_STAYS.en : draftFileWords('SHEET_STAYS', writer.locale)
+    throw new DomainError('conflict', words, [{ path: 'refusal/SHEET_STAYS', message: words }])
+  }
+  if (from !== body.part) {
+    try {
+      await commandOn(writer.app, mover, { name: 'portalOrdering.moveDraftFile', idempotencyKey, input: { requestId, fileId, part: body.part, version: body.version }, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: body.version } }, async (tools) => {
+        const current = await readRequest(tools.tx, row.id)
+        if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
+        await tools.tx.storedFile.update({ where: { id: file.id }, data: { category: DRAFT_FILE_CATEGORY[body.part] }, select: { id: true } })
+        await markEdited(tools.tx, row.id, writer.userId, tools.now) // who saved it: the person, not the system
+        tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { fileId: file.id, lineId, part: body.part, from, by: writer.userId, ...(writer.door === 'office' ? { byOffice: true } : {}) } })
+        draftChanged(tools, row)
+        return null
+      })
+    } catch (error) {
+      throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error
+    }
+  }
+  return requestView(writer, await ownDraft(writer, requestId))
+}
+// ---- end od-ts t.6
 
 // ---- a discarded draft and a line taken out take their files with them -------------------------------------------------------
 
