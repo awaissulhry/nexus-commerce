@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { TabItem } from '@nexus/ui/components'
+import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { browserApi } from '../../lib/api/browser'
+import type { HealthState } from '../../lib/production/model'
 import type { ApiClient } from '../../lib/api/client'
 import { createLiveBus, type LiveBus, type LiveChange, type LiveSource, type LiveState } from '../../shell/live/bus'
 import type { MyAccess, PortalMe } from './api'
@@ -105,6 +107,21 @@ export interface PortalBand {
   readOnly?: { key: string; params?: Readonly<Record<string, string>> } | null
   /** The page's own keys, for the shortcuts dialog (`keys` as shown, words in the person's language). */
   keys?: readonly { keys: readonly string[]; words: string }[]
+  /**
+   * pp-w1 (w1.2; 10-design § 2): what follows the status pill on a record page, the office band's twins: the record's health, the
+   * customer's own urgency and the record it was made from. Data only; absent: none (every other page draws as before).
+   */
+  chips?: PortalBandChips | null
+}
+
+/** pp-w1 (w1.2): the band's chips. Customer-safe by shape: no note, no person, no amount. */
+export interface PortalBandChips {
+  /** Late or At risk only, never On track (the shared HealthPill, customer face): a person's raise carries its curated reason code only. */
+  readonly health?: { readonly computed: HealthState | null; readonly raised?: { readonly reason: PromiseReasonCode } | null } | null
+  /** "Urgent": the customer's own urgency, in the page's words; null: none. */
+  readonly urgent?: string | null
+  /** "Made from your request #7": its page, in the page's words; null: none. */
+  readonly madeFrom?: { readonly href: string; readonly label: string } | null
 }
 
 type BandSetter = (band: PortalBand | null) => void

@@ -43,7 +43,7 @@ import {
   type PaymentIntent,
   type ShipmentsRead,
 } from './api'
-import { orderBandOf } from './band'
+import { bandProductionOf, orderBandOf } from './band'
 import { openLater, saveBytes, useOffline, usePortalOrderFiles } from './hooks'
 import { downloadLink } from '../../../record-panels/api' // F-SA-238: a shared order file opens through the files route (the content wall)
 import {
@@ -58,7 +58,6 @@ import {
   EMPTY_CANCEL,
   EMPTY_CHANGE,
   isFinal,
-  movesOf,
   NAV_KEY,
   neighbourOf,
   NS,
@@ -533,9 +532,12 @@ function OrderContainer({ id }: { id: string }) {
       .catch(() => setDialog((current) => (current?.kind === 'ask' ? { ...current, orderFiles: { state: 'error', read: current.orderFiles?.read ?? null } } : current)))
   }
   // ---- end F-SA-246
-  /** Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. */
-  const openAsk = (kind: AskKind | null = null) => {
-    if (kind === 'CHANGE') return openChange()
+  /**
+   * Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. pp-w1 (w1.2):
+   * the line ⋯ "Ask for a change on this line" opens the same dialog at Change, at that line (`line`).
+   */
+  const openAsk = (kind: AskKind | null = null, line: string | null = null) => {
+    if (kind === 'CHANGE') return openChange(line)
     if (kind === 'CANCEL') return openCancel()
     writeKey.current = null
     setDialog({ kind: 'ask', step: kind ? 'details' : 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
@@ -938,27 +940,24 @@ function OrderContainer({ id }: { id: string }) {
           tab,
           prefix: frame.prefix,
           facts: {
-            changeHeld: changeHeldWords,
+            // pp-w1 (w1.2): the ONE "Ask for a change…" opens the Ask dialog (held: a preview, no right to ask, offline).
+            ask: { held: askHeldWords(null) },
             cancelHeld: cancelHeldWords,
             reconfirm: revisionShown !== null ? { revision: revisionShown, held: reconfirmHeldKey ? t(reconfirmHeldKey) : null } : null,
             shipments: record.shipments.shown,
-            moves: movesOf(record.promiseHistory),
             confirmation: readsDocuments,
             pay: firstPay ? { held: firstPay[1].held } : null,
-            // F-PR-13: "Ask us…" opens the Ask dialog (held like a change: a preview, no right to ask, offline).
-            ask: { held: askHeldWords(null) },
             problem: reportFacts, // F-PR-24
+            // pp-w1 (w1.2): the health and urgency chips from the order's production read — only for a person who sees production
+            // (PW-O02); "Made from your request #7" from the summary read.
+            production: bandProductionOf(production.read, seesProduction),
+            madeFrom,
           },
-          onChange: () => openChange(),
+          onAsk: () => openAsk(),
           onCancel: openCancel,
           onReconfirm: () => void openReconfirm(),
-          onHistory: () => {
-            if (tab !== 'status') router.push(recordHref(frame.prefix, id, 'status'))
-            setHistoryOpen(true)
-          },
           onConfirmation: () => void openConfirmation(),
           onPay: () => (firstPay ? openPay(firstPay[0]) : undefined),
-          onAsk: () => openAsk(), // F-PR-13
           onProblem: openProblem, // F-PR-24
         })
       : { title: state === 'missing' ? t('record.missing') : t('list.title'), back: { href: `${frame.prefix}/orders`, label: t('list.title') } },
@@ -1128,7 +1127,7 @@ function OrderContainer({ id }: { id: string }) {
         onReconfirm: () => void openReconfirm(),
         onPay: openPay,
         onWithdraw: withdraw,
-        onChangeLine: (lineId) => openChange(lineId),
+        onChangeLine: (lineId) => openAsk('CHANGE', lineId), // pp-w1 (w1.2): the ONE Ask, at this line
         onLine: (lineId) => setOpenLine(lineId),
         onHistory: setHistoryOpen,
         onCopy: copy,

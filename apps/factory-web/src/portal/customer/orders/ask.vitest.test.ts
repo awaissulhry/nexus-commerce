@@ -209,7 +209,7 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
   })
 
   it('every word in both languages, and the Italian speaks to the customer as "voi"', () => {
-    const flat = (locale: 'en' | 'it') => Object.entries(CATALOGUE[locale]['portal-orders'] ?? {}).filter(([key]) => key.startsWith('ask.') || key === 'band.ask')
+    const flat = (locale: 'en' | 'it') => Object.entries(CATALOGUE[locale]['portal-orders'] ?? {}).filter(([key]) => key.startsWith('ask.') || key === 'band.change')
     const en = flat('en')
     const it = flat('it')
     expect(en.length).toBeGreaterThan(80)
@@ -217,14 +217,17 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
     for (const [key, text] of it) expect(text, key).not.toMatch(/\b(tu|tuo|tua|tuoi|tue|ti|hai|puoi|vuoi|scegli|scrivici|chiedici)\b/i)
   })
 
-  it('the band: "Ask us…" opens the dialog; "Ask for a change" stays in the ⋯; without the dialog the band is as before', () => {
-    const facts: OrderBandFacts = { changeHeld: null, cancelHeld: null, reconfirm: null, shipments: 1, moves: 0, confirmation: true, pay: null }
+  // pp-w1 (w1.2; O1-B1): ONE ask door — the band's "Ask for a change…" opens this dialog; the ⋯ holds no second "Ask for a change".
+  it('the band: its ONE "Ask for a change…" opens the dialog at its first step; the ⋯ holds no second ask', () => {
+    const facts: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
     const record = orderRecord({ status: 'IN_PRODUCTION' })
     const words = orderWords('en')
-    const withAsk = orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts: { ...facts, ask: { held: null } } })
-    expect(withAsk.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask us…']])
-    expect(withAsk.more?.[0]).toMatchObject({ id: 'change', label: words.t('band.change') })
-    expect(orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts }).actions?.map((action) => action.id)).toEqual(['change'])
+    let opened = 0
+    const band = orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts, onAsk: () => void (opened += 1) })
+    expect(band.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask for a change…']])
+    band.actions?.[0]?.onClick?.()
+    expect(opened).toBe(1)
+    expect(band.more?.some((item) => item.id === 'change' || item.id === 'ask')).toBe(false)
   })
 })
 

@@ -28,7 +28,7 @@ import type { OrderRecordViewModel } from './view/OrderRecordView'
 
 const PREFIX_BETA = `/p/${BRAND_BETA.code}`
 const t = (locale: Locale) => words(locale)
-const FACTS: OrderBandFacts = { changeHeld: null, cancelHeld: null, reconfirm: null, shipments: 1, moves: 0, confirmation: true, pay: null }
+const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
 
 describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
   it('four tabs in order; Messages is gone', () => {

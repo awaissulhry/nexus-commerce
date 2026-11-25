@@ -128,7 +128,7 @@ describe('the problems it reported on this order, and Report a problem', () => {
 
   it('the band’s ⋯ offers it too (held with the words), and only where the page offers it', () => {
     const record = betaRecord()
-    const facts = { changeHeld: null, cancelHeld: null, reconfirm: null, shipments: 1, moves: 0, confirmation: true, pay: null }
+    const facts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
     const band = (problem?: { held: string | null } | null) => orderBandOf({ words: orderWords('en'), record, tab: 'status', prefix: PREFIX, facts: { ...facts, ...(problem === undefined ? {} : { problem }) } })
     expect(band({ held: null }).more?.find((item) => item.id === 'problem')).toMatchObject({ label: 'Report a problem', disabled: false })
     expect(band({ held: 'No connection: try again when you are back online.' }).more?.find((item) => item.id === 'problem')).toMatchObject({ disabled: true, description: 'No connection: try again when you are back online.' })

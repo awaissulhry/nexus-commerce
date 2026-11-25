@@ -30,17 +30,16 @@
     "updated": "Updated {time}",
     "export": "Export this view (CSV)",
     "print": "Print this list",
-    "change": "Ask for a change",
+    "change": "Ask for a change…",
     "reconfirm": "Re-confirm version {version}",
     "cancel": "Ask to cancel…",
     "pay": "Pay the deposit",
-    "history": "Promise date history",
     "confirmation": "Order confirmation PDF",
     "newOrder": "New order",
     "downloadAll": "Download all (Excel)",
     "downloading": "Preparing the file…",
     "downloadAllHint": "Every order of this view with your columns, in one Excel file.",
-    "ask": "Ask us…"
+    "urgent": "Urgent"
   },
   "keys": {
     "search": "Search your orders",
@@ -48,6 +47,8 @@
     "rows": "Next / previous order",
     "orders": "Next / previous order of the list",
     "tabs": "Between the tabs",
+    "thread": "Show or hide the conversation",
+    "send": "Send the message (from the message box)",
     "close": "Close the window"
   },
   "chips": {

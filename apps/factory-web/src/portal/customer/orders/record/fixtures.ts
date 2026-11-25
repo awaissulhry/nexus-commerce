@@ -23,7 +23,7 @@ import {
   withoutPrices,
   words,
 } from '../design-data'
-import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, movesOf, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
+import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
 // B-TH-275: the customer's own reference in the pop-ups; what the order was made from.
 import { orderRefOf } from '../model'
 import { CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
@@ -101,13 +101,13 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
     const tab = input.tab ?? 'status'
     const model = recordModel(record, { tab, ...(input.model?.(locale) ?? {}) })
     const facts: OrderBandFacts = {
-      changeHeld: model.changeHeld,
+      ask: { held: null }, // pp-w1 (w1.2): the ONE "Ask for a change…"
       cancelHeld: null,
       reconfirm: model.revision.page?.content.revisedOrder && record.order.reconfirmNeeded ? { revision: model.revision.page.content.revisedOrder.revision, held: model.reconfirmHeld } : null,
       shipments: record.shipments.shown,
-      moves: movesOf(record.promiseHistory),
       confirmation: true,
       pay: Object.values(model.pay)[0] ?? null,
+      madeFrom: model.madeFrom ?? null, // pp-w1 (w1.2): "Made from your request #7" in the band
       ...(input.facts?.(locale) ?? {}),
     }
     return {
@@ -314,7 +314,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'change-review', label: 'Ask for a change: review old → new', model: recordCase({ model: () => ({ dialog: changeDialog({ ...EDITED, step: 'review' }) }) }), note: '⌘Enter sends from the review step.' },
     { id: 'change-refused', label: 'Ask for a change: refused at the click', model: recordCase({ model: () => ({ dialog: changeDialog({ ...EDITED, step: 'review' }, { problem: 'problem.verdict.OPEN_REQUEST' }) }) }) },
     { id: 'change-discard', label: 'Ask for a change: Esc with typed work', model: recordCase({ model: () => ({ dialog: changeDialog(EDITED, { discard: true }) }) }), note: 'Discard / Stay (no draft is stored).' },
-    { id: 'change-held', label: 'Ask for a change: the order cannot change any more', model: recordCase({ model: (locale) => ({ dialog: changeDialog({}, { rules: rulesOf({ change: { possible: false, code: 'STATUS', day: null, words: { it: 'Non possibile: pronto per la spedizione', en: 'Not possible: ready to ship' } } }) }), changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }), facts: (locale) => ({ changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }) }), note: 'The band’s Ask for a change is held with the same words.' },
+    { id: 'change-held', label: 'Ask for a change: the order cannot change any more', model: recordCase({ model: (locale) => ({ dialog: changeDialog({}, { rules: rulesOf({ change: { possible: false, code: 'STATUS', day: null, words: { it: 'Non possibile: pronto per la spedizione', en: 'Not possible: ready to ship' } } }) }), changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }) }), note: 'The change is held with its reason; the line’s ⋯ “Ask for a change on this line” is held with the same words (the band’s ONE “Ask for a change…” opens the Ask dialog).' },
     // ── pop:cancel-request ──
     { id: 'cancel', label: 'pop:cancel-request — Ask to cancel', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES' }) }) }), note: 'Per line what the cut-off rules say now (held / Free · fee); the fee words; reason and note.' },
     { id: 'cancel-chosen', label: 'Ask to cancel: a line chosen, the fee', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES', lineIds: [rulesOf().lines[1]!.lineId], reasonCode: 'NOT_NEEDED' }) }) }) },
@@ -322,11 +322,11 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'cancel-mtm', label: 'Ask to cancel: made to measure for a consumer', model: recordCase({ record: MTM, model: () => ({ requests: NO_REQUESTS, dialog: cancelDialog({}, rulesOf({ cancel: { possible: true, code: 'FREE', day: null, words: { it: 'Libero', en: 'Free' } }, noWithdrawal: NO_WITHDRAWAL_WORDS, cancelFee: { pct: null, words: { it: 'Nessuna penale', en: 'No fee' }, currency: 'EUR', wholeOrderFee: 0 } }), own(MTM)) }) }), note: '“No right of withdrawal applies (Codice del Consumo art. 59)”.' },
     // ── pop:reconfirm ──
     // ---- F-PR-13: the Ask dialog — what, the details of a production ask, what it means before Send
-    { id: 'ask', label: 'Ask us: what you would like (step 1)', model: recordCase({ model: () => ({ dialog: askDialog() }), facts: () => ({ ask: { held: null } }) }), note: 'Change and cancel, then the asks this customer’s limits open; Resume is held with its reason; a closed ask is not drawn.' },
-    { id: 'ask-rush', label: 'Ask us: make it urgent, the need-by date (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'RUSH', draft: { requestedDate: dayAt(9) } }) }), facts: () => ({ ask: { held: null } }) }) },
-    { id: 'ask-split', label: 'Ask us: ship what is ready, the first part (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SPLIT_SHIPMENT', draft: { cells: { [rulesOf().lines[1]!.lineId]: { '50': 4 } } } }) }), facts: () => ({ ask: { held: null } }) }) },
-    { id: 'ask-sample', label: 'Ask us: another sample (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SAMPLE_ROUND', draft: { lineId: rulesOf().lines[0]!.lineId } }) }), facts: () => ({ ask: { held: null } }) }), note: 'A pre-production sample is held after the leather was cut; the top of production stays open.' },
-    { id: 'ask-impact', label: 'Ask us: what it means before Send (step 3)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'impact', kind: 'RUSH', draft: { requestedDate: dayAt(9) }, impact: RUSH_IMPACT }) }), facts: () => ({ ask: { held: null } }) }), note: 'Nothing frozen, no price, the earliest date (an estimate, a date only).' },
+    { id: 'ask', label: 'Ask us: what you would like (step 1)', model: recordCase({ model: () => ({ dialog: askDialog() }) }), note: 'Change and cancel, then the asks this customer’s limits open; Resume is held with its reason; a closed ask is not drawn.' },
+    { id: 'ask-rush', label: 'Ask us: make it urgent, the need-by date (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'RUSH', draft: { requestedDate: dayAt(9) } }) }) }) },
+    { id: 'ask-split', label: 'Ask us: ship what is ready, the first part (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SPLIT_SHIPMENT', draft: { cells: { [rulesOf().lines[1]!.lineId]: { '50': 4 } } } }) }) }) },
+    { id: 'ask-sample', label: 'Ask us: another sample (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SAMPLE_ROUND', draft: { lineId: rulesOf().lines[0]!.lineId } }) }) }), note: 'A pre-production sample is held after the leather was cut; the top of production stays open.' },
+    { id: 'ask-impact', label: 'Ask us: what it means before Send (step 3)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'impact', kind: 'RUSH', draft: { requestedDate: dayAt(9) }, impact: RUSH_IMPACT }) }) }), note: 'Nothing frozen, no price, the earliest date (an estimate, a date only).' },
     {
       id: 'change-impact',
       label: 'Ask for a change: what it means (frozen, a price may apply, after release)',
@@ -349,7 +349,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     {
       id: 'office-preview',
       label: 'An office preview',
-      model: recordCase({ preview: true, model: (locale) => ({ changeHeld: words(locale)('held.preview'), withdrawHeld: words(locale)('held.preview'), fileHeld: words(locale)('held.previewFiles') }), facts: (locale) => ({ changeHeld: words(locale)('held.preview'), cancelHeld: words(locale)('held.preview') }) }),
+      model: recordCase({ preview: true, model: (locale) => ({ changeHeld: words(locale)('held.preview'), withdrawHeld: words(locale)('held.preview'), fileHeld: words(locale)('held.previewFiles') }), facts: (locale) => ({ ask: { held: words(locale)('held.preview') }, cancelHeld: words(locale)('held.preview') }) }),
       note: 'Every sending verb is held with the reason.',
     },
     { id: 'offline', label: 'No connection', model: recordCase({ model: () => ({ offlineSince: at(-1) }) }) },

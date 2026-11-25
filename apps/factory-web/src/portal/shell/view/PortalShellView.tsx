@@ -2,19 +2,20 @@
 
 import { forwardRef, useMemo, useState, type MouseEvent, type ReactNode, type Ref, type UIEvent } from 'react'
 import Link from 'next/link'
-import { Bell, Keyboard, LogOut, MessageCircleQuestion, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown } from 'lucide-react'
+import { Bell, Keyboard, LogOut, MessageCircleQuestion, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { Banner, Menu, SearchTrigger, Tabs, type MenuItemDef } from '@nexus/ui/components'
 import { BottomBar, type BottomBarLinkProps } from '@nexus/ui/components/BottomBar/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { DetailHeader, DETAIL_HEADER_FOLD } from '@nexus/ui/patterns'
 import { PortalActionBar } from '@nexus/ui/patterns/PortalActionBar/index'
 import type { AreaNav } from '@nexus/ui/patterns/shell/index'
-import { Button, Kbd, Pill, ToolbarButton } from '@nexus/ui/primitives'
+import { Button, Kbd, Pill, Tag, ToolbarButton } from '@nexus/ui/primitives'
 import { brandingAttrs, checkBranding, type BrandingTokens } from '@nexus/ui/tokens/branding'
 import { densityAttrs } from '@nexus/ui/tokens/density'
 import '@nexus/ui/styles/branding.css'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
+import { HealthPill } from '../../../lib/production/view/HealthPill'
 import type { LiveState } from '../../../shell/live/bus'
 import type { PortalBand } from '../frame'
 import type { BadgeWords, PortalNotice } from '../model'
@@ -244,10 +245,21 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
               }
               title={title}
               meta={
-                band.refs || band.status ? (
+                band.refs || band.status || band.chips ? (
                   <span className="fw-pband-meta">
                     {band.refs ? <RefPair theirs={band.refs.theirs ?? null} ours={band.refs.ours ?? null} size="sm" labels={ds.refPair} /> : null}
                     {band.status ? <Pill tone={band.status.tone}>{band.status.label}</Pill> : null}
+                    {/* pp-w1 (w1.2): the office band's twins after the status — health (Late / At risk), urgency, made from. */}
+                    {band.chips?.health ? <HealthPill face="customer" computed={band.chips.health.computed} raised={band.chips.health.raised ?? null} /> : null}
+                    {band.chips?.urgent ? <Tag tone="warning">{band.chips.urgent}</Tag> : null}
+                    {band.chips?.madeFrom ? (
+                      <Button asChild size="sm" variant="link" inline>
+                        <Link href={band.chips.madeFrom.href} onClick={(event) => follow(event, band.chips!.madeFrom!.href)}>
+                          {band.chips.madeFrom.label}
+                          <ChevronRight size={14} aria-hidden />
+                        </Link>
+                      </Button>
+                    ) : null}
                   </span>
                 ) : undefined
               }
