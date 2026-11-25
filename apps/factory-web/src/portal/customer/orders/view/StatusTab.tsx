@@ -457,7 +457,7 @@ function OrderFiles({ model, record, actions }: { model: OrderRecordViewModel; r
       headingLevel={2}
       headerAction={
         <Button asChild size="sm" variant="quiet">
-          <a href={recordHref(model.prefix, record.order.id, 'documents')}>{t('orderFiles.all', { count: files.count })}</a>
+          <a href={recordHref(model.prefix, record.order.id, 'files')}>{t('orderFiles.all', { count: files.count })}</a>
         </Button>
       }
     >

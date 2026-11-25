@@ -134,14 +134,14 @@ function quality(over: Partial<ProductionQuality> = {}): ProductionQuality {
 
 function betaRecord(): OrderRecord {
   // The design record ships to another made-up customer: Brand Beta's own address here (the tab draws the ship-to).
-  return orderRecord({ number: BRAND_BETA.numbers.order, yourNumber: customerNumberOf('ORDER', 4), customerRef: BRAND_BETA.customerRef, status: 'IN_PRODUCTION', shipTo: { name: `${BRAND_BETA.legalName} — Lager`, line1: BRAND_BETA.address.line1, postalCode: BRAND_BETA.address.postalCode, city: BRAND_BETA.address.city, country: BRAND_BETA.address.country } })
+  return orderRecord({ yourNumber: customerNumberOf('ORDER', 4), customerRef: BRAND_BETA.customerRef, status: 'IN_PRODUCTION', shipTo: { name: `${BRAND_BETA.legalName} — Lager`, line1: BRAND_BETA.address.line1, postalCode: BRAND_BETA.address.postalCode, city: BRAND_BETA.address.city, country: BRAND_BETA.address.country } })
 }
 
 function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): OrderRecordViewModel {
   return {
     state: 'ready',
     record,
-    tab: 'status',
+    tab: 'overview',
     prefix: PREFIX,
     offlineSince: null,
     notice: null,

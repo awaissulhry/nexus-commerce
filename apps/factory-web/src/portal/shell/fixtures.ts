@@ -420,8 +420,9 @@ export const designScreen = defineDesignScreen<PortalFrameCaseBuilder>({
     {
       id: 'frame-narrow',
       label: 'Record-page rule: under 1280 px, "Messages (2 new)"',
-      model: caseOf((locale) => ({ shell: shell(locale, { band: orderBand(locale), path: '/orders/x' }), page: framePage(locale, 'stacked', { newCount: 2 }) })),
-      note: 'The body leads; the button counts the person’s own new messages and opens the conversation full width. Open at 1024 and phone 390.',
+      // pp-w1 (w1.1): the button sits in the band (the live frame puts it there; the design review's band carries it).
+      model: caseOf((locale) => ({ shell: shell(locale, { band: { ...orderBand(locale), thread: { count: 2, onClick: () => undefined } }, path: '/orders/x' }), page: framePage(locale, 'stacked', { newCount: 2 }) })),
+      note: 'The body leads; the band’s button counts the person’s own new messages and opens the conversation full width. Open at 1024 and phone 390.',
     },
     {
       id: 'frame-narrow-open',

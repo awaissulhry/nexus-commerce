@@ -248,7 +248,7 @@ function approveOf(locale: Locale): BulkApproveDialogModel {
 
 const BETA_RULES = (): ChangeRules =>
   rulesOf({
-    order: { ...rulesOf().order, number: BRAND_BETA.numbers.order, customerRef: BRAND_BETA.customerRef },
+    order: { ...rulesOf().order, customerRef: BRAND_BETA.customerRef },
     addresses: [],
     openRequestId: null,
     cancel: { possible: true, code: 'FREE', day: null, words: w('Free', 'Gratis') },

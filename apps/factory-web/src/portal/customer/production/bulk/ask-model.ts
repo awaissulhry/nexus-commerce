@@ -34,7 +34,7 @@ export function askUsHrefOf(prefix: string, row: Pick<ProductionRow, 'id' | 'urg
   if (!facts.urgencyOn || !facts.mayAsk || !urgency || urgency.code !== 'REGULAR' || urgency.locked || urgency.asked) return null
   const cut = cutStartedOf(row) // F-MS-105
   const full = facts.use !== null && facts.use.left <= 0
-  return cut || full ? recordHref(prefix, row.id, 'status', { ask: 'RUSH' }) : null
+  return cut || full ? recordHref(prefix, row.id, 'overview', { ask: 'RUSH' }) : null
 }
 
 // ── the review before Send ───────────────────────────────────────────────────────────────────────────────────────────────

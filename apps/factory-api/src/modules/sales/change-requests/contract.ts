@@ -174,7 +174,9 @@ export const requestFields = {
  * The customer's view of a request: `mine` when the person asked it. B-SA-046c: `followUp` — an accepted request CARRYING_OUT while
  * the order's Still to do holds a step of it, DONE once none (null: not accepted). A code only: no step, work order, name or count.
  */
-const partnerRequest = output({ ...requestFields, mine: z.boolean(), followUp: z.enum(REQUEST_FOLLOW_UPS).nullable() })
+// pp-s s.2 (O3-W1): the customer's request names its order by id and its PO — never the office's series (`orderNumber`, a count
+// across every customer). Left out of the PARTNER shape only: the office's shapes keep it (a key left out is stripped).
+const partnerRequest = output({ ...requestFields, mine: z.boolean(), followUp: z.enum(REQUEST_FOLLOW_UPS).nullable() }).omit({ orderNumber: true })
 
 const orderParams = input({ orderId: id() })
 const requestParams = input({ orderId: id(), requestId: id() })
@@ -186,7 +188,8 @@ export const rulesContract = defineContract({
   response: {
     200: output({
       asOf: instant(),
-      order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.enum(SALES_ORDER_STATUSES), requestedDate: day.nullable(), promiseDate: day.nullable(), currency: z.string(), version: z.number().int() }),
+      // pp-s s.2 (O3-W1): the order by id and its PO, no office series.
+      order: output({ id: id(), customerRef: z.string().nullable(), status: z.enum(SALES_ORDER_STATUSES), requestedDate: day.nullable(), promiseDate: day.nullable(), currency: z.string(), version: z.number().int() }),
       /** May a change be asked at all; may the whole order be asked to be cancelled. */
       change: verdict,
       cancel: verdict,
@@ -280,7 +283,7 @@ export const impactContract = defineContract({
   response: {
     200: output({
       asOf: instant(),
-      order: output({ id: id(), number: z.string(), customerRef: z.string().nullable() }),
+      order: output({ id: id(), customerRef: z.string().nullable() }), // pp-s s.2 (O3-W1): no office series
       impact: askImpact,
       cancelFee: cancelFee.optional(),
     }),
