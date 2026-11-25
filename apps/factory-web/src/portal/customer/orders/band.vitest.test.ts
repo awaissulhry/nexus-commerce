@@ -229,6 +229,13 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).not.toMatch(/\.nds-detailhdr-meta \{\s*order: 1;\s*flex: 1 1 0;/)
   })
 
+  // pp-fx5 (walk W-14): at 1440 with the conversation hidden, "Messages (2 new)" pushed "Made from your request #1 ›" under the reference
+  // although 196 px stood free — the DS caps a dense band's pills at half the title's room. From 1280 px they take the room they need.
+  it('W-14: from 1280 px the band’s pills take the room they need (no half-room cap), down to their widest one — the band keeps one row', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.fw-pband \.nds-detailhdr\.dense \.nds-detailhdr-meta \{\s*flex: 0 1 auto;\s*min-width: min-content;\s*max-width: none;\s*\}/)
+  })
+
   // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a
   // wrapping COLUMN, put "Free for suppliers…" in a second column off the screen; the band's tab row sat 6 px past the edge.
   it('W-15: at 375 the foot is one column (no wrap into a second column) and a band’s tab row scrolls inside itself', () => {

@@ -239,6 +239,17 @@
   gap: var(--nds-space-8);
 }
 
+/* pp-fx5 (walk W-14): at 1440 the band is ONE row — "Messages (2 new)" (the conversation hidden) pushed "Made from your request #1 ›"
+   under the reference although 196 px stood free: the DS caps a dense band's identity pills at half the title's room. From 1280 px
+   the portal band's pills take the room they need, down to their widest one, before the title shrinks. */
+@media (min-width: 1280px) {
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
+    flex: 0 1 auto;
+    min-width: min-content;
+    max-width: none;
+  }
+}
+
 .fw-plive {
   font-size: var(--nds-font-size-xs);
   color: var(--nds-warning-text);
