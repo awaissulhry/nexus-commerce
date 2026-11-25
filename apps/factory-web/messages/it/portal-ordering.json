@@ -42,68 +42,15 @@
   "head": {
     "title": "Dati dell'ordine",
     "intro": "Quello che ci serve per gestire la richiesta. Ogni campo si salva quando lo lasciate.",
-    "ref": "Il vostro numero d'ordine",
-    "refHint": "Il vostro numero per questo ordine: lo stampiamo su ogni documento.",
-    "shipTo": "Consegna a",
-    "shipToChoose": "Scegli un indirizzo di consegna",
-    "shipToHint": "Indirizzi verificati da noi. Qui potete aggiungerne uno nuovo.",
-    "shipToWaiting": "Verifichiamo questo nuovo indirizzo prima della prima consegna. Potete comunque inviare la richiesta: lo verifichiamo quando confermiamo.",
-    "shipToGone": "Questo indirizzo non è più in uso: sceglietene un altro.",
-    "shipToNone": "Non avete ancora un indirizzo di consegna: aggiungetene uno.",
-    "default": "predefinito",
-    "waiting": "in attesa della nostra verifica",
-    "archived": "non più in uso",
-    "addAddress": "Aggiungi un nuovo indirizzo",
     "addAddressAdmin": "Solo il vostro amministratore aggiunge indirizzi di consegna: chiedete a {names}.",
-    "addAddressAdminNone": "Solo il vostro amministratore aggiunge indirizzi di consegna.",
-    "date": "Data di consegna richiesta",
-    "dateHint": "Confermiamo la data quando confermiamo la richiesta.",
-    "note": "Nota per noi",
-    "noteHint": "Quello che dobbiamo sapere su questo ordine.",
-    "problem": {
-      "refLong": "Al massimo 100 caratteri.",
-      "noteLong": "Al massimo 4.000 caratteri.",
-      "datePast": "Scegliete oggi o un giorno successivo."
-    }
+    "addAddressAdminNone": "Solo il vostro amministratore aggiunge indirizzi di consegna."
   },
   "lines": {
     "title_one": "Righe ({count})",
     "title_other": "Righe ({count})",
     "addStyles": "Aggiungi modelli",
-    "empty": "Ancora nessuna riga.",
-    "emptyBody": "Aggiungete un modello, riordinate un ordine passato o caricate un foglio.",
-    "lineTitle": "Riga {seq}: {title}",
-    "fromOwn": "dal vostro ordine {seq}",
-    "fromOwnRef": "dal vostro ordine {seq} (vostro numero {ref})",
-    "fromDay": "dal vostro ordine del {day}",
-    "fromDayRef": "dal vostro ordine del {day} (vostro numero {ref})",
-    "colour": "Colore",
-    "colourGone": "{colour} (fuori produzione)",
-    "menu": "Altro per la riga {seq}",
-    "remove": "Togli la riga",
-    "gridCaption": "Pezzi per taglia di {title}, {colour}",
-    "note": "Il vostro codice o una nota",
-    "noteHint": "Si salva con la riga; la vediamo nella richiesta.",
-    "pieces": "Pezzi",
     "unitPrice": "Prezzo unitario",
-    "amount": "Importo riga",
-    "held": {
-      "empty": "Una riga chiede almeno un pezzo: scrivete le taglie o togliete la riga."
-    },
-    "dropSize": "Lascia fuori la taglia {size}"
-  },
-  "size": {
-    "caption": "Pezzi per taglia",
-    "colour": "Colore",
-    "total": "Totale",
-    "cellName": "{colour}, taglia {size}",
-    "notOffered": "non offerta",
-    "empty": "Nessuna taglia.",
-    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
-    "notWhole": "{cell}: solo pezzi interi, da 0 a {max}.",
-    "cutToMax": "{cell}: ridotto a {max}.",
-    "pasted": "{applied} incollati, {skipped} lasciati fuori.",
-    "issues": "Controllate queste taglie"
+    "amount": "Importo riga"
   },
   "reorder": {
     "title": "Riordina un ordine passato",
@@ -203,37 +150,11 @@
     "takePrices": "Prendi i prezzi di oggi",
     "problems_one": "{count} problema",
     "problems_other": "{count} problemi",
-    "showMe": "Mostrami",
     "sendKeys": "⌘ Invio invia da qui quando nulla lo trattiene."
   },
-  "problem": {
-    "thisStyle": "Questo modello",
-    "NO_LINES": "Aggiungete almeno una riga.",
-    "TOO_MANY_LINES": "Al massimo {max} righe per richiesta.",
-    "DATE_PAST": "La data di consegna richiesta è passata: scegliete oggi o un giorno successivo.",
-    "SHIP_TO_ARCHIVED": "L'indirizzo di consegna non è più in uso: sceglietene un altro.",
-    "STYLE_NOT_SOLD": "{style} non è più in vendita per voi: togliete la riga.",
-    "COLOUR_DISCONTINUED": "{colour} è fuori produzione: scegliete un altro colore.",
-    "SIZE_NOT_OFFERED": "La taglia {size} non è offerta per {style}.",
-    "NO_SIZES": "La riga non chiede nessuna taglia.",
-    "PRICE_CHANGED": "Prezzo ora {now} (era {was}).",
-    "PRICE_NEW": "Prezzo ora {now}: prendete i prezzi di oggi.",
-    "PRICE_ANY": "Il prezzo è cambiato: prendete i prezzi di oggi."
-  },
   "notice": {
-    "PRICE_CHANGED": "Prezzo ora {now} (era {was})",
-    "PRICE_ANY": "Il prezzo è cambiato da quell'ordine",
-    "REVISION_CHANGED": "Ora prodotto a una revisione più recente del modello",
-    "SIZES_DROPPED": "Taglie non più offerte, lasciate fuori: {sizes}",
-    "SIZES_DROPPED_SOME": "Alcune taglie non sono più offerte e sono state lasciate fuori",
-    "COLOUR_DISCONTINUED": "{colour} è fuori produzione — scegliete un altro colore",
-    "STYLE_NOT_SOLD": "{style} non è più in vendita",
-    "MADE_TO_MEASURE": "Un capo su misura non si riordina da qui: chiedetecelo",
-    "NO_SIZES_LEFT": "Nessuna delle sue taglie è ancora offerta",
     "removed": "Riga {seq} tolta: {style}, {colour}.",
-    "back": "{style}, {colour} è di nuovo nella bozza al prezzo di oggi.",
-    "undo": "Annulla",
-    "hide": "Nascondi"
+    "back": "{style}, {colour} è di nuovo nella bozza al prezzo di oggi."
   },
   "done": {
     "added_one": "{count} riga aggiunta alla bozza.",
@@ -262,9 +183,7 @@
     "body": "È stata inviata o eliminata, forse da un collega. Iniziate un nuovo ordine o guardate negli Ordini."
   },
   "draft": {
-    "failed": "Non è stato possibile leggere questa bozza.",
-    "stale": "Questa bozza è cambiata altrove (un collega, un'altra scheda). Quello che avete scritto è ancora qui.",
-    "reload": "Rileggila"
+    "failed": "Non è stato possibile leggere questa bozza."
   },
   "address": {
     "title": "Nuovo indirizzo di consegna",
@@ -531,49 +450,13 @@
   "draftPage": {
     "title": "Bozza d'ordine",
     "titleOf": "Bozza d'ordine · {title}",
-    "untitled": "Bozza senza titolo",
     "back": "Nuovo ordine",
-    "shared": "La fabbrica può leggere questa bozza. Il lavoro parte solo quando la inviate.",
-    "saved": "Salvata alle {time}",
-    "savedBy": "Salvata alle {time} da {name}",
-    "version": "v{n}",
-    "changedBy": "Modificata da {name} poco fa.",
     "send": "Invia alla fabbrica",
     "sendHeld": "Solo chi può ordinare la invia: {names}.",
     "sendHeldNone": "Solo chi può ordinare la invia: chiedete al vostro amministratore.",
     "discard": "Elimina…",
     "discardHeld": "La elimina solo il collega che ha iniziato questa bozza o chi può inviare ordini.",
-    "checklist": "Cosa contiene la bozza",
-    "part": {
-      "NEED": "Cosa vi serve",
-      "LOGOS": "Loghi",
-      "REFERENCES": "Riferimenti",
-      "PEOPLE": "Persone e taglie",
-      "DATE": "Data e consegna",
-      "PRICE": "Il vostro prezzo",
-      "NOTES": "Note"
-    },
-    "state": {
-      "READY": "Pronto",
-      "LATER": "Lo mandiamo dopo",
-      "MISSING": "Manca",
-      "OPTIONAL": "Facoltativo"
-    },
-    "chip": "{n}. {part}: {state}",
-    "addLine": "Aggiungi una riga",
     "reorderHeld": "Il vostro accesso non mostra gli ordini.",
-    "people": {
-      "grid": "Riga {seq}: griglia taglie, {pieces} pezzi",
-      "none": "Riga {seq}: ancora nessun pezzo",
-      "empty": "Prima aggiungete una riga: qui compaiono le sue taglie.",
-      "total": "Riga {seq}: {pieces} pezzi · taglie dopo",
-      "totalSizes": "Riga {seq}: {pieces} pezzi nelle taglie",
-      "noTotal": "Riga {seq}: manca ancora il totale",
-      "byPerson_one": "Riga {seq}, per persona: {count} persona",
-      "byPerson_other": "Riga {seq}, per persona: {count} persone",
-      "inSheet": "Riga {seq}, per persona: nella scheda allegata",
-      "noOne": "Riga {seq}, per persona: ancora nessuno indicato"
-    },
     "price": {
       "line": "Riga",
       "ours": "Il nostro prezzo di listino",
@@ -591,162 +474,25 @@
     "acceptedNoOrders": "La fabbrica ne ha fatto un ordine: lo segue il vostro buyer.",
     "refusedNoOrders": "La fabbrica non ha accettato questa richiesta: il motivo lo ha il vostro buyer.",
     "sentNoOrders": "Questa bozza è stata inviata alla fabbrica: la segue il vostro buyer.",
-    "problems_one": "{count} problema da sistemare prima di inviare",
-    "problems_other": "{count} problemi da sistemare prima di inviare",
     "keySend": "Invia alla fabbrica",
     "keyThread": "Mostra o nascondi la conversazione",
     "files": {
-      "logoHint": "I file vettoriali (AI, EPS, PDF) stampano meglio; per iniziare va bene anche una foto.",
-      "addLogos": "Aggiungi loghi: trascinateli qui o sceglieteli",
-      "addReferences": "Aggiungi foto o PDF: trascinateli qui o sceglieteli",
-      "addSheets": "Aggiungi una scheda misure: trascinatela qui o sceglietela",
-      "onDraft": "sulla bozza",
-      "onLine": "sulla riga {seq}",
       "kind": {
         "vector": "vettoriale",
         "picture": "foto",
         "document": "documento"
       },
-      "scanning": "in attesa del controllo antivirus: arriva alla fabbrica quando è pulito",
-      "uploading": "Caricamento…",
-      "failed": "Non caricato: {reason}",
-      "full": "Questa bozza ha già 50 file: toglietene uno o scriveteci nei messaggi per il resto.",
-      "closed": "Per ora qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica citando «{draft}». Li aggiungiamo alla richiesta quando la inviate.",
-      "sheetsClosed": "Schede misure: inviatele per e-mail al vostro referente in fabbrica citando «{draft}».",
-      "notNow": "In questo momento qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica.",
-      "later": "Li mandiamo dopo",
-      "noLogos": "Ancora nessun logo.",
-      "noReferences": "Ancora nessun riferimento.",
-      "noSheets": "Ancora nessuna scheda misure.",
-      "sheetsTitle": "Schede misure",
-      "sheetsPrivacy": "Le schede misure sono dati personali: in fabbrica le aprono solo le persone che gestiscono le misure."
+      "notNow": "In questo momento qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica."
     },
     "start": {
       "words": "Scrivetelo semplicemente a parole",
       "describe": "Descrivetelo",
       "describeHint": "Con parole vostre: cosa vi serve, i colori, quanti pezzi — o una riga per persona. La fabbrica la legge dal primo salvataggio."
     },
-    "kind": {
-      "CATALOGUE": "Dal catalogo",
-      "DESCRIBED": "Descritto da voi",
-      "MADE_TO_MEASURE": "Su misura"
-    },
     "addDescribed": "Descrivetelo",
     "addMtm": "Su misura",
-    "mtmOff": "Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.",
     "line": {
-      "untitled": "Riga senza titolo",
-      "byPerson": "Per persona",
-      "people_one": "{count} persona",
-      "people_other": "{count} persone",
-      "inSheet": "Persone: nella scheda allegata",
-      "noPeople": "ancora nessuno indicato",
-      "total": "{pieces} pezzi",
-      "sizesLater": "taglie dopo",
-      "inSizes": "nelle taglie: {sizes}",
-      "noTotal": "Totale non ancora indicato",
-      "colours": "Colori: {colours}",
-      "ownStyle": "Il vostro modello {style}",
-      "madeFrom": "Dal modello {style}",
-      "change": "Modifica…",
-      "removed": "Riga {seq} tolta.",
-      "menu": "Altro per la riga {seq}"
-    },
-    "customLine": {
-      "titleDescribed": "Descrivete cosa vi serve",
-      "titleMtm": "Una riga su misura",
-      "titleChange": "Riga {seq} · {kind}",
-      "description": "Cosa vi serve",
-      "descriptionHint": "Con parole vostre: il capo, il tessuto, i loghi, tutto quello che dobbiamo sapere (fino a 2000 caratteri).",
-      "descriptionMtm": "Cosa vi serve (facoltativo)",
-      "colours": "Colori a parole (facoltativo)",
-      "coloursHint": "Per esempio «rosso e bianco, come il riferimento».",
-      "style": "Il vostro modello (facoltativo)",
-      "styleHint": "Uno dei modelli del vostro marchio, se nasce da uno di quelli.",
-      "styleMtm": "Modello (facoltativo)",
-      "styleMtmHint": "Il modello da cui nasce, se lo conoscete.",
-      "noStyle": "Nessuno",
-      "stylesLoading": "Leggiamo i vostri modelli…",
-      "stylesFailed": "Non siamo riusciti a leggere i vostri modelli: potete salvare la riga senza.",
-      "how": "Quanti",
-      "howTotal": "Un totale (le taglie possono seguire)",
-      "howPeople": "Una riga per persona",
-      "total": "Pezzi in tutto",
-      "totalHint": "Lasciatelo vuoto se non lo sapete ancora: ve lo chiediamo prima dell'invio.",
-      "garment": "Tipo di capo",
-      "garmentChoose": "Scegliete il tipo di capo",
-      "mtmPeople": "Il su misura è sempre una riga per persona: indicate le persone, o allegate la loro scheda misure, in Persone e taglie.",
-      "peopleHint": "Indicate le persone, o allegate la loro scheda misure, in Persone e taglie.",
-      "note": "Nota sulla riga (facoltativa)",
-      "add": "Aggiungi la riga",
-      "save": "Salva la riga",
-      "problem": {
-        "description": "Dite con parole vostre cosa vi serve.",
-        "descriptionLong": "Al massimo 2000 caratteri.",
-        "coloursLong": "Al massimo 200 caratteri.",
-        "total": "Un numero intero di pezzi, da 1 a 100000.",
-        "garment": "Scegliete il tipo di capo.",
-        "noteLong": "Al massimo 1000 caratteri."
-      }
-    },
-    "roster": {
-      "privacy": "Nomi e misure dei vostri piloti e del vostro team sono dati personali: li usiamo solo per realizzare questo ordine, e in fabbrica le schede misure le aprono solo le persone che si occupano delle misure.",
-      "title": "Riga {seq} · {kind} · {title} — una riga per persona",
-      "add": "Aggiungi una persona",
-      "col": {
-        "name": "Nome",
-        "number": "Numero",
-        "how": "Come riceviamo la taglia",
-        "what": "Cosa c'è",
-        "more": "Altro"
-      },
-      "empty": "Ancora nessuno indicato: aggiungete le persone, o allegate la loro scheda misure a questa riga.",
-      "inSheet": "Persone: nella scheda allegata",
-      "sheetOnLine": "Scheda misure su questa riga: {names}",
-      "attach": "Allegate la loro scheda misure a questa riga: trascinatela qui o sceglietela",
-      "attachClosed": "Schede misure: inviatele per e-mail al vostro contatto in fabbrica, citando «{draft}» e la riga {seq}.",
-      "sheetGone": "una scheda non più sulla bozza",
-      "personMenu": "Altro per {name}",
-      "change": "Modifica…",
-      "remove": "Togli"
-    },
-    "measure": {
-      "SIZE": "Taglia",
-      "SHEET": "Scheda misure",
-      "LATER": "Le mandiamo dopo"
-    },
-    "person": {
-      "titleAdd": "Aggiungete una persona alla riga {seq}",
-      "titleChange": "{name} · riga {seq}",
-      "name": "Nome",
-      "nameHint": "Il nome con cui distinguiamo i suoi capi.",
-      "number": "Numero (facoltativo)",
-      "numberHint": "Un numero di gara o di maglia, fino a 10 caratteri.",
-      "how": "Come riceviamo la taglia",
-      "size": "Taglia",
-      "sizeHint": "Come nella tabella taglie del capo.",
-      "sheet": "Scheda misure",
-      "sheetChoose": "Scegliete una scheda di questa bozza",
-      "noSheets": "Su questa bozza non c'è ancora una scheda misure: aggiungetela prima in Persone e taglie, o scegliete un altro modo.",
-      "later": "Le misure ve le mandiamo dopo.",
-      "note": "Nota (facoltativa)",
-      "add": "Aggiungi la persona",
-      "save": "Salva",
-      "problem": {
-        "name": "Un nome va da 1 a 120 caratteri.",
-        "number": "Al massimo 10 caratteri.",
-        "size": "Indicate la taglia (fino a 40 caratteri).",
-        "sheet": "Scegliete la scheda misure con le misure.",
-        "note": "Al massimo 1000 caratteri."
-      }
-    },
-    "problem": {
-      "NO_TOTAL": "Indicate quanti pezzi in tutto (le taglie possono seguire).",
-      "SIZES_NOT_TOTAL": "Le taglie fanno {sum} pezzi, il totale dice {total}.",
-      "SIZES_NOT_TOTAL_ANY": "Le taglie e il totale non coincidono.",
-      "NO_PEOPLE": "Indicate le persone, o allegate la loro scheda misure.",
-      "GARMENT_TYPE_GONE": "Il su misura {type} non è più offerto: scegliete un altro tipo di capo.",
-      "GARMENT_TYPE_GONE_ANY": "Questo tipo di capo non si fa più su misura: sceglietene un altro."
+      "removed": "Riga {seq} tolta."
     }
   }
 }

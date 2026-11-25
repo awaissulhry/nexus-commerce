@@ -1,6 +1,7 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { NAME_MAX, type Tone } from '../../shared/account/model'
-import type { CompanyData, DeliveryAddress, PartyAddressLines } from './api'
+import type { CompanyData, DeliveryAddress } from './api'
+import { addressLine } from '../../../lib/address-line'
 
 /**
  * The customer's Account page, the pure part (B-W2b-196, SCR-188; design portal.customer.account): what each section shows
@@ -66,11 +67,9 @@ export interface AddressRow {
 
 export const ADDRESS_TONE: Readonly<Record<AddressState, Tone>> = { APPROVED: 'success', OURS: 'success', WAITING: 'warning', REFUSED: 'danger', REMOVED: 'neutral' }
 
-/** The address on one line ("Via Esempio 1, 20100 Milano (MI), IT"). */
-export function addressLine(address: Pick<PartyAddressLines, 'line1' | 'line2' | 'postalCode' | 'city' | 'province' | 'country'>): string {
-  const city = [address.postalCode, address.city].filter(Boolean).join(' ') + (address.province ? ` (${address.province})` : '')
-  return [address.line1, address.line2, city, address.country].filter((part) => part && part.trim() !== '').join(', ')
-}
+/** The address on one line ("Via Esempio 1, 20100 Milano (MI), IT"): od-w1.1 — it lives in src/lib (the draft order names its ship-to
+ * with it in both doors); the account keeps its name. */
+export { addressLine }
 
 export function addressState(row: Pick<DeliveryAddress, 'status' | 'approval'>): AddressState {
   if (row.approval?.status === 'REFUSED') return 'REFUSED'

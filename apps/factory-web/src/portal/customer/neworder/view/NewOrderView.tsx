@@ -1,41 +1,38 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, ClipboardList, Eye, FileSpreadsheet, History, Lock, RefreshCw, Shirt, WifiOff } from 'lucide-react'
-import { Banner, Card, Field, PressableRow, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { AlertTriangle, ClipboardList, FileSpreadsheet, History, Lock, Shirt, WifiOff } from 'lucide-react'
+import { Banner, Card, PressableRow, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
-import { SaveStatus, type SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
-import { Button, Input, Select } from '@nexus/ui/primitives' // follow-up 22: the start's ways are Cards that are buttons, no RadioCard
-import { DateField, Textarea, useDsWords } from '../../../../lib/i18n/ds-parts'
+import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
+import { Button } from '@nexus/ui/primitives' // follow-up 22: the start's ways are Cards that are buttons, no RadioCard
+import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { DraftRecord, DraftRow, RequestStatus } from '../api'
 import type { NewOrderPhase } from '../band'
-import { draftRowWords, problemPlace, problemWords, requestedHref, shipToOptions, WAYS, newOrderHref, type HeaderDraft, type HeaderField, type Way } from '../model'
+import { draftRowWords, requestedHref, WAYS, newOrderHref, type HeaderDraft, type HeaderField, type Way } from '../model'
 import { useOrderingWords } from '../words'
 import { DiscardDialog, NewAddressDialog, StylePickerDialog, type AddressDialogActions, type AddressDialogModel, type DiscardModel, type PickerActions, type PickerModel } from './Dialogs'
-import { LinesSection, type LinesActions } from './LinesSection'
 import { Loading, ReadFailed } from './parts'
 import { ReorderPanel, type ReorderActions, type ReorderModel } from './ReorderPanel'
 import { UploadPanel, type UploadActions, type UploadModel } from './UploadPanel'
 // ---- F-CP-150 (customer page plan C5, D9–D11; 12 §2; picture 22): the draft order page — the portal record frame with the draft's
-// conversation docked, the checklist strip, the seven part cards, ONE banner, the keys in one information icon at the foot.
-import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'
+// conversation docked; od-w1.1: its body is the ONE draft order's shared part (src/lib/order-draft), the portal adds its own cards.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalDockWidth, PortalFrameMode } from '../../../shell/record/model'
 import { draftKeys } from '../band'
-import { closedOf, draftBannerOf, draftChips, reorderHeldKey, savedWords, type DraftChip, type DraftPart } from '../model'
-import { DraftChecklist, PartHeading } from './DraftChecklist'
+import { closedOf, draftChips, reorderHeldKey, type DraftChip } from '../model'
+import { draftViewOf } from '../../../../lib/order-draft/model'
+import { useDraftWords } from '../../../../lib/order-draft/words'
+import { DraftPage } from '../../../../lib/order-draft/view/DraftPage'
+import { PartHeading } from '../../../../lib/order-draft/view/parts'
+import type { DraftFilesActions, UploadRow } from '../../../../lib/order-draft/view/DraftFiles'
+import { CustomLineDialog, type CustomLineDialogActions, type CustomLineDialogModel, type LinesActions } from '../../../../lib/order-draft/view/LinesSection'
+import { PersonDialog, type PeopleRosterActions, type PersonDialogActions, type PersonDialogModel } from '../../../../lib/order-draft/view/PeopleRoster'
 // ---- end F-CP-150
-// ---- F-CP-151 (B-CP-072; D14): the draft's files cards — logos, references, measurement sheets; the e-mail way on live.
-import type { DraftFilePart } from '../api'
-import { draftFilesOf, draftMailName, filesAddHeld, LATER_PART_OF, laterToggleOf, uploadsOpenOf } from '../model'
-import { DraftFilesCard, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
-// ---- end F-CP-151
 import { wordsHref } from '../request-model' // F-CP-152: "Just write it in words"
 // ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6): lines of every kind, the People and sizes roster, "Your price".
 import { NotebookPen, Ruler } from 'lucide-react'
 import { mtmHeldKey, ownTotalOf, priceRowsOf, yourPriceAccess, type AddKind } from '../model'
-import { CustomLineDialog, type CustomLineDialogActions, type CustomLineDialogModel } from './LinesSection'
-import { PeopleRoster, PersonDialog, type PeopleRosterActions, type PersonDialogActions, type PersonDialogModel } from './PeopleRoster'
 import { YourPriceCell } from './parts'
 // ---- end F-CP-154
 
@@ -157,6 +154,7 @@ const WAY_ICON: Readonly<Record<Way, ReactNode>> = { pick: <Shirt size={18} aria
 export function NewOrderView({ model, actions, children }: { model: NewOrderViewModel; actions?: NewOrderActions; children?: ReactNode }) {
   const words = useOrderingWords()
   const { t } = words
+  const dw = useDraftWords()
   const ds = useDsWords()
   const offline = model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: words.time(model.offlineSince) })} /> : null
   const seesOrders = model.seesOrders ?? true
@@ -258,17 +256,18 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
     )
   }
 
-  // ── F-CP-150: the draft order page ──────────────────────────────────────────────────────────────────────────────────────
+  // ── F-CP-150: the draft order page — od-w1.1: the ONE draft order's body is the shared part (src/lib/order-draft), drawn inside the
+  // portal's record frame; the portal adds its ways in, its panels, its dialogs and its own price card.
   const record = model.record
   const request = record.request
   const chips = draftChips(record)
-  const chip = (part: DraftPart): DraftChip => chips.find((entry) => entry.part === part)!
   const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
   // F-CP-154: "Describe it" and "Made to measure" first (made to measure held with words only where the office switched it off).
   const mtmHeld = mtmHeldKey(request)
+  const mtmWords = mtmHeld ? dw.t(mtmHeld) : null // od-w1.1: the draft part's words
   const addKinds: MenuItemDef[] = [
     { id: 'described', label: t('draftPage.addDescribed'), icon: <NotebookPen size={14} aria-hidden />, disabled: model.writeHeld !== null, description: model.writeHeld ?? undefined, onSelect: () => actions?.onAddKind?.('described') },
-    { id: 'mtm', label: t('draftPage.addMtm'), icon: <Ruler size={14} aria-hidden />, disabled: (model.writeHeld ?? (mtmHeld ? t(mtmHeld) : null)) !== null, description: model.writeHeld ?? (mtmHeld ? t(mtmHeld) : undefined), onSelect: () => actions?.onAddKind?.('mtm') },
+    { id: 'mtm', label: t('draftPage.addMtm'), icon: <Ruler size={14} aria-hidden />, disabled: (model.writeHeld ?? mtmWords) !== null, description: model.writeHeld ?? mtmWords ?? undefined, onSelect: () => actions?.onAddKind?.('mtm') },
   ]
   const addLine: MenuItemDef[] = [
     ...addKinds,
@@ -277,140 +276,65 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
       return { id: way, label: t(`start.way.${way}`), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onWay?.(way) }
     }),
   ]
-  const kind = draftBannerOf({ offline: model.offlineSince !== null, stale: model.stale, refused: model.problem !== null, notice: model.notice !== null, problems: request.problems.length })
-  const kit = { t, price: (value: string | null | undefined) => words.price(value, request.currency), locale: words.locale }
-  // F-CP-151: each part's files, where they may go up (else the e-mail way), the cap and "Sending later".
-  const files = draftFilesOf(request)
-  const capKey = filesAddHeld(request, { preview: false, offline: false, busy: false })
-  const filesModel = (part: DraftFilePart): DraftFilesModel => {
-    const later = laterToggleOf(request, LATER_PART_OF[part])
-    return {
-      part,
-      files: part === 'LOGO' ? files.logos : part === 'REFERENCE' ? files.references : files.sheets,
-      lines: request.lines,
-      uploading: model.uploads ?? [],
-      open: uploadsOpenOf(request),
-      addHeld: model.writeHeld ?? (capKey ? t(capKey) : null),
-      removeHeld: model.writeHeld,
-      later: later ? { on: later.on, held: model.writeHeld } : null,
-      draftName: draftMailName(request, t),
-    }
-  }
   return (
     <PortalRecordFrame thread={children ?? null} threadLabel={t('draftPage.thread')} design={model.frame}>
-      <div
-        className="fw-pno fw-pno-draft"
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault()
-            if (!model.sendHeld) actions?.onSend?.()
-          }
+      <DraftPage
+        kind="portal"
+        model={{
+          draft: draftViewOf(record),
+          today: model.today,
+          header: model.header,
+          headerErrors: model.headerErrors,
+          save: model.save,
+          cells: model.cells,
+          notes: model.notes,
+          saving: model.saving,
+          writeHeld: model.writeHeld,
+          addAddressHeld: model.addAddressHeld,
+          problem: model.problem ? t(model.problem) : null,
+          stale: model.stale,
+          staleBy: model.staleBy ?? null,
+          notice: model.notice,
+          showProblems: model.showProblems,
+          offlineSince: model.offlineSince,
+          chips,
+          addLine,
+          uploads: model.uploads ?? [],
+          keys: draftKeys(words),
         }}
-      >
-        {/* ONE banner, by weight. */}
-        {kind === 'offline' ? offline : null}
-        {kind === 'stale' ? (
-          <Banner
-            tone="warning"
-            title={t('draft.stale')}
-            action={
-              <Button size="sm" onClick={() => actions?.onReload?.()}>
-                <RefreshCw size={14} aria-hidden /> {t('draft.reload')}
-              </Button>
-            }
-          >
-            {model.staleBy ? <p>{t('draftPage.changedBy', { name: model.staleBy })}</p> : null}
-          </Banner>
-        ) : null}
-        {kind === 'refused' && model.problem ? <Banner tone="danger" title={t(model.problem)} /> : null}
-        {kind === 'notice' && model.notice ? (
-          <Banner
-            tone="success"
-            title={model.notice.lines[0]}
-            action={
-              <span className="fw-pno-buttons">
-                {model.notice.undo ? (
-                  <Button size="sm" variant="secondary" heldReason={model.writeHeld} onClick={() => actions?.onUndo?.()}>
-                    {t('notice.undo')}
-                  </Button>
-                ) : null}
-                <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-                  {t('notice.hide')}
-                </Button>
-              </span>
-            }
-          >
-            {model.notice.lines.length > 1 ? (
-              <ul className="fw-pno-notes">
-                {model.notice.lines.slice(1).map((line, index) => (
-                  <li key={index}>{line}</li>
-                ))}
-              </ul>
-            ) : null}
-          </Banner>
-        ) : null}
-        {kind === 'problems' ? (
-          <Banner
-            tone="warning"
-            icon={<AlertTriangle size={16} aria-hidden />}
-            title={t('draftPage.problems', { count: request.problems.length })}
-            action={
-              <Button size="sm" variant="secondary" onClick={() => actions?.onShowMe?.()}>
-                {t('summary.showMe')}
-              </Button>
-            }
-          >
-            {model.showProblems ? (
-              <ul className="fw-pno-notes">
-                {request.problems.map((problem, index) => (
-                  <li key={index} className="fw-pno-note is-danger">
-                    <a href={`#${problemPlace(problem)}`}>{problemWords(problem, request.lines, kit, request.customLines ?? [])}</a>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </Banner>
-        ) : null}
-        <div className="fw-pno-draftmeta">
-          <span className="fw-pno-shared">
-            <Eye size={14} aria-hidden /> {t('draftPage.shared')}
-          </span>
-          {model.save.kind === 'saving' || model.save.kind === 'failed' ? (
-            <SaveStatus state={model.save} formatTime={words.time} labels={ds.saveStatus} onRetry={actions?.onRetrySave} retryHeld={model.writeHeld} />
-          ) : (
-            <span className="fw-pno-quiet" role="status">
-              {savedWords(request, t, words.time)}
-            </span>
-          )}
-        </div>
-        <DraftChecklist chips={chips} onChip={actions?.onChip} />
-        {model.way === 'reorder' && model.reorder ? <ReorderPanel model={model.reorder} actions={actions?.reorder} /> : null}
-        {model.way === 'upload' && model.upload ? <UploadPanel model={model.upload} actions={actions?.upload} /> : null}
-        <Card padded>
-          <LinesSection model={{ record, cells: model.cells, notes: model.notes, saving: model.saving, writeHeld: model.writeHeld, chip: chip('NEED'), addLine }} actions={actions?.lines} />
-        </Card>
-        {/* F-CP-151: 2 Logos beside 3 References; the measurement sheets inside 4 People and sizes. */}
-        <div className="fw-pno-pair">
-          <DraftFilesCard chip={chip('LOGOS')} model={filesModel('LOGO')} actions={actions?.files} />
-          <DraftFilesCard chip={chip('REFERENCES')} model={filesModel('REFERENCE')} actions={actions?.files} />
-        </div>
-        <PeopleCard chip={chip('PEOPLE')} record={record} sheets={filesModel('SHEET')} writeHeld={model.writeHeld} actions={{ ...actions?.files, ...actions?.people }} />
-        <div className="fw-pno-pair">
-          <DateCard model={model} actions={actions} chip={chip('DATE')} />
-          <NotesCard model={model} actions={actions} chip={chip('NOTES')} />
-        </div>
-        <PriceCard model={model} actions={actions} chip={chip('PRICE')} />
-        {/* review G3: the page's keys in ONE information icon at its foot, never as hints above the cards. */}
-        <div className="fw-pno-draftfoot">
-          <ListKeysInfo keys={draftKeys(words).map((entry) => ({ keys: entry.keys, does: entry.words }))} />
-        </div>
-      </div>
-      {model.dialogs.picker ? <StylePickerDialog model={model.dialogs.picker} actions={actions?.picker} /> : null}
-      {model.dialogs.address ? <NewAddressDialog model={model.dialogs.address} actions={actions?.address} /> : null}
-      {model.dialogs.discard ? <DiscardDialog model={model.dialogs.discard} onConfirm={actions?.discard?.onConfirm} onCancel={actions?.discard?.onCancel} /> : null}
-      {/* F-CP-154: a described or made-to-measure line's window; a person's window. */}
-      {model.dialogs.customLine ? <CustomLineDialog model={model.dialogs.customLine} actions={actions?.customLine} /> : null}
-      {model.dialogs.person ? <PersonDialog model={model.dialogs.person} actions={actions?.person} /> : null}
+        actions={{
+          onHeader: actions?.onHeader,
+          onHeaderLeave: actions?.onHeaderLeave,
+          onAddAddress: actions?.onAddAddress,
+          onShowMe: actions?.onShowMe,
+          onUndo: actions?.onUndo,
+          onDismissNotice: actions?.onDismissNotice,
+          onReload: actions?.onReload,
+          onRetrySave: actions?.onRetrySave,
+          onChip: actions?.onChip,
+          files: actions?.files,
+          lines: actions?.lines,
+          people: actions?.people,
+        }}
+        onSendKey={() => (model.sendHeld ? undefined : actions?.onSend?.())}
+        panels={
+          <>
+            {model.way === 'reorder' && model.reorder ? <ReorderPanel model={model.reorder} actions={actions?.reorder} /> : null}
+            {model.way === 'upload' && model.upload ? <UploadPanel model={model.upload} actions={actions?.upload} /> : null}
+          </>
+        }
+        cards={<PriceCard model={model} actions={actions} chip={chips.find((entry) => entry.part === 'PRICE')!} />}
+        dialogs={
+          <>
+            {model.dialogs.picker ? <StylePickerDialog model={model.dialogs.picker} actions={actions?.picker} /> : null}
+            {model.dialogs.address ? <NewAddressDialog model={model.dialogs.address} actions={actions?.address} /> : null}
+            {model.dialogs.discard ? <DiscardDialog model={model.dialogs.discard} onConfirm={actions?.discard?.onConfirm} onCancel={actions?.discard?.onCancel} /> : null}
+            {/* F-CP-154: a described or made-to-measure line's window; a person's window (their refusal in this page's words). */}
+            {model.dialogs.customLine ? <CustomLineDialog model={{ ...model.dialogs.customLine, failed: model.dialogs.customLine.failed ? t(model.dialogs.customLine.failed) : null }} actions={actions?.customLine} /> : null}
+            {model.dialogs.person ? <PersonDialog model={{ ...model.dialogs.person, failed: model.dialogs.person.failed ? t(model.dialogs.person.failed) : null }} actions={actions?.person} /> : null}
+          </>
+        }
+      />
     </PortalRecordFrame>
   )
 }
@@ -505,103 +429,7 @@ function WayCard({ id, icon, title, hint, held = false, busy, onStart }: { id: s
 }
 // ---- end follow-up 22
 
-// ── F-CP-150: the part cards ──────────────────────────────────────────────────────────────────────────────────────────────
-
-/**
- * 4 People and sizes: each line's pieces as the draft holds them, the privacy line (review G6), each by-person line's roster (name,
- * number, Size · Measurement sheet · Sending later; "People: in the attached sheet" when a sheet on the line stands for it — F-CP-154),
- * then the draft's measurement sheets.
- */
-function PeopleCard({ chip, record, sheets, writeHeld, actions }: { chip: DraftChip; record: DraftRecord; sheets: DraftFilesModel; writeHeld: string | null; actions?: PeopleRosterActions }) {
-  return (
-    <Card padded>
-      <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="part-people-title">
-        <PartHeading chip={chip} id="part-people-title" />
-        <PeopleRoster model={{ record, writeHeld, sheets }} actions={actions} />
-      </section>
-    </Card>
-  )
-}
-
-/** 5 Date and delivery: their PO, the date wanted, ship-to with "Add a new address" — each saved on leaving the field. */
-function DateCard({ model, actions, chip }: { model: NewOrderViewModel; actions?: NewOrderActions; chip: DraftChip }) {
-  const words = useOrderingWords()
-  const { t } = words
-  const record = model.record!
-  const options = shipToOptions(record.addresses, model.header.shipToAddressId || null)
-  const chosen = options.find((option) => option.id === model.header.shipToAddressId)
-  const error = (field: HeaderField) => (model.headerErrors[field] ? t(model.headerErrors[field]!) : undefined)
-  const held = model.writeHeld !== null
-  return (
-    <Card padded>
-      <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="head-title">
-        <PartHeading chip={chip} id="head-title" />
-        <div className="fw-pno-fields">
-          <Field label={t('head.date')} hint={t('head.dateHint')} error={error('requestedDate')}>
-            <DateField
-              value={model.header.requestedDate}
-              min={model.today}
-              clearable
-              disabled={held}
-              onChange={(value) => {
-                actions?.onHeader?.('requestedDate', value)
-                actions?.onHeaderLeave?.('requestedDate')
-              }}
-            />
-          </Field>
-          <Field label={t('head.ref')} hint={t('head.refHint')} error={error('customerRef')}>
-            <Input value={model.header.customerRef} maxLength={100} disabled={held} onChange={(event) => actions?.onHeader?.('customerRef', event.target.value)} onBlur={() => actions?.onHeaderLeave?.('customerRef')} />
-          </Field>
-          <div className="fw-pno-field-wide">
-            <Field
-              label={t('head.shipTo')}
-              hint={chosen?.state === 'WAITING' ? t('head.shipToWaiting') : chosen?.state === 'ARCHIVED' ? t('head.shipToGone') : options.length === 0 ? t('head.shipToNone') : t('head.shipToHint')}
-              error={error('shipToAddressId')}
-            >
-              <div className="fw-pno-shipto">
-                <Select
-                  value={model.header.shipToAddressId}
-                  disabled={held}
-                  onChange={(event) => {
-                    actions?.onHeader?.('shipToAddressId', event.target.value)
-                    actions?.onHeaderLeave?.('shipToAddressId')
-                  }}
-                >
-                  <option value="">{t('head.shipToChoose')}</option>
-                  {options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {[option.name, option.line].filter(Boolean).join(' — ')}
-                      {option.isDefault ? ` (${t('head.default')})` : option.state === 'WAITING' ? ` (${t('head.waiting')})` : option.state === 'ARCHIVED' ? ` (${t('head.archived')})` : ''}
-                    </option>
-                  ))}
-                </Select>
-                <Button variant="secondary" heldReason={model.addAddressHeld} onClick={() => actions?.onAddAddress?.()}>
-                  {t('head.addAddress')}
-                </Button>
-              </div>
-            </Field>
-          </div>
-        </div>
-      </section>
-    </Card>
-  )
-}
-
-/** 7 Notes: their note to us (saved on leaving the field). */
-function NotesCard({ model, actions, chip }: { model: NewOrderViewModel; actions?: NewOrderActions; chip: DraftChip }) {
-  const { t } = useOrderingWords()
-  const error = model.headerErrors.note ? t(model.headerErrors.note) : undefined
-  return (
-    <Card padded>
-      <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="part-notes-title">
-        <PartHeading chip={chip} id="part-notes-title" />
-        <Field label={t('head.note')} hint={t('head.noteHint')} error={error}>
-          <Textarea value={model.header.note} rows={4} maxLength={4000} disabled={model.writeHeld !== null} onChange={(event) => actions?.onHeader?.('note', event.target.value)} onBlur={() => actions?.onHeaderLeave?.('note')} />
-        </Field>
-      </section>
-    </Card>
-  )
-}
+// ── F-CP-150: the portal's own part card ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * 6 Your price: for a price holder (the customer's Buyer, Finance, Admin) every line by seq with its pieces, our list price beside it on
@@ -612,13 +440,14 @@ function NotesCard({ model, actions, chip }: { model: NewOrderViewModel; actions
  */
 function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions?: NewOrderActions; chip: DraftChip }) {
   const words = useOrderingWords()
+  const dw = useDraftWords() // od-w1.1: a line's name and the part's name are the draft part's words
   const { t } = words
   const record = model.record!
   const request = record.request
   const price = (value: string | null | undefined) => words.price(value, request.currency) ?? '—'
   // F-CP-154: the customer's own price per line, typed by a price holder while the draft may be written.
   const access = yourPriceAccess(record.seesPrices, request.status === 'DRAFT' ? model.writeHeld : t('held.notDraft'))
-  const rows = priceRowsOf(request, t, words.locale)
+  const rows = priceRowsOf(request, dw.t, words.locale)
   const typed = model.ownPrices ?? {}
   const own = ownTotalOf(rows, typed)
   return (
@@ -628,7 +457,7 @@ function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions
         {access !== 'none' ? (
           <>
             <SummaryTable
-              label={t('draftPage.part.PRICE')}
+              label={dw.t('draftPage.part.PRICE')}
               density="roomy"
               stackOnPhone
               columns={[t('draftPage.price.line'), t('summary.pieces'), t('draftPage.price.ours'), t('draftPage.price.yours')]}

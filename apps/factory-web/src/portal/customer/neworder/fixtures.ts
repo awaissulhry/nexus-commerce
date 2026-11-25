@@ -13,14 +13,14 @@ import { draftDiscardHeld, draftSendHeld, draftTitleOf } from './model'
 // ---- end F-CP-150
 // ---- F-CP-151 (B-CP-072; D14): the draft's files (made-up names; a line's file names its line by seq on the page).
 import type { DraftFile } from './api'
-import type { UploadRow } from './view/DraftFiles'
+import type { UploadRow } from '../../../lib/order-draft/view/DraftFiles'
 
 // ---- end F-CP-151
 // ---- F-CP-154 (B-CP-075, B-CP-076; picture 22): lines of every kind, the roster, "Your price", their windows (made-up riders).
 import { describedLine, kindsRecord, mtmLine, MTM_TYPES, RIDERS, SHEET_ON_MTM } from './design-data'
 import { customLineDraftOf, customLineProblems, EMPTY_PERSON, personProblems } from './model'
-import type { CustomLineDialogModel } from './view/LinesSection'
-import type { PersonDialogModel } from './view/PeopleRoster'
+import type { CustomLineDialogModel } from '../../../lib/order-draft/view/LinesSection'
+import type { PersonDialogModel } from '../../../lib/order-draft/view/PeopleRoster'
 // ---- end F-CP-154
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'

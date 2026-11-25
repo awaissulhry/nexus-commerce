@@ -6,20 +6,20 @@ import { EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { Field } from '@nexus/ui/components'
-import { useDsWords } from '../../../../lib/i18n/ds-parts'
-import { INTL_LOCALE } from '../../../../lib/i18n/locales'
-import type { DraftLine, DraftRecord } from '../api'
+import { useDsWords } from '../../i18n/ds-parts'
+import { INTL_LOCALE } from '../../i18n/locales'
+import type { DraftView, DraftViewCustomLine, DraftViewLine } from '../model'
 import { columnsOf, fromOrderText, noticeTone, noticeWords, piecesOfCells, problemWords, type Cells } from '../model'
-import { useOrderingWords, type OrderingWords } from '../words'
+import { useDraftWords } from '../words'
 // F-CP-150: the lines are part 1 of the draft ("What you need"): the part's heading and "Add a line ▾" (the ways in).
 import { ChevronDown } from 'lucide-react'
 import { type DraftChip } from '../model'
-import { PartHeading } from './DraftChecklist'
+import { PartHeading } from './parts'
 // ---- F-CP-154 (customer page plan C5; 12 §2 part 1): lines of every kind — From the catalogue · Described by you · Made to measure.
 import { Banner } from '@nexus/ui/components'
 import { SegmentedControl } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
-import type { CustomLine, CustomLineKind, MadeToMeasure } from '../api'
+import { Modal, Textarea } from '../../i18n/ds-parts'
+import type { CustomLineKind, MadeToMeasure } from '../schema'
 import { customDetailWords, customTitleOf, entriesInOrder, kindKey, type CustomLineDraft, type CustomLineField } from '../model'
 import { KindTag } from './parts'
 // ---- end F-CP-154
@@ -28,12 +28,13 @@ import { KindTag } from './parts'
  * sec:lines (design portal.customer.neworder "One line per style and colourway, with the whole size run in one grid"): each
  * line a card — the style (our code, name, your code), the colourway (offered colours only), the DS SizeGridEditor (the
  * sizes offered; stacked on a phone, `layout="auto"`; arrows between cells, Enter down, Esc restores; a block pasted from a
- * spreadsheet), pieces, the unit price from the customer's list and the line amount (price grain only), the line's
- * problems and a reorder's differences in our words, ⋯ Remove line (with Undo). Empty: "No lines yet…".
+ * spreadsheet), pieces, the line's problems and a reorder's differences in our words, ⋯ Remove line (with Undo). Empty: "No lines
+ * yet…". od-w1.1: no price here (money wall) — a price holder reads the list price and the amount in the host's own price card.
  */
 
 export interface LinesModel {
-  record: DraftRecord
+  /** The draft without a single price (`draftViewOf`). */
+  draft: DraftView
   /** Typed sizes not saved yet, by line. */
   cells: Readonly<Record<string, Cells>>
   /** Typed notes not saved yet, by line. */
@@ -62,8 +63,9 @@ export interface LinesActions {
   onChangeCustom?: (lineId: string) => void
 }
 
-/** The DS size grid's words in the page's language (this catalogue's `size.*`, the stacked layout's from ds-words). */
-export function useSizeCopy(t: OrderingWords['t']): Partial<SizeGridCopy> {
+/** The DS size grid's words in the page's language (the part's `size.*`, the stacked layout's from ds-words; the portal's picker too). */
+export function useSizeCopy(): Partial<SizeGridCopy> {
+  const { t } = useDraftWords()
   const ds = useDsWords()
   return useMemo(
     () => ({
@@ -85,11 +87,11 @@ export function useSizeCopy(t: OrderingWords['t']): Partial<SizeGridCopy> {
 }
 
 export function LinesSection({ model, actions }: { model: LinesModel; actions?: LinesActions }) {
-  const words = useOrderingWords()
+  const words = useDraftWords()
   const { t } = words
-  const request = model.record.request
+  const request = model.draft.request
   return (
-    <section className="fw-pno-section" id="lines" tabIndex={-1} aria-labelledby="lines-title">
+    <section className="fw-od-section" id="lines" tabIndex={-1} aria-labelledby="lines-title">
       {/* F-CP-150: part 1 "What you need" — its state, and "Add a line ▾" with the ways in. */}
       <PartHeading
         chip={model.chip}
@@ -103,7 +105,7 @@ export function LinesSection({ model, actions }: { model: LinesModel; actions?: 
             <Menu
               align="right"
               label={
-                <span className="fw-pno-menulabel">
+                <span className="fw-od-menulabel">
                   <Plus size={14} aria-hidden /> {t('draftPage.addLine')} <ChevronDown size={14} aria-hidden />
                 </span>
               }
@@ -116,7 +118,7 @@ export function LinesSection({ model, actions }: { model: LinesModel; actions?: 
       {entriesInOrder(request).length === 0 ? (
         <EmptyState icon={<ShoppingBag size={24} aria-hidden />} title={t('lines.empty')} description={t('lines.emptyBody')} />
       ) : (
-        <ol className="fw-pno-lines">
+        <ol className="fw-od-lines">
           {/* F-CP-150: by seq — a row never jumps under the cursor when the draft is read again. F-CP-154: every kind in ONE order. */}
           {entriesInOrder(request).map((entry) => (
             <li key={entry.line.id}>{entry.kind === 'CATALOGUE' ? <LineCard line={entry.line} model={model} actions={actions} /> : <CustomLineCard line={entry.line} model={model} actions={actions} />}</li>
@@ -127,19 +129,17 @@ export function LinesSection({ model, actions }: { model: LinesModel; actions?: 
   )
 }
 
-function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel; actions?: LinesActions }) {
-  const words = useOrderingWords()
+function LineCard({ line, model, actions }: { line: DraftViewLine; model: LinesModel; actions?: LinesActions }) {
+  const words = useDraftWords()
   const { t, locale } = words
-  const copy = useSizeCopy(t)
-  const record = model.record
-  const currency = record.request.currency
+  const copy = useSizeCopy()
+  const request = model.draft.request
   const typed = model.cells[line.id]
   const cells: Cells = typed ?? Object.fromEntries(line.sizes.map((row) => [row.size, row.quantity]))
   const columns = columnsOf(line)
-  const kit = { t, price: (value: string | null | undefined) => words.price(value, currency) }
+  // od-w1.1: no figure of money in the shared part — a price problem or notice reads its words without the amounts.
+  const kit = { t, price: () => null }
   const shownPieces = piecesOfCells(cells)
-  const unit = words.price(line.unitPriceShown, currency)
-  const amount = typed ? (line.unitPriceShown ? words.price((Number(line.unitPriceShown) * shownPieces).toFixed(2), currency) : null) : words.price(line.amount, currency)
   // A size no longer offered has no cell to type into: its problem says so with "Leave size 62 out".
   const lineProblems = line.problems
   const discontinued = line.problems.some((problem) => problem.code === 'COLOUR_DISCONTINUED')
@@ -148,27 +148,27 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
   const title = `${line.style.code} · ${line.style.name}`
   return (
     // F-CP-150: a row of part 1's card (the card is the part; a line is no card of its own).
-    <div className="fw-pno-linecard">
+    <div className="fw-od-linecard">
       <div
-        className="fw-pno-line"
+        className="fw-od-line"
         id={`line-${line.id}`}
         tabIndex={-1}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) actions?.onLeave?.(line.id)
         }}
       >
-        <div className="fw-pno-linehead">
-          <div className="fw-pno-linetitle">
-            <span className="fw-pno-linename">
+        <div className="fw-od-linehead">
+          <div className="fw-od-linetitle">
+            <span className="fw-od-linename">
               {t('lines.lineTitle', { seq: line.seq, title })} <KindTag kind="CATALOGUE" /> {/* F-CP-154 */}
             </span>
-            <span className="fw-pno-quiet">
+            <span className="fw-od-quiet">
               {line.colourway.name} ({line.colourway.code})
               {/* B-TH-304: the customer's own order number, never the office's series. */}
               {line.source ? ` · ${fromOrderText(line.source, t, words.day)}` : ''}
             </span>
           </div>
-          <div className="fw-pno-lineactions">
+          <div className="fw-od-lineactions">
             {line.colours.length > 1 || discontinued ? (
               <Field label={t('lines.colour')}>
                 <Select value={line.colourway.id} disabled={model.writeHeld !== null} onChange={(event) => actions?.onColour?.(line.id, event.target.value)}>
@@ -185,10 +185,10 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
           </div>
         </div>
         {line.notices.length > 0 || lineProblems.length > 0 ? (
-          <ul className="fw-pno-notes">
+          <ul className="fw-od-notes">
             {lineProblems.map((problem, index) => (
-              <li key={`p${index}`} className="fw-pno-note is-danger">
-                <AlertTriangle size={14} aria-hidden /> {problemWords(problem, record.request.lines, kit)}
+              <li key={`p${index}`} className="fw-od-note is-danger">
+                <AlertTriangle size={14} aria-hidden /> {problemWords(problem, request.lines, kit)}
                 {problem.code === 'SIZE_NOT_OFFERED' && problem.size ? (
                   <Button size="sm" variant="quiet" heldReason={model.writeHeld} onClick={() => actions?.onDropSize?.(line.id, problem.size!)}>
                     {t('lines.dropSize', { size: problem.size })}
@@ -199,8 +199,8 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
             {line.notices
               .filter((notice) => notice.code !== 'PRICE_CHANGED' || !line.problems.some((problem) => problem.code === 'PRICE_CHANGED'))
               .map((notice, index) => (
-                <li key={`n${index}`} className={`fw-pno-note is-${noticeTone(notice.code)}`}>
-                  <Info size={14} aria-hidden /> {noticeWords(notice.code, { style: line.style.code, colour: line.colourway.name, priceNow: line.priceNow, priceThen: line.unitPriceShown }, kit)}
+                <li key={`n${index}`} className={`fw-od-note is-${noticeTone(notice.code)}`}>
+                  <Info size={14} aria-hidden /> {noticeWords(notice.code, { style: line.style.code, colour: line.colourway.name }, kit)}
                 </li>
               ))}
           </ul>
@@ -216,30 +216,18 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
           locale={INTL_LOCALE[locale]}
           copy={copy}
         />
-        <div className="fw-pno-linefoot">
+        <div className="fw-od-linefoot">
           <Field label={t('lines.note')} hint={t('lines.noteHint')}>
             <Input value={model.notes[line.id] ?? line.note ?? ''} maxLength={1000} disabled={model.writeHeld !== null} onChange={(event) => actions?.onNote?.(line.id, event.target.value)} />
           </Field>
-          <dl className="fw-pno-figures">
+          <dl className="fw-od-figures">
             <div>
               <dt>{t('lines.pieces')}</dt>
               <dd>{words.pieces(shownPieces)}</dd>
             </div>
-            {record.seesPrices ? (
-              <>
-                <div>
-                  <dt>{t('lines.unitPrice')}</dt>
-                  <dd>{unit ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>{t('lines.amount')}</dt>
-                  <dd>{amount ?? '—'}</dd>
-                </div>
-              </>
-            ) : null}
           </dl>
         </div>
-        {model.saving.includes(line.id) ? <p className="fw-pno-quiet" role="status">{t('state.saving')}</p> : null}
+        {model.saving.includes(line.id) ? <p className="fw-od-quiet" role="status">{t('state.saving')}</p> : null}
       </div>
     </div>
   )
@@ -251,11 +239,11 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
  * ("30 pieces · sizes later", "By person · 4 people", "By person · People: in the attached sheet"), its problems in our words, and ⋯
  * Change… / Remove line. Its people live in part 4 (People and sizes).
  */
-function CustomLineCard({ line, model, actions }: { line: CustomLine; model: LinesModel; actions?: LinesActions }) {
-  const words = useOrderingWords()
+function CustomLineCard({ line, model, actions }: { line: DraftViewCustomLine; model: LinesModel; actions?: LinesActions }) {
+  const words = useDraftWords()
   const { t, locale } = words
-  const request = model.record.request
-  const kit = { t, price: (value: string | null | undefined) => words.price(value, request.currency), locale }
+  const request = model.draft.request
+  const kit = { t, price: () => null, locale }
   const held = model.writeHeld
   const more: MenuItemDef[] = [
     { id: 'change', label: t('draftPage.line.change'), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onChangeCustom?.(line.id) },
@@ -263,33 +251,33 @@ function CustomLineCard({ line, model, actions }: { line: CustomLine; model: Lin
   ]
   const style = line.style ? `${line.style.code} ${line.style.name}`.trim() : null
   return (
-    <div className="fw-pno-linecard">
-      <div className="fw-pno-line" id={`line-${line.id}`} tabIndex={-1}>
-        <div className="fw-pno-linehead">
-          <div className="fw-pno-linetitle">
-            <span className="fw-pno-linename">
+    <div className="fw-od-linecard">
+      <div className="fw-od-line" id={`line-${line.id}`} tabIndex={-1}>
+        <div className="fw-od-linehead">
+          <div className="fw-od-linetitle">
+            <span className="fw-od-linename">
               {t('lines.lineTitle', { seq: line.seq, title: customTitleOf(line, t, locale) })} <KindTag kind={line.kind} />
             </span>
-            <span className="fw-pno-quiet">{customDetailWords(line, t, words.pieces)}</span>
+            <span className="fw-od-quiet">{customDetailWords(line, t, words.pieces)}</span>
           </div>
-          <div className="fw-pno-lineactions">
+          <div className="fw-od-lineactions">
             <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('draftPage.line.menu', { seq: line.seq }) }} items={more} />
           </div>
         </div>
-        {line.description && line.description.trim().includes('\n') ? <p className="fw-pno-ownwords">{line.description}</p> : null}
+        {line.description && line.description.trim().includes('\n') ? <p className="fw-od-ownwords">{line.description}</p> : null}
         {line.colourText || style || line.note ? (
-          <ul className="fw-pno-linefacts">
+          <ul className="fw-od-linefacts">
             {line.colourText ? <li>{t('draftPage.line.colours', { colours: line.colourText })}</li> : null}
             {style ? <li>{t(line.kind === 'MADE_TO_MEASURE' ? 'draftPage.line.madeFrom' : 'draftPage.line.ownStyle', { style })}</li> : null}
             {line.note ? <li>{t('lines.note')}: {line.note}</li> : null}
           </ul>
         ) : null}
         {line.problems.filter((problem) => !problem.personId).length > 0 ? (
-          <ul className="fw-pno-notes">
+          <ul className="fw-od-notes">
             {line.problems
               .filter((problem) => !problem.personId)
               .map((problem, index) => (
-                <li key={index} className="fw-pno-note is-danger">
+                <li key={index} className="fw-od-note is-danger">
                   <AlertTriangle size={14} aria-hidden /> {problemWords(problem, request.lines, kit, request.customLines ?? [])}
                 </li>
               ))}
@@ -313,7 +301,7 @@ export interface CustomLineDialogModel {
   styles: { state: 'loading' | 'error' | 'ready'; rows: readonly { readonly id: string; readonly code: string; readonly name: string }[] }
   garmentTypes: MadeToMeasure['garmentTypes']
   busy: boolean
-  /** A refusal in our words (a key), or null. */
+  /** A refusal in the host's words (od-w1.1: the host says it in its own catalogue), or null. */
   failed: string | null
 }
 
@@ -329,7 +317,7 @@ export interface CustomLineDialogActions {
  * per person (the people go in People and sizes). Esc closes; the focus goes back to the opener; Save says why it cannot.
  */
 export function CustomLineDialog({ model, actions }: { model: CustomLineDialogModel; actions?: CustomLineDialogActions }) {
-  const words = useOrderingWords()
+  const words = useDraftWords()
   const { t, locale } = words
   const mtm = model.kind === 'MADE_TO_MEASURE'
   const error = (field: CustomLineField) => (model.showProblems && model.problems[field] ? t(model.problems[field]!) : undefined)
@@ -353,13 +341,13 @@ export function CustomLineDialog({ model, actions }: { model: CustomLineDialogMo
       }
     >
       <form
-        className="fw-pno-dialog"
+        className="fw-od-dialog"
         onSubmit={(event) => {
           event.preventDefault()
           actions?.onSave?.()
         }}
       >
-        {model.failed ? <Banner tone="danger" title={t(model.failed)} /> : null}
+        {model.failed ? <Banner tone="danger" title={model.failed} /> : null}
         {mtm ? (
           <Field label={t('draftPage.customLine.garment')} required error={error('garmentType')}>
             <Select value={model.draft.garmentType} data-autofocus onChange={(event) => actions?.onField?.('garmentType', event.target.value)}>
@@ -392,10 +380,10 @@ export function CustomLineDialog({ model, actions }: { model: CustomLineDialogMo
           </Select>
         </Field>
         {mtm ? (
-          <p className="fw-pno-quiet">{t('draftPage.customLine.mtmPeople')}</p>
+          <p className="fw-od-quiet">{t('draftPage.customLine.mtmPeople')}</p>
         ) : (
-          <div className="fw-pno-stack">
-            <span className="fw-pno-h3">{t('draftPage.customLine.how')}</span>
+          <div className="fw-od-stack">
+            <span className="fw-od-h3">{t('draftPage.customLine.how')}</span>
             <SegmentedControl
               ariaLabel={t('draftPage.customLine.how')}
               wrap
@@ -407,7 +395,7 @@ export function CustomLineDialog({ model, actions }: { model: CustomLineDialogMo
               ]}
             />
             {model.draft.byPerson ? (
-              <p className="fw-pno-quiet">{t('draftPage.customLine.peopleHint')}</p>
+              <p className="fw-od-quiet">{t('draftPage.customLine.peopleHint')}</p>
             ) : (
               <Field label={t('draftPage.customLine.total')} hint={t('draftPage.customLine.totalHint')} error={error('total')}>
                 <Input value={model.draft.total} inputMode="numeric" maxLength={6} onChange={(event) => actions?.onField?.('total', event.target.value)} />

@@ -13,7 +13,7 @@ import { ppeKey, styleName, typeKey } from '../../catalogue/model'
 import { StyleCardView } from '../../catalogue/view/StyleCards'
 import { piecesOfCells } from '../model'
 import { useOrderingWords } from '../words'
-import { useSizeCopy } from './LinesSection'
+import { useSizeCopy } from '../../../../lib/order-draft/view/LinesSection' // od-w1.1: the size grid's words are the draft part's
 import { Loading, PricesNote, ReadFailed } from './parts'
 
 /**
@@ -79,7 +79,7 @@ export function pickerLineCount(model: Pick<PickerModel, 'selected' | 'cells' | 
 export function StylePickerDialog({ model, actions }: { model: PickerModel; actions?: PickerActions }) {
   const words = useOrderingWords()
   const { t, locale } = words
-  const copy = useSizeCopy(t)
+  const copy = useSizeCopy()
   const read = model.catalogue.read
   const styles = useMemo(() => pickerStyles(read, model.q, model.category, model.ppe, locale), [read, model.q, model.category, model.ppe, locale])
   const lines = pickerLineCount(model)

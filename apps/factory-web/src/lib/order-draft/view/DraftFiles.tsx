@@ -3,11 +3,11 @@
 import { Mail, ShieldCheck } from 'lucide-react'
 import { Card } from '@nexus/ui/components'
 import { Toggle } from '@nexus/ui/primitives'
-import { FileDropzone, FileRow } from '../../../../lib/i18n/ds-parts'
-import type { DraftFile, DraftFilePart, DraftLine } from '../api'
+import { FileDropzone, FileRow } from '../../i18n/ds-parts'
+import type { DraftFile, DraftFilePart, DraftLine } from '../schema'
 import { fileHeldKey, fileKindOf, fileWhereWords, type DraftChip } from '../model'
-import { useOrderingWords } from '../words'
-import { PartHeading } from './DraftChecklist'
+import { useDraftWords } from '../words'
+import { PartHeading } from './parts'
 
 /**
  * F-CP-151 (customer page plan C5; 12 §2 parts 2–4; D14 — O7, the virus scanner's spend, is NOT approved): the draft's files.
@@ -63,15 +63,15 @@ export const ACCEPT: Readonly<Record<DraftFilePart, string>> = {
 
 /** The files of one part: their rows, what is going up, the drop area (or the e-mail way), "Sending later". */
 export function DraftFilesBody({ model, actions }: { model: DraftFilesModel; actions?: DraftFilesActions }) {
-  const words = useOrderingWords()
+  const words = useDraftWords()
   const { t } = words
   const uploading = model.uploading.filter((row) => row.part === model.part)
   return (
-    <div className="fw-pno-files">
-      {model.part === 'LOGO' ? <p className="fw-pno-quiet">{t('draftPage.files.logoHint')}</p> : null}
-      {model.files.length === 0 && uploading.length === 0 ? <p className="fw-pno-quiet">{t(NONE_KEY[model.part])}</p> : null}
+    <div className="fw-od-files">
+      {model.part === 'LOGO' ? <p className="fw-od-quiet">{t('draftPage.files.logoHint')}</p> : null}
+      {model.files.length === 0 && uploading.length === 0 ? <p className="fw-od-quiet">{t(NONE_KEY[model.part])}</p> : null}
       {model.files.length > 0 || uploading.length > 0 ? (
-        <ul className="fw-pno-filelist">
+        <ul className="fw-od-filelist">
           {model.files.map((file) => {
             const held = fileHeldKey(file)
             const what = model.part === 'LOGO' ? `${t(`draftPage.files.kind.${fileKindOf(file)}`)} · ${fileWhereWords(file, model.lines, t)}` : fileWhereWords(file, model.lines, t)
@@ -90,18 +90,18 @@ export function DraftFilesBody({ model, actions }: { model: DraftFilesModel; act
       ) : null}
       {model.open ? (
         model.addHeld ? (
-          <p className="fw-pno-held">{model.addHeld}</p>
+          <p className="fw-od-held">{model.addHeld}</p>
         ) : (
           <FileDropzone multiple accept={ACCEPT[model.part]} hint={t(ADD_KEY[model.part])} onFiles={(files) => actions?.onFiles?.(model.part, files)} />
         )
       ) : (
         // D14: on live, until the virus scanner runs — the e-mail way, naming the draft.
-        <p className="fw-pno-mailway" role="note">
+        <p className="fw-od-mailway" role="note">
           <Mail size={16} aria-hidden /> <span>{t(model.part === 'SHEET' ? 'draftPage.files.sheetsClosed' : 'draftPage.files.closed', { draft: model.draftName })}</span>
         </p>
       )}
       {model.later ? (
-        <span className="fw-pno-later">
+        <span className="fw-od-later">
           <Toggle size="sm" checked={model.later.on} disabled={model.later.held !== null} title={model.later.held ?? undefined} onChange={(next) => actions?.onLater?.(model.part, next)} aria-label={t('draftPage.files.later')} />
           <span aria-hidden>{t('draftPage.files.later')}</span>
         </span>
@@ -114,7 +114,7 @@ export function DraftFilesBody({ model, actions }: { model: DraftFilesModel; act
 export function DraftFilesCard({ chip, model, actions }: { chip: DraftChip; model: DraftFilesModel; actions?: DraftFilesActions }) {
   return (
     <Card padded>
-      <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby={`${chip.target}-title`}>
+      <section className="fw-od-section" id={chip.target} tabIndex={-1} aria-labelledby={`${chip.target}-title`}>
         <PartHeading chip={chip} id={`${chip.target}-title`} />
         <DraftFilesBody model={model} actions={actions} />
       </section>
@@ -124,11 +124,11 @@ export function DraftFilesCard({ chip, model, actions }: { chip: DraftChip; mode
 
 /** Measurement sheets, inside People and sizes: their files and the line on who opens them (body data, review G6). */
 export function DraftSheets({ model, actions }: { model: DraftFilesModel; actions?: DraftFilesActions }) {
-  const { t } = useOrderingWords()
+  const { t } = useDraftWords()
   return (
-    <div className="fw-pno-sheets">
-      <h3 className="fw-pno-h3">{t('draftPage.files.sheetsTitle')}</h3>
-      <p className="fw-pno-quiet">
+    <div className="fw-od-sheets">
+      <h3 className="fw-od-h3">{t('draftPage.files.sheetsTitle')}</h3>
+      <p className="fw-od-quiet">
         <ShieldCheck size={14} aria-hidden /> {t('draftPage.files.sheetsPrivacy')}
       </p>
       <DraftFilesBody model={model} actions={actions} />

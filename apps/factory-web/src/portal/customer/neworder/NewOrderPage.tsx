@@ -13,16 +13,14 @@ import { fetchCatalogue, fetchStyle } from '../catalogue/api'
 import { saveText, useOffline } from '../orders/hooks'
 import {
   addLines,
-  changeHeader,
   changeLine,
   createDraft,
   discardDraft,
-  fetchDraft,
   fetchDrafts,
   fetchPastOrder,
   fetchPastOrders,
   fileContent,
-  removeLine,
+  portalDraftPort,
   reorderInto,
   sendDraft,
   SHEET_MAX_BYTES,
@@ -68,6 +66,7 @@ import type { ReorderModel } from './view/ReorderPanel'
 import type { SheetState } from './view/UploadPanel'
 import { NotInAccess } from './view/parts'
 import { useOrderingWords } from './words'
+import { DRAFT_NS, useDraftWords } from '../../../lib/order-draft/words'
 // ---- F-CP-150 (customer page plan C5, D9–D11): the draft order page — its conversation docked, who may send, who changed it.
 import { PortalThread } from '../../shell/thread/PortalThread'
 import { fetchColleagues } from './api'
@@ -79,14 +78,14 @@ import { COMPOSE_NS } from '../../../lib/request-compose/model'
 import { heldProblem } from '../../../lib/request-compose/files'
 import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
 import { putToStore, sha256Hex, StoreError } from '../../../record-panels/store'
-import { announceDraftFile, completeDraftFile, removeDraftFile, type DraftFile, type DraftFilePart } from './api'
+import type { DraftFile, DraftFilePart } from './api'
 import { DRAFT_FILES_MAX, draftFileCount, LATER_PART_OF, laterToggleOf } from './model'
-import type { UploadRow } from './view/DraftFiles'
+import type { UploadRow } from '../../../lib/order-draft/view/DraftFiles'
 // ---- end F-CP-151
 // ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6; B-CP-075, B-CP-076): lines of every kind, the People and sizes roster,
 // "Your price" — every write a draft command at the draft's version; "Your price" only from a price holder (the grain filter refuses it
 // from anyone else: the page never sends the key without the grain).
-import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson, type CustomLine } from './api'
+import { changeCustomLine, type CustomLine } from './api'
 import {
   ADD_KIND_OF,
   customLineBody,
@@ -129,7 +128,7 @@ import {
  */
 export function CustomerNewOrderPage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'portal-account', COMPOSE_NS /* F-CP-151: a file's refusal words */]}>
+    <WithMessages namespaces={[NS, DRAFT_NS /* od-w1.1: the draft order's own words */, 'ds-words', 'lists', 'portal-account', COMPOSE_NS /* F-CP-151: a file's refusal words */]}>
       <NewOrderContainer />
     </WithMessages>
   )
@@ -198,10 +197,14 @@ const NO_REORDER: ReorderState = { q: '', orders: { state: 'loading', rows: [] }
 function NewOrderContainer() {
   const frame = usePortalFrame()
   const api = usePortalApi()
+  // od-w1.1: the ONE draft order's commands through the portal's port (the office gives the same commands on its own routes).
+  const port = useMemo(() => portalDraftPort(api), [api])
   const router = useRouter()
   const search = useSearchParams()
   const words = useOrderingWords()
   const { t, locale } = words
+  // od-w1.1: the ONE draft order's own words (its title, a file cap, a line with no piece) are the shared part's catalogue.
+  const dw = useDraftWords()
   const offline = useOffline()
   const can = useCallback((permission: string) => frame.me.permissions.includes(permission), [frame.me.permissions])
   // F-CP-150 (D11): the draft is kept with portal.orderDrafts.edit; sending and reordering stay with who may order.
@@ -322,7 +325,7 @@ function NewOrderContainer() {
       // F-CP-150: who changed it ("Changed by Marta Bianchi a moment ago") — read, never applied: what was typed stays.
       const id = recordRef.current?.request.id
       if (id)
-        fetchDraft(api, id)
+        port.read(id)
           .then((next) => setStaleBy(next.request.lastEditedBy ?? null))
           .catch(() => undefined)
     },
@@ -340,7 +343,7 @@ function NewOrderContainer() {
   const read = useCallback(async () => {
     if (!draftId) return
     try {
-      const next = await fetchDraft(api, draftId)
+      const next = await port.read(draftId)
       apply(next)
       startFrom(next)
       setLoad('ready')
@@ -434,7 +437,7 @@ function NewOrderContainer() {
       return enqueue(async () => {
         const version = recordRef.current!.request.version
         try {
-          const next = await changeHeader(api, current.request.id, { version, ...body }, keyFor('head', { version, body }))
+          const next = await port.header(current.request.id, { version, ...body }, keyFor('head', { version, body }))
           apply(next)
           setSave({ kind: 'saved', at: next.request.updatedAt })
           return true
@@ -474,7 +477,7 @@ function NewOrderContainer() {
       return enqueue(async () => {
         const version = recordRef.current!.request.version
         try {
-          const next = await changeLine(api, current.request.id, lineId, { version, ...body }, keyFor('line', { lineId, version, body }))
+          const next = await port.changeLine(current.request.id, lineId, { version, ...body }, keyFor('line', { lineId, version, body }))
           apply(next)
           // What was typed since this save started stays typed.
           if (body.sizes) setCells(({ [lineId]: now, ...rest }) => (now && now !== typed ? { ...rest, [lineId]: now } : rest))
@@ -528,7 +531,7 @@ function NewOrderContainer() {
   const changeColour = (lineId: string, colourwayId: string) => {
     const id = recordRef.current?.request.id
     if (!id) return
-    void write(`colour:${lineId}:${colourwayId}`, (version, key) => changeLine(api, id, lineId, { version, colourwayId }, key))
+    void write(`colour:${lineId}:${colourwayId}`, (version, key) => port.changeLine(id, lineId, { version, colourwayId }, key))
   }
 
   const remove = async (lineId: string) => {
@@ -536,7 +539,7 @@ function NewOrderContainer() {
     // F-CP-154: a described or made-to-measure line goes out the same way (its people with it); no Undo: its people would not come back.
     const custom = current ? customLinesOf(current.request).find((entry) => entry.id === lineId) : undefined
     if (current && custom) {
-      const gone = await write(`remove:${lineId}`, (version, key) => removeLine(api, current.request.id, lineId, version, key))
+      const gone = await write(`remove:${lineId}`, (version, key) => port.removeLine(current.request.id, lineId, version, key))
       if (!gone) return
       setOwnPrices(({ [lineId]: _drop, ...rest }) => rest)
       setNotice({ lines: [t('draftPage.line.removed', { seq: custom.seq })], undo: null })
@@ -544,7 +547,7 @@ function NewOrderContainer() {
     }
     const line = current?.request.lines.find((entry) => entry.id === lineId)
     if (!current || !line) return
-    const next = await write(`remove:${lineId}`, (version, key) => removeLine(api, current.request.id, lineId, version, key))
+    const next = await write(`remove:${lineId}`, (version, key) => port.removeLine(current.request.id, lineId, version, key))
     if (!next) return
     setCells(({ [lineId]: _drop, ...rest }) => rest)
     setNotes(({ [lineId]: _drop, ...rest }) => rest)
@@ -629,8 +632,8 @@ function NewOrderContainer() {
     }
     const next =
       line && changes
-        ? await write(`customLine:${line.id}:${JSON.stringify(changes)}`, (version, key) => changeCustomLine(api, current.request.id, line.id, { version, ...changes }, key), onError)
-        : await write(`customLine:new:${JSON.stringify(customLineBody(customDialog.draft))}`, (version, key) => addCustomLine(api, current.request.id, { version, line: customLineBody(customDialog.draft) }, key), onError)
+        ? await write(`customLine:${line.id}:${JSON.stringify(changes)}`, (version, key) => port.changeCustomLine(current.request.id, line.id, { version, ...changes }, key), onError)
+        : await write(`customLine:new:${JSON.stringify(customLineBody(customDialog.draft))}`, (version, key) => port.addCustomLine(current.request.id, { version, line: customLineBody(customDialog.draft) }, key), onError)
     if (next) setCustomDialog(null)
     else setCustomDialog((now) => (now ? { ...now, busy: false, failed: failed ?? 'refusal.other' } : now))
   }
@@ -666,15 +669,15 @@ function NewOrderContainer() {
     const body = personBody(personDialog.draft)
     const next =
       person && changes
-        ? await write(`person:${person.id}:${JSON.stringify(changes)}`, (version, key) => changePerson(api, current.request.id, line.id, person.id, { version, ...changes }, key), onError)
-        : await write(`person:new:${line.id}:${JSON.stringify(body)}`, (version, key) => addPeople(api, current.request.id, line.id, { version, people: [body] }, key), onError)
+        ? await write(`person:${person.id}:${JSON.stringify(changes)}`, (version, key) => port.changePerson(current.request.id, line.id, person.id, { version, ...changes }, key), onError)
+        : await write(`person:new:${line.id}:${JSON.stringify(body)}`, (version, key) => port.addPeople(current.request.id, line.id, { version, people: [body] }, key), onError)
     if (next) setPersonDialog(null)
     else setPersonDialog((now) => (now ? { ...now, busy: false, failed: failed ?? 'refusal.other' } : now))
   }
 
   const removePersonRow = (lineId: string, personId: string) => {
     const id = recordRef.current?.request.id
-    if (id) void write(`removePerson:${personId}`, (version, key) => removePerson(api, id, lineId, personId, version, key))
+    if (id) void write(`removePerson:${personId}`, (version, key) => port.removePerson(id, lineId, personId, version, key))
   }
 
   /** "Your price" of a line, saved on leaving its cell (catalogue or custom line) — only a price holder's, only what changed. */
@@ -989,7 +992,7 @@ function NewOrderContainer() {
   const recheck = useCallback(() => {
     const current = recordRef.current
     if (!current || current.request.status !== 'DRAFT') return
-    fetchDraft(api, current.request.id)
+    port.read(current.request.id)
       .then((next) => {
         if (next.request.version === recordRef.current?.request.version) return
         if (dirty) setStale(true)
@@ -1028,7 +1031,7 @@ function NewOrderContainer() {
     const current = recordRef.current
     if (!current) return
     try {
-      const next = await fetchDraft(api, current.request.id)
+      const next = await port.read(current.request.id)
       if (next.request.version === recordRef.current?.request.version) apply(next)
       else recheck()
     } catch {
@@ -1042,7 +1045,7 @@ function NewOrderContainer() {
     for (const file of list) {
       const key = newIdempotencyKey()
       const contentType = contentTypeOf(file).split(';')[0]!.trim().toLowerCase()
-      const problem = room <= 0 ? { words: t('draftPage.files.full') } : (() => {
+      const problem = room <= 0 ? { words: dw.t('draftPage.files.full') } : (() => {
         const found = heldProblem({ name: file.name, type: contentType, size: file.size })
         return found ? { words: tc(found.key, found.params) } : null
       })()
@@ -1054,9 +1057,9 @@ function NewOrderContainer() {
       setUploads((rows) => [...rows, { key, part, name: file.name, state: 'uploading' }])
       try {
         const bytes = await file.arrayBuffer()
-        const { file: announced, upload } = await announceDraftFile(api, current.request.id, { part, ...(lineId ? { lineId } : {}), originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
+        const { file: announced, upload } = await port.announceFile(current.request.id, { part, ...(lineId ? { lineId } : {}), originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
         await putToStore(upload, new Blob([bytes], { type: contentType }))
-        await completeDraftFile(api, current.request.id, announced.id)
+        await port.completeFile(current.request.id, announced.id, newIdempotencyKey())
         setUploads((rows) => rows.filter((row) => row.key !== key))
       } catch (error) {
         setUploads((rows) => rows.map((row) => (row.key === key ? { ...row, state: 'failed' as const, failure: failureOf(error) } : row)))
@@ -1066,14 +1069,14 @@ function NewOrderContainer() {
   }
   const removeFile = (file: DraftFile) => {
     const id = recordRef.current?.request.id
-    if (id) void write(`removeFile:${file.id}:${file.version}`, (_version, key) => removeDraftFile(api, id, file.id, file.version, key))
+    if (id) void write(`removeFile:${file.id}:${file.version}`, (_version, key) => port.removeFile(id, file.id, file.version, key))
   }
   /** "Sending later" for a part (sheets: People and sizes) — once the API keeps the mark (B-CP-075). */
   const markLater = (part: DraftFilePart, on: boolean) => {
     const current = recordRef.current
     const toggle = current ? laterToggleOf(current.request, LATER_PART_OF[part]) : null
     if (!current || !toggle || toggle.on === on) return
-    void write(`later:${toggle.next.join(',')}`, (version, key) => changeHeader(api, current.request.id, { version, laterParts: toggle.next }, key))
+    void write(`later:${toggle.next.join(',')}`, (version, key) => port.header(current.request.id, { version, laterParts: toggle.next }, key))
   }
   // ---- end F-CP-151
 
@@ -1081,10 +1084,10 @@ function NewOrderContainer() {
   // F-CP-150: held, never hidden — a Designer reads the names of who may order; Discard… held for a colleague who neither orders
   // nor started the draft.
   const sendHeldNow = record ? draftSendHeld(record.request, { preview, offline, busy: busy || saving.length > 0, emptyLine: typedEmpty }, orderers ?? []) : ({ key: 'held.busy' } as { key: string; count?: number; names?: string })
-  const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : sendHeldNow.names !== undefined ? { names: sendHeldNow.names } : undefined) : null
+  const sendWords = sendHeldNow ? (sendHeldNow.key === 'lines.held.empty' ? dw.t : t)(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : sendHeldNow.names !== undefined ? { names: sendHeldNow.names } : undefined) : null
   const discardKey = record ? draftDiscardHeld(record.request, { preview, offline, busy: false }) : held
   const discardWords = discardKey ? t(discardKey) : null
-  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, t, locale) } : null
+  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, dw.t, locale) } : null
   usePortalBand(
     allowed
       ? newOrderBandOf({
@@ -1095,7 +1098,7 @@ function NewOrderContainer() {
           customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
           sendHeld: sendWords,
           discardHeld: discardWords,
-          title: record ? draftTitleOf(record.request, t, locale) : null, // F-CP-150 (F-CP-154: a line in the customer's own words names it)
+          title: record ? draftTitleOf(record.request, dw.t, locale) : null, // F-CP-150 (F-CP-154: a line in the customer's own words names it)
           ask: draftAsk, // F-CP-150
           onSend: () => void send(),
           onDiscard: () => setDiscard({ busy: false, failed: null }),
