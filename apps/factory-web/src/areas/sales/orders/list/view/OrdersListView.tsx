@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Filter, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Ruler } from 'lucide-react' // F-SA-221: the made-to-measure mark
-import { Banner, EmptyState, Menu, MetricStrip, ProgressBar } from '@nexus/ui/components'
+import { Banner, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -19,7 +19,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money } from '../../../quotes/model'
 import { ORDER_STATUSES, type OrderRow, type OrderStatus } from '../../api'
-import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
+import { dayInstant, depositTone, ROW_VIEWS, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
 // ---- B-TH-057 (TH-4: the server sort, the custom field filter) ----
 import { columnSort, SORT_COLUMNS, sortOfColumn } from '../../model'
 import { sortChoicesOf, urgentRuleOf } from '../../model' // F-CW-201
@@ -39,6 +39,10 @@ import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
 import { DoorCell, FunnelButton, PeekCard, PeekLink, SheetChips, type SheetChip } from '../sheet/parts'
+// pg-w1: the shared order cells (lib/order-cells), imported after the sheet's parts (their css loads after the sheet's own).
+import { PromiseCell as SharedPromiseCell } from '../../../../../lib/order-cells/view/PromiseCell'
+import { ShippedCell as SharedShippedCell } from '../../../../../lib/order-cells/view/ShippedCell'
+import { OrderCard } from '../../../../../lib/order-cells/view/OrderCard'
 import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224: the one customer filter
 // F-SA-212: the ONE picture part (the cell, the phone card's aside and the picture large).
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
@@ -437,16 +441,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         promised: { role: 'hidden' as const },
         whereItIs: {
           role: 'subtitle' as const,
+          // pg-w1: the card's block is the shared phone card (lib/order-cells OrderCard: the portal's list draws it too) — the same DOM.
           draw: (row: OrderRow) => (
-            <span className="fw-sheet-card">
-              <span className="fw-sheet-card-pic">{picture(row)}</span>
-              <span className="fw-sheet-card-lines">
-                <span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>
-                <span className="fw-sheet-card-chips">
+            <OrderCard
+              picture={picture(row)}
+              sub={<span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>}
+              chips={
+                <>
                   {where(row, 'chips')}
                   {urgency(row)}
-                </span>
-                <span className="fw-sheet-card-promise">
+                </>
+              }
+              promise={
+                <>
                   {row.promiseDate ? (
                     <span>
                       {t('col.promised')} <b>{formatDate(dayInstant(row.promiseDate), { locale })}</b>
@@ -455,9 +462,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <span>{t('list.noPromise')}</span>
                   )}
                   {where(row, 'pieces')}
-                </span>
-              </span>
-            </span>
+                </>
+              }
+            />
           ),
         },
       }
@@ -1286,25 +1293,12 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     ) : null
   // F-CW-102: the lateness is chip 2 of Where it is ("Late · 3 d") — the tag beside the date only while that column is not on
   // screen (the same fact never twice in one row; Sales › Orders' own default view keeps the tag).
+  // pg-w1: Promised and Shipped are the shared cells (lib/order-cells: the portal's list draws them too), office face — the same DOM.
+  // cw fx5 (walk W-14): "No promise" / "Nessuna data promessa" wraps inside the cell (quieter, two lines), never cut (the cell's own).
   const PromiseCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data ? (
-      data.promiseDate ? (
-        <span className="fw-so-inline">
-          {door(linesDoor(prefix, data, true), day(data.promiseDate))}
-          {!whereShown && data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
-        </span>
-      ) : (
-        // cw fx5 (walk W-14): "No promise" / "Nessuna data promessa" wraps inside the cell (quieter, two lines), never cut.
-        <span className="fw-sheet-wraps is-quiet">{door(linesDoor(prefix, data, true), t('list.noPromise'))}</span>
-      )
-    ) : null
+    data ? <SharedPromiseCell cell={{ face: 'office', day: data.promiseDate ? day(data.promiseDate) : null, door: linesDoor(prefix, data, true), lateDays: whereShown ? null : data.daysLate }} t={s} /> : null
   const ShippedCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data ? (
-      <span className="fw-so-progress">
-        <ProgressBar value={shippedPercent(data)} ariaLabel={t('list.shippedLabel', { number: data.number })} height={6} />
-        {door(shippedDoor(prefix, data), s('shippedOf', { shipped: data.shippedUnits, units: data.units }))}
-      </span>
-    ) : null
+    data ? <SharedShippedCell cell={{ shipped: data.shippedUnits, units: data.units, record: data.number, door: shippedDoor(prefix, data) }} t={s} /> : null
   const InvoicedCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     const cell = invoicedCell(data, can)
