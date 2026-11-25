@@ -248,7 +248,9 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
   it('the new words exist in both languages with the same placeholders; the Italian speaks "voi"', () => {
     const holes = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
     const keys = Object.keys(CATALOGUE.en['portal-orders']!).filter((key) => key.startsWith('overview.') || key.startsWith('strip.'))
-    expect(keys.length).toBeGreaterThanOrEqual(15)
+    // pp-fx4 (W-16): overview.total and overview.still went (Lines › Totals' words say them), overview.notRead came (W-10): 15 → 14.
+    expect(keys.length).toBeGreaterThanOrEqual(14)
+    expect(keys).toContain('overview.notRead')
     for (const key of keys) {
       expect(CATALOGUE.it['portal-orders']![key], key).toBeTruthy()
       expect(holes(CATALOGUE.it['portal-orders']![key]!), key).toEqual(holes(CATALOGUE.en['portal-orders']![key]!))
