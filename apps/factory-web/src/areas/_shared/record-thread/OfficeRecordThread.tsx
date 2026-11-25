@@ -12,7 +12,7 @@ import { useThreadReminder } from './use-thread-reminder'
  * - B-TH-300 (`docked`): on a record page inside RecordFrame — the Head with Activity's doors (R-ACT), the files line, the Files view,
  *   the one file viewer and Saved replies join the same feed and box.
  * Each message's menu keeps Remind me (B-W2b-388; tw- W2.2: a row of the menu), and it opens here (the thread's own Remind me;
- * reminders are Home's, home.view); the reader's own follow-up shows as a bell in its message's foot. Office only: the portal keeps PortalThread on the DS PartnerThread (PR-15), and check-view-boundaries keeps
+ * reminders are Home's, home.view); the reader's own follow-up shows as a bell in its message's foot. Office only: the portal draws the partner face (lib/record-thread/partner, the same parts), and check-view-boundaries keeps
  * this file out of every other view.
  */
 export function OfficeRecordThread(host: DockedHost & { docked?: boolean; /* B-TH-271 */ onEmpty?: (empty: boolean) => void }) {

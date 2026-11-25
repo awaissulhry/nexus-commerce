@@ -151,8 +151,6 @@ export const designScreen = defineDesignScreen<HeadCaseModel>({
     { id: 'closed', label: 'Closed thread', model: c(head({ closed: { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' } }, { ...ALL, manage: true }), both), note: '"Closed by Alex Demo, 12 Nov" in the line; Reopen for threads.manage in the ⋮; the doors stay open.' },
     { id: 'offline', label: 'Offline', model: c(head({ offline: { asOf: '2026-11-17T09:42:00.000Z' }, holds: doorHolds({ can: ALL, hasParty: true, offline: true, rights: RIGHTS }) }), both), note: '"Offline · as of 10:42"; every door held "You are offline".' },
     { id: 'reminder-set', label: 'My reminder is set; muted', model: c(head({ reminder: { at: '2026-11-20T07:00:00.000Z' }, follow: { following: true, muted: true } }), both), note: 'The ⋮ says "Remind me · Reminder set for 20 Nov" and offers Unmute.' },
-    { id: 'portal-need-info', label: 'Portal: the plain line (Need info)', model: { ...c(head(), [718, 375]), portal: { needInfo: true, last: { from: 'us', at: '2026-11-16T15:10:00.000Z' }, factory: 'Factory Demo' } }, note: 'The customer reads one plain line from real states; no owner, no waiting time, no office count (W08, W34).' },
-    { id: 'portal-last', label: 'Portal: the last message', model: { ...c(head(), [718, 375]), portal: { needInfo: false, last: { from: 'you', at: '2026-11-17T06:40:00.000Z' }, factory: 'Factory Demo' } } },
     { id: 'door-task', label: 'Add task → the existing New task dialog', model: c(head(), both, 'task') },
     { id: 'door-approve', label: 'Ask a partner to approve → the existing dialog', model: c(head(), both, 'approve') },
     { id: 'door-share', label: 'Share with a partner → the existing dialog', model: c(head(), both, 'share') },

@@ -18,7 +18,7 @@ import { confirmOrder, declineOrder, fetchNotices, fetchOrder, fetchRevisions, t
 import { answerLines, lineRequestOf } from '../../../lib/po-answer/lines'
 import { confirmAllBody, confirmBodyOf, declineHeld, NS, problemOf, recordHref, requestsAbout, reviewOf, seenKey, tabOf, type AnswerDraft, type AnswerProblem, type DeclineDraft, type RecordTab } from './model'
 import { mayApprove, NotInAccessHere, useOffline } from './parts'
-import { OrderRecordView, PriceTalkHint, type AnswerDone, type OrderRecordViewModel } from './view/OrderRecordView'
+import { OrderRecordView, type AnswerDone, type OrderRecordViewModel } from './view/OrderRecordView'
 import type { VersionModel } from './view/Dialogs'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useOrderWords } from './words'
@@ -242,13 +242,8 @@ function OrderContainer({ id }: { id: string }) {
         : { kind: 'version', model: dialog.model }
 
   // B-TH-277: the PO's conversation, docked beside every tab once the order is read (none while it loads, fails or is not theirs).
-  const thread =
-    page && state === 'ready' ? (
-      <>
-        <PriceTalkHint />
-        <PortalThread type="PurchaseOrder" id={page.order.id} showRecord={false} />
-      </>
-    ) : null
+  // pt-w2 W2.3 (A19): price talk is said INSIDE the column, in its ⓘ — never a box above it.
+  const thread = page && state === 'ready' ? <PortalThread type="PurchaseOrder" id={page.order.id} help={[t('messages.priceTalk')]} /> : null
   return (
     <PortalRecordFrame thread={thread} threadLabel={t('thread.label', { number: page?.order.documentNumber ?? '' })}>
       <OrderRecordView

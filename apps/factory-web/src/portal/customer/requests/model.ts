@@ -61,7 +61,7 @@ export function stateHint(code: RequestStateCode): string {
   return `hint.${code}`
 }
 
-/** A message of the request's thread as the page needs it (the DS PartnerThread's own shape). */
+/** A message of the request's thread as the page needs it (the partner face's message, lib/record-thread/partner). */
 export interface ThreadLine {
   id: string
   side: 'company' | 'partner'

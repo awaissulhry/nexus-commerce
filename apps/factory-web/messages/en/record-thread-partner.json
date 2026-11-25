@@ -1,0 +1,25 @@
+{
+  "box": "Your message",
+  "send": "Send",
+  "sending": "Sending…",
+  "emptyHeld": "Write a message first.",
+  "you": "You",
+  "yourTeam": "Your team",
+  "copied": "Text copied.",
+  "row": {
+    "label": "{who}, {time}",
+    "labelEmail": "{who}, by email, {time}"
+  },
+  "kind": {
+    "record": "Messages of {record}",
+    "account": "Messages with {record}",
+    "link": "Messages of {record}"
+  },
+  "attach": {
+    "label": "Attach files of this record",
+    "hint": "Only files already shared with you can be attached.",
+    "attached_one": "{count} file attached",
+    "attached_other": "{count} files attached",
+    "drop": "Do not attach {name}"
+  }
+}

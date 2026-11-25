@@ -69,29 +69,18 @@
   flex: 1 1 auto;
 }
 
-.fw-prf[data-mode='docked'] .fw-prf-thread > div,
-.fw-prf[data-mode='docked'] .fw-pthread {
+/* pt-w2 W2.3 (lane pt-): the messages' ONE card (`.fw-rtp`, the partner face) fills the conversation's place, docked or stacked — its
+   list scrolls itself, the box stays at its foot. The stacked view's height is the frame's own rule. */
+.fw-prf .fw-prf-thread > div,
+.fw-prf .fw-prf-thread > .fw-rtp {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
 }
 
-.fw-prf[data-mode='docked'] .fw-pthread > .nds-pthread {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-list,
-.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-empty {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-empty {
-  align-content: flex-start;
+.fw-prf .fw-prf-thread .fw-rtp {
+  height: auto;
 }
 
 /* ---- F-SA-264: the conversation's top row (width menu, Hide), and the dock hidden — the body takes the whole width. */

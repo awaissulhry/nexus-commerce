@@ -85,12 +85,6 @@
     "followFirst": "Prima segui il record.",
     "notShareable": "Questo record resta interno alla fabbrica: non si condivide mai con un cliente o un fornitore."
   },
-  "portal": {
-    "needInfo": "Ci serve qualcosa da te",
-    "lastFromYou": "Ultimo messaggio: da te, {date}",
-    "lastFromUs": "Ultimo messaggio: da {factory}, {date}",
-    "none": "Ancora nessun messaggio"
-  },
   "design": {
     "frame438": "Dock stretto, circa 438 px",
     "frame718": "Dock largo, circa 718 px",

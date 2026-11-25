@@ -307,13 +307,15 @@ describe('F-CP-156 — Ask the factory designer: the box, the one @ chip, held w
       const html = draw(locale, threadModel({ designer: { name: NAME, ask: false, chip: false, held: null } }))
       expect(html, locale).toContain(tr(locale)('thread.designer.ask', { name: NAME }))
       expect(html, locale).toContain(tr(locale)('thread.designer.hint', { name: NAME }))
-      expect(html, locale).toContain('type="checkbox"')
+      // pt-w2 W2.3 (A5): still ONE checkbox (a golden finds it by role), drawn as a chip in the composer's chips row.
+      expect(html, locale).toContain('role="checkbox"')
+      expect(html, locale).toMatch(/<div class="fw-rt-cx-chips"><span class="nds-tooltip"><button type="button" role="checkbox"/)
       // Never who read it (no "seen by", Statuto art. 4).
       expect(html, locale).not.toMatch(/seen by|read by|visto da|letto da/i)
-      expect(draw(locale, threadModel({ designer: null })), locale).not.toContain('type="checkbox"')
+      expect(draw(locale, threadModel({ designer: null })), locale).not.toContain('role="checkbox"')
     }
     expect(tr('en')('thread.designer.ask', { name: NAME })).toBe('Ask Giulia Esempio, factory designer')
-    expect(tr('it')('thread.designer.ask', { name: NAME })).toBe('Chiedi a Giulia Esempio, designer della fabbrica')
+    expect(tr('it')('thread.designer.ask', { name: NAME })).toBe('Chiedete a Giulia Esempio, designer della fabbrica')
   })
 
   it('the chip: typing "@" shows ONE chip with that one name; pressing it puts "@<name> " in the text (and ticks the box)', () => {
@@ -329,13 +331,16 @@ describe('F-CP-156 — Ask the factory designer: the box, the one @ chip, held w
     expect(withDesignerMention('@', NAME)).toBe('@Giulia Esempio ')
     expect(withDesignerMention('', NAME)).toBe('@Giulia Esempio ')
     expect(withDesignerMention('Hello', NAME)).toBe('Hello @Giulia Esempio ')
+    // pt-w2 W2.3 (A5): the "@" shortcut stays — ONE chip with that one name: while an "@" is typed it completes "@<name> " and ticks
+    // (the host's onDesignerChip); no second chip, no list of our people.
     for (const locale of ['it', 'en'] as const) {
       const html = draw(locale, threadModel())
-      expect(html, locale).toContain(tr(locale)('thread.designer.chip', { name: NAME }))
-      // ONE chip, one name.
-      expect(html.split('fw-pthread-designer-chip').length - 1, locale).toBe(1)
-      expect(draw(locale, threadModel({ designer: { name: NAME, ask: true, chip: false, held: null } })), locale).not.toContain('fw-pthread-designer-chip')
+      expect(html.split('fw-rtp-designer').length - 1, locale).toBe(1)
+      expect(html, locale).not.toContain(`${NAME} · `)
+      expect(tr(locale)('thread.designer.chip', { name: NAME }), locale).toBe('thread.designer.chip')
     }
+    const composer = readFileSync(new URL('../../lib/record-thread/partner/view/PartnerComposer.tsx', import.meta.url), 'utf8')
+    expect(composer).toContain('if (designer.completes && !on) actions?.onDesignerChip?.()')
   })
 
   it('held words keep the text: a refusal before the post (nothing posted) says why in the portal’s words, the typed text stays', () => {
@@ -390,35 +395,33 @@ describe('F-CP-156 — Ask the factory designer: the box, the one @ chip, held w
 
   // F-CP-156 (cp-fx14, customer page walk L3): held, not disabled — the box stays focusable with a readable label, is described by
   // the held words beside it and does not change; the DS Checkbox has no held state (packages/ui as it is).
-  it('walk L3: a held box is aria-disabled (never disabled), described by its held words beside it, and a tick changes nothing', () => {
+  it('walk L3: a held chip is aria-disabled (never disabled), described by its held words, and a tick changes nothing', () => {
     const html = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
     const pattern = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const describedWords = (markup: string) => {
-      const input = /<input[^>]*type="checkbox"[^>]*>/.exec(markup)?.[0] ?? ''
-      const id = /aria-describedby="([^"]+)"/.exec(input)?.[1] ?? '(none)'
-      return { input, words: new RegExp(`<p class="fw-pthread-designer-hint" id="${pattern(id)}">([\\s\\S]*?)</p>`).exec(markup)?.[1] ?? '' }
+      const chip = /<button type="button" role="checkbox"[^>]*>/.exec(markup)?.[0] ?? ''
+      const id = /aria-describedby="([^"]+)"/.exec(chip)?.[1] ?? '(none)'
+      return { chip, words: new RegExp(`<span id="${pattern(id)}" class="nds-vh">([\\s\\S]*?)</span>`).exec(markup)?.[1] ?? '' }
     }
     for (const locale of ['it', 'en'] as const) {
       const words = tr(locale)('thread.designer.notHere')
       const held = draw(locale, threadModel({ designer: { name: NAME, ask: false, chip: false, held: words } }))
       const box = describedWords(held)
-      expect(box.input, locale).toContain('aria-disabled="true"')
-      expect(box.input, locale).not.toMatch(/\sdisabled=""/)
+      expect(box.chip, locale).toContain('aria-disabled="true"')
+      expect(box.chip, locale).not.toMatch(/\sdisabled=""/)
+      expect(box.chip, locale).toContain('is-held')
       expect(box.words, locale).toContain(html(words))
-      expect(held, locale).toContain('data-held=""')
-      // The label keeps its colour: never the DS disabled grey.
-      expect(held, locale).not.toMatch(/class="nds-check[^"]*\bdisabled\b/)
       // May be ticked: no hold, described by its hint.
       const free = describedWords(draw(locale, threadModel({ designer: { name: NAME, ask: false, chip: false, held: null } })))
-      expect(free.input, locale).not.toContain('aria-disabled')
+      expect(free.chip, locale).not.toContain('aria-disabled')
       expect(free.words, locale).toContain(html(tr(locale)('thread.designer.hint', { name: NAME })))
     }
-    // A tick on a held box changes nothing; the held words in the DS text colour (not muted, never the disabled grey).
-    const source = readFileSync(new URL('./view/ThreadView.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('if (held === null) onAskDesigner?.(event.target.checked)')
-    expect(source).not.toMatch(/disabled=\{model\.designer/)
-    const css = readFileSync(new URL('./portal-shell.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-pthread-designer\[data-held\] \.fw-pthread-designer-hint \{[^}]*color: var\(--nds-text\);/)
+    // A tick on a held chip changes nothing; it keeps its own colour (never the disabled grey).
+    const source = readFileSync(new URL('../../lib/record-thread/partner/view/PartnerComposer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('if (held !== null) return')
+    expect(source).not.toMatch(/\bdisabled=\{/)
+    const css = readFileSync(new URL('../../lib/record-thread/partner/partner.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rtp-designer\.is-held \{\s*cursor: default;\s*\}/)
   })
 })
 // ---- end F-CP-156

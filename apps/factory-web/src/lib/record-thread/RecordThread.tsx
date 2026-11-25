@@ -119,7 +119,7 @@ export interface RecordThreadSlots {
  * box at the bottom, with its files, To / Cc and the send check — for Incoming's reading pane and the request's full page; docked on
  * a record page (RecordFrame) the Head joins above the feed and, with a pin, the pinned bar (tw- W2.1: at most these 2 bands above the
  * first message) and the helpers beside the box. R and N switch the box from anywhere in the column outside a field; J / K walk the
- * messages while the feed has the focus. Office only (PR-15: the portal keeps the DS PartnerThread). Draws its model: the office
+ * messages while the feed has the focus. Office only (the portal draws the partner face: lib/record-thread/partner, on the same parts). Draws its model: the office
  * container (areas/_shared/record-thread) reads, re-reads live and sends.
  */
 export function RecordThread({ model, actions, slots }: { model: RecordThreadModel; actions: RecordThreadActions; slots?: RecordThreadSlots }) {

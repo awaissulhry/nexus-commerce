@@ -85,12 +85,6 @@
     "followFirst": "Follow the record first.",
     "notShareable": "This record stays inside the factory: it is never shared with a customer or supplier."
   },
-  "portal": {
-    "needInfo": "We need something from you",
-    "lastFromYou": "Last message: from you, {date}",
-    "lastFromUs": "Last message: from {factory}, {date}",
-    "none": "No messages yet"
-  },
   "design": {
     "frame438": "Narrow dock, about 438 px",
     "frame718": "Wide dock, about 718 px",

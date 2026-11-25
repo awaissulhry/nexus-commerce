@@ -16,7 +16,7 @@ import { parentHref, summaryTone } from './model'
  * The portal's generic page (B-W2b-173; B-TH-274: P-ANY, PL5): `/p/<party>/open/<type>/<id>` — any record from a list, a
  * notification or a search before its own page exists, a record's conversation as its own page (`?view=conversation`: the route
  * does not send it on to the record's own page), and the account conversation (`Party`, the person's own party: "Ask us a
- * question"). No tabs: the conversation (PortalThread on the DS PartnerThread) is the main column, the box ready for "Ask a
+ * question"). No tabs: the conversation (PortalThread on the partner face) is the main column, the box ready for "Ask a
  * question"; beside it the record's summary (GET /records/:type/:id/summary, the partner view only — B-TH-076). A record that is
  * not theirs answers like one that does not exist (the thread's or the summary's 404). A step that builds the record's page sets
  * its line in RECORD_PAGES (nav/portal-nav.ts) and the address opens that page instead.
@@ -88,7 +88,7 @@ export function RecordPage({ type, id }: { type: string; id: string }) {
         void loadSummary()
       }}
     >
-      <PortalThread type={type} id={id} onRecord={setRecord} onMissing={() => setMissing(true)} showRecord={false} title={account ? t('thread.accountHeading') : undefined} />
+      <PortalThread type={type} id={id} onRecord={setRecord} onMissing={() => setMissing(true)} title={account ? t('thread.accountHeading') : undefined} />
     </RecordView>
   )
 }

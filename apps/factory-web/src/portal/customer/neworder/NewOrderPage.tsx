@@ -1308,7 +1308,7 @@ function NewOrderContainer() {
       }}
     >
       {/* F-CP-150 (D10): the draft's ONE conversation, docked from its first save; it stays once the draft is sent. */}
-      {record && draftId && phase !== 'start' ? <PortalThread type="PortalOrderRequest" id={record.request.id} showRecord={false} /> : null}
+      {record && draftId && phase !== 'start' ? <PortalThread type="PortalOrderRequest" id={record.request.id} /> : null}
     </NewOrderView>
   )
 }

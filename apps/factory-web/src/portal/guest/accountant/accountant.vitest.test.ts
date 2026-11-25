@@ -193,7 +193,9 @@ describe('B-TH-276 — Ask finance docked like every portal record page', () => 
     expect(html).toContain('aria-label="Ask finance"')
     expect(html).toContain('data-mode="docked"')
     expect(html).not.toContain('fw-pacc-ask')
-    expect(html.match(/class="nds-pthread[ "]/g)?.length).toBe(1)
+    // pt-w2 W2.3: ONE column of the partner face (the office's thread parts), never the DS PartnerThread.
+    expect(html.match(/<section class="fw-rt-column is-docked fw-rtp"/g)?.length).toBe(1)
+    expect(html).not.toContain('nds-pthread')
   })
 
   it('narrower: the room leads with "Messages (2 new)"; open, the conversation alone with its Back', () => {

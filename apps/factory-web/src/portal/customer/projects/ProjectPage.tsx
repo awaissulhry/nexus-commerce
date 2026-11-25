@@ -138,7 +138,7 @@ function ProjectContainer({ id }: { id: string }) {
         },
         onOlderNews: () => void loadOlder(),
       }}
-      thread={state === 'missing' ? null : <PortalThread type="Project" id={id} title={t('thread.title')} showRecord={false} onMissing={() => setThreadMissing(true)} />}
+      thread={state === 'missing' ? null : <PortalThread type="Project" id={id} title={t('thread.title')} onMissing={() => setThreadMissing(true)} />}
     />
   )
 }

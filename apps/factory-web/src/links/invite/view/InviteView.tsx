@@ -3,7 +3,6 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import { Download, ExternalLink, Files as FilesIcon, Info, Paperclip, Users } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
-import { PartnerThread, type PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { Button, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
 import { FileDropzone, FileRow, Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../lib/i18n/format'
@@ -11,7 +10,10 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { LinkFrameView } from '../../../shell/links/view/LinkFrameView'
 import type { SharePage } from '../api'
-import { acceptOf, BODY_LIMIT, daysLeft, fieldValueOf, heldKey, LINK_NS, mayKeys, shownFields, sizeText, threadOldestFirst, type InviteActions, type InviteViewModel, type Words } from '../model'
+import { acceptOf, daysLeft, fieldValueOf, heldKey, LINK_NS, mayKeys, shownFields, threadOldestFirst, type InviteActions, type InviteViewModel, type Words } from '../model'
+// pt-w2 W2.4 (lane pt-, A10): the record's shared thread on the ONE partner face, kind link.
+import type { PortalThreadMessage } from '../../../lib/record-thread/partner/model'
+import { PartnerColumn } from '../../../lib/record-thread/partner/view/PartnerColumn'
 // B-TH-274: the files strip of the thread (the old Shared files card merged in).
 import { filesStrip } from '../model'
 import '../invite.css'
@@ -323,12 +325,14 @@ function Upload({ page, model, actions }: { page: SharePage; model: InviteViewMo
 }
 // ---- end B-TH-274
 
-/** sec:thread — the record's shared thread (messages and files; e-mail replies land here); post with ⌘Enter. */
+/**
+ * sec:thread — the record's shared thread (messages and files; email replies land here) on the ONE partner face, kind link (pt-w2 W2.4):
+ * no Reply and no quote (its read and its post carry no reply link: A10), the files as rows, the "+" ticks the record's shared files to
+ * go with the message, Enter posts; held with the reason when the invitation does not allow writing.
+ */
 function Messages({ page, model, actions }: { page: SharePage; model: InviteViewModel; actions?: InviteActions }) {
   const { t, say } = useSay()
-  const locale = useLocale()
-  const ds = useDsWords()
-  const messages = useMemo<PartnerMessage[]>(
+  const messages = useMemo<PortalThreadMessage[]>(
     () =>
       threadOldestFirst(page.thread.messages, model.older).map((message) => ({
         id: message.id,
@@ -336,38 +340,41 @@ function Messages({ page, model, actions }: { page: SharePage; model: InviteView
         channel: message.channel === 'EMAIL' ? 'email' : message.channel === 'PORTAL' ? 'portal' : 'app',
         author: message.author,
         body: message.body,
-        attachments: message.attachments.map((file) => ({ id: file.id, name: file.originalName, size: sizeText(file.sizeBytes, locale) })),
+        attachments: message.attachments.map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType })),
         at: message.at,
-        atText: formatDateTime(message.at, { locale, timeZone: model.timeZone }),
       })),
-    [page.thread.messages, model.older, locale, model.timeZone],
+    [page.thread.messages, model.older],
   )
   const held = heldKey(page.thread.held)
-  // PartnerThread draws its own frame: no card around it.
   return (
     <div className="fw-inv-thread">
-      {model.postProblem && <Banner tone="danger" title={say(model.postProblem)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismiss?.('post')}>{t('dismiss')}</Button>} />}
-      <PartnerThread
-        title={t('thread.title')}
-        headingLevel={2}
-        companyName={page.from.companyName}
-        messages={messages}
-        empty={t('thread.empty')}
-        labels={ds.partnerThread}
-        textareaLabels={ds.textarea}
-        loadMore={model.cursor ? { onClick: () => actions?.onMore?.(), busy: model.moreBusy } : null}
-        composer={{
-          value: model.draft,
+      <PartnerColumn
+        model={{
+          kind: 'link',
+          state: 'ready',
+          title: t('thread.title'),
+          recordName: page.record.theirRef ?? page.record.reference,
+          companyName: page.from.companyName,
+          messages,
+          more: model.cursor !== null,
+          older: model.moreBusy ? 'loading' : 'idle',
+          composer: {
+            value: model.draft,
+            busy: model.posting,
+            held: held ? t(held) : null,
+            // "Post, attach": the record's files shared with the person may go with the message (the "+").
+            attach: { files: page.files.map((file) => ({ id: file.id, name: file.originalName })), attached: model.attached },
+          },
+          help: page.thread.replyByEmail ? [t('thread.replyByEmail')] : [],
+          notice: say(model.postProblem),
+        }}
+        actions={{
           onChange: (value) => actions?.onDraft?.(value),
           onSend: () => actions?.onPost?.(),
-          busy: model.posting,
-          heldReason: held ? t(held) : null,
-          hint: page.thread.replyByEmail ? t('thread.replyByEmail') : null,
-          limit: BODY_LIMIT,
-          // "Post, attach": the record's files shared with the person may go with the message.
-          files: page.files.map((file) => ({ id: file.id, name: file.originalName })),
-          attached: model.attached,
           onAttach: (ids) => actions?.onAttach?.(ids),
+          onOlder: () => actions?.onMore?.(),
+          onOpenFile: (fileId) => actions?.onOpenFile?.(fileId),
+          onDismissNotice: () => actions?.onDismiss?.('post'),
         }}
       />
     </div>

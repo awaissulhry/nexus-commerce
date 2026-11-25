@@ -383,7 +383,7 @@ function NoticeContainer({ id }: { id: string | null }) {
 
   // B-TH-277: the order's conversation, docked once the order is known (a notice read, or the new notice's order chosen and offered).
   const dockOrder = dockedOrderOf({ page, order, missing: load === 'missing' })
-  const thread = dockOrder ? <PortalThread type="PurchaseOrder" id={dockOrder.id} showRecord={false} /> : null
+  const thread = dockOrder ? <PortalThread type="PurchaseOrder" id={dockOrder.id} /> : null
   const threadLabel = t('thread.label', { number: dockOrder?.number ?? '' })
 
   if (!stepping && page) {

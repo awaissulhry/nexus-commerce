@@ -35,6 +35,71 @@
       "tooShort": "Move the crosshair away from the start first."
     }
   },
+  "record-files": {
+    "priced": {
+      "lockedCount_one": "Priced document — you cannot open it",
+      "lockedCount_other": "{count} priced documents — you cannot open them"
+    }
+  },
+  "record-thread-card": {
+    "menu": {
+      "reply": "Reply",
+      "copyText": "Copy text"
+    },
+    "quote": {
+      "you": "You",
+      "label": "Go to the message of {who} at {time}"
+    },
+    "files": {
+      "open": "Open {name}",
+      "moreLabel_one": "Show {count} more file",
+      "moreLabel_other": "Show {count} more files"
+    },
+    "body": {
+      "showAll": "Show all ({count} lines)"
+    }
+  },
+  "record-thread-composer": {
+    "placeholder": "Write a message"
+  },
+  "record-thread-feed": {
+    "feed": {
+      "label": "Messages, oldest first"
+    },
+    "state": {
+      "loading": "Reading the messages…",
+      "error": "The messages could not be read",
+      "errorBody": "What you typed in the box below is kept.",
+      "tryAgain": "Try again"
+    },
+    "down": {
+      "label": "Go to the newest message"
+    },
+    "live": {
+      "arrived_one": "{count} new message",
+      "arrived_other": "{count} new messages"
+    },
+    "older": {
+      "retry": "Retry"
+    }
+  },
+  "record-thread-head": {
+    "more": {
+      "label": "Message tools"
+    },
+    "width": {
+      "hide": "Hide the messages"
+    },
+    "keys": {
+      "title": "How it works",
+      "quote": "on a quote: go to the message",
+      "enter": "send",
+      "esc": "close a menu, drop the reply"
+    },
+    "pinbar": {
+      "label": "Pinned message {n} of {count}: go to it"
+    }
+  },
   "safety-reports": {
     "held": {
       "offline": "No connection: try again when you are back online."

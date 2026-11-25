@@ -48,7 +48,7 @@ const CHECK = words('record-thread-send')
 const HEAD = words('record-thread-head')
 const ASK = words('record-approvals')
 const SHARE = words('record-shares')
-const DS = words('ds-words')
+const RTP = words('record-thread-partner') // pt-w2 W2.4: the portal box's own words (the partner face's)
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence as a regular expression: its placeholders match anything. */
@@ -106,11 +106,11 @@ function portalDock(page: Page): Locator {
   return page.locator('.fw-prf[data-mode="docked"] > aside#messages')
 }
 
-/** Writes in a portal page's docked conversation (the DS PartnerThread's box) and waits for the message in it. */
+/** Writes in a portal page's docked conversation (the partner face's box) and waits for the message in it. */
 async function writeInDock(page: Page, text: string): Promise<void> {
   const dock = portalDock(page)
-  await dock.getByRole('textbox', { name: DS('partnerThread.composer'), exact: true }).fill(text)
-  await dock.getByRole('button', { name: DS('partnerThread.send'), exact: true }).click()
+  await dock.getByRole('textbox', { name: RTP('box'), exact: true }).fill(text)
+  await dock.getByRole('button', { name: RTP('send'), exact: true }).click()
   await seen(dock.getByText(text), 60_000)
 }
 

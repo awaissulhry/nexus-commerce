@@ -31,6 +31,7 @@ const FRAME = words('record-frame')
 const HEAD = words('record-thread-head')
 const CARD = words('record-thread-card') // tw- T.3: a bubble's menu (Answer in its thread)
 const DS = words('ds-words')
+const RTP = words('record-thread-partner') // pt-w2 W2.4: the portal box's own words (the partner face's)
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (pass the key's raw text: `words(ns)(key)` keeps its placeholders). */
@@ -152,8 +153,8 @@ export default defineStage({
       await alpha.go(`/orders/${order.id}`)
       const dock = alpha.page.locator('.fw-prf[data-mode="docked"] > aside#messages')
       await seen(dock, 60_000)
-      await dock.getByRole('textbox', { name: DS('partnerThread.composer'), exact: true }).fill(FROM_ALPHA)
-      await dock.getByRole('button', { name: DS('partnerThread.send'), exact: true }).click()
+      await dock.getByRole('textbox', { name: RTP('box'), exact: true }).fill(FROM_ALPHA)
+      await dock.getByRole('button', { name: RTP('send'), exact: true }).click()
       await seen(dock.getByText(FROM_ALPHA), 60_000)
       await flow.settle()
     })

@@ -14,7 +14,6 @@ import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialo
 import { RemindMeDialog } from '../../../../shell/panels/remind-me/view/RemindMeDialog'
 import { CloseThreadConfirm } from '../../popups/view/Confirms'
 import type { DockWidth, HeadDoor, HeadModel, ThreadView } from '../model'
-import { PortalHeadLine, type PortalHeadModel } from './PortalHeadLine'
 // B-TH-229: "Change owner…"
 import { OwnerDialog } from './OwnerDialog'
 import { HEAD_NS, RecordThreadHead } from './RecordThreadHead'
@@ -40,8 +39,6 @@ export interface HeadCaseModel {
   }
   /** A door open at once (the case shows that dialog); B-TH-229: 'owner' — Change owner…. */
   readonly open?: HeadDoor | 'close' | 'owner' | null
-  /** The portal's plain line instead of the office Head. */
-  readonly portal?: PortalHeadModel
 }
 
 export function HeadCase({ model }: { model: HeadCaseModel }) {
@@ -88,7 +85,7 @@ function Case({ model }: { model: HeadCaseModel }) {
         <div key={frame}>
           <p className="fw-rth-frame-label">{t(`design.frame${frame}`)}</p>
           <section className={`fw-rth-frame is-${frame}`} aria-label={t('design.frameLabel', { width: frame })}>
-            {model.portal ? <PortalHeadLine model={model.portal} /> : <RecordThreadHead model={frame === 375 ? { ...head, compact: true, width: null } : head} actions={actions} />}
+            <RecordThreadHead model={frame === 375 ? { ...head, compact: true, width: null } : head} actions={actions} />
             {open === 'followers' && frame === model.frames[0] ? (
               <div className="fw-rth-open">
                 <FollowersControl model={{ followers: { ...dialogs.followers, open: true } }} />

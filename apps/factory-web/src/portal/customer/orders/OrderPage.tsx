@@ -1281,7 +1281,7 @@ function OrderContainer({ id }: { id: string }) {
       }}
     >
       {/* B-TH-275: the order's ONE conversation, docked by the frame beside every tab. */}
-      {record ? <PortalThread type="SalesOrder" id={record.order.id} showRecord={false} /> : null}
+      {record ? <PortalThread type="SalesOrder" id={record.order.id} /> : null}
     </OrderRecordView>
   )
 }

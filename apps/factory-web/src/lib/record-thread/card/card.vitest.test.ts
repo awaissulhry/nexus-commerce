@@ -951,6 +951,8 @@ describe('tw- W2.2 — the walls of the face: never forward, star, delete, edit,
   }
   const rt = sources(new URL('../', import.meta.url))
   const srt = sources(new URL('../../../areas/_shared/record-thread/', import.meta.url))
+  // pt-w2 W2.2 (WALL): the portal thread and the invite page's thread read the same rule (rt/partner is inside rt/ already).
+  const outside = [...sources(new URL('../../../portal/shell/thread/', import.meta.url)), ...sources(new URL('../../../links/invite/view/', import.meta.url)), readFileSync(new URL('../../../portal/shell/view/ThreadView.tsx', import.meta.url), 'utf8')]
 
   it('R15: no Forward, Star, Delete, Edit, Message info or Report row anywhere in rt/', () => {
     const menu = readFileSync(new URL('./view/MessageMenu.tsx', import.meta.url), 'utf8')
@@ -963,13 +965,13 @@ describe('tw- W2.2 — the walls of the face: never forward, star, delete, edit,
     for (const source of [...rt, ...srt]) expect(source).not.toMatch(/linkPreview|og:image|unfurl/i)
   })
 
-  it('R6–R9: no photo of a person, no reaction, no "seen by" / "read by" / "typing" field or word in rt/ + srt/', () => {
-    for (const source of [...rt, ...srt]) {
+  it('R6–R9: no photo of a person, no reaction, no "seen by" / "read by" / "typing" field or word in rt/ + srt/ (+ the portal thread, the invite page)', () => {
+    for (const source of [...rt, ...srt, ...outside]) {
       expect(source).not.toMatch(/\bavatarUrl\b|\bphotoUrl\b|\breactions?\s*[:=]/)
       expect(source).not.toMatch(/\b(seenBy|readBy|isTyping|typingNow)\b/)
     }
     for (const locale of ['en', 'it'] as const) {
-      for (const name of ['record-thread', 'record-thread-card', 'record-thread-feed', 'record-thread-head']) {
+      for (const name of ['record-thread', 'record-thread-card', 'record-thread-feed', 'record-thread-head', 'record-thread-partner' /* pt-w2 */]) {
         for (const [key, text] of Object.entries(CATALOGUE[locale][name] ?? {})) expect(text, `${locale} ${name} ${key}`).not.toMatch(/\b(seen by|read by|is typing|visto da|letto da|sta scrivendo)\b/i)
       }
     }

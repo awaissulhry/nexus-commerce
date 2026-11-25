@@ -150,42 +150,38 @@
     "title": "Messaggi",
     "accountTitle": "Fateci una domanda",
     "accountHeading": "Sul vostro account",
-    "empty": "Ancora nessun messaggio. Chiedeteci pure qualsiasi cosa su questo documento.",
-    "emptyAccount": "Ancora nessun messaggio. Chiedeteci pure qualsiasi cosa.",
-    "hint": "Potete anche rispondere alle nostre e-mail: la risposta arriva qui.",
-    "whoCan": "Il vostro accesso vi permette di leggere questa conversazione. Chiedete al vostro amministratore ({names}) di poterci scrivere.",
-    "whoCanNoAdmin": "Il vostro accesso vi permette di leggere questa conversazione. Chiedeteci di poterci scrivere.",
+    "hint": "Potete anche rispondere alle nostre email: la risposta arriva qui.",
+    "whoCan": "Potete leggere questi messaggi; per scrivere qui, chiedete al vostro amministratore ({names}).",
+    "whoCanNoAdmin": "Potete leggere questi messaggi; per scrivere qui, chiedetelo a noi.",
     "held": {
       "PREVIEW": "Questa è un'anteprima: da qui non si invia nulla.",
-      "NO_COMMENT": "Il vostro accesso vi permette di leggere questa conversazione, non di scriverci.",
-      "CLOSED": "Abbiamo chiuso questa conversazione. Se qualcosa è ancora aperto, scriveteci sul documento.",
+      "NO_COMMENT": "Potete leggere questi messaggi, non scriverci.",
+      "CLOSED": "Qui la scrittura è chiusa. Se qualcosa è ancora aperto, scriveteci sul documento.",
       "other": "Qui non potete scrivere."
     },
     "failed": {
-      "conflict": "Nel frattempo abbiamo chiuso questa conversazione: il messaggio non è stato inviato. Il testo è ancora qui.",
+      "conflict": "Nel frattempo la scrittura qui è stata chiusa: il messaggio non è stato inviato. Il testo è ancora qui.",
       "forbidden": "Il vostro accesso non vi permette di scrivere qui. Il testo è ancora qui.",
       "invalid": "Il messaggio non può essere inviato così. Controllatelo e inviatelo di nuovo.",
       "unavailable": "Nessuna connessione: il messaggio non è stato inviato. Il testo è ancora qui; inviatelo di nuovo.",
       "other": "Il messaggio non è stato inviato. Il testo è ancora qui; inviatelo di nuovo.",
       "more": "Non è stato possibile leggere i messaggi precedenti."
     },
-    "erased": "Messaggio rimosso dopo una richiesta per la privacy",
-    "pins": {
-      "title_one": "{count} messaggio fissato",
-      "title_other": "{count} messaggi fissati",
-      "removed": "Messaggio rimosso dopo una richiesta di privacy",
-      "filesOnly_one": "{count} file",
-      "filesOnly_other": "{count} file"
-    },
     "designer": {
-      "ask": "Chiedi a {name}, designer della fabbrica",
+      "ask": "Chiedete a {name}, designer della fabbrica",
       "hint": "{name} riceve subito il vostro messaggio; il resto della fabbrica lo legge come sempre.",
       "typeAt": "Scrivete @ per chiedere a {name}.",
-      "chip": "{name} · designer della fabbrica",
       "asked": "Abbiamo chiesto a {name}.",
       "notHere": "Qui il designer della fabbrica non si può chiedere: il messaggio arriva al nostro team.",
       "noDesigner": "Non c'è ancora un designer della fabbrica per voi: scrivete qui, risponde il nostro team.",
       "capped": "Messaggio inviato. Oggi avete già chiesto 20 volte al designer della fabbrica: questo messaggio arriva al nostro team."
+    },
+    "reply": {
+      "refused": "A quel messaggio non si può rispondere qui."
+    },
+    "jump": {
+      "tooFar": "Troppo indietro per aprirlo qui.",
+      "outOfReach": "Quel messaggio è fuori dalla vostra portata."
     }
   },
   "record": {

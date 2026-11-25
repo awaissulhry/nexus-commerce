@@ -32,6 +32,7 @@ const REQUEST = words('portal-requests')
 const INCOMING = words('sales-inquiries')
 const BOX = words('record-thread-composer')
 const DS = words('ds-words')
+const RTP = words('record-thread-partner') // pt-w2 W2.4: the portal box's own words (the partner face's)
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence as a regular expression: its placeholders match anything. */
@@ -153,8 +154,8 @@ export default defineStage({
       await seen(page.getByRole('heading', { name: REQUEST('title', { seq: run.seq }) }), 60_000)
       await seen(page.getByText(REQUEST('question.title')).first())
       await seen(page.getByText(QUESTION).first())
-      await page.getByRole('textbox', { name: DS('partnerThread.composer'), exact: true }).fill(ANSWER)
-      await page.getByRole('button', { name: DS('partnerThread.send'), exact: true }).click()
+      await page.getByRole('textbox', { name: RTP('box'), exact: true }).fill(ANSWER)
+      await page.getByRole('button', { name: RTP('send'), exact: true }).click()
       await seen(page.getByText(ANSWER).first())
       await flow.settle()
       expect((await flow.read(sales.page, `/sales/inquiries/${run.id}`)).inquiry.status).toBe('ASSIGNED')

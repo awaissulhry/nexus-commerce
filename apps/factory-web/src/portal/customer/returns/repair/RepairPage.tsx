@@ -251,7 +251,7 @@ function RepairContainer({ id }: { id: string }) {
       }}
     >
       {/* B-TH-275: the repair's ONE conversation, docked beside both tabs. */}
-      {repair ? <PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} showRecord={false} /> : null}
+      {repair ? <PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} /> : null}
     </RepairRecordView>
   )
 }

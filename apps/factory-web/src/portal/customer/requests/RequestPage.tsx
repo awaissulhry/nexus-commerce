@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
+import type { PortalThreadMessage } from '../../../lib/record-thread/partner/model'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
@@ -25,7 +25,7 @@ import { useRequestWords } from './words'
  * `/p/<party>/orders/requests/<id>` — the customer's request (B-TH-222, B-TH-303; threads plan X-P-CUS-REQ): GET
  * /portal/inquiries/:id (another customer's id answers 404: the neutral "not one of yours" page, W37), the band ("Your request
  * 7", back to Orders & requests, their PO, the true state), the state line, and the request's thread through the portal's
- * PortalThread on the DS PartnerThread (two sides, no office-note kind by type, PR-15; read and posted only through the
+ * PortalThread on the partner face (two sides, no office-note field by type; read and posted only through the
  * partner thread routes, W08). It reads again on the live channel's request events (ours only: the channel names the party)
  * and when the connection comes back; Answer puts the cursor in the message box.
  */
@@ -99,7 +99,7 @@ function RequestContainer({ id }: { id: string }) {
     onReconnect: () => void load(),
   }, allowed)
 
-  const onMessages = useCallback((read: readonly PartnerMessage[]) => {
+  const onMessages = useCallback((read: readonly PortalThreadMessage[]) => {
     setMessages(read.map((message) => ({ id: message.id, side: message.side, body: message.body, at: message.at })))
   }, [])
 
@@ -182,7 +182,7 @@ function RequestContainer({ id }: { id: string }) {
             setWithdrawing(null)
           },
         }}
-        thread={state === 'missing' ? null : <PortalThread type="Inquiry" id={id} title={t('thread.title')} showRecord={false} onMissing={() => setState('missing')} onMessages={onMessages} />}
+        thread={state === 'missing' ? null : <PortalThread type="Inquiry" id={id} title={t('thread.title')} onMissing={() => setState('missing')} onMessages={onMessages} />}
       />
     </div>
   )
