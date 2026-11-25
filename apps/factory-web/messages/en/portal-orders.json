@@ -90,7 +90,7 @@
   },
   "row": {
     "open": "Open the order",
-    "shipments": "Shipments & tracking",
+    "shipments": "Shipments",
     "messages": "Messages",
     "menu": "Actions for order {number}",
     "openRequest": "Open the request"

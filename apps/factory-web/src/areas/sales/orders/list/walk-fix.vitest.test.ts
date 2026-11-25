@@ -754,7 +754,9 @@ describe('fourth look: the extra columns join ONE AT A TIME, each as soon as the
     expect(workPreset('late', null, false, 0).shown).toEqual([...WAITING_SET])
     expect(workPreset('open', 'us', false, 1).shown).toEqual([...BASE, 'waitingOn'])
     const tab = read('../../customers/record/view/WorkTab.tsx')
-    expect(tab).toContain('const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))')
+    // pg-w1: the measure moved into the shared lib part; the tab hands it its own thresholds (workJoinedOf).
+    expect(tab).toContain('const { ref, value: joined } = useRoomWidth(workJoinedOf, 0)')
+    expect(read('../../../../lib/order-cells/use-room-width.ts')).toContain('const measure = () => setValue(of(node.getBoundingClientRect().width))')
     expect(tab).toContain('return { ref, room: workRoomOfJoined(joined), joined }')
     expect(tab).toContain('workRoom.joined /* F-CW-103; cw fx8: the columns join one at a time */),')
     // The Money columns and the sheet's own `wide` flag still read the measured room by name (their own rule, left as it is).
