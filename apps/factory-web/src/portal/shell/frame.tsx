@@ -1,9 +1,12 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { TabItem } from '@nexus/ui/components'
+import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
+import type { CustomerOrderStatus } from '@nexus/factory-domain/sales/portal-orders/status' // pp-w1 (L4)
 import { browserApi } from '../../lib/api/browser'
+import type { HealthState } from '../../lib/production/model'
 import type { ApiClient } from '../../lib/api/client'
 import { createLiveBus, type LiveBus, type LiveChange, type LiveSource, type LiveState } from '../../shell/live/bus'
 import type { MyAccess, PortalMe } from './api'
@@ -92,7 +95,11 @@ export interface PortalBand {
   back?: { href: string; label: string } | null
   /** Their reference first, ours second (RefPair). */
   refs?: { theirs?: string | null; ours?: string | null } | null
-  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' } | null
+  /**
+   * The lifecycle pill. pp-w1 (L4): a customer's order also names its status (`order`): the shell draws the SHARED status chip
+   * (lib/order-cells StateChip: the office's tone, its group's mark — the same chip as the orders list); absent: the pill as before.
+   */
+  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'; order?: CustomerOrderStatus } | null
   /** At most two; the primary last (on a phone it moves to the action bar above the bottom bar). */
   actions?: readonly PortalBandAction[]
   /** The ⋯ items; the frame ends them with "Ask a question" (about `ask`, else the account). */
@@ -105,13 +112,78 @@ export interface PortalBand {
   readOnly?: { key: string; params?: Readonly<Record<string, string>> } | null
   /** The page's own keys, for the shortcuts dialog (`keys` as shown, words in the person's language). */
   keys?: readonly { keys: readonly string[]; words: string }[]
+  /**
+   * pp-w1 (w1.2; 10-design § 2): what follows the status pill on a record page, the office band's twins: the record's health, the
+   * customer's own urgency and the record it was made from. Data only; absent: none (every other page draws as before).
+   */
+  chips?: PortalBandChips | null
+  /**
+   * pp-w1 (w1.1; 10-design § 4): the record frame's thread button before the ⋯ — "Messages (2 new)" while the conversation is not on
+   * screen (hidden, or narrower with its view closed). Set by PortalRecordFrame (`usePortalBandThread`), never by a page.
+   */
+  thread?: PortalBandThread | null
+}
+
+/** pp-w1 (w1.1): the band's thread button: the person's own new messages and what a click does (shows or opens the conversation). */
+export interface PortalBandThread {
+  readonly count: number
+  readonly onClick: () => void
+}
+
+/** pp-w1 (w1.2): the band's chips. Customer-safe by shape: no note, no person, no amount. */
+export interface PortalBandChips {
+  /** Late or At risk only, never On track (the shared HealthPill, customer face): a person's raise carries its curated reason code only. */
+  readonly health?: { readonly computed: HealthState | null; readonly raised?: { readonly reason: PromiseReasonCode } | null } | null
+  /** "Urgent": the customer's own urgency, in the page's words; null: none. */
+  readonly urgent?: string | null
+  /** "Made from your request #7": its page, in the page's words; null: none. */
+  readonly madeFrom?: { readonly href: string; readonly label: string } | null
 }
 
 type BandSetter = (band: PortalBand | null) => void
 const BandContext = createContext<BandSetter | null>(null)
+// pp-w1 (w1.1): the record frame's own part of the band (its thread button), set apart from the page's and drawn with it.
+type BandThreadSetter = (thread: PortalBandThread | null) => void
+const BandThreadContext = createContext<BandThreadSetter | null>(null)
 
 export function PortalBandProvider({ set, children }: { set: BandSetter; children?: ReactNode }) {
-  return <BandContext.Provider value={set}>{children}</BandContext.Provider>
+  const page = useRef<PortalBand | null>(null)
+  const thread = useRef<PortalBandThread | null>(null)
+  const push = useCallback(() => set(page.current && thread.current ? { ...page.current, thread: thread.current } : page.current), [set])
+  const setPage = useCallback<BandSetter>(
+    (band) => {
+      page.current = band
+      push()
+    },
+    [push],
+  )
+  const setThread = useCallback<BandThreadSetter>(
+    (next) => {
+      thread.current = next
+      push()
+    },
+    [push],
+  )
+  return (
+    <BandContext.Provider value={setPage}>
+      <BandThreadContext.Provider value={setThread}>{children}</BandThreadContext.Provider>
+    </BandContext.Provider>
+  )
+}
+
+/**
+ * pp-w1 (w1.1): the record frame puts its thread button in the band (null takes it away; it leaves with the frame). The band is set
+ * again only when the count or the button's presence changes; a click always reaches the frame's latest one.
+ */
+export function usePortalBandThread(thread: PortalBandThread | null): void {
+  const set = useContext(BandThreadContext)
+  const latest = useRef(thread)
+  latest.current = thread
+  const count = thread ? thread.count : null
+  useEffect(() => {
+    set?.(count === null ? null : { count, onClick: () => latest.current?.onClick() })
+  }, [set, count])
+  useEffect(() => () => set?.(null), [set])
 }
 
 /**

@@ -41,6 +41,12 @@
       "lockedCount_other": "{count} priced documents — you cannot open them"
     }
   },
+  "record-frame": {
+    "notices": {
+      "fewer_one": "Hide 1 notice",
+      "fewer_other": "Hide {count} notices"
+    }
+  },
   "record-thread-card": {
     "menu": {
       "reply": "Reply",
