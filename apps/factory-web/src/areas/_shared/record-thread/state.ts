@@ -106,18 +106,6 @@ export function withCorrections(messages: readonly OfficeMessage[]): OfficeMessa
     return { ...message, correctedBy: by }
   })
 }
-
-/**
- * Why a jump (a quote, a correction, a pin, a search hit, an ask, the file viewer) did not reach its message, in words (null: it is
- * there): an older page could not be read; the 1,000 messages a jump reads ran out with more left ("Too far back to open here."); or
- * the thread has no such message for this reader ("That message is out of your reach.").
- */
-export function jumpRefusal(outcome: { readonly found: boolean; readonly failed: boolean; readonly cursor: string | null }): { readonly ns: string; readonly key: string } | null {
-  if (outcome.found) return null
-  if (outcome.failed) return { ns: 'record-thread-feed', key: 'older.failed' }
-  if (outcome.cursor !== null) return { ns: 'record-thread', key: 'notice.messageGone' }
-  return { ns: 'record-thread', key: 'notice.outOfReach' }
-}
 // ---- end tw- W1.4
 
 /** After a re-read: the outbox items the server now lists leave; the draft, files and recipients stay as they are. */

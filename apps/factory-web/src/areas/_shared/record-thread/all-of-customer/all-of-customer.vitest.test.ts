@@ -667,7 +667,8 @@ describe('tw- T.0 — All of loads older messages on scroll, as the record threa
     expect(view).toContain('<div ref={topRef} className="fw-rt-sentinel" aria-hidden="true" />')
     expect(view).toContain('if (!shouldLoadOlder({ more: model.more, older: olderState, count, askedAt: askedAt.current })) return')
     expect(view).toContain("{ root: scroller, rootMargin: '240px 0px 0px 0px' }")
-    const feed = readFileSync(new URL('../../../../lib/record-thread/feed/view/Feed.tsx', import.meta.url), 'utf8')
+    // pt-w1 W1.3: the record thread's top sentinel lives in the list's behaviour both doors run.
+    const feed = readFileSync(new URL('../../../../lib/record-thread/feed/use-feed-shell.ts', import.meta.url), 'utf8')
     expect(feed).toContain("{ root: feed, rootMargin: '240px 0px 0px 0px' }")
     expect(textOf(render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'loading' }) })))).toContain('Reading older messages…')
     const failed = render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'failed' }) }))

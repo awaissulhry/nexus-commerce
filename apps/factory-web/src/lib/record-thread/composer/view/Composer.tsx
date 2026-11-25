@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Ban, ChevronDown, Euro, Globe, HardHat, Link2, Lock, Mail, Paperclip, PencilLine, Plus, Ruler, SendHorizontal, UserPlus, X } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { Ban, ChevronDown, Euro, Globe, HardHat, Link2, Lock, Mail, Paperclip, PencilLine, Plus, Ruler, UserPlus, X } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Checkbox, Tooltip } from '@nexus/ui/primitives'
 import { MentionInput, type MentionInputHandle } from '../../helpers/view/MentionInput'
-import { toneClass } from '../../parts/tones'
 import { useLocale, useT } from '../../../i18n/provider'
 import { shortDateOf, dayOf, timeOf } from '../../parts/time'
 // B-TH-236: the amount field (B-TH-049) beside the box, price readers only.
@@ -17,13 +16,11 @@ import {
   audienceName,
   boxState,
   composerModes,
-  COUNTER_FROM,
   enterSends,
   floorOffered,
   floorTooLong,
   FLOOR_TEXT,
   heldReason,
-  MAX_BODY,
   sendKey,
   switchMode,
   type ComposerContext,
@@ -38,6 +35,8 @@ import { aboutWords, withoutAbout } from '../model'
 // F-CP-147 (B-CP-020): the API held words that look like a price — the box warns (no amount repeated) and Send becomes "Send anyway".
 import { namesPriceAsked } from '../model'
 import { NAMES_PRICE_SEND, namesPriceWords } from '../../send-check/model'
+// pt-w1 W1.2 (lane pt-, S3): the ONE row both doors draw — the bar, the chips, the box slot, Send, the counter; the keys; the box's growth.
+import { ComposerHeld, ComposerRow, composerKeys, LinkBar, ReplyLine, useBoxGrow } from './ComposerRow'
 import '../../parts/parts.css'
 import '../composer.css'
 
@@ -104,7 +103,6 @@ export function Composer(props: ComposerProps) {
   const heldId = useId()
   const boxRef = useRef<HTMLDivElement>(null)
   const mention = useRef<MentionInputHandle>(null)
-  const textArea = () => boxRef.current?.querySelector<HTMLTextAreaElement>('textarea') ?? null
   const [dragging, setDragging] = useState(false)
   // B-TH-283: which side of the box a drag is over (the right side files them as measurement sheets).
   const [dropSide, setDropSide] = useState<'files' | 'sheets'>('files')
@@ -122,21 +120,8 @@ export function Composer(props: ComposerProps) {
   const length = [...draft.body].length
 
   // tw- W2.3 (P0-B2): the box grows with the text from one line to about 8 lines, then scrolls inside; its floor is ONE line
-  // (composer.css owns the height rule: never 0 px — a measured 0 is never written back).
-  useLayoutEffect(() => {
-    const area = textArea()
-    if (!area) return
-    area.style.height = 'auto'
-    const line = Number.parseFloat(getComputedStyle(area).lineHeight) || 20
-    const max = Math.round(line * 8 + 12)
-    const height = area.scrollHeight
-    if (height <= 0) {
-      area.style.removeProperty('height')
-      return
-    }
-    area.style.height = `${Math.min(height, max)}px`
-    area.style.overflowY = height > max ? 'auto' : 'hidden'
-  }, [draft.body, draft.mode])
+  // (composer.css owns the height rule: never 0 px — a measured 0 is never written back). pt-w1 W1.2: ComposerRow's useBoxGrow.
+  useBoxGrow(boxRef, draft)
 
   // The new mode is read out ("Reply to Brand Alpha — Brand Alpha reads this").
   useEffect(() => {
@@ -148,32 +133,26 @@ export function Composer(props: ComposerProps) {
   if (state === 'closed') {
     const closed = context.closed ?? null
     return (
-      <div className="fw-rt-composer">
-        <div className="fw-rt-cx-held">
-          <Lock size={16} aria-hidden />
-          <span>
-            {closed?.by && closed.at
-              ? t('box.closed', { who: closed.by, date: shortDateOf(closed.at, locale, dayOf(props.now ?? new Date().toISOString())) })
-              : t('box.closedPlain')}
-          </span>
-          {context.can.manage && props.onReopen && <span aria-hidden="true">·</span>}
-          {context.can.manage && props.onReopen && (
-            <Button size="sm" onClick={props.onReopen}>
-              {t('box.reopen')}
-            </Button>
-          )}
-        </div>
-      </div>
+      <ComposerHeld icon={<Lock size={16} aria-hidden />}>
+        <span>
+          {closed?.by && closed.at
+            ? t('box.closed', { who: closed.by, date: shortDateOf(closed.at, locale, dayOf(props.now ?? new Date().toISOString())) })
+            : t('box.closedPlain')}
+        </span>
+        {context.can.manage && props.onReopen && <span aria-hidden="true">·</span>}
+        {context.can.manage && props.onReopen && (
+          <Button size="sm" onClick={props.onReopen}>
+            {t('box.reopen')}
+          </Button>
+        )}
+      </ComposerHeld>
     )
   }
   if (state === 'noRight') {
     return (
-      <div className="fw-rt-composer">
-        <div className="fw-rt-cx-held">
-          <Ban size={16} aria-hidden />
-          <span>{t('box.noRight')}</span>
-        </div>
-      </div>
+      <ComposerHeld icon={<Ban size={16} aria-hidden />}>
+        <span>{t('box.noRight')}</span>
+      </ComposerHeld>
     )
   }
 
@@ -194,21 +173,21 @@ export function Composer(props: ComposerProps) {
   }
 
   // tw- W2.3 (D5, Z3): Enter sends, Shift+Enter a new line; in Reply to N (context.many) only ⌘/Ctrl+Enter sends (N records, no Undo).
-  // The @ list takes its own Enter first (MentionInput). "/" in an empty box opens Saved replies.
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.altKey && (enterSends(context) || event.metaKey || event.ctrlKey)) {
-      if (event.nativeEvent.isComposing) return
-      event.preventDefault()
-      send()
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      // tw- fx2 (walk G-12): Esc drops the reply (or correction) bar and the focus stays in the box; with no bar it leaves the box.
-      if (link) dropLink()
-      else props.onEscape?.()
-    } else if (event.key === '/' && draft.body === '' && openReplies()) {
-      event.preventDefault()
-    }
-  }
+  // The @ list takes its own Enter first (MentionInput). "/" in an empty box opens Saved replies. pt-w1 W1.2: ONE rule (composerKeys).
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+    composerKeys(
+      event,
+      { enterSends: enterSends(context), body: draft.body },
+      {
+        send,
+        escape: () => {
+          // tw- fx2 (walk G-12): Esc drops the reply (or correction) bar and the focus stays in the box; with no bar it leaves the box.
+          if (link) dropLink()
+          else props.onEscape?.()
+        },
+        slash: openReplies,
+      },
+    )
   /** Opens Saved replies (its own menu inside the box); false when there is none. */
   const openReplies = (): boolean => {
     const trigger = boxRef.current?.querySelector<HTMLButtonElement>('.fw-rt-cx-helpers .nds-menu-wrap > button')
@@ -275,22 +254,20 @@ export function Composer(props: ComposerProps) {
       <span>{sendWords(namesPriceWords(draft.mode).key)}</span>
     </p>
   ) : link ? (
-    <div className={`fw-rt-cx-bar is-link${quote ? ` ${toneClass(quote.tone)}` : ''}`} role="group" aria-label={link.kind === 'reply' ? t('link.replying', { who: link.who ?? t('link.someone'), when: shortDateOf(link.at, locale, dayOf(props.now ?? new Date().toISOString())) }) : undefined}>
+    <LinkBar
+      tone={quote?.tone}
+      label={link.kind === 'reply' ? t('link.replying', { who: link.who ?? t('link.someone'), when: shortDateOf(link.at, locale, dayOf(props.now ?? new Date().toISOString())) }) : undefined}
+      drop={{ label: t(link.kind === 'reply' ? 'link.dropReply' : 'link.dropCorrect'), onDrop: dropLink }}
+    >
       {link.kind === 'reply' ? (
-        <span className="fw-rt-cx-quote">
-          <b>{quote ? (quote.you ? cardWords('quote.you') : (quote.name ?? t('link.someone'))) : (link.who ?? t('link.someone'))}</b>
-          {quote && <span>{quote.line}</span>}
-        </span>
+        <ReplyLine who={quote ? (quote.you ? cardWords('quote.you') : (quote.name ?? t('link.someone'))) : (link.who ?? t('link.someone'))} line={quote?.line} />
       ) : (
         <span className="fw-rt-cx-quote is-correct">
           <PencilLine size={13} aria-hidden />
           <span>{t(`link.correcting.${link.way ?? draft.mode}`, { time: timeOf(link.at, locale), party })}</span>
         </span>
       )}
-      <Button size="sm" variant="quiet" className="icon" aria-label={t(link.kind === 'reply' ? 'link.dropReply' : 'link.dropCorrect')} onClick={dropLink}>
-        <X size={13} aria-hidden />
-      </Button>
-    </div>
+    </LinkBar>
   ) : notes.length > 0 ? (
     <div className="fw-rt-cx-bar fw-rt-cx-notes" role="status">
       {notes.map((note) => (
@@ -386,24 +363,15 @@ export function Composer(props: ComposerProps) {
     ) : null
 
   return (
-    <div className="fw-rt-composer" data-mode={draft.mode}>
-      {bar}
-      {draft.mode === 'reply' && props.recipients}
-      {chips}
-      <div className="fw-rt-cx-row">
-        {plus}
-        {!chipInChips && chipNode}
-        <div
-          ref={boxRef}
-          className={`fw-rt-cx-box${dragging ? ' is-dragging' : ''}`}
-          onDragEnter={(event) => onDrag(event, true)}
-          onDragOver={(event) => onDrag(event, true)}
-          onDragLeave={(event) => {
-            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-            setDragging(false)
-          }}
-          onDrop={onDrop}
-        >
+    <ComposerRow
+      data={{ 'data-mode': draft.mode }}
+      bar={bar}
+      fields={draft.mode === 'reply' && props.recipients}
+      chips={chips}
+      plus={plus}
+      chip={!chipInChips && chipNode}
+      box={{
+        input: (
           <MentionInput
             ref={mention}
             className="fw-rt-cx-text"
@@ -424,49 +392,63 @@ export function Composer(props: ComposerProps) {
               props.onFiles?.(files)
             }}
           />
-          {props.helpers && <span className="fw-rt-cx-helpers">{props.helpers}</span>}
-          {props.tray}
-          {dragging && !props.onSheets && (
-            <div className="fw-rt-cx-drop" aria-hidden="true">
-              <Paperclip size={18} aria-hidden />
-              {t(`drop.${draft.mode}`, { party })}
-            </div>
-          )}
-          {dragging && props.onSheets && (
-            <div className="fw-rt-cx-drop is-split" aria-hidden="true">
-              <span className={dropSide === 'files' ? 'is-on' : ''}>
+        ),
+        ref: boxRef,
+        dragging,
+        drag: {
+          onDragEnter: (event) => onDrag(event, true),
+          onDragOver: (event) => onDrag(event, true),
+          onDragLeave: (event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setDragging(false)
+          },
+          onDrop,
+        },
+        helpers: props.helpers,
+        tray: props.tray,
+        drop: (
+          <>
+            {dragging && !props.onSheets && (
+              <div className="fw-rt-cx-drop" aria-hidden="true">
                 <Paperclip size={18} aria-hidden />
                 {t(`drop.${draft.mode}`, { party })}
-              </span>
-              <span className={dropSide === 'sheets' ? 'is-on' : ''}>
-                <Ruler size={18} aria-hidden />
-                {t('drop.sheets')}
-              </span>
-            </div>
+              </div>
+            )}
+            {dragging && props.onSheets && (
+              <div className="fw-rt-cx-drop is-split" aria-hidden="true">
+                <span className={dropSide === 'files' ? 'is-on' : ''}>
+                  <Paperclip size={18} aria-hidden />
+                  {t(`drop.${draft.mode}`, { party })}
+                </span>
+                <span className={dropSide === 'sheets' ? 'is-on' : ''}>
+                  <Ruler size={18} aria-hidden />
+                  {t('drop.sheets')}
+                </span>
+              </div>
+            )}
+          </>
+        ),
+      }}
+      send={{ label: sendLabel, held: heldText, onSend: send }}
+      length={length}
+      lines={
+        <>
+          {floor && floorTooLong(draft) && <p className="fw-rt-cx-line">{t('floor.long', { limit: FLOOR_TEXT })}</p>}
+          {toCustomer(draft.mode) && prospect && (
+            <p className="fw-rt-cx-warn">
+              <span>{t('prospect.line', { party: prospect.name })}</span>
+              {props.onMakeCustomer && (
+                <Button size="sm" onClick={props.onMakeCustomer}>
+                  <UserPlus size={13} aria-hidden /> {t('prospect.make')}
+                </Button>
+              )}
+            </p>
           )}
-        </div>
-        <Button size="sm" variant="primary" className="fw-rt-cx-send" onClick={send} heldReason={heldText} aria-label={sendLabel}>
-          <SendHorizontal size={16} aria-hidden />
-          <span className="fw-rt-sr">{sendLabel}</span>
-        </Button>
-      </div>
-      {length >= COUNTER_FROM && <p className={`fw-rt-cx-count${length > MAX_BODY ? ' is-over' : ''}`}>{t('counter', { count: MAX_BODY - length })}</p>}
-      {floor && floorTooLong(draft) && <p className="fw-rt-cx-line">{t('floor.long', { limit: FLOOR_TEXT })}</p>}
-      {toCustomer(draft.mode) && prospect && (
-        <p className="fw-rt-cx-warn">
-          <span>{t('prospect.line', { party: prospect.name })}</span>
-          {props.onMakeCustomer && (
-            <Button size="sm" onClick={props.onMakeCustomer}>
-              <UserPlus size={13} aria-hidden /> {t('prospect.make')}
-            </Button>
-          )}
-        </p>
-      )}
-      {props.lines}
-      {props.hint}
-      <p className="fw-rt-sr" aria-live="polite">
-        {announce}
-      </p>
-    </div>
+          {props.lines}
+          {props.hint}
+        </>
+      }
+      announce={announce}
+    />
   )
 }

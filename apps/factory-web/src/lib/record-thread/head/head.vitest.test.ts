@@ -758,3 +758,24 @@ describe('tw- fx2 — the head after the walk', () => {
   const head = (over: Partial<HeadModel> = {}) => drawAll(createElement(RecordThreadHead, { model: base(over) }))
 })
 // ---- end tw- fx2
+
+// ---- pt-w1 W1.4 (lane pt-, A11; ONE SHARED THREAD): the Width rows both doors' heads draw -------------------------------------------
+import { DOCK_WIDTHS, widthRows } from './model'
+
+describe('pt-w1 W1.4 — the Width rows of a "⋮"', () => {
+  it('widthRows: the office’s four widths + Hide + Default; the portal’s three; the current one ticked', () => {
+    const office = widthRows(DOCK_WIDTHS, 'forty')
+    expect(office.map((row) => row.width)).toEqual(['third', 'forty', 'half', 'full', 'hide', 'reset'])
+    expect(office.filter((row) => row.checked).map((row) => row.width)).toEqual(['forty'])
+    expect(office.every((row) => row.kind === 'width')).toBe(true)
+    const portal = widthRows(['third', 'forty', 'half'] as const, 'half')
+    expect(portal.map((row) => row.width)).toEqual(['third', 'forty', 'half', 'hide', 'reset'])
+    expect(portal.filter((row) => row.checked).map((row) => row.width)).toEqual(['half'])
+    // No width chosen yet: nothing ticked, Hide and Default still there.
+    expect(widthRows(['third', 'forty', 'half'] as const, null).some((row) => row.checked)).toBe(false)
+    // The office's ⋮ draws exactly these rows, in its place.
+    expect(menuRows(base()).filter((row) => row.kind === 'width')).toEqual(widthRows(DOCK_WIDTHS, base().width))
+    expect(readFileSync(new URL('./model.ts', import.meta.url), 'utf8')).toContain('if (model.width !== null) rows.push(...widthRows(DOCK_WIDTHS, model.width))')
+  })
+})
+// ---- end pt-w1 W1.4

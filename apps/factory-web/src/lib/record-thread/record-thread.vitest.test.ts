@@ -126,7 +126,7 @@ describe('SCR-006-thread, both languages', () => {
   })
 
   it('the views fetch nothing and import no office or portal code (lib/record-thread stays a view, PR-15)', () => {
-    const files = ['RecordThread.tsx', 'ThreadCase.tsx', 'parts/DockedStage.tsx', 'model.ts', 'card/view/MessageCard.tsx', 'feed/view/Feed.tsx', 'composer/view/Composer.tsx', 'attachments/view/AttachmentTray.tsx', 'send-check/view/Recipients.tsx', 'send-check/view/SendCheckDialog.tsx']
+    const files = ['RecordThread.tsx', 'ThreadCase.tsx', 'parts/DockedStage.tsx', 'model.ts', 'card/view/MessageCard.tsx', 'card/view/MessageRow.tsx' /* pt-w1 W1.1 */, 'feed/view/Feed.tsx', 'feed/view/FeedShell.tsx', 'feed/use-feed-shell.ts' /* pt-w1 W1.3 */, 'jump.ts' /* pt-w1 W1.4 */, 'composer/view/Composer.tsx', 'composer/view/ComposerRow.tsx' /* pt-w1 W1.2 */, 'attachments/view/AttachmentTray.tsx', 'send-check/view/Recipients.tsx', 'send-check/view/SendCheckDialog.tsx']
     for (const file of files) {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
       expect(source, file).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)

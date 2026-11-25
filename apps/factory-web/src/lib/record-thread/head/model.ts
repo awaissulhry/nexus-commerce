@@ -150,6 +150,24 @@ export const widthKey = (recordType: string, personId: string | null) => `factor
 
 export const isDockWidth = (value: unknown): value is DockWidth => typeof value === 'string' && (DOCK_WIDTHS as readonly string[]).includes(value)
 
+/** pt-w1 W1.4 (lane pt-, A11): one Width row of a "⋮": a width the door offers, or Hide, or Default. */
+export interface WidthRow<W extends string> {
+  readonly kind: 'width'
+  readonly width: W | 'hide' | 'reset'
+  readonly checked: boolean
+}
+
+/**
+ * pt-w1 W1.4 (lane pt-, A11): the Width rows of a "⋮" in both doors — every width the door offers (the office four, the portal three),
+ * the current one ticked, then Hide and Default. A head draws them only when its host hands it a width chooser.
+ */
+export function widthRows<W extends string>(widths: readonly W[], current: W | null): WidthRow<W>[] {
+  const rows: WidthRow<W>[] = []
+  for (const width of widths) rows.push({ kind: 'width', width, checked: width === current })
+  rows.push({ kind: 'width', width: 'hide', checked: false }, { kind: 'width', width: 'reset', checked: false })
+  return rows
+}
+
 // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §6.3): a page that names its tab keeps "hidden" per person + record type; a
 // private window keeps nothing. F-OP-301 (walk #5): the chosen width is ONE per person + record type on every tab (`widthKey`): the dock
 // never changes its width when the page tab changes.
@@ -466,10 +484,7 @@ export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' 
   rows.push({ kind: 'door', door: 'share', held: model.holds.share, label: { key: 'act.share' }, ...count('partners', 'act.invited') })
   rows.push({ kind: 'door', door: 'followers', held: model.holds.followers, label: followers ? { key: 'act.followersN', params: { count: followers } } : { key: 'act.followers' } })
   rows.push({ kind: 'door', door: 'task', held: model.holds.task, label: { key: 'act.task' }, ...count('tasks', 'act.openTasks') })
-  if (model.width !== null) {
-    for (const width of DOCK_WIDTHS) rows.push({ kind: 'width', width, checked: width === model.width })
-    rows.push({ kind: 'width', width: 'hide', checked: false }, { kind: 'width', width: 'reset', checked: false })
-  }
+  if (model.width !== null) rows.push(...widthRows(DOCK_WIDTHS, model.width)) // pt-w1 W1.4: the rows both doors draw
   if (model.print) rows.push({ kind: 'print' })
   // TH-5 follow-up: a closed thread its record reopens (a closed project) offers no Reopen here; closing an open one stays.
   if (model.canManage && !(model.closed && model.reopenWithRecord)) rows.push({ kind: model.closed ? 'reopen' : 'close' })

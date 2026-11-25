@@ -43,9 +43,10 @@ describe('oldest at the top, newest at the bottom', () => {
     const rows = feedRows({ messages: [msg('b', same), msg('a', same), msg('c', '2026-11-17T08:00:00.000Z')], events: [] })
     expect(messageIds(rows)).toEqual(['c', 'a', 'b'])
     expect([msg('b', same), msg('a', same)].sort(byTime).map((message) => message.id)).toEqual(['a', 'b'])
-    const view = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('[...model.messages].sort(byTime)')
-    expect(view).not.toMatch(/\.sort\(\(a, b\) => \(a\.at < b\.at/)
+    // pt-w1 W1.3: the ids J / K walk and "seen" uses live in the list's behaviour both doors run (use-feed-shell.ts).
+    const shell = readFileSync(new URL('./use-feed-shell.ts', import.meta.url), 'utf8')
+    expect(shell).toContain('[...model.messages].sort(byTime)')
+    for (const file of ['./view/Feed.tsx', './use-feed-shell.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/\.sort\(\(a, b\) => \(a\.at < b\.at/)
   })
 })
 
@@ -513,6 +514,9 @@ import { FLASH_MS, shouldLoadOlder } from './model'
 
 describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count, the flash', () => {
   const view = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+  // pt-w1 W1.3: the list's behaviour and its scroller moved out of Feed into the parts both doors draw — the pins follow the code.
+  const shell = readFileSync(new URL('./use-feed-shell.ts', import.meta.url), 'utf8')
+  const shellView = readFileSync(new URL('./view/FeedShell.tsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('./feed.css', import.meta.url), 'utf8')
   const caseOf = (id: string) => designScreen.cases.find((item) => item.id === id)!.model
 
@@ -523,10 +527,10 @@ describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count,
     expect(shouldLoadOlder({ more: true, older: 'loading', count: 100, askedAt: 50 })).toBe(false)
     expect(shouldLoadOlder({ more: true, older: 'failed', count: 100, askedAt: 50 })).toBe(false)
     expect(shouldLoadOlder({ more: false, older: 'idle', count: 100, askedAt: null })).toBe(false)
-    expect(view).toContain('new IntersectionObserver(')
-    expect(view).toContain('if (!shouldLoadOlder({ more, older, count: ids.length, askedAt: askedAt.current })) return')
-    expect(view).toContain('askedAt.current = ids.length')
-    expect(view).not.toContain("t('older.show'")
+    expect(shell).toContain('new IntersectionObserver(')
+    expect(shell).toContain('if (!shouldLoadOlder({ more, older, count: ids.length, askedAt: askedAt.current })) return')
+    expect(shell).toContain('askedAt.current = ids.length')
+    for (const source of [view, shell, shellView]) expect(source).not.toContain("t('older.show'")
   })
 
   it('every row that is not a message is a centred pill; the day pill has no time-zone tooltip; a pin pill says who pinned', () => {
@@ -562,10 +566,10 @@ describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count,
     }
     expect(renderView(FeedCase, caseOf('conversation'))).not.toContain('fw-rt-down')
     // The count is the reader's own: what the model says, then what arrived while they were higher up — nobody else's reading.
-    expect(view).toContain('useState(model.newCount ?? 0)')
-    expect(view).toContain('if (line && !atBottom.current) setNewCount(model.newSince ?? 0)')
-    expect(view).toContain('setNewCount((count) => count + arrived)')
-    expect(view).not.toContain('fw-rt-newbar')
+    expect(shell).toContain('useState(model.newCount ?? 0)')
+    expect(shell).toContain('if (line && !atBottom.current) setNewCount(model.newSince ?? 0)')
+    expect(shell).toContain('setNewCount((count) => count + arrived)')
+    for (const source of [view, shell, shellView]) expect(source).not.toContain('fw-rt-newbar')
   })
 
   it('the flash names the row: the whole row of the jumped-to message, FLASH_MS as ONE constant, a still tint with reduced motion', () => {
@@ -577,15 +581,16 @@ describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count,
     expect(css).toMatch(/\.fw-rt-msg\[data-flash\]::before \{[^}]*background: var\(--nds-tonal-border\);[^}]*animation: fw-rt-flash var\(--fw-rt-flash-ms\)/)
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.fw-rt-msg\[data-flash\]::before \{\s*animation-name: fw-rt-flash-still;/)
     // One constant: no other 1500 in the feed's or the card's code and styles.
-    for (const file of ['./view/Feed.tsx', './feed.css', '../card/view/MessageCard.tsx', '../card/card.css']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/1500|1\.5s/)
+    for (const file of ['./view/Feed.tsx', './feed.css', '../card/view/MessageCard.tsx', '../card/view/MessageRow.tsx' /* pt-w1 W1.1 */, '../card/card.css']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/1500|1\.5s/)
     expect(renderView(FeedCase, caseOf('conversation'))).not.toContain('data-flash')
   })
 
   it('R answers the focused message (its own way); J / K stay; the floating day; nothing yellow in the feed’s own pills', () => {
-    expect(view).toContain("if (key === 'r') {")
-    expect(view).toContain('replyWay(message, model.context) !== null')
-    expect(view).toContain('actions.onReply(message.id)')
-    expect(view).toContain('fw-rt-float')
+    expect(shell).toContain("if (key === 'r') {")
+    expect(view).toContain('replyWay(message, model.context) !== null') // the office's own way: Feed hands it as canReply
+    expect(shell).toContain('if (message && actions?.onReply && canReply(message)) {')
+    expect(shell).toContain('actions.onReply(message.id)')
+    expect(shellView).toContain('fw-rt-float')
     expect(css).not.toMatch(/warning/)
     expect(css).not.toMatch(/rgba?\(|hsla?\(|color-mix\(|#[0-9a-f]{3,8}\b/i)
   })
@@ -649,8 +654,9 @@ describe('tw- W2.4 — the states in the new face (S13, B6)', () => {
 // ---- tw- fx2 (the walk: G-1, G-7, G-12, G-15) ---------------------------------------------------------------------------------------
 describe('tw- fx2 — the feed after the walk', () => {
   const feedSource = () => readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+  const shellSource = () => readFileSync(new URL('./use-feed-shell.ts', import.meta.url), 'utf8') // pt-w1 W1.3: the list's behaviour
   it('G-1: a feed drawn hidden (the phone before its thread view opens) opens once it has a height — at the band, else the newest', () => {
-    const source = feedSource()
+    const source = shellSource()
     expect(source).toContain("if (feed.clientHeight === 0 && typeof ResizeObserver !== 'undefined') return // tw- fx2 (G-1): not shown yet")
     expect(source).toContain('if (feed.clientHeight > 0) setShown((count) => count + 1)')
     expect(source).toContain('}, [model.state, model.context.anchorId, model.newSince, rows, shown])')
@@ -664,10 +670,51 @@ describe('tw- fx2 — the feed after the walk', () => {
   })
 
   it('G-12: J / K walk the list and stop there (a page’s own list keys never get them too)', () => {
-    const source = feedSource()
+    const source = shellSource()
     const walk = source.slice(source.indexOf("if (key !== 'j' && key !== 'k') return"), source.indexOf('revealInList(element) // tw- fx2 (G-3): the list only'))
     expect(walk).toContain('event.preventDefault()')
     expect(walk).toContain('event.stopPropagation()')
   })
 })
 // ---- end tw- fx2
+
+// ---- pt-w1 W1.3 (lane pt-, S4; ONE SHARED THREAD): the list both doors draw — its behaviour and its scroller, the host's rows --------
+import type { FeedRowMessage } from './model'
+
+describe('pt-w1 W1.3 — the shared list shell', () => {
+  const shell = readFileSync(new URL('./use-feed-shell.ts', import.meta.url), 'utf8')
+  const shellView = readFileSync(new URL('./view/FeedShell.tsx', import.meta.url), 'utf8')
+  const feed = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+
+  it('FeedShell and its hook import no card, office or portal code; the host draws each row', () => {
+    for (const [name, source] of [['use-feed-shell.ts', shell], ['FeedShell.tsx', shellView]] as const) {
+      expect(source, name).not.toMatch(/from '[^']*(card\/|areas|portal|shell\/|record-panels|lib\/api|lib\/session)/)
+      expect(source, name).not.toMatch(/MessageCard|replyWay|CardMessage|\bfetch\(/)
+      expect(source, name).not.toContain('scrollIntoView(')
+    }
+    // The view draws the host's rows and end lines where Feed drew them; the scroller keeps the classes scroll.ts and the goldens find.
+    expect(shellView).toContain('<div ref={shell.feedRef} className="fw-rt-feed" role="feed" tabIndex={0} aria-label={t(\'feed.label\')}')
+    expect(shellView).toContain('<div ref={shell.topRef} className="fw-rt-sentinel" aria-hidden="true" />')
+    expect(shellView.indexOf('{rows}')).toBeLessThan(shellView.indexOf('{end}'))
+    expect(feed).toContain('const shell = useFeedShell(model, rows, actions, (message) => replyWay(message, model.context) !== null)')
+    expect(feed).toContain("flash={row.kind === 'message' ? shell.flashOf(row.message.id) : null}")
+    // The behaviour moved whole: no observer, scroll or key code is left in the office feed.
+    expect(feed).not.toMatch(/IntersectionObserver|ResizeObserver|useLayoutEffect|scrollTop|walkTarget|onKeyDown/)
+  })
+
+  it('feedRows takes a narrow message (id, at, sender key, mine, theirs / ours) and hands the host its own message back', () => {
+    type Partner = FeedRowMessage & { readonly words: string }
+    const at = (minute: number) => `2026-11-17T09:${String(minute).padStart(2, '0')}:00.000Z`
+    const messages: Partner[] = [
+      { id: 'p1', at: at(1), kind: 'theirs', senderKey: 'ours~Bea Esempio', mine: false, words: 'Hello' },
+      { id: 'p2', at: at(2), kind: 'theirs', senderKey: 'ours~Bea Esempio', mine: false, words: 'The sizes' },
+      { id: 'p3', at: at(3), kind: 'ours', senderKey: 'mine~Lia Modello', mine: true, words: 'Thanks' },
+    ]
+    const rows = feedRows({ messages, events: [], firstNewId: 'p3', newCount: 1 })
+    expect(rows.map((row) => row.kind)).toEqual(['day', 'message', 'message', 'new', 'message'])
+    const drawn = rows.flatMap((row) => (row.kind === 'message' ? [row] : []))
+    expect(drawn.map((row) => row.message.words)).toEqual(['Hello', 'The sizes', 'Thanks'])
+    expect(drawn.map((row) => [row.run.side, row.run.first, row.run.showName])).toEqual([['others', true, true], ['others', false, false], ['mine', true, false]])
+  })
+})
+// ---- end pt-w1 W1.3

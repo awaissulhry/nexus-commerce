@@ -1,14 +1,12 @@
 'use client'
 
-import { Fragment, useEffect, useId, useState, type AnimationEvent, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
-import { Bell, Check, CheckCheck, CircleAlert, Clock, CornerDownRight, EyeOff, FileText, FileX, Globe, ImageIcon, Layers, Lock, Mail, Pin, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Bell, Check, CheckCheck, CircleAlert, Clock, FileX, Globe, Layers, Lock, Mail, RotateCw, Tablet, Undo2 } from 'lucide-react'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { formatDate } from '../../../i18n/format'
 import { INTL_LOCALE } from '../../../i18n/locales'
 import { useLocale, useT } from '../../../i18n/provider'
-import { FLASH_MS } from '../../feed/model'
 import type { RunPlace } from '../../feed/runs'
-import { Avatar } from '../../parts/Avatar'
 import { timeOf } from '../../parts/time'
 import { senderTone } from '../../parts/tones'
 import {
@@ -17,7 +15,6 @@ import {
   showsUndo,
   undoLeft,
   type CardAction,
-  type CardLink,
   audienceKey,
   authorWords,
   cardActions,
@@ -25,19 +22,14 @@ import {
   copyTextOf, // tw- W2.5
   READ_ONLY_MENU, // tw- W2.5
   deliveryMark,
-  fileKindKey,
   footMarks,
-  longFold,
-  sizeWords,
   splitQuoted,
   type CardContext,
   type CardMessage,
 } from '../model'
 import { bodyKind, skippedLine } from '../model' // B-TH-255
 import { askChip, changeChip, type CardAsk, type CardChange } from '../model' // F-SA-244
-import { Bubble, BubbleFoot } from './Bubble'
-import { MessageMenu, opensOnRightClick } from './MessageMenu' // tw- W2.2
-import { QuoteBlock } from './QuoteBlock'
+import { FootIcon, MessageRow, rowFlash, type TailLine } from './MessageRow' // pt-w1 W1.1: the row both doors draw
 import '../card.css'
 
 export interface CardActions {
@@ -94,14 +86,6 @@ const READ_ONLY_DOOR: Partial<Record<CardAction, keyof CardActions>> = { answerT
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
 const DELIVERY_ICON = { clock: Clock, check: Check, checks: CheckCheck, alert: CircleAlert, back: Undo2 } as const
-/** An album shows at most this many tiles; past it the 4th tile says "+N" (W-041). */
-const ALBUM_TILES = 4
-
-/** A line under the words: drawn by the card, the foot placed in the LAST of them (the time sits at the end of the last line). */
-interface TailLine {
-  readonly key: string
-  readonly draw: (foot: ReactNode) => ReactNode
-}
 
 // F-SA-261 (sales page plan R4, P9; "All of <Customer>"): `readOnly` draws the card as the merged customer feed shows it — the same
 // card, its audience, words and files, with no menu, no Undo and no Retry: nothing is done on it there.
@@ -116,6 +100,8 @@ interface TailLine {
  * "Corrected", who reads it (the lock of an office note, the mail, the globe, the tablet), the time or "Sending · Undo (7)", and our
  * email's delivery mark (grey ticks, never "read"). An office note is the one yellow on either side, said in words too (R17). The
  * system's own office line is a centred pill (no menu). An article named by writer, audience and time for screen readers.
+ * pt-w1 W1.1 (lane pt-, S2): the row itself — the article, the tile, the bubble, the quote, the files, the words, what is counted, the
+ * foot, the menu — is `MessageRow`, the same in both doors; the card keeps every office line and fills the row's slots with them.
  */
 export function MessageCard({
   message,
@@ -139,14 +125,8 @@ export function MessageCard({
 }) {
   const t = useT('record-thread-card')
   const frameWords = useT('record-frame') // F-SA-265: the record frame's door words (loaded by the frame around a record page)
-  const pricedWords = useT('record-files') // B-CP-014: a priced document's lock (record-files.json priced.*; THREAD_NAMESPACES loads it)
   const locale = useLocale()
   const intl = INTL_LOCALE[locale]
-  const quotedId = useId()
-  const [quotedOpen, setQuotedOpen] = useState(false)
-  const [allShown, setAllShown] = useState(false)
-  const [allFiles, setAllFiles] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false) // tw- W2.2: the arrow or a right-click opens it
 
   const party = context.partyName || t('side.theParty')
   const who = authorWords(message)
@@ -158,8 +138,6 @@ export function MessageCard({
   const body = bodyKind(message)
   const { text, quoted } = body === 'text' ? splitQuoted(message.body, message.kind) : { text: '', quoted: null }
   const skipped = skippedLine(message.skipped)
-  const fold = longFold(text)
-  const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, true, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0, priced: message.lockedPriced ?? 0 /* B-CP-014 */ })
   // F-SA-261: none read-only. tw- W2.2: ONE order; a row whose door the host does not give is not drawn.
   // tw- W2.5: read only (All of <Customer>), the card's own small menu: Answer in its thread · Copy text · Copy link, each by its door.
@@ -173,16 +151,8 @@ export function MessageCard({
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
   const tone = (message.senderKey ? context.tones?.get(message.senderKey) : undefined) ?? senderTone(message.senderKey) // tw- fx2 (G-7)
   const cls = ['fw-rt-msg', `is-${message.kind}`, body === 'erased' ? 'is-erased' : '', sending ? 'is-pending' : '', failed ? 'is-failed' : '', system ? 'is-system' : `is-${place.side}`, place.first ? 'is-start' : ''].filter(Boolean).join(' ')
-  // tw- W1.3: the jump's flash on the whole row — the one named constant, cleared when its animation ends (no timer).
-  const lit = flash
-    ? {
-        'data-flash': '',
-        style: { '--fw-rt-flash-ms': `${FLASH_MS}ms` } as CSSProperties,
-        onAnimationEnd: (event: AnimationEvent<HTMLElement>) => {
-          if (event.target === event.currentTarget && event.animationName.startsWith('fw-rt-flash')) flash.onEnd()
-        },
-      }
-    : {}
+  // tw- W1.3: the jump's flash on the whole row — the one named constant, cleared when its animation ends (pt-w1: MessageRow's rowFlash).
+  const lit = rowFlash(flash)
 
   // ── the system's own office line: one centred pill, no menu (10-design §9 "A system note: a pill") ──────────────────
   if (system) {
@@ -203,64 +173,10 @@ export function MessageCard({
 
   // ── the name line: the person, and their company when it is not the reader's own (P3) ────────────────────────────────
   const org = message.authorHidden ? null : message.authorKind === 'PARTY' ? context.partyName : message.authorKind === 'WORKER' ? t('org.floor') : null
-  const name = paper || place.showName ? { text: author, org: paper ? null : org } : null
   const names = message.mentions.filter((one): one is string => one !== null)
 
-  // ── the album of tiles (Z1: icon + name this round; real pictures later change the cell only) ───────────────────────
-  const photos = files.photos
-  const album = photos.length === 0 ? [] : allFiles || photos.length <= ALBUM_TILES ? photos : photos.slice(0, ALBUM_TILES - 1)
-  const moreCount = allFiles || photos.length <= ALBUM_TILES ? 0 : photos.length - (ALBUM_TILES - 1)
-  const openFile = (fileId: string) => actions?.onOpenFile?.(fileId)
-
-  // ── the lines under the words ──────────────────────────────────────────────────────────────────────────────────────
+  // ── the office's own lines under the words (pt-w1 W1.1: the row draws the words, what is counted, and the foot in the last line) ──
   const tail: TailLine[] = []
-  if (body === 'erased') {
-    tail.push({
-      key: 'erased',
-      draw: (foot) => (
-        <p className="fw-rt-erased">
-          <EyeOff size={13} aria-hidden />
-          <span>{t('erased.line')}</span>
-          {foot}
-        </p>
-      ),
-    })
-  } else if (body === 'text') {
-    tail.push({
-      key: 'body',
-      draw: (foot) => (
-        <>
-          <p className={`fw-rt-body${folded ? ' is-folded' : ''}`}>
-            {wordsOf(text, names)}
-            {quoted !== null && (
-              <button type="button" className="fw-rt-quoted" aria-expanded={quotedOpen} aria-controls={quotedId} aria-label={t(quotedOpen ? 'body.hideQuoted' : 'body.showQuoted')} onClick={() => setQuotedOpen((open) => !open)}>
-                …
-              </button>
-            )}
-            {foot}
-          </p>
-          {quoted !== null && (
-            <p id={quotedId} className="fw-rt-quoted-text" hidden={!quotedOpen}>
-              {quoted}
-            </p>
-          )}
-        </>
-      ),
-    })
-    if (folded) {
-      tail.push({
-        key: 'showAll',
-        draw: (foot) => (
-          <p className="fw-rt-bline">
-            <button type="button" className="fw-rt-showall" onClick={() => setAllShown(true)}>
-              {t('body.showAll', { count: fold.lines })}
-            </button>
-            {foot}
-          </p>
-        ),
-      })
-    }
-  }
   if (message.amount) {
     const amount = message.amount
     tail.push({
@@ -283,24 +199,11 @@ export function MessageCard({
     const change = message.change
     tail.push({ key: 'change', draw: (foot) => <ChangeLine messageId={message.id} change={change} actions={actions} foot={foot} /> })
   }
-  // B-TH-231 / B-CP-014: what the reader may not open is counted in its own words, never named.
-  const quiet = (key: string, words: string, icon: ReactNode = <Lock size={13} aria-hidden />) =>
-    tail.push({
-      key,
-      draw: (foot) => (
-        <p className="fw-rt-bline is-quiet fw-rt-held-file">
-          {icon}
-          <span>{words}</span>
-          {foot}
-        </p>
-      ),
-    })
-  if (files.sheets > 0) quiet('sheets', t('files.sheetLocked', { count: files.sheets }))
-  if ((files.priced ?? 0) > 0) quiet('priced', pricedWords('priced.lockedCount', { count: files.priced ?? 0 }))
-  if (files.hidden > 0) quiet('hidden', t('files.cannotOpen', { count: files.hidden }))
+  // ── the office's own lines at the end (after what the reader may not open, which the row counts) ──
+  const end: TailLine[] = []
   // B-TH-255 (T3-F15): what an inbound mail brought that was not kept, by name and why (office only; never a signature logo).
   if (skipped) {
-    tail.push({
+    end.push({
       key: 'skipped',
       draw: (foot) => (
         <p className="fw-rt-bline is-quiet fw-rt-skipped" role="note">
@@ -313,7 +216,7 @@ export function MessageCard({
   }
   const mail = message.email // tw- W2.2: its To · Cc · Subject live in the menu's Email details
   if (mail?.status === 'BOUNCED' || mail?.status === 'COMPLAINED' || mail?.status === 'FAILED') {
-    tail.push({
+    end.push({
       key: 'bounce',
       draw: (foot) => (
         <p className="fw-rt-bline is-bad fw-rt-bounce" role="note">
@@ -331,7 +234,7 @@ export function MessageCard({
   }
   if (!readOnly /* F-SA-261 */ && message.outbox?.state === 'failed') {
     const reason = message.outbox.reason
-    tail.push({
+    end.push({
       key: 'failed',
       draw: (foot) => (
         <p className="fw-rt-bline is-bad fw-rt-failline" role="alert">
@@ -346,7 +249,7 @@ export function MessageCard({
   }
   // tw- W1.4 (R18): on paper, who reads it in words.
   if (paper) {
-    tail.push({
+    end.push({
       key: 'audience',
       draw: (foot) => (
         <p className="fw-rt-bline is-quiet fw-rt-audwords">
@@ -356,42 +259,11 @@ export function MessageCard({
       ),
     })
   }
-  if (tail.length === 0) tail.push({ key: 'foot', draw: (foot) => <p className="fw-rt-bline is-foot">{foot}</p> })
 
-  // ── the foot: the pin, "Corrected", who reads it, the time (or Sending · Undo), our email's delivery mark ─────────────────
+  // ── the office's own parts of the foot: the follow-up bell, who reads it, Sending · Undo, our email's delivery mark ─────────────
   const delivery = message.kind === 'ours' && mail && !message.outbox ? deliveryMark(mail.status) : null
   const DeliveryIcon = delivery ? DELIVERY_ICON[delivery.icon] : null
   const timeWords = <time dateTime={message.at}>{time}</time>
-  const onJump = actions?.onJump
-  const correctedBy = message.correctedBy ?? null
-  const foot = (
-    <BubbleFoot>
-      {message.pinned && <FootIcon className="fw-rt-pinned" word={t('foot.pinned')} icon={<Pin size={13} aria-hidden />} />}
-      {/* tw- W2.2 (10-design §2 "Foot"): the reader's own follow-up on their message — a bell, for its sender only. */}
-      {message.followUp && message.mine && <FootIcon className="fw-rt-followup" word={t('foot.followUp', { date: formatDate(message.followUp.at, { locale }) })} icon={<Bell size={13} aria-hidden />} />}
-      {correctedBy &&
-        (onJump && !readOnly ? (
-          <button type="button" className="fw-rt-corrected" onClick={() => onJump(correctedBy.id)}>
-            {t('foot.corrected')}
-          </button>
-        ) : (
-          <span className="fw-rt-corrected">{t('foot.corrected')}</span>
-        ))}
-      {footMarks(message).map((mark) => {
-        const Icon = MARK_ICON[mark.icon]
-        return <FootIcon key={mark.key} className={mark.icon === 'lock' ? 'fw-rt-lock' : undefined} word={t(mark.key)} icon={<Icon size={13} aria-hidden />} />
-      })}
-      {!readOnly /* F-SA-261 */ && mail && showsUndo(message, context.now ?? Date.now()) ? (
-        <UndoFoot until={mail.undoUntil!} start={context.now} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} done={timeWords} />
-      ) : sending ? (
-        <span>{t('outbox.sending')}</span>
-      ) : (
-        timeWords
-      )}
-      {delivery && DeliveryIcon && mail && <FootIcon className={delivery.tone === 'bad' ? 'is-bad' : 'is-ok'} word={t(`delivery.${mail.status}`)} icon={<DeliveryIcon size={13} aria-hidden />} />}
-    </BubbleFoot>
-  )
-
   const pick = (action: CardAction) => {
     if (action === 'answerThere') actions?.onAnswerThere?.(message.id) // tw- W2.5
     else if (action === 'reply') actions?.onReply?.(message.id)
@@ -407,156 +279,63 @@ export function MessageCard({
     else if (action === 'emailDetails') actions?.onEmailDetails?.(message.id)
     else if (action === 'useOn') actions?.onUseOn?.(message.id)
   }
-  const tools =
-    menu.length > 0 ? (
-      <MessageMenu rows={menu} label={t('menu.label', { author, time })} open={menuOpen} onOpenChange={setMenuOpen} onPick={pick} answerHref={message.ask ? (actions?.answerHref?.(message.ask.requestId) ?? null) : null} />
-    ) : null
-  // tw- W2.2 (W-060): a right-click on the message opens the same menu (a link or selected text keeps the browser's own).
-  const onContextMenu =
-    menu.length > 0
-      ? (event: MouseEvent<HTMLElement>) => {
-          if (!opensOnRightClick(event, typeof window === 'undefined' ? '' : (window.getSelection()?.toString() ?? ''))) return
-          event.preventDefault()
-          setMenuOpen(true)
-        }
-      : undefined
 
+  // pt-w1 W1.1: the row both doors draw — the message's OWN links (R1), its files as this reader sees them, the office's lines in its slots.
   return (
-    <article className={cls} id={`message-${message.id}`} data-message-id={message.id} data-feed-item={message.id} tabIndex={-1} aria-label={label} onContextMenu={onContextMenu} {...lit}>
-      {place.side === 'others' && place.first && !paper && <Avatar name={message.authorHidden ? null : message.author} size="run" tone={tone} />}
-      <Bubble model={{ side: place.side, run: { first: place.first, last: place.last }, name, senderTone: tone }} tools={tools}>
-        {/* TOP: the correction, the quote — both from this message's OWN links (R1) — and what it is about. */}
-        {message.corrects && <CorrectionLink link={message.corrects} onJump={onJump} />}
-        {message.replyTo && <QuoteBlock link={message.replyTo} onJump={onJump} tones={context.tones} />}
-        {/* F-SA-265: a message about a part of its record (a line, a shipment…) jumps back to its row on the page. */}
-        {!readOnly && message.about && actions?.onShowOnPage && (
-          <button type="button" className="fw-rt-about" onClick={() => actions.onShowOnPage?.(message.id)}>
-            <Layers size={12} aria-hidden />
-            {frameWords('discuss.showOnPage')}
-          </button>
-        )}
-        {(album.length > 0 || files.others.length > 0 || files.held.length > 0) && (
-          <div className="fw-rt-attach">
-            {album.length > 0 && (
-              <ul className={`fw-rt-album${album.length + (moreCount > 0 ? 1 : 0) === 1 ? ' is-one' : ''}`} aria-label={t('files.label')}>
-                {album.map((file) => (
-                  <li key={file.id}>
-                    <button type="button" className="fw-rt-tile" aria-label={t('files.open', { name: file.name })} onClick={() => openFile(file.id)}>
-                      <ImageIcon size={18} aria-hidden />
-                      <span>{file.name}</span>
-                    </button>
-                  </li>
-                ))}
-                {moreCount > 0 && (
-                  <li>
-                    <button type="button" className="fw-rt-tile is-more" aria-label={t('files.moreLabel', { count: moreCount })} onClick={() => (actions?.onMoreFiles ? actions.onMoreFiles(message.id) : setAllFiles(true))}>
-                      +{moreCount}
-                    </button>
-                  </li>
-                )}
-              </ul>
-            )}
-            {files.others.map((file) => (
-              <button key={file.id} type="button" className="fw-rt-file" aria-label={t('files.open', { name: file.name })} onClick={() => openFile(file.id)}>
-                <FileText size={18} aria-hidden />
-                <span className="fw-rt-file-name">
-                  <b>{file.name}</b>
-                  <small>{`${t(fileKindKey(file))} · ${sizeWords(file.sizeBytes, intl)}`}</small>
-                </span>
-              </button>
-            ))}
-            {files.held.map((file) => (
-              <p key={file.id} className="fw-rt-held-file">
-                {file.status === 'DELETED' ? <Trash2 size={13} aria-hidden /> : <Lock size={13} aria-hidden />}
-                <span>
-                  <b>{file.name}</b> · {t(file.status === 'DELETED' ? 'files.removed' : file.status === 'QUARANTINED' ? 'files.quarantined' : 'files.pending')}
-                </span>
-              </p>
-            ))}
-          </div>
-        )}
-        {tail.map((line, index) => (
-          <Fragment key={line.key}>{line.draw(index === tail.length - 1 ? foot : null)}</Fragment>
-        ))}
-      </Bubble>
-    </article>
+    <MessageRow
+      message={{
+        id: message.id,
+        at: message.at,
+        kindClass: `is-${message.kind}`,
+        ariaLabel: label,
+        who: author,
+        face: message.authorHidden ? null : message.author,
+        org,
+        tone,
+        words: body === 'erased' ? 'erased' : body === 'text' ? { text, quoted } : null,
+        names,
+        pending: sending,
+        failed,
+        corrects: message.corrects,
+        replyTo: message.replyTo,
+        correctedBy: message.correctedBy,
+        files,
+        pinned: message.pinned,
+      }}
+      context={context}
+      actions={actions}
+      run={place}
+      flash={flash}
+      paper={paper}
+      readOnly={readOnly}
+      menu={{ rows: menu, onPick: pick, answerHref: message.ask ? (actions?.answerHref?.(message.ask.requestId) ?? null) : null }}
+      // F-SA-265: a message about a part of its record (a line, a shipment…) jumps back to its row on the page.
+      top={!readOnly && message.about && actions?.onShowOnPage && (
+        <button type="button" className="fw-rt-about" onClick={() => actions.onShowOnPage?.(message.id)}>
+          <Layers size={12} aria-hidden />
+          {frameWords('discuss.showOnPage')}
+        </button>
+      )}
+      lines={{ words: tail, end }}
+      foot={{
+        /* tw- W2.2 (10-design §2 "Foot"): the reader's own follow-up on their message — a bell, for its sender only. */
+        start: message.followUp && message.mine && <FootIcon className="fw-rt-followup" word={t('foot.followUp', { date: formatDate(message.followUp.at, { locale }) })} icon={<Bell size={13} aria-hidden />} />,
+        marks: footMarks(message).map((mark) => {
+          const Icon = MARK_ICON[mark.icon]
+          return <FootIcon key={mark.key} className={mark.icon === 'lock' ? 'fw-rt-lock' : undefined} word={t(mark.key)} icon={<Icon size={13} aria-hidden />} />
+        }),
+        time:
+          !readOnly /* F-SA-261 */ && mail && showsUndo(message, context.now ?? Date.now()) ? (
+            <UndoFoot until={mail.undoUntil!} start={context.now} onUndo={actions?.onUndo ? () => actions.onUndo?.(message.id) : undefined} done={timeWords} />
+          ) : sending ? (
+            <span>{t('outbox.sending')}</span>
+          ) : (
+            timeWords
+          ),
+        end: delivery && DeliveryIcon && mail && <FootIcon className={delivery.tone === 'bad' ? 'is-bad' : 'is-ok'} word={t(`delivery.${mail.status}`)} icon={<DeliveryIcon size={13} aria-hidden />} />,
+      }}
+    />
   )
-}
-
-/** One small icon of the foot with its honest word as the tooltip and for screen readers (R17). */
-function FootIcon({ icon, word, className }: { icon: ReactNode; word: string; className?: string | undefined }) {
-  return (
-    <span className={`fw-rt-mi${className ? ` ${className}` : ''}`} title={word}>
-      {icon}
-      <span className="fw-rt-sr">{word}</span>
-    </span>
-  )
-}
-
-/** "Correction of 09:12" at the top of a correction: it goes to the message it corrects (from its own link, R1). */
-function CorrectionLink({ link, onJump }: { link: CardLink; onJump?: ((messageId: string) => void) | undefined }) {
-  const t = useT('record-thread-card')
-  const locale = useLocale()
-  const words = t('link.correction', { time: timeOf(link.at, locale) })
-  if (!onJump) {
-    return (
-      <p className="fw-rt-corr">
-        <CornerDownRight size={13} aria-hidden />
-        {words}
-      </p>
-    )
-  }
-  return (
-    <button type="button" className="fw-rt-corr" onClick={() => onJump(link.id)}>
-      <CornerDownRight size={13} aria-hidden />
-      {words}
-    </button>
-  )
-}
-
-const URL_PATTERN = /\bhttps?:\/\/[^\s<>"']+/g
-const escapePattern = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-/**
- * The words with their links (W-026: they open in a new tab; nothing is fetched to preview them, R16) and their @names coloured
- * (W-025: the people a note mentioned, by the names the read gave; the "Mentioned:" line went).
- */
-function wordsOf(text: string, mentioned: readonly string[]): ReactNode[] {
-  const parts: ReactNode[] = []
-  const names = [...new Set(mentioned)].sort((a, b) => b.length - a.length)
-  const mention = names.length > 0 ? new RegExp(`@(?:${names.map(escapePattern).join('|')})(?![\\p{L}\\p{N}])`, 'gu') : null
-  const plain = (segment: string, at: number) => {
-    if (!mention) {
-      parts.push(segment)
-      return
-    }
-    let last = 0
-    for (const found of segment.matchAll(mention)) {
-      const index = found.index ?? 0
-      if (index > last) parts.push(segment.slice(last, index))
-      parts.push(
-        <span key={`m${at + index}`} className="fw-rt-mention">
-          {found[0]}
-        </span>,
-      )
-      last = index + found[0].length
-    }
-    if (last < segment.length) parts.push(segment.slice(last))
-  }
-  let last = 0
-  for (const found of text.matchAll(URL_PATTERN)) {
-    const index = found.index ?? 0
-    const href = found[0].replace(/[.,;:!?)\]]+$/, '')
-    if (index > last) plain(text.slice(last, index), last)
-    parts.push(
-      <a key={`u${index}`} className="fw-rt-link" href={href} target="_blank" rel="noopener noreferrer">
-        {href}
-      </a>,
-    )
-    last = index + href.length
-  }
-  if (last < text.length) plain(text.slice(last), last)
-  return parts
 }
 
 /**
