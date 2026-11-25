@@ -153,9 +153,17 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       if (!view) return null
       return (
         <span className="fw-ocl-stack">
-          <DoorCell door={view.number.door} t={t} strong>
-            {view.number.text}
-          </DoorCell>
+          {view.kind === 'catalogue' ? (
+            // pg-fx4 (Z5, Z7): an order request's name (its subject, else your PO, else the kind's words): no page, so plain — strong,
+            // one line, the whole of it in its tip.
+            <span className="fw-sheet-plain fw-pgl-strong" title={view.number.text}>
+              {view.number.text}
+            </span>
+          ) : (
+            <DoorCell door={view.number.door} t={t} strong>
+              {view.number.text}
+            </DoorCell>
+          )}
           {view.number.sub ? (
             <span className="fw-ocl-sub" title={view.number.sub}>
               {view.number.sub}
@@ -302,7 +310,8 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
     }
     const fields: Record<string, CardField> = {}
     for (const column of columns) if (column.colId) fields[column.colId] = { role: 'hidden' }
-    fields.number = { role: 'title', draw: (row) => <span className="fw-sheet-plain">{viewOf(row)?.number.text ?? ''}</span> }
+    // pg-fx4: the title wraps (an order request's subject is never cut on a phone: no tip there).
+    fields.number = { role: 'title', draw: (row) => <span className="fw-sheet-plain fw-pgl-wrap">{viewOf(row)?.number.text ?? ''}</span> }
     fields.whereItIs = { role: 'subtitle', draw: block }
     fields.newMessages = { role: 'aside', draw: (row) => <NewMessagesBubble unread={latest.current.model.unread?.[row.id]} href={viewOf(row)?.messages.href ?? null} record={viewOf(row)?.messages.record ?? ''} l={l} /> }
     return fields

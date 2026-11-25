@@ -4,7 +4,7 @@ import type { OrdersRead, OrderRow, PortalColumn } from './api' // B-TH-246
 import { listBandOf } from './band'
 import { at, orderWords, ordersRead, PREFIX, ROWS, shellOf, words } from './design-data'
 // B-TH-223 (fix-portal-1): Brand Beta's cases list Brand Beta's own rows, never the rows above (BA-PO-…).
-import { BETA_ROWS, betaOrdersRead } from './design-data'
+import { BETA_DRAFTS, BETA_ROWS, betaDraftsRead, betaOrdersRead } from './design-data'
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
 import type { RequestRow } from '../requests/api'
@@ -80,6 +80,9 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
     }
   }
 }
+/** pg-fx4 (Z5): Brand Beta's world with its two sent drafts (named by the subject; neither subject nor PO). */
+const DRAFT_WORLD: readonly OrderRow[] = [...BETA_DRAFTS, ...BETA_ROWS]
+const draftsRead = (group: CustomerGroup | null) => bandRead(groupRead(DRAFT_WORLD, (rows) => betaDraftsRead('OPEN', rows), group), DRAFT_WORLD, REQUESTS)
 /** A group pressed: its rows only (Brand Beta's). */
 const betaGroup = (group: CustomerGroup) => betaCase(() => ({ group, read: betaRead(group) }))
 /** pg-t: 200 orders of Brand Beta's own (its own ids, numbers and PO codes): the first page of 50 shown, "50 of 200 …", Show more. */
@@ -108,6 +111,9 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'th-223-list', label: 'Orders & requests: everything open (the band of groups, requests first)', model: betaCase(), note: 'ONE band (Requests · Confirmed · In production · Ready to ship · Shipped · Delivered; Cancelled and Closed requests apart; the server\'s numbers), then Picture · Number (“Your order 21” / your PO; a request’s subject) · Where it is · Promised (+ “was …”) · Shipped · New messages · Net value · your columns. Every cell a door; a catalogue request plain.' },
     // B-TH-230 (Z10): New messages — the bubble "2", the person's own, on their own requests and orders only.
     { id: 'th-230-new-messages', label: 'New messages: the bubble on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [BETA_ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown; the bubble opens the request’s page or the order with its conversation shown.' },
+    // pg-fx4 (Z5; the Owner's walk): a sent draft is named by its subject, else your PO, else "Order request" — never "Catalogue".
+    { id: 'th-223-drafts', label: 'Sent drafts waiting for our yes: named by their subject, else your PO, else “Order request”', model: betaCase(() => ({ read: draftsRead(null) })), note: 'A draft may be described or a custom size, not from the catalogue: its subject is the Number (strong, one line, the whole of it in its tip; your PO under it); none: your PO over “Order request”; neither: “Order request”. No page yet: its cells stay plain (Z7).' },
+    { id: 'th-223-drafts-requests', label: 'Sent drafts: the Requests group pressed', model: betaCase(() => ({ group: 'REQUESTS', read: draftsRead('REQUESTS') })) },
     { id: 'th-223-requests', label: 'Group pressed: Requests (the open requests, the catalogue order and the order that wait for our yes)', model: betaGroup('REQUESTS'), note: 'The request whose order waits ("Club vests") shows once: as its order row (H4).' },
     { id: 'th-223-confirmed', label: 'Group pressed: Confirmed', model: betaGroup('CONFIRMED') },
     { id: 'th-223-in-production', label: 'Group pressed: In production (an order that needs your answer: its one mark)', model: betaGroup('IN_PRODUCTION') },

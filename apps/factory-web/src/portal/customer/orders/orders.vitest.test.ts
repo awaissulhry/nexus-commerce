@@ -298,7 +298,7 @@ describe('documents', () => {
       listRowsOf(null, '', [], [ROWS[0]!], 'en')[0]!,
       listRowsOf(null, '', [], [ROWS[3]!], 'en')[0]!,
     ]
-    expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.catalogue'])
+    expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.orderRequest']) // pg-fx4: never "Catalogue"
     expect(rowHref('/p/B', request)).toBe(`/p/B/orders/requests/${REQUESTS[0]!.id}`)
     expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=overview`)
     expect(rowHref('/p/B', catalogue)).toBeNull()

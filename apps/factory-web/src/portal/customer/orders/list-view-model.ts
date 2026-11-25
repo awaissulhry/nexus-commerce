@@ -199,12 +199,16 @@ export function rowViewOf(row: ListRow, input: { readonly prefix: string; readon
         ? { face: 'customer', of: 'asked', day: dayOf(order.requestedDate, words), door }
         : { face: 'customer', of: 'promise', day: null, door }
   if (order.kind === 'REQUEST') {
-    // Z7: a catalogue request (not decided yet) has no page and no own number: its Number is the PO, else the kind's words; plain cells.
+    // Z7: an order request (not decided yet) has no page and no own number; plain cells. pg-fx4 (Z5): its Number is its subject (line 2
+    // its PO), else its PO (line 2 the kind's words), else the kind's words — "Order request", never "Catalogue".
+    const subject = order.subject?.trim() || null
+    const kind = t(kindKey(row))
+    const number = subject ? { text: subject, sub: po } : po ? { text: po, sub: kind } : { text: kind, sub: null }
     return {
       id: row.id,
       kind: 'catalogue',
       href: null,
-      number: { text: po ?? t(kindKey(row)), sub: po ? t(kindKey(row)) : null, door: null },
+      number: { ...number, door: null },
       picture: false,
       state,
       mark: null,
@@ -212,7 +216,7 @@ export function rowViewOf(row: ListRow, input: { readonly prefix: string; readon
       promise: promise(null),
       ordered: { day: dayOf(order.orderedOn, words), door: null },
       shipped: { asked: list('customer.shipped.asked', { count: order.pieces.ordered }) },
-      messages: { href: null, record: name },
+      messages: { href: null, record: number.text },
       value: null,
     }
   }

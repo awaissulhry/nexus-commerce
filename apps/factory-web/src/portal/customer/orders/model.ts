@@ -490,8 +490,11 @@ export type ListRow = { kind: 'request'; id: string; request: RequestRow } | { k
 
 // pg-t (Z9): the old list's chips, tiles, chip counts and rows left with it; the list on the shared parts is pco/list-view-model.ts.
 
-/** What kind a row is, as words (a key of `portal-orders`). */
-export const kindKey = (row: ListRow): string => (row.kind === 'request' ? 'kind.request' : row.order.kind === 'REQUEST' ? 'kind.catalogue' : 'kind.order')
+/**
+ * What kind a row is, as words (a key of `portal-orders`). pg-fx4: an order request still waiting for us is "Order request", never
+ * "Catalogue" (a draft may be described or a custom size, not from the catalogue).
+ */
+export const kindKey = (row: ListRow): string => (row.kind === 'request' ? 'kind.request' : row.order.kind === 'REQUEST' ? 'kind.orderRequest' : 'kind.order')
 
 /** The customer's own number of a row, written: "Your request 7", "Your order 12"; null when it has none. */
 export const yoursOf = (row: ListRow, locale: Locale): string | null => (row.kind === 'request' ? yourNumberText(row.request.yourNumber, locale) : yourNumberText(row.order.yourNumber ?? null, locale))

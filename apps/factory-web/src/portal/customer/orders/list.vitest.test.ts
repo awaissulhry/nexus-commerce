@@ -14,7 +14,7 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
 import { REQUESTS, requestRow } from '../requests/design-data'
 import { fetchSheet, type OrdersRead } from './api'
-import { BETA_ROWS, betaOrdersRead, ordersRead, ROWS } from './design-data'
+import { BETA_DRAFTS, BETA_ROWS, betaOrdersRead, ordersRead, ROWS } from './design-data'
 import { designScreen as listScreen } from './fixtures'
 import { bandOf, countOf, groupOfAddress, groupQuery, holdsOrders, LIST_WIDTHS, listRowsOf, nextParcelOf, requestsOf, roomColumnsOf, rowViewOf, sheetChipOf, type ListWords } from './list-view-model'
 import { NS, type ListRow } from './model'
@@ -76,14 +76,42 @@ describe('pg-t: the rows on the shared cells', () => {
     expect(viewOf({ kind: 'request', id: closed.id, request: closed }).state).toMatchObject({ tone: 'neutral', mark: CUSTOMER_GROUP_ICON.CLOSED_REQUESTS, line: true })
   })
 
-  it('Z7: a catalogue request has no page — its Number is your PO, else "Catalogue"; every cell plain, no picture, no bubble door', () => {
+  it('Z7: an order request has no page — its Number is your PO over "Order request", else "Order request"; every cell plain, no picture, no bubble door', () => {
     const catalogue = BETA_ROWS.find((row) => row.kind === 'REQUEST')!
     const view = viewOf(order(catalogue))
     expect(view).toMatchObject({ kind: 'catalogue', href: null, door: null, picture: false, mark: null, value: null, messages: { href: null } })
-    expect(view.number).toEqual({ text: `Your PO ${catalogue.customerRef}`, sub: 'Catalogue', door: null })
+    expect(view.number).toEqual({ text: `Your PO ${catalogue.customerRef}`, sub: 'Order request', door: null })
     expect(view.promise.door).toBeNull()
     expect(view.ordered.door).toBeNull()
-    expect(viewOf(order({ ...catalogue, customerRef: null })).number).toEqual({ text: 'Catalogue', sub: null, door: null })
+    expect(viewOf(order({ ...catalogue, customerRef: null })).number).toEqual({ text: 'Order request', sub: null, door: null })
+  })
+
+  // pg-fx4 (Z5; the Owner's walk on :3300): a sent draft "Custom motorcycle suit …", no PO, read "Catalogue". Never again.
+  it('pg-fx4: a sent draft is named by its subject (line 2 your PO), else your PO, else "Order request"; never "Catalogue", in EN and IT', () => {
+    const catalogue = BETA_ROWS.find((row) => row.kind === 'REQUEST')!
+    const subject = 'Made-up custom motorcycle suit for the beta riders'
+    const named = viewOf(order({ ...catalogue, customerRef: null, subject }))
+    expect(named.number).toEqual({ text: subject, sub: null, door: null })
+    expect(named.messages).toEqual({ href: null, record: subject })
+    expect(viewOf(order({ ...catalogue, subject })).number).toEqual({ text: subject, sub: `Your PO ${catalogue.customerRef}`, door: null })
+    // No subject (null, empty, blank, or an older answer without it): the PO, else the kind's neutral words.
+    for (const none of [null, '', '   ', undefined]) expect(viewOf(order({ ...catalogue, customerRef: null, subject: none })).number.text).toBe('Order request')
+    const IT = wordsFor('it')
+    expect(rowViewOf(order({ ...catalogue, customerRef: null, subject: null }), { prefix: PREFIX, seesPrices: true, words: IT }).number.text).toBe("Richiesta d'ordine")
+    expect(rowViewOf(order({ ...catalogue, customerRef: null, subject }), { prefix: PREFIX, seesPrices: true, words: IT }).number.text).toBe(subject)
+    // The design case of the gallery: Brand Beta's two sent drafts — one named by its subject, one with neither subject nor PO.
+    for (const draft of BETA_DRAFTS) expect(draft).toMatchObject({ kind: 'REQUEST', customerRef: null, number: null, yourNumber: null })
+    expect(BETA_DRAFTS.map((draft) => viewOf(order(draft)).number.text)).toEqual([BETA_DRAFTS[0]!.subject, 'Order request'])
+    // The words: "Catalogue" left the list's kinds in both languages.
+    for (const locale of LOCALES) {
+      const kinds = Object.keys(CATALOGUE[locale][NS] ?? {}).filter((key) => key.startsWith('kind.'))
+      expect(kinds, locale).toContain('kind.orderRequest')
+      expect(kinds, locale).not.toContain('kind.catalogue')
+    }
+    // The Number cell draws the request's name strong, on one line, the whole of it in its tip; the phone title wraps.
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<span className="fw-sheet-plain fw-pgl-strong" title={view.number.text}>')
+    expect(view).toContain('<span className="fw-sheet-plain fw-pgl-wrap">{viewOf(row)?.number.text ?? \'\'}</span>')
   })
 
   it('no price without the grain: no Net value at all (and none on a request)', () => {

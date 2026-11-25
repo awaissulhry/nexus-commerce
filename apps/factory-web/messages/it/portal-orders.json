@@ -556,7 +556,7 @@
   },
   "kind": {
     "request": "Richiesta",
-    "catalogue": "Catalogo",
+    "orderRequest": "Richiesta d'ordine",
     "order": "Ordine"
   },
   "sheet": {
