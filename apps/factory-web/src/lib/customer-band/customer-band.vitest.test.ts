@@ -3,9 +3,9 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { metricKind } from '@nexus/ui/components'
-import { LOCALES } from '../../../../../lib/i18n/locales'
-import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
-import { I18nProvider } from '../../../../../lib/i18n/provider'
+import { LOCALES } from '../i18n/locales'
+import { createTranslator, messagesFor } from '../i18n/messages'
+import { I18nProvider } from '../i18n/provider'
 import { BAND_FOLD_BELOW, foldOf, metricsOf, oursOf, OURS_ACCENT, type BandTile } from './customer-band'
 import { CustomerBand, type CustomerBandModel } from './CustomerBand'
 
@@ -177,21 +177,27 @@ describe('F-CQ-B: the band draws the design system\'s parts', () => {
 describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
   const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('Work: the seven groups (Cancelled apart), the number class `fw-cwb-num`, the group named customers.work.band.pipeline', () => {
-    const work = src('../view/WorkBand.tsx')
-    expect(work).toContain('<CustomerBand')
-    expect(work).toContain('value: <span className="fw-cwb-num">{number(group.count)}</span>,')
-    expect(work).toContain("groupsLabel: t('customers.work.band.pipeline'),")
-    expect(work).toContain("const cancelled = picture.groups.filter((group) => group.phase === 'CANCELLED').map(tileOf)")
-    expect(work).toContain('closed: { groups: cancelled },')
+    const work = src('../../areas/sales/customers/record/view/WorkBand.tsx')
+    // pg-w1: the Work band draws the ONE groups band (office face), which draws this band frame with the face's words.
+    const groups = src('../order-groups/view/GroupsBand.tsx')
+    expect(work).toContain('<GroupsBand')
+    expect(work).toContain("face: 'office',")
+    expect(groups).toContain('<CustomerBand')
+    expect(groups).toContain('value: <span className="fw-cwb-num">{number(entry.count)}</span>,')
+    expect(groups).toContain("const groupsLabel = office ? parties('customers.work.band.pipeline') : list('customer.band.groups')")
+    expect(groups).toContain('const closed = model.groups.filter((entry) => isClosedGroup(model.face, entry.group)).map(tileOf)')
+    expect(groups).toContain('closed: { groups: closed },')
+    expect(src('../order-groups/groups.ts')).toMatch(/office: Object\.freeze\(\['CANCELLED'\] as const\),/)
     // fx1 (walk B-07): "Work orders of <customer> ›" on the notes line only from 1040 px (the window says it below), Cancelled stays.
     expect(work).toContain('{workOrders && <span className="fw-cb-roomy">{workOrders}</span>}')
-    expect(work).toContain("info: t('customers.work.band.info'),")
+    expect(work).toContain('officeFacts: { line: notes, chips: { label: t(\'customers.work.strip.label\'), items: chips }, window: windowNotes },')
+    expect(groups).toContain("info: parties('customers.work.band.info'),")
     // The two doors that navigate: the host's (WorkTab: router.push), the view stays pure.
     expect(work).toContain('onPress: () => actions?.onGo?.(href, true)')
-    expect(src('../view/WorkTab.tsx')).toContain('onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),')
+    expect(src('../../areas/sales/customers/record/view/WorkTab.tsx')).toContain('onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),')
   })
   it('Quotes: the doors are filter tiles (the host\'s ONE replace), `fw-bo-count`, the group named band.pipeline, "Closed:" apart', () => {
-    const quotes = src('../quotes-tab/view/BeforeOrderBand.tsx')
+    const quotes = src('../../areas/sales/customers/record/quotes-tab/view/BeforeOrderBand.tsx')
     expect(quotes).toContain('<CustomerBand')
     expect(quotes).toContain('value: <span className="fw-bo-count">{door.count}</span>,')
     expect(quotes).toContain("groupsLabel: b('band.pipeline'),")
@@ -203,10 +209,10 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     expect(quotes).toContain("info: p('customers.work.band.info'),")
     expect(quotes).not.toContain('InfoTip')
     expect(quotes).toContain("oursWords: b('band.waitsOn', { who: b('band.who.us') }),")
-    const hook = src('../quotes-tab/use-quotes-tab.ts')
+    const hook = src('../../areas/sales/customers/record/quotes-tab/use-quotes-tab.ts')
     expect(hook).toContain('const onDoor = useCallback((each: Door) => go(hrefs[each]), [go, hrefs])')
     expect(hook.match(/router\.replace\(/g)?.length).toBe(1)
-    expect(src('../QuotesIncomingTab.tsx')).toContain('onCloseDoor, onDoor /* F-CQ-B */, onRetry }}')
+    expect(src('../../areas/sales/customers/record/QuotesIncomingTab.tsx')).toContain('onCloseDoor, onDoor /* F-CQ-B */, onRetry }}')
   })
   it('the phone\'s button says everything before an order; "Waiting for <customer>" has its short words — both languages', () => {
     for (const locale of LOCALES) {
@@ -215,6 +221,6 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     }
     const parties = (locale: (typeof LOCALES)[number]) => createTranslator(locale, messagesFor(locale, ['parties']).parties!)
     expect([parties('en')('customers.work.tile.customerShort'), parties('it')('customers.work.tile.customerShort')]).toEqual(['Waiting for the customer', 'In attesa del cliente'])
-    expect(src('../view/WorkBand.tsx')).toContain("return chip.tile === 'customer' ? { ...item, short: t('customers.work.tile.customerShort') } : item")
+    expect(src('../../areas/sales/customers/record/view/WorkBand.tsx')).toContain("return chip.tile === 'customer' ? { ...item, short: t('customers.work.tile.customerShort') } : item")
   })
 })

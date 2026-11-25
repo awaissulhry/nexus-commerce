@@ -1,0 +1,42 @@
+{
+  "customer": {
+    "group": {
+      "REQUESTS": "Requests",
+      "CLOSED_REQUESTS": "Closed requests"
+    },
+    "note": {
+      "REQUESTS": "sent to us, not an order yet, or an order that waits for our yes",
+      "CONFIRMED": "we said yes; production has not started",
+      "IN_PRODUCTION": "being made",
+      "READY": "made, waiting to leave",
+      "SHIPPED": "left in part or in full, not all arrived yet",
+      "DELIVERED": "every parcel arrived",
+      "CANCELLED": "cancelled",
+      "CLOSED_REQUESTS": "declined, closed or withdrawn"
+    },
+    "band": {
+      "label": "Your orders by where they are",
+      "groups": "Groups of your orders",
+      "open": "Your open orders and requests",
+      "openCount": "Your open orders and requests:",
+      "needsYou_one": "{count} needs your answer",
+      "needsYou_other": "{count} need your answer",
+      "groupTip": "Show: {group}",
+      "groupOnTip": "Showing: {group}. Press again to show everything open.",
+      "sum": "Every order and request is in exactly one group. Open: from Requests to Shipped."
+    },
+    "mark": {
+      "needsYou": "Needs your answer"
+    },
+    "promise": {
+      "was": "was {date}",
+      "asked": "date asked",
+      "wanted": "wanted"
+    },
+    "shipped": {
+      "asked": "{count} asked",
+      "tip": "Next parcel: {name} · expected {date}",
+      "parcel": "Your order {order} · parcel {n}"
+    }
+  }
+}

@@ -7,7 +7,7 @@ import { boardSchema, ORDER_STATUSES, type OrderBoard } from '../../orders/api'
 import { boardNarrowOf, extraFromAddress, listAddress, noExtra, rowsFromAddress, rowsQuery, withoutExtra } from '../../orders/model'
 import { lockedEntry } from '../../orders/list/use-orders-sheet'
 import { phasePhrase } from '../../orders/list/sheet/model'
-import { PHASE_ICON } from '../../orders/list/sheet/phase-icon'
+import { PHASE_ICON } from '../../../../lib/order-groups/groups' // pg-w1: the phase marks moved to lib/order-groups
 import { extraChips } from '../../orders/list/view/OrdersListView'
 import { BEFORE_GROUPS, beforeLineOf, beforeOrderOf, beforeOrderTouched, NO_BEFORE_ORDER, quotesGroupDoor, readBeforeOrder } from './before-order'
 import { IN_PRODUCTION_VIEW, phaseCountOf, phaseDoor, sourcesTouched, workEntry, type Read, type WorkReads } from './use-customer-work'

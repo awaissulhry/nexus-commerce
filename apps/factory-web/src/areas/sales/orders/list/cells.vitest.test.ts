@@ -114,8 +114,10 @@ describe('the clash and the words', () => {
 // ---- F-SA-212 (sales page plan N8, picks P13, P18): the Picture cell, the phone card and the picture large are the ONE part -----
 describe('the Orders sheet mounts the ONE picture part (F-SA-212)', () => {
   const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-  const parts = readFileSync(new URL('./sheet/parts.tsx', import.meta.url), 'utf8')
-  const css = readFileSync(new URL('./sheet/sheet.css', import.meta.url), 'utf8')
+  // pg-w1: the door cell and its rules moved to the shared cells (lib/order-cells): the same pins read both places.
+  const shared = ['DoorCell', 'StateChip', 'MarkChip', 'PromiseCell', 'ShippedCell'].map((part) => readFileSync(new URL(`../../../../lib/order-cells/view/${part}.tsx`, import.meta.url), 'utf8')).join('\n')
+  const parts = `${readFileSync(new URL('./sheet/parts.tsx', import.meta.url), 'utf8')}\n${shared}`
+  const css = `${readFileSync(new URL('./sheet/sheet.css', import.meta.url), 'utf8')}\n${readFileSync(new URL('../../../../lib/order-cells/order-cells.css', import.meta.url), 'utf8')}`
   it('the cell (76 px column, the cell size), the phone card\'s aside (the phone size) and the viewer come from lib/record-picture', () => {
     expect(view).toContain("from '../../../../../lib/record-picture/view/RecordPicture'")
     expect(view).toContain('size="cell"')
@@ -609,10 +611,11 @@ describe('F-CW-102: the row\'s chips', () => {
     expect(textOfHtml(html)).toBe('Sewing Late · 3 d Deposit open · due 25/11/2026 Sewn 152 of 244 · 24 ready now')
     // The pieces stay in the cell's tooltip (when three chips need two lines the pieces line gives way: the row keeps its height).
     expect(html).toContain('title="Sewn 152 of 244 · 24 ready now"')
-    const css = readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-sheet-wi \{[^}]*flex-wrap: wrap;[^}]*max-height: 43px;[^}]*overflow: hidden;/)
-    expect(css).toMatch(/\.fw-sheet-wi-pcs \{\s*flex-basis: 100%;/)
-    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i) // tokens only
+    // pg-w1: the chips' rules moved verbatim to the shared cells' css (lib/order-cells/order-cells.css).
+    const shared = readFileSync(new URL('../../../../lib/order-cells/order-cells.css', import.meta.url), 'utf8')
+    expect(shared).toMatch(/\.fw-sheet-wi \{[^}]*flex-wrap: wrap;[^}]*max-height: 43px;[^}]*overflow: hidden;/)
+    expect(shared).toMatch(/\.fw-sheet-wi-pcs \{\s*flex-basis: 100%;/)
+    for (const css of [readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8'), shared]) expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i) // tokens only
     // Dense (beside the dock): the chip's head stays whole, its tail and its mark go to its tooltip.
     const dense = await where(late, { prefix: '/w/DEMO', dense: true })
     expect(textOfHtml(dense)).toBe('Sewing Late · 3 d Deposit open Sewn 152 of 244 · 24 ready now')
@@ -773,7 +776,9 @@ describe('F-CW-102: the row\'s chips', () => {
 
   it('the same fact never twice in a row: the lateness tag beside the promise only while Where it is is not on screen; no Customer column on a customer\'s own page', () => {
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("{!whereShown && data.daysLate !== null && data.daysLate > 0 && <Tag tone=\"danger\">{t('list.daysLate', { count: data.daysLate })}</Tag>}")
+    // pg-w1: Promised is the shared cell (lib/order-cells), office face: the host leaves the Late tag out while Where it is is shown.
+    expect(view).toContain('lateDays: whereShown ? null : data.daysLate')
+    expect(readFileSync(new URL('../../../../lib/order-cells/view/PromiseCell.tsx', import.meta.url), 'utf8')).toContain("{cell.lateDays !== null && cell.lateDays !== undefined && cell.lateDays > 0 && <Tag tone=\"danger\">{words.orders('list.daysLate', { count: cell.lateDays })}</Tag>}")
     expect(view).toContain("setShowsWhere(ids.includes('whereItIs'))")
     expect(view).toContain("setShowsPriority(ids.includes('priority'))")
     expect(view).toContain("...(model.locked?.party ? [] : [{ colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell }]),")
