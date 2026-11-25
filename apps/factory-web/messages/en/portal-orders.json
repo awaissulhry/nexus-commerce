@@ -162,10 +162,10 @@
   },
   "tabs": {
     "label": "Order",
-    "status": "Status & progress",
+    "overview": "Overview",
     "lines": "Lines",
-    "shipments": "Shipments & tracking",
-    "documents": "Documents",
+    "shipments": "Shipments",
+    "files": "Files",
     "toConfirm": "to confirm"
   },
   "messages": {

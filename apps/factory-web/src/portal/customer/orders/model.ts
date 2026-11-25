@@ -44,11 +44,14 @@ type Translate = (key: string, params?: Readonly<Record<string, string | number>
 
 // ── addresses ────────────────────────────────────────────────────────────────────────────────────────────────────────
 // ---- B-TH-275 (P-CUS-ORD.body; tabs 5 → 4): the Messages tab is gone — the order's conversation docks beside every tab (the portal
-// record frame, B-TH-273). An old `?tab=messages` (a list's link, a mail, a notification) opens Status & progress with the
+// record frame, B-TH-273). An old `?tab=messages` (a list's link, a mail, a notification) opens the first tab with the
 // conversation shown and its box focused (the frame's arrival rule), and so does any address the page does not know.
-export const RECORD_TABS = ['status', 'lines', 'shipments', 'documents'] as const
+// pp-w1 (w1.3; D2 a, L5): round 1's tabs in the office's words — Overview · Lines · Shipments · Files (Money comes with its own
+// round). The old addresses keep working: `?tab=status` opens Overview, `?tab=documents` opens Files (links in mails, My production).
+export const RECORD_TABS = ['overview', 'lines', 'shipments', 'files'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(RECORD_TABS, value)
+export const OLD_RECORD_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ status: 'overview', documents: 'files' })
+export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(RECORD_TABS, value, OLD_RECORD_TABS)
 // ---- end B-TH-275
 
 /** The list's address: the chip (OPEN is the API's default and is left out) and the search. */
@@ -61,13 +64,13 @@ export function listQuery(chip: ListChip | null, q: string, extra: Readonly<Reco
   return text ? `?${text}` : ''
 }
 
-export function recordHref(prefix: string, id: string, tab: RecordTab = 'status', extra: Readonly<Record<string, string>> = {}): string {
+export function recordHref(prefix: string, id: string, tab: RecordTab = 'overview', extra: Readonly<Record<string, string>> = {}): string {
   const params = new URLSearchParams({ tab, ...extra })
   return `${prefix}/orders/${encodeURIComponent(id)}?${params.toString()}`
 }
 
 // ---- B-TH-275: "Messages" on a row (the list's menu, its New messages cell) opens the order with its conversation shown and the box
-// focused: the frame's arrival term `tab=messages` (the page then reads Status & progress and cleans the address).
+// focused: the frame's arrival term `tab=messages` (the page then reads Overview and cleans the address).
 export const orderThreadHref = (prefix: string, id: string): string => `${prefix}/orders/${encodeURIComponent(id)}?tab=messages`
 
 /**

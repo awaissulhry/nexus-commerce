@@ -12,7 +12,7 @@ import { portalArrivalOf } from '../../shell/record/model'
 // F-SA-264
 import { DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, portalHiddenKey, portalWidthKey, readPortalDock, showButtonWords, writePortalDock } from '../../shell/record/model'
 import type { OrderRecord } from './api'
-import { orderBandOf, type OrderBandFacts } from './band'
+import { orderBandOf, orderTabsOf, type OrderBandFacts } from './band'
 import { documentsRead, orderRecord, orderWords, progressRead, requestsOf, shellOf, shipmentsRead, threadOf, words } from './design-data'
 import { madeFromOf, orderNameOf, orderRefOf, orderThreadHref, RECORD_TABS, recordHref, stateLineKey, tabOf, threadHref, type RecordTab } from './model'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
@@ -20,26 +20,28 @@ import type { OrderRecordViewModel } from './view/OrderRecordView'
 
 /**
  * B-TH-275 (threads plan TH-6; P-CUS-ORD.band, .body, .thread; picture 22; wall W02, W08, W09, W10, W13, W14, W36): the customer's
- * order on the portal record frame — 5 → 4 tabs (Status & progress, Lines, Shipments & tracking, Documents), the conversation docked
- * (no Messages tab, no Ask modal), an old `?tab=messages` lands on Status with the conversation shown, "Your order is confirmed" only
+ * order on the portal record frame — 5 → 4 tabs (pp-w1: Overview, Lines, Shipments, Files, under the band), the conversation docked
+ * (no Messages tab, no Ask modal), an old `?tab=messages` lands on Overview with the conversation shown, "Your order is confirmed" only
  * for a CONFIRMED order, the customer's own number and never the office's SO- series, and Brand Beta's page holds nothing of Brand
  * Alpha.
  */
 
 const PREFIX_BETA = `/p/${BRAND_BETA.code}`
 const t = (locale: Locale) => words(locale)
-const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
+const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
 
 describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
   it('four tabs in order; Messages is gone', () => {
-    expect([...RECORD_TABS]).toEqual(['status', 'lines', 'shipments', 'documents'])
+    expect([...RECORD_TABS]).toEqual(['overview', 'lines', 'shipments', 'files'])
     expect((RECORD_TABS as readonly string[]).includes('messages')).toBe(false)
   })
 
-  it('an old ?tab=messages (a list, a mail, a notification) opens Status & progress, with the conversation shown and focused', () => {
-    expect(tabOf('messages')).toBe('status')
-    expect(tabOf('documents')).toBe('documents')
-    expect(tabOf('constructor')).toBe('status')
+  it('an old ?tab=messages (a list, a mail, a notification) opens Overview, with the conversation shown and focused', () => {
+    expect(tabOf('messages')).toBe('overview')
+    // pp-w1 (w1.3): the old ids keep their links working.
+    expect(tabOf('status')).toBe('overview')
+    expect(tabOf('documents')).toBe('files')
+    expect(tabOf('constructor')).toBe('overview')
     const href = orderThreadHref('/p/X', 'o1')
     expect(href).toBe('/p/X/orders/o1?tab=messages')
     expect(portalArrivalOf(href.slice(href.indexOf('?')))).toEqual({ openThread: true, focus: true })
@@ -49,12 +51,14 @@ describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
     expect(recordHref('/p/X', 'o1', 'shipments' as RecordTab)).toBe('/p/X/orders/o1?tab=shipments')
   })
 
-  it('the band: "Your order 11", their PO, four link tabs and "Ask a question" about the order by its own name', () => {
+  it('the band: "Your order 11", their PO and "Ask a question" about the order by its own name; the four link tabs under it', () => {
     const record = orderRecord()
-    const band = orderBandOf({ words: orderWords('en'), record, tab: 'status', prefix: '/p/X', facts: FACTS })
+    const band = orderBandOf({ words: orderWords('en'), record, prefix: '/p/X', facts: FACTS })
     expect(band.title).toBe('Your order 11')
     expect(band.refs).toEqual({ theirs: record.order.customerRef, ours: null })
-    expect(band.tabs?.items.map((item) => item.id)).toEqual(['status', 'lines', 'shipments', 'documents'])
+    // pp-w1 (w1.3, D6 a): the tabs left the band for the body (orderTabsOf).
+    expect(band.tabs ?? null).toBeNull()
+    expect(orderTabsOf({ words: orderWords('en'), record, prefix: '/p/X', toConfirm: false, files: null }).map((item) => item.id)).toEqual([...RECORD_TABS])
     expect(band.ask).toEqual({ type: 'SalesOrder', id: record.order.id, label: 'Your order 11' })
     expect(JSON.stringify(band, (_key, value) => (typeof value === 'function' ? undefined : value))).not.toMatch(/\bSO-\d{4}-\d+/)
   })
@@ -114,7 +118,7 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
   return {
     state: 'ready',
     record,
-    tab: 'status',
+    tab: 'overview',
     prefix: PREFIX_BETA,
     offlineSince: null,
     notice: null,
@@ -140,7 +144,7 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
 
 function betaCase(record: OrderRecord, tab: RecordTab, over: Partial<OrderRecordViewModel> = {}): CustomerCaseBuilder {
   return (locale) => ({
-    shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX_BETA, facts: FACTS }), {
+    shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, prefix: PREFIX_BETA, facts: FACTS }), {
       partyName: BRAND_BETA.legalName,
       person: { displayName: BRAND_BETA.portalPerson.name, email: BRAND_BETA.portalPerson.email },
       prefix: PREFIX_BETA,
@@ -168,7 +172,7 @@ describe('Brand Beta’s order page (W02, W10, W13, W14): its own records, numbe
   })
 
   it('docked: ONE conversation beside the body, named, `#messages` for "Ask a question"; no Messages tab in the band', () => {
-    const html = draw(betaCase(betaRecord(), 'status'), 'en')
+    const html = draw(betaCase(betaRecord(), 'overview'), 'en')
     expect(html.match(/<aside/g)?.length).toBe(1)
     expect(html).toContain('id="messages"')
     expect(html).toContain('aria-label="Messages: Your order 4"')
@@ -187,19 +191,19 @@ describe('Brand Beta’s order page (W02, W10, W13, W14): its own records, numbe
   })
 
   it('the confirmed sentence shows on a CONFIRMED order only; "Made from your request #2" links its page', () => {
-    const confirmed = textOf(draw(betaCase(betaRecord({ status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED }), 'status'), 'en'))
+    const confirmed = textOf(draw(betaCase(betaRecord({ status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED }), 'overview'), 'en'))
     expect(confirmed).toContain('Your order is confirmed.')
     expect(confirmed).toContain('Made from your request #2')
-    const waiting = textOf(draw(betaCase(betaRecord({ status: 'REQUESTED', words: CUSTOMER_STATUS_WORDS.REQUESTED }), 'status'), 'en'))
+    const waiting = textOf(draw(betaCase(betaRecord({ status: 'REQUESTED', words: CUSTOMER_STATUS_WORDS.REQUESTED }), 'overview'), 'en'))
     expect(waiting).toContain('We received your order: it waits for our approval.')
     expect(waiting).not.toContain('Your order is confirmed.')
-    const shipped = textOf(draw(betaCase(betaRecord({ status: 'PARTLY_SHIPPED', words: CUSTOMER_STATUS_WORDS.PARTLY_SHIPPED }), 'status', { madeFrom: null }), 'en'))
+    const shipped = textOf(draw(betaCase(betaRecord({ status: 'PARTLY_SHIPPED', words: CUSTOMER_STATUS_WORDS.PARTLY_SHIPPED }), 'overview', { madeFrom: null }), 'en'))
     expect(shipped).not.toContain('Your order is confirmed.')
     expect(shipped).not.toContain('Made from your')
   })
 
   it('a missing order draws no conversation (the same words for another customer’s order)', () => {
-    const html = draw(betaCase(betaRecord(), 'status', { state: 'missing', record: null }), 'en')
+    const html = draw(betaCase(betaRecord(), 'overview', { state: 'missing', record: null }), 'en')
     expect(html).not.toContain('<aside')
     expect(textOf(html)).toContain('It is not one of your orders, or it no longer exists.')
   })
@@ -264,7 +268,7 @@ describe('F-SA-264 — the customer’s conversation: width menu, Hide / Show, r
 
   it('docked: the conversation’s top row has the width menu and "Hide the conversation" (⌘J); the chosen width draws its columns', () => {
     for (const locale of ['en', 'it'] as const) {
-      const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'docked', width: 'half' } }), locale)
+      const html = draw(betaCase(betaRecord(), 'overview', { frame: { mode: 'docked', width: 'half' } }), locale)
       expect(html).toContain('class="fw-prf-tools"')
       expect(html).toContain(`aria-label="${locale === 'en' ? 'Width' : 'Larghezza'}"`)
       expect(html).toContain(`aria-label="${locale === 'en' ? 'Hide the conversation' : 'Nascondi la conversazione'}"`)
@@ -292,7 +296,7 @@ describe('F-SA-264 — the customer’s conversation: width menu, Hide / Show, r
   })
 
   it('narrower than 1280 px: no width menu, no Hide (the "Messages" button and the full-width view as before)', () => {
-    const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'stacked', newCount: 2 } }), 'en')
+    const html = draw(betaCase(betaRecord(), 'overview', { frame: { mode: 'stacked', newCount: 2 } }), 'en')
     expect(html).not.toContain('fw-prf-tools')
     expect(textOf(html)).toContain('Messages (2 new)')
     expect(textOf(html)).not.toContain('Show the conversation')

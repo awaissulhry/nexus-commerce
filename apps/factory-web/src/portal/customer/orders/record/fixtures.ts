@@ -63,7 +63,7 @@ function recordModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = 
     // B-TH-275: docked beside the body (the 1440 picture); the narrow cases say `stacked`.
     frame: { mode: 'docked' },
     madeFrom: null,
-    tab: 'status',
+    tab: 'overview', // pp-w1 (w1.3): the first tab
     prefix: PREFIX,
     offlineSince: null,
     notice: null,
@@ -98,20 +98,19 @@ interface CaseInput {
 function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
   return (locale) => {
     const record = input.record ?? orderRecord()
-    const tab = input.tab ?? 'status'
+    const tab = input.tab ?? 'overview'
     const model = recordModel(record, { tab, ...(input.model?.(locale) ?? {}) })
     const facts: OrderBandFacts = {
       ask: { held: null }, // pp-w1 (w1.2): the ONE "Ask for a change…"
       cancelHeld: null,
       reconfirm: model.revision.page?.content.revisedOrder && record.order.reconfirmNeeded ? { revision: model.revision.page.content.revisedOrder.revision, held: model.reconfirmHeld } : null,
-      shipments: record.shipments.shown,
       confirmation: true,
       pay: Object.values(model.pay)[0] ?? null,
       madeFrom: model.madeFrom ?? null, // pp-w1 (w1.2): "Made from your request #7" in the band
       ...(input.facts?.(locale) ?? {}),
     }
     return {
-      shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
+      shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
       // B-TH-275: the order's ONE conversation docks beside every tab.
       body: { kind: 'record', model, thread: { ...threadOf(locale), ...(input.thread?.(locale) ?? {}) } /* F-CP-158 */ },
     }
@@ -273,12 +272,12 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'shipments-none', label: 'Nothing shipped yet', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'ready', read: shipmentsRead({ shipments: [], firstExpected: dayAt(9), stillToShip: [] }) } }) }), note: '“Nothing shipped yet. Expected first shipment: …”' },
     { id: 'shipments-error', label: 'Shipments could not be read', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'error', read: null } }) }) },
     // ── Documents ──
-    { id: 'documents', label: 'Documents', model: recordCase({ tab: 'documents' }), note: 'By version with the fingerprint; the earlier confirmation names the version that replaced it; NEW; preview and download (logged).' },
-    { id: 'documents-empty', label: 'No documents yet', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'ready', read: documentsRead({ items: [], count: 0 }) } }) }) },
-    { id: 'documents-no-access', label: 'Documents not in the role', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'noAccess', read: null } }) }) },
-    { id: 'documents-error', label: 'Documents could not be read', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'error', read: null } }) }) },
-    { id: 'preview', label: 'A document’s preview opening', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'loading', bytes: null } } }) }) },
-    { id: 'preview-error', label: 'A document that could not be opened', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'error', bytes: null } } }) }) },
+    { id: 'documents', label: 'Documents', model: recordCase({ tab: 'files' }), note: 'By version with the fingerprint; the earlier confirmation names the version that replaced it; NEW; preview and download (logged).' },
+    { id: 'documents-empty', label: 'No documents yet', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'ready', read: documentsRead({ items: [], count: 0 }) } }) }) },
+    { id: 'documents-no-access', label: 'Documents not in the role', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'noAccess', read: null } }) }) },
+    { id: 'documents-error', label: 'Documents could not be read', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'error', read: null } }) }) },
+    { id: 'preview', label: 'A document’s preview opening', model: recordCase({ tab: 'files', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'loading', bytes: null } } }) }) },
+    { id: 'preview-error', label: 'A document that could not be opened', model: recordCase({ tab: 'files', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'error', bytes: null } } }) }) },
     // ── B-TH-275: the conversation docked (no Messages tab), the state line, "Made from your request" ──
     {
       id: 'th-275-narrow',

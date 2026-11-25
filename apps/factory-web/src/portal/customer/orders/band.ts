@@ -1,4 +1,4 @@
-import type { MenuItemDef } from '@nexus/ui/components'
+import type { MenuItemDef, TabItem } from '@nexus/ui/components'
 import type { PortalBand, PortalBandAction, PortalBandChips } from '../../shell/frame'
 import type { ProductionHealth, ProductionOrder } from '../production/api'
 import { healthInputOf } from '../production/model'
@@ -11,7 +11,7 @@ import type { OrderWords } from './words'
 /**
  * The frame's band of each Orders & tracking page (design portal.customer.orders h, rec "Order"): one builder per page, used
  * by the live page and its design cases alike. At most two actions, the primary last; the ⋯ items (the frame ends them with
- * "Ask a question"); the record's link tabs.
+ * "Ask a question"). pp-w1 (w1.3, D6 a): the order's tabs sit in the body under the band, as the office's (`orderTabsOf`).
  */
 
 // B-W2b-194: `newOrder` = the New order page's address for a person who may order (else null: no button).
@@ -46,8 +46,6 @@ export interface OrderBandFacts {
   cancelHeld: string | null
   /** A revised version waits for the person's re-confirmation (its number); null: none. */
   reconfirm: { revision: number; held: string | null } | null
-  /** The shipments shown (null while unknown). */
-  shipments: number | null
   /** The order confirmation PDF can open in a new tab. */
   confirmation: boolean
   /** An open deposit may be paid here (null: no such deposit). */
@@ -90,10 +88,25 @@ export function bandChipsOf(words: OrderWords, facts: Pick<OrderBandFacts, 'prod
   return health || urgent || madeFrom ? { health, urgent, madeFrom } : null
 }
 
+/**
+ * pp-w1 (w1.3; D2 a, D6 a, P0-B15): the order's tab strip, drawn in the BODY under the band (the office's place; the return, repair,
+ * supplier and job pages keep theirs in the band for now) — Overview ("to confirm" while a revised version waits) · Lines · Shipments
+ * · Files, each with its count (0 too; null while unknown: no pill, never a made-up 0).
+ */
+export function orderTabsOf(input: { words: OrderWords; record: OrderRecord; prefix: string; toConfirm: boolean; files: number | null }): TabItem[] {
+  const { t } = input.words
+  const href = (tab: RecordTab) => recordHref(input.prefix, input.record.order.id, tab)
+  return [
+    { id: 'overview', label: t('tabs.overview'), href: href('overview'), ...(input.toConfirm ? { badge: t('tabs.toConfirm') } : {}) },
+    { id: 'lines', label: t('tabs.lines'), count: input.record.lines.length, href: href('lines') },
+    { id: 'shipments', label: t('tabs.shipments'), count: input.record.shipments.shown, href: href('shipments') },
+    { id: 'files', label: t('tabs.files'), count: input.files, href: href('files') },
+  ]
+}
+
 export function orderBandOf(input: {
   words: OrderWords
   record: OrderRecord
-  tab: RecordTab
   prefix: string
   facts: OrderBandFacts
   /** pp-w1 (w1.2): "Ask for a change…" opens the Ask dialog at its first step. */
@@ -107,7 +120,6 @@ export function orderBandOf(input: {
   const { t, locale } = input.words
   const { record, facts } = input
   const order = record.order
-  const tabHref = (tab: RecordTab) => recordHref(input.prefix, order.id, tab)
   // pp-w1 (w1.2; O1-B1, O1-B2): ONE "Ask for a change…" — the Ask dialog at its first step (the line ⋯ opens the same dialog at its
   // line); none on a cancelled or delivered order. The ⋯ keeps the real acts; the promise's history is the tracker's own popover.
   const open = order.status !== 'CANCELLED' && order.status !== 'DELIVERED'
@@ -122,7 +134,7 @@ export function orderBandOf(input: {
   ]
   const chips = bandChipsOf(input.words, facts)
   // ---- B-TH-275 (P-CUS-ORD.band; plan §0.5, B-TH-303): "Your order 12" — the customer's own number, never the office's SO- series;
-  // their PO first in the band's references. Four tabs: the conversation docks beside them (no Messages tab, no Ask modal).
+  // their PO first in the band's references. The conversation docks beside the body (no Messages tab, no Ask modal).
   const name = orderNameOf(order, locale, t)
   return {
     title: name,
@@ -131,16 +143,6 @@ export function orderBandOf(input: {
     status: { label: order.words[locale], tone: statusTone(order.status) },
     actions,
     more,
-    tabs: {
-      label: t('tabs.label'),
-      active: input.tab,
-      items: [
-        { id: 'status', label: t('tabs.status'), href: tabHref('status'), ...(facts.reconfirm ? { badge: t('tabs.toConfirm') } : {}) },
-        { id: 'lines', label: t('tabs.lines'), count: record.lines.length, href: tabHref('lines') },
-        { id: 'shipments', label: t('tabs.shipments'), count: facts.shipments, href: tabHref('shipments') },
-        { id: 'documents', label: t('tabs.documents'), href: tabHref('documents') },
-      ],
-    },
     ask: { type: 'SalesOrder', id: order.id, label: name },
     // ---- end B-TH-275
     ...(chips ? { chips } : {}),

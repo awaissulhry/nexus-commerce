@@ -56,7 +56,7 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
   return {
     state: 'ready',
     record,
-    tab: 'status',
+    tab: 'overview',
     prefix: PREFIX,
     offlineSince: null,
     notice: null,
@@ -128,8 +128,8 @@ describe('the problems it reported on this order, and Report a problem', () => {
 
   it('the band’s ⋯ offers it too (held with the words), and only where the page offers it', () => {
     const record = betaRecord()
-    const facts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
-    const band = (problem?: { held: string | null } | null) => orderBandOf({ words: orderWords('en'), record, tab: 'status', prefix: PREFIX, facts: { ...facts, ...(problem === undefined ? {} : { problem }) } })
+    const facts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
+    const band = (problem?: { held: string | null } | null) => orderBandOf({ words: orderWords('en'), record, prefix: PREFIX, facts: { ...facts, ...(problem === undefined ? {} : { problem }) } })
     expect(band({ held: null }).more?.find((item) => item.id === 'problem')).toMatchObject({ label: 'Report a problem', disabled: false })
     expect(band({ held: 'No connection: try again when you are back online.' }).more?.find((item) => item.id === 'problem')).toMatchObject({ disabled: true, description: 'No connection: try again when you are back online.' })
     expect(band(null).more?.some((item) => item.id === 'problem')).toBe(false)
@@ -143,7 +143,7 @@ describe('Order files (3): the newest files we shared on this order and its line
     const text = textOf(html)
     expect(text).toContain('Order files (4)')
     expect(text).toContain('All in Documents (4)')
-    expect(html).toContain(`href="${PREFIX}/orders/${ORDER_ID}?tab=documents"`)
+    expect(html).toContain(`href="${PREFIX}/orders/${ORDER_ID}?tab=files"`)
     // documentsRead: four current documents (an earlier version is not one of them), the newest three shown.
     expect(text).toContain('DDT-2026-0144')
     expect(text).toContain('DoC JKT-DEMO-01 rev. 2')

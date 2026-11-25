@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
@@ -7,27 +8,31 @@ import type { Locale } from '../../../lib/i18n/locales'
 import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import type { PortalBand } from '../../shell/frame'
 import type { ProductionHealth, Urgency } from '../production/api'
+import { rowHref as productionRowHref } from '../production/model'
 import type { OrderRecord } from './api'
-import { bandChipsOf, bandHealthOf, bandProductionOf, orderBandOf, type BandProduction, type OrderBandFacts } from './band'
+import { bandChipsOf, bandHealthOf, bandProductionOf, orderBandOf, orderTabsOf, type BandProduction, type OrderBandFacts } from './band'
 import { orderRecord, orderWords, PREFIX, shellOf, withoutPrices } from './design-data'
+import { RECORD_TABS, tabOf } from './model'
+import { designScreen as recordScreen } from './record/fixtures'
 import { CustomerCase } from './view/CustomerCase'
 
 /**
  * pp-w1 (lane pp-, the customer's order page on shared parts, round 1; 10-design § 2): the order's band — ONE "Ask for a change…"
  * (the Ask dialog; O1-B1), a ⋯ of real acts only (no second ask, no promise history), the office band's chips (health Late / At risk
  * only, the customer's own urgency, "Made from your request #7 ›"), the keys window with ⌘J and ⌘↵ (O1-B9) — and wall PW-O02 part 1:
- * the band of a Viewer and a Designer holds no chip without portal.production.view, and never a price. Made-up data only.
+ * the band of a Viewer and a Designer holds no chip without portal.production.view, and never a price. w1.3: the tab strip under
+ * the band (Overview · Lines · Shipments · Files, the old addresses kept) and the phone title rule (G10). Made-up data only.
  */
 
 const say = (en: string, it = en) => ({ en, it })
-const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
+const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
 const health = (code: ProductionHealth['code'], reason: ProductionHealth['reason'] = null): ProductionHealth => ({ code, words: say(code), reason })
 const urgency = (code: Urgency['code']): Urgency => ({ code, words: say(code === 'URGENT' ? 'Urgent' : 'Regular'), urgentRank: code === 'URGENT' ? 1 : null, asked: false, askedWords: null, byUs: false, byUsWords: null, locked: false, lockWords: null })
 /** A production read that would draw both chips: Late, and urgent by the customer's own mark. */
 const LATE_URGENT: BandProduction = { health: health('LATE'), urgency: urgency('URGENT') }
 
 const bandOf = (facts: Partial<OrderBandFacts> = {}, status: OrderRecord['order']['status'] = 'IN_PRODUCTION', locale: Locale = 'en') =>
-  orderBandOf({ words: orderWords(locale), record: orderRecord({ status }), tab: 'status', prefix: PREFIX, facts: { ...FACTS, ...facts } })
+  orderBandOf({ words: orderWords(locale), record: orderRecord({ status }), prefix: PREFIX, facts: { ...FACTS, ...facts } })
 const drawBand = (band: PortalBand, locale: Locale) => render(createElement(CustomerCase, { model: (at: Locale) => ({ shell: shellOf(at, band), body: { kind: 'noAccess', admins: [] } }) }), locale)
 const plain = (band: PortalBand) => JSON.stringify(band, (_key, value) => (typeof value === 'function' ? undefined : value))
 
@@ -102,7 +107,7 @@ describe('PW-O02 (part 1) — the band of a Viewer and a Designer: no chip witho
     const seesProduction = over.production ?? template.permissions.includes('portal.production.view')
     const seesPrices = template.grains.includes('price')
     const record = seesPrices ? orderRecord({ status: 'IN_PRODUCTION' }) : withoutPrices(orderRecord({ status: 'IN_PRODUCTION' }))
-    return (locale: Locale) => orderBandOf({ words: orderWords(locale), record, tab: 'status', prefix: PREFIX, facts: { ...FACTS, production: bandProductionOf(LATE_URGENT, seesProduction), pay: seesPrices ? { held: null } : null } })
+    return (locale: Locale) => orderBandOf({ words: orderWords(locale), record, prefix: PREFIX, facts: { ...FACTS, production: bandProductionOf(LATE_URGENT, seesProduction), pay: seesPrices ? { held: null } : null } })
   }
 
   it('the templates as the plan reads them: Viewer sees production, Designer does not; neither sees a price', () => {
@@ -148,5 +153,51 @@ describe('PW-O02 (part 1) — the band of a Viewer and a Designer: no chip witho
         if (!partnerTemplateOf(key)!.grains.includes('price')) expect(band.more?.some((item) => item.id === 'pay'), `${key} ${locale}`).toBe(false)
       }
     }
+  })
+})
+
+describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in the body under the band (D2 a, D6 a)', () => {
+  const tabsOf = (over: Partial<Parameters<typeof orderTabsOf>[0]> = {}, locale: Locale = 'en') => orderTabsOf({ words: orderWords(locale), record: orderRecord(), prefix: PREFIX, toConfirm: false, files: 3, ...over })
+
+  it('the office’s words in both languages, a link each, the old addresses landing on their new tabs', () => {
+    expect(tabsOf().map((tab) => [tab.id, tab.label])).toEqual([['overview', 'Overview'], ['lines', 'Lines'], ['shipments', 'Shipments'], ['files', 'Files']])
+    expect(tabsOf({}, 'it').map((tab) => tab.label)).toEqual(['Panoramica', 'Righe', 'Spedizioni', 'File'])
+    expect(tabsOf().map((tab) => tab.id)).toEqual([...RECORD_TABS])
+    expect(tabsOf()[3]!.href).toBe(`${PREFIX}/orders/${orderRecord().order.id}?tab=files`)
+    expect([tabOf('status'), tabOf('documents'), tabOf('messages'), tabOf(null)]).toEqual(['overview', 'files', 'overview', 'overview'])
+    for (const locale of ['en', 'it'] as const) for (const old of ['tabs.status', 'tabs.documents']) expect(CATALOGUE[locale]['portal-orders']![old], `${locale} ${old}`).toBeUndefined()
+  })
+
+  it('counts on Lines, Shipments and Files — 0 too, no pill while unknown; "to confirm" on Overview while a revised version waits', () => {
+    const record = orderRecord()
+    const tabs = tabsOf({ files: 0, toConfirm: true })
+    expect(tabs.map((tab) => tab.count ?? null)).toEqual([null, record.lines.length, record.shipments.shown, 0])
+    expect(tabs[0]!.badge).toBe('to confirm')
+    expect(tabsOf({ files: null })[3]!.count ?? null).toBeNull()
+    expect(tabsOf()[0]!.badge).toBeUndefined()
+  })
+
+  it('the page draws them in its body (after the band, inside main), the band draws none; each tab draws its part', () => {
+    const entry = recordScreen.cases.find((item) => item.id === 'status')!
+    for (const locale of ['en', 'it'] as const) {
+      const html = render(createElement(recordScreen.view, { model: entry.model }), locale)
+      expect(html, locale).not.toContain('fw-ptabs')
+      expect(html, locale).toMatch(new RegExp(`<nav[^>]*aria-label="${locale === 'en' ? 'Order' : 'Ordine'}"`))
+      expect(html.search(/<nav[^>]*aria-label="(Order|Ordine)"/), locale).toBeGreaterThan(html.indexOf('id="main-content"'))
+      for (const tab of RECORD_TABS) expect(html, `${locale} ${tab}`).toContain(`?tab=${tab}"`)
+      expect(html, locale).toContain('aria-current="page"')
+    }
+    const files = recordScreen.cases.find((item) => item.id === 'documents')!
+    expect(textOf(render(createElement(recordScreen.view, { model: files.model }), 'en'))).toContain(CATALOGUE.en['portal-orders']!['docs.filesTitle']!)
+  })
+
+  it('My production opens an order on Overview (its row, its "Ask us" for an urgent order)', () => {
+    expect(productionRowHref('/p/X', { id: 'o1' })).toBe('/p/X/orders/o1?tab=overview')
+  })
+
+  it('G10: on a phone the band’s row 1 holds ‹ · the title · ⋯; the reference, the pills and Pages go to row 2 (one shell rule)', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
+    for (const rule of ['.fw-pband .nds-detailhdr.dense .back {', '.fw-pband .nds-detailhdr.dense .fw-ppages {\n    order: 2;', 'flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));']) expect(phone, rule).toContain(rule)
   })
 })

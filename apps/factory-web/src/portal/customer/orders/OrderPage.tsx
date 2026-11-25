@@ -114,9 +114,9 @@ import { useProductionPageWords } from '../production/words'
 // ---- end F-PR-24
 
 /**
- * `/p/<party>/orders/<id>?tab=status|lines|shipments|documents&line=` for a customer (B-W2b-191; design portal.customer.orders rec
- * "Order"; B-TH-275: the conversation docks beside the four tabs — an old `?tab=messages` opens Status & progress with it shown and
- * focused; "Made from your request" from the order's summary): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
+ * `/p/<party>/orders/<id>?tab=overview|lines|shipments|files&line=` for a customer (B-W2b-191; design portal.customer.orders rec
+ * "Order"; pp-w1: the old `status` / `documents` open Overview / Files; B-TH-275: the conversation docks beside the four tabs — an
+ * old `?tab=messages` opens Overview with it shown and focused; "Made from your request" from the order's summary): reads the order (GET /portal/sales-orders/:id) and each part on its own — the
  * revised version that waits (B-W2b-184), progress while shared (polled every `refreshSeconds`), the change and cancel
  * requests and their rules (B-W2b-183), shipments, documents (B-W2b-178), the deposit's open item (B-W2b-185) — fills the
  * band, runs the pop-ups (each write one Idempotency-Key per body), guards a typed change, reads again on the live
@@ -348,7 +348,7 @@ function OrderContainer({ id }: { id: string }) {
   }
   const productionReady = production.state === 'ready'
   useEffect(() => {
-    if (tab === 'status' && productionReady && readsDocuments) void loadDocuments()
+    if (tab === 'overview' && productionReady && readsDocuments) void loadDocuments()
   }, [tab, productionReady, readsDocuments, loadDocuments])
   // ---- end F-PR-24
 
@@ -420,10 +420,11 @@ function OrderContainer({ id }: { id: string }) {
 
   useEffect(() => {
     if (tab === 'shipments') void loadShipments()
-    if (tab === 'documents') void loadDocuments()
+    if (tab === 'files') void loadDocuments()
   }, [tab, loadShipments, loadDocuments])
-  // ---- F-SA-238: the order's shared files on Documents, grouped like the office's Files tab (read again on the live channel's news) ----
-  const orderFiles = usePortalOrderFiles(api, id, tab === 'documents', record ? orderNameOf(record.order, locale, t) : '')
+  // ---- F-SA-238: the order's shared files on Files, grouped like the office's Files tab (read again on the live channel's news) ----
+  // pp-w1 (w1.3, P0-B15): read on arrival on every tab — the tab strip counts them ("Files 3", 0 too) — and again on every hint.
+  const orderFiles = usePortalOrderFiles(api, id, true, record ? orderNameOf(record.order, locale, t) : '')
   // ---- end F-SA-238
 
   useEffect(() => setOpenLine(lineParam), [lineParam])
@@ -443,8 +444,8 @@ function OrderContainer({ id }: { id: string }) {
       void loadRequests()
       void loadRules()
       if (tab === 'shipments') void loadShipments()
-      if (tab === 'documents') void loadDocuments()
-      if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created
+      if (tab === 'files') void loadDocuments()
+      orderFiles.reload() // F-SA-238: live on partner_notification.created; pp-w1 (w1.3): the Files count on every tab
     },
     onReconnect: () => {
       void load()
@@ -937,14 +938,12 @@ function OrderContainer({ id }: { id: string }) {
       ? orderBandOf({
           words,
           record,
-          tab,
           prefix: frame.prefix,
           facts: {
             // pp-w1 (w1.2): the ONE "Ask for a change…" opens the Ask dialog (held: a preview, no right to ask, offline).
             ask: { held: askHeldWords(null) },
             cancelHeld: cancelHeldWords,
             reconfirm: revisionShown !== null ? { revision: revisionShown, held: reconfirmHeldKey ? t(reconfirmHeldKey) : null } : null,
-            shipments: record.shipments.shown,
             confirmation: readsDocuments,
             pay: firstPay ? { held: firstPay[1].held } : null,
             problem: reportFacts, // F-PR-24

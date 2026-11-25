@@ -802,6 +802,37 @@
     max-width: 100%;
   }
 
+  /* pp-w1 (G10; 10-design § 8): row 1 holds only ‹ · the title · ⋯ — at 375 the title was cut to "Your…" beside the back link's
+     words and Pages. The back link keeps its chevron (its words stay for a screen reader, clipped out of sight); the title fills
+     row 1; the reference, the pills and Pages share row 2. One rule for every portal page with a band. */
+  .fw-pband .nds-detailhdr.dense .back {
+    flex: 0 0 var(--nds-control-h-sm);
+    width: var(--nds-control-h-sm);
+    height: var(--nds-control-h-sm);
+    overflow: hidden;
+    white-space: nowrap;
+    color: transparent;
+  }
+
+  .fw-pband .nds-detailhdr.dense .back > svg {
+    flex: none;
+    color: var(--nds-text-link);
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {
+    flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));
+  }
+
+  .fw-pband .nds-detailhdr.dense .nds-detailhdr-meta {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .fw-pband .nds-detailhdr.dense .fw-ppages {
+    order: 2;
+  }
+
   .fw-pmain {
     padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-16);
   }

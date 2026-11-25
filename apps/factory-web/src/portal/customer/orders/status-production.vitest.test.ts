@@ -60,7 +60,7 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
   return {
     state: 'ready',
     record,
-    tab: 'status',
+    tab: 'overview',
     prefix: PREFIX,
     offlineSince: null,
     notice: null,

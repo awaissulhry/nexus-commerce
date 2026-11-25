@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { AlertCircle, WifiOff } from 'lucide-react'
-import { Banner, EmptyState } from '@nexus/ui/components'
+import { Banner, EmptyState, Tabs } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import type { ApprovalPage, ChangeRequest, DocumentsRead, OrderRecord, ProgressRead, ShipmentsRead } from '../api'
 import type { RecordTab } from '../model'
@@ -21,6 +21,10 @@ import type { PortalFrameMode } from '../../../shell/record/model'
 import type { PortalDockWidth } from '../../../shell/record/model' // F-SA-264
 import { orderNameOf } from '../model'
 // ---- end B-TH-275
+// ---- pp-w1 (w1.3, D6 a): the order's tabs in the body under the band, as the office's (the factory's TabLink: no prefetch)
+import { TabLink } from '../../../../lib/tab-link/TabLink'
+import { orderTabsOf } from '../band'
+// ---- end pp-w1
 import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
 import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-238
@@ -32,10 +36,10 @@ import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
 /**
- * SCR-184 › one order (design portal.customer.orders rec "Order"; B-TH-275, picture 22: Status & progress, Lines, Shipments &
- * tracking, Documents — 5 → 4 tabs). The frame's band holds the title ("Your order 12": the customer's own number), their PO, the
- * status, "Ask for a change" (and "Re-confirm version N" while a revised version waits), the ⋯ (Ask to cancel, Pay the deposit,
- * Promise date history, the order confirmation PDF, Ask a question) and the four tabs; this view draws the tab and the pop-ups
+ * SCR-184 › one order (design portal.customer.orders rec "Order"; B-TH-275, picture 22; pp-w1: Overview, Lines, Shipments, Files).
+ * The frame's band holds the title ("Your order 12": the customer's own number), their PO, the status and its chips, the ONE
+ * "Ask for a change…", the ⋯ (Re-confirm version N, Ask to cancel, Pay the deposit, the order confirmation PDF, Report a problem,
+ * Ask a question); this view draws the four tabs under the band (D6 a, as the office), the tab and the pop-ups
  * beside the order's ONE conversation, docked by the portal record frame (`children`: PortalThread live, ThreadView in the design;
  * from 1280 px ~40 % on the right, narrower behind "Messages (2 new)"). Each part reads on its own: a part that failed says so with
  * Try again, never as an empty part. Loading, a failed read and a missing order draw no conversation.
@@ -176,7 +180,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
 }
 
 export function OrderRecordView({ model, actions, children }: { model: OrderRecordViewModel; actions?: OrderRecordActions; children?: ReactNode }) {
-  const { t, time, locale } = useOrderWords()
+  const words = useOrderWords()
+  const { t, time, locale } = words
   if (model.state === 'loading') return <Loading rows={4} height={80} />
   if (model.state === 'missing') {
     return (
@@ -212,6 +217,15 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
       door={model.askDoor ? { label: t('band.change'), held: model.askDoor.held, onOpen: () => actions?.onAskChange?.() } : null}
     >
       <div className="fw-pord">
+        {/* pp-w1 (w1.3; D2 a, D6 a): Overview · Lines · Shipments · Files in the body, `sm`, scrolling with its › arrow on a phone. */}
+        <Tabs
+          ariaLabel={t('tabs.label')}
+          tabs={orderTabsOf({ words, record, prefix: model.prefix, toConfirm: record.order.reconfirmNeeded && model.revision.state === 'ready' && !!model.revision.page?.content.revisedOrder, files: model.files?.read?.total ?? null })}
+          active={model.tab}
+          size="sm"
+          overflow="scroll"
+          linkAs={TabLink}
+        />
         {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
         {model.notice ? (
           <Banner
@@ -224,10 +238,10 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
             }
           />
         ) : null}
-        {model.tab === 'status' ? <StatusTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'overview' ? <StatusTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
-        {model.tab === 'documents' ? <DocumentsTab model={model} actions={actions} /> : null}
+        {model.tab === 'files' ? <DocumentsTab model={model} actions={actions} /> : null}
         {dialog?.kind === 'change' ? <ChangeDialog model={dialog.model} actions={actions?.dialog?.change} /> : null}
         {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} actions={actions?.dialog?.cancel} /> : null}
         {dialog?.kind === 'reconfirm' ? <ReconfirmDialog model={dialog.model} actions={actions?.dialog?.reconfirm} /> : null}

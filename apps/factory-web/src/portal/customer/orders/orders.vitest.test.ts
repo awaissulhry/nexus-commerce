@@ -113,12 +113,15 @@ describe('addresses and tabs', () => {
     expect(listQuery(null, '')).toBe('')
     expect(listQuery('OPEN', '  ')).toBe('')
     expect(listQuery('DATE_MOVED', ' BA-PO ', { print: '1' })).toBe('?chip=DATE_MOVED&q=BA-PO&print=1')
-    expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=status')
+    expect(recordHref('/p/X', 'o1')).toBe('/p/X/orders/o1?tab=overview')
     // B-TH-275: no Messages tab — the list's "Messages" opens the order with its docked conversation shown (the frame's arrival term).
     expect(recordHref('/p/X', 'o1', 'lines')).toBe('/p/X/orders/o1?tab=lines')
     expect(tabOf('shipments')).toBe('shipments')
-    expect(tabOf('nope')).toBe('status')
-    expect(tabOf('messages')).toBe('status')
+    expect(tabOf('nope')).toBe('overview')
+    expect(tabOf('messages')).toBe('overview')
+    // pp-w1 (w1.3): the old ids of links in mails land on their new tabs.
+    expect(tabOf('status')).toBe('overview')
+    expect(tabOf('documents')).toBe('files')
   })
 
   it('a request not decided yet opens nothing (it is not an order yet)', () => {
@@ -353,7 +356,7 @@ describe('documents and the CSV', () => {
     expect(ownRef(catalogue, 'en')).toBeNull()
     expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.catalogue'])
     expect(rowHref('/p/B', request)).toBe(`/p/B/orders/requests/${REQUESTS[0]!.id}`)
-    expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=status`)
+    expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=overview`)
     expect(rowHref('/p/B', catalogue)).toBeNull()
   })
 })
@@ -697,10 +700,11 @@ describe('F-SA-238 — the portal Documents tab: the customer’s own shared fil
     expect(draw('en', { read: null, problem: 'read', selected: [], canShare: false, face: 'customer' })).toMatch(/Try again|Retry/)
   })
 
-  it('the page reads it on Documents and again on the live channel’s news; another customer’s order: the neutral "not found"', () => {
+  // pp-w1 (w1.3): read on arrival on every tab (the tab strip counts the files) and again on every hint of the live channel.
+  it('the page reads it on arrival and again on the live channel’s news; another customer’s order: the neutral "not found"', () => {
     const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("const orderFiles = usePortalOrderFiles(api, id, tab === 'documents'")
-    expect(page).toContain("if (tab === 'documents') orderFiles.reload() // F-SA-238: live on partner_notification.created")
+    expect(page).toContain("const orderFiles = usePortalOrderFiles(api, id, true, ")
+    expect(page).toContain('      orderFiles.reload() // F-SA-238: live on partner_notification.created; pp-w1 (w1.3): the Files count on every tab')
     const tab = readFileSync(new URL('./view/DocumentsTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("t('docs.filesNotFound')")
     for (const locale of ['en', 'it'] as const) {

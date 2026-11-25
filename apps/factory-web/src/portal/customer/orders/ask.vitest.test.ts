@@ -219,11 +219,11 @@ describe('the dialog’s words and the wall (PW-P06)', () => {
 
   // pp-w1 (w1.2; O1-B1): ONE ask door — the band's "Ask for a change…" opens this dialog; the ⋯ holds no second "Ask for a change".
   it('the band: its ONE "Ask for a change…" opens the dialog at its first step; the ⋯ holds no second ask', () => {
-    const facts: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, shipments: 1, confirmation: true, pay: null }
+    const facts: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
     const record = orderRecord({ status: 'IN_PRODUCTION' })
     const words = orderWords('en')
     let opened = 0
-    const band = orderBandOf({ words, record, tab: 'status', prefix: PREFIX, facts, onAsk: () => void (opened += 1) })
+    const band = orderBandOf({ words, record, prefix: PREFIX, facts, onAsk: () => void (opened += 1) })
     expect(band.actions?.map((action) => [action.id, action.label])).toEqual([['ask', 'Ask for a change…']])
     band.actions?.[0]?.onClick?.()
     expect(opened).toBe(1)
