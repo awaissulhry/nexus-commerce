@@ -24,6 +24,7 @@ import { orderNameOf } from '../model'
 // ---- pp-w1 (w1.3, D6 a): the order's tabs in the body under the band, as the office's (the factory's TabLink: no prefetch)
 import { TabLink } from '../../../../lib/tab-link/TabLink'
 import { orderTabsOf } from '../band'
+import { RecordNotices } from '../../../../lib/record-frame/RecordNotices' // w1.4: the office's notice slot, shared
 // ---- end pp-w1
 import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
@@ -204,6 +205,17 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
   }
   const record = model.record
   const dialog = model.dialog
+  const notice = model.notice ? (
+    <Banner
+      tone={model.notice.tone}
+      title={t(model.notice.key, model.notice.params)}
+      action={
+        <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+          {t('notice.hide')}
+        </Button>
+      }
+    />
+  ) : null
   return (
     <PortalRecordFrame
       thread={children ?? null}
@@ -220,18 +232,13 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
           overflow="scroll"
           linkAs={TabLink}
         />
-        {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
-        {model.notice ? (
-          <Banner
-            tone={model.notice.tone}
-            title={t(model.notice.key, model.notice.params)}
-            action={
-              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-                {t('notice.hide')}
-              </Button>
-            }
-          />
-        ) : null}
+        {/* pp-w1 (w1.4): the order's notices in the office's ONE notice slot (lib/record-frame RecordNotices): the most serious shows,
+            the rest wait behind "N more notices" — a failure first, then the lost connection, then what was just sent. */}
+        <RecordNotices>
+          {model.notice?.tone === 'danger' ? notice : null}
+          {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
+          {model.notice && model.notice.tone !== 'danger' ? notice : null}
+        </RecordNotices>
         {model.tab === 'overview' ? <StatusTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}

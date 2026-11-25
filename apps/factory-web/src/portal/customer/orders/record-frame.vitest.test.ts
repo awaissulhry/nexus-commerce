@@ -18,6 +18,8 @@ import { documentsRead, orderRecord, orderWords, progressRead, requestsOf, shell
 import { madeFromOf, orderNameOf, orderRefOf, orderThreadHref, RECORD_TABS, recordHref, stateLineKey, tabOf, threadHref, type RecordTab } from './model'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrderRecordViewModel } from './view/OrderRecordView'
+import { ReaderProvider, useT } from '../../../lib/i18n/provider' // pp-w1 (w1.4)
+import { WithMessages } from '../../../record-panels/i18n' // pp-w1 (w1.4)
 
 /**
  * B-TH-275 (threads plan TH-6; P-CUS-ORD.band, .body, .thread; picture 22; wall W02, W08, W09, W10, W13, W14, W36): the customer's
@@ -350,3 +352,36 @@ describe('F-SA-264 / pp-w1 — the customer’s conversation: ONE head row, the 
   })
 })
 // ---- end F-SA-264
+
+// ---- pp-w1 (w1.4): the order's notices in the office's ONE notice slot (lib/record-frame RecordNotices), in the portal's words -----
+describe('w1.4 — the notices: one slot, the most serious first, the rest behind "N more notices"; the portal says "voi"', () => {
+  it('a failure first, then the lost connection, then what was just sent — all inside RecordNotices', () => {
+    const html = draw(betaCase(betaRecord(), 'overview', { offlineSince: '2026-11-25T08:00:00Z', notice: { tone: 'danger', key: 'docs.downloadFailed' } }), 'en')
+    expect(html.match(/class="fw-rcf-notices[" ]/g)?.length).toBe(1)
+    const slot = html.slice(html.indexOf('fw-rcf-notices-list'))
+    const failed = slot.indexOf('The document could not be downloaded.')
+    const offline = slot.indexOf('No connection — showing what was loaded at')
+    expect(failed).toBeGreaterThan(0)
+    expect(offline).toBeGreaterThan(failed)
+    const sent = draw(betaCase(betaRecord(), 'overview', { offlineSince: '2026-11-25T08:00:00Z', notice: { tone: 'success', key: 'notice.changeSent' } }), 'en')
+    const after = sent.slice(sent.indexOf('fw-rcf-notices-list'))
+    expect(after.indexOf('No connection')).toBeLessThan(after.indexOf('Your change request was sent.'))
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("import { RecordNotices } from '../../../../lib/record-frame/RecordNotices'")
+  })
+
+  it('"Hide 2 notices" in the portal reads the voi form (outside words); the office keeps its own', () => {
+    const fewer = (reader: 'office' | 'outside') => {
+      let said = ''
+      function Probe() {
+        said = useT('record-frame')('notices.fewer', { count: 2 })
+        return null
+      }
+      render(createElement(ReaderProvider, { reader }, createElement(WithMessages, { namespaces: ['record-frame'] }, createElement(Probe))), 'it')
+      return said
+    }
+    expect(fewer('outside')).toBe('Nascondete 2 avvisi')
+    expect(fewer('office')).toBe('Nascondi 2 avvisi')
+  })
+})
+// ---- end pp-w1 (w1.4)
