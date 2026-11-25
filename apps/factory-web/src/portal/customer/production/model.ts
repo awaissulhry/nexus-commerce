@@ -45,8 +45,8 @@ export function listQuery(chip: ProductionChip | null, q: string): string {
   return text ? `?${text}` : ''
 }
 
-/** Where a row opens: the order's own page on Status & progress (the order's production is drawn there). */
-export const rowHref = (prefix: string, row: Pick<ProductionRow, 'id'>): string => recordHref(prefix, row.id, 'status')
+/** Where a row opens: the order's own page on Overview (the order's production is drawn there; pp-w1 w1.3). */
+export const rowHref = (prefix: string, row: Pick<ProductionRow, 'id'>): string => recordHref(prefix, row.id, 'overview')
 
 // ── the customer's own name of an order (B-TH-303: never the office's SO- series) ──────────────────────────────────────
 /** RefPair's two sides: their PO first, then the customer's own number ("Your order" · "12"). */
@@ -280,7 +280,7 @@ export const waitingInputOf = (waiting: ProductionWaiting): WaitingInput => ({ w
 /** The plain stage of the lib's strip (the API's five stages are the same). */
 export const plainStageOf = (stage: { readonly code: string } | null): PlainStage | null => (stage ? (stage.code as PlainStage) : null)
 
-// ── F-PR-12a: the order's Status & progress (portal/customer/orders/view/StatusTab.tsx) ─────────────────────────────────────
+// ── F-PR-12a: the order's Overview (portal/customer/orders/overview/model.ts; was Status & progress) ─────────────────────────────────────
 /** What holds its work, as the lib's banner reads it: the curated words only (every level). */
 export const holdsOf = (holds: ProductionOrder['holds'], locale: Locale): HoldInput[] => holds.map((hold, index) => ({ id: `${hold.kind}-${index}`, kind: hold.kind, since: hold.since, customerWords: say(hold.words, locale) }))
 

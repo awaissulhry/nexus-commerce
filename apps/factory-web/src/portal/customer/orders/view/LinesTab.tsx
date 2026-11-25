@@ -6,7 +6,7 @@ import { Card, Disclosure, Menu, SummaryTable, type MenuItemDef } from '@nexus/u
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { OrderLine, OrderRecord } from '../api'
-import { linePromise, pieceCount, totalsOf, unitPriceText } from '../model'
+import { linePromise, pieceCount, shownLinesOf, totalsOf, unitPriceText } from '../model'
 import { useOrderWords } from '../words'
 import { PricesNote, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
@@ -129,6 +129,8 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
   }, [t, locale, day, words, seesPrices, currency, hasCheck, checkStamp])
 
   const totals = seesPrices ? totalsOf(record) : null
+  // pp-w1 (w1.4, O3-B1): a charge line (FEE) is not drawn here in round 1; the totals below count it (the order's own amounts).
+  const lines = shownLinesOf(record.lines)
   return (
     <div className="fw-pord-tab">
       <h2 className="fw-pord-h2">{t('lines.title')}</h2>
@@ -136,12 +138,12 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
       {/* F-CP-143: the Price check card (a price holder: its Buyer, Finance, Admin); "Your prices…" opens its window. */}
       {seesPrices && model.priceCheck ? <PriceCheckCard model={model.priceCheck} actions={actions?.priceCheck} /> : null}
       {seesPrices && model.priceCheck?.dialog && model.priceCheck.check ? <PriceCheckDialog model={model.priceCheck.dialog} check={model.priceCheck.check} actions={actions?.priceCheck?.dialog} /> : null}
-      <ListFrame<OrderLine> label={t('lines.label')} title={t('lines.title')} listKey={null} rows={record.lines} rowId={(line) => line.id} columns={columns} count={t('lines.count', { count: record.lines.length, pieces: pieceCount(record.pieces.ordered, locale) })} onOpen={(line) => actions?.onLine?.(line.id)} />
+      <ListFrame<OrderLine> label={t('lines.label')} title={t('lines.title')} listKey={null} rows={lines} rowId={(line) => line.id} columns={columns} count={t('lines.count', { count: lines.length, pieces: pieceCount(record.pieces.ordered, locale) })} onOpen={(line) => actions?.onLine?.(line.id)} />
       <section className="fw-pord-section" aria-labelledby="fw-pord-sizes">
         <h2 id="fw-pord-sizes" className="fw-pord-h2">
           {t('lines.sizesTitle')}
         </h2>
-        {record.lines.map((line) => (
+        {lines.map((line) => (
           <Disclosure key={line.id} id={`line-${line.id}`} open={model.openLine === line.id ? true : undefined} summary={t('lines.sizesOf', { seq: line.seq, style: line.style?.code ?? line.description ?? '—', colour: line.colourway?.name ?? '' })}>
             {line.kind === 'MADE_TO_MEASURE' ? (
               <p className="fw-pord-hint">{line.measurement ? t('lines.mtmUnit', { rider: line.measurement.riderName, revision: line.measurement.revision, size: line.baseSize ?? '—' }) : t('lines.mtmUnitNone')}</p>

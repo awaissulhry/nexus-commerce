@@ -15,6 +15,7 @@ import type { DraftOrderRow } from '../model' // F-CP-152
 // B-TH-238: the Messages card.
 import { messagesEmpty, type MessageRow, type MessagesCard } from '../model'
 import { useHomeWords } from '../words'
+import { useCellWords } from '../../../../lib/order-cells/words' // pg-w2 (D6): a parcel named by its order, the shared cells' words
 import { ApproveDialog, type ApproveActions, type ApproveDialogModel } from './ApproveDialog'
 import { DocumentPreview, type DocumentPreviewActions, type DocumentPreviewModel } from '../../documents/preview/view/DocumentPreview'
 import '../customer-home.css'
@@ -453,6 +454,7 @@ function NextOrders({
   const words = useHomeWords()
   const { t, day } = words
   const ds = useDsWords()
+  const cells = useCellWords()
   return (
     <section className="fw-pch-section fw-pch-orders" aria-labelledby="fw-pch-orders">
       <div className="fw-pch-head">
@@ -491,7 +493,7 @@ function NextOrders({
                 </span>
                 <MilestoneTracker steps={row.steps} layout="compact" label={t('orders.steps', { number: name })} labels={ds.milestoneTracker} />
                 <span className="fw-pch-sub">
-                  {[t('orders.pieces', { open: row.pieces.open, ordered: row.pieces.ordered }), row.shipment ? t('orders.shipment', { number: row.shipment.number, status: row.shipment.words }) : null].filter(Boolean).join(' · ')}
+                  {[t('orders.pieces', { open: row.pieces.open, ordered: row.pieces.ordered }), row.shipment ? (row.shipment.parcel ? t('orders.shipment', { number: cells.list('customer.shipped.parcel', row.shipment.parcel), status: row.shipment.words }) : row.shipment.words) : null].filter(Boolean).join(' · ')}
                 </span>
               </>
             )

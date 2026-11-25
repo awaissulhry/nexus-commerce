@@ -10,36 +10,41 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { portalArrivalOf } from '../../shell/record/model'
 // F-SA-264
-import { DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, portalHiddenKey, portalWidthKey, readPortalDock, showButtonWords, writePortalDock } from '../../shell/record/model'
+import { bandThreadOf, DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, portalFirstWidth, portalHiddenKey, portalWidthKey, readPortalDock, writePortalDock } from '../../shell/record/model'
+import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
 import type { OrderRecord } from './api'
-import { orderBandOf, type OrderBandFacts } from './band'
-import { documentsRead, orderRecord, orderWords, progressRead, requestsOf, shellOf, shipmentsRead, threadOf, words } from './design-data'
+import { orderBandOf, orderTabsOf, type OrderBandFacts } from './band'
+import { documentsRead, orderRecord, orderWords, progressRead, requestsOf, shellOf, shipmentsRead, threadOf, withThreadButton, words } from './design-data'
 import { madeFromOf, orderNameOf, orderRefOf, orderThreadHref, RECORD_TABS, recordHref, stateLineKey, tabOf, threadHref, type RecordTab } from './model'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrderRecordViewModel } from './view/OrderRecordView'
+import { ReaderProvider, useT } from '../../../lib/i18n/provider' // pp-w1 (w1.4)
+import { WithMessages } from '../../../record-panels/i18n' // pp-w1 (w1.4)
 
 /**
  * B-TH-275 (threads plan TH-6; P-CUS-ORD.band, .body, .thread; picture 22; wall W02, W08, W09, W10, W13, W14, W36): the customer's
- * order on the portal record frame — 5 → 4 tabs (Status & progress, Lines, Shipments & tracking, Documents), the conversation docked
- * (no Messages tab, no Ask modal), an old `?tab=messages` lands on Status with the conversation shown, "Your order is confirmed" only
+ * order on the portal record frame — 5 → 4 tabs (pp-w1: Overview, Lines, Shipments, Files, under the band), the conversation docked
+ * (no Messages tab, no Ask modal), an old `?tab=messages` lands on Overview with the conversation shown, "Your order is confirmed" only
  * for a CONFIRMED order, the customer's own number and never the office's SO- series, and Brand Beta's page holds nothing of Brand
  * Alpha.
  */
 
 const PREFIX_BETA = `/p/${BRAND_BETA.code}`
 const t = (locale: Locale) => words(locale)
-const FACTS: OrderBandFacts = { changeHeld: null, cancelHeld: null, reconfirm: null, shipments: 1, moves: 0, confirmation: true, pay: null }
+const FACTS: OrderBandFacts = { ask: { held: null }, cancelHeld: null, reconfirm: null, confirmation: true, pay: null }
 
 describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
   it('four tabs in order; Messages is gone', () => {
-    expect([...RECORD_TABS]).toEqual(['status', 'lines', 'shipments', 'documents'])
+    expect([...RECORD_TABS]).toEqual(['overview', 'lines', 'shipments', 'files'])
     expect((RECORD_TABS as readonly string[]).includes('messages')).toBe(false)
   })
 
-  it('an old ?tab=messages (a list, a mail, a notification) opens Status & progress, with the conversation shown and focused', () => {
-    expect(tabOf('messages')).toBe('status')
-    expect(tabOf('documents')).toBe('documents')
-    expect(tabOf('constructor')).toBe('status')
+  it('an old ?tab=messages (a list, a mail, a notification) opens Overview, with the conversation shown and focused', () => {
+    expect(tabOf('messages')).toBe('overview')
+    // pp-w1 (w1.3): the old ids keep their links working.
+    expect(tabOf('status')).toBe('overview')
+    expect(tabOf('documents')).toBe('files')
+    expect(tabOf('constructor')).toBe('overview')
     const href = orderThreadHref('/p/X', 'o1')
     expect(href).toBe('/p/X/orders/o1?tab=messages')
     expect(portalArrivalOf(href.slice(href.indexOf('?')))).toEqual({ openThread: true, focus: true })
@@ -49,12 +54,14 @@ describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
     expect(recordHref('/p/X', 'o1', 'shipments' as RecordTab)).toBe('/p/X/orders/o1?tab=shipments')
   })
 
-  it('the band: "Your order 11", their PO, four link tabs and "Ask a question" about the order by its own name', () => {
+  it('the band: "Your order 11", their PO and "Ask a question" about the order by its own name; the four link tabs under it', () => {
     const record = orderRecord()
-    const band = orderBandOf({ words: orderWords('en'), record, tab: 'status', prefix: '/p/X', facts: FACTS })
+    const band = orderBandOf({ words: orderWords('en'), record, prefix: '/p/X', facts: FACTS })
     expect(band.title).toBe('Your order 11')
     expect(band.refs).toEqual({ theirs: record.order.customerRef, ours: null })
-    expect(band.tabs?.items.map((item) => item.id)).toEqual(['status', 'lines', 'shipments', 'documents'])
+    // pp-w1 (w1.3, D6 a): the tabs left the band for the body (orderTabsOf).
+    expect(band.tabs ?? null).toBeNull()
+    expect(orderTabsOf({ words: orderWords('en'), record, prefix: '/p/X', toConfirm: false, files: null }).map((item) => item.id)).toEqual([...RECORD_TABS])
     expect(band.ask).toEqual({ type: 'SalesOrder', id: record.order.id, label: 'Your order 11' })
     expect(JSON.stringify(band, (_key, value) => (typeof value === 'function' ? undefined : value))).not.toMatch(/\bSO-\d{4}-\d+/)
   })
@@ -101,8 +108,7 @@ describe('"Made from your request" (the order’s summary read, B-TH-076)', () =
 // ---- the page as Brand Beta reads it ------------------------------------------------------------------------------------------
 function betaRecord(over: Partial<OrderRecord['order']> = {}): OrderRecord {
   return orderRecord({
-    // The office's number is in the read and must never be drawn.
-    number: BRAND_BETA.numbers.order,
+    // pp-w1 (C-1): the office's number is no longer in the web's read; it must never be drawn either (asserted below).
     yourNumber: customerNumberOf('ORDER', 4),
     customerRef: BRAND_BETA.customerRef,
     shipTo: { name: `${BRAND_BETA.legalName} — Lager`, line1: BRAND_BETA.address.line1, postalCode: BRAND_BETA.address.postalCode, city: BRAND_BETA.address.city, country: BRAND_BETA.address.country },
@@ -114,7 +120,7 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
   return {
     state: 'ready',
     record,
-    tab: 'status',
+    tab: 'overview',
     prefix: PREFIX_BETA,
     offlineSince: null,
     notice: null,
@@ -130,7 +136,6 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
     fileHeld: null,
     openLine: null,
     copied: null,
-    historyOpen: false,
     dialog: null,
     frame: { mode: 'docked' },
     madeFrom: { kind: 'request', href: `${PREFIX_BETA}/orders/requests/${BRAND_BETA.ids.thread}`, label: '#2' },
@@ -140,7 +145,9 @@ function betaModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}
 
 function betaCase(record: OrderRecord, tab: RecordTab, over: Partial<OrderRecordViewModel> = {}): CustomerCaseBuilder {
   return (locale) => ({
-    shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX_BETA, facts: FACTS }), {
+    // pp-w1 (w1.1): the frame's "Messages (2 new)" rides in the band (the design's band carries it: withThreadButton).
+    // pp-w2: "Made from your request #2" is the band's (the Overview draws it no more), from the page's summary read.
+    shell: shellOf(locale, withThreadButton(orderBandOf({ words: orderWords(locale), record, prefix: PREFIX_BETA, facts: { ...FACTS, madeFrom: betaModel(record, { tab, ...over }).madeFrom ?? null } }), betaModel(record, { tab, ...over }).frame), {
       partyName: BRAND_BETA.legalName,
       person: { displayName: BRAND_BETA.portalPerson.name, email: BRAND_BETA.portalPerson.email },
       prefix: PREFIX_BETA,
@@ -168,7 +175,7 @@ describe('Brand Beta’s order page (W02, W10, W13, W14): its own records, numbe
   })
 
   it('docked: ONE conversation beside the body, named, `#messages` for "Ask a question"; no Messages tab in the band', () => {
-    const html = draw(betaCase(betaRecord(), 'status'), 'en')
+    const html = draw(betaCase(betaRecord(), 'overview'), 'en')
     expect(html.match(/<aside/g)?.length).toBe(1)
     expect(html).toContain('id="messages"')
     expect(html).toContain('aria-label="Messages: Your order 4"')
@@ -187,19 +194,19 @@ describe('Brand Beta’s order page (W02, W10, W13, W14): its own records, numbe
   })
 
   it('the confirmed sentence shows on a CONFIRMED order only; "Made from your request #2" links its page', () => {
-    const confirmed = textOf(draw(betaCase(betaRecord({ status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED }), 'status'), 'en'))
+    const confirmed = textOf(draw(betaCase(betaRecord({ status: 'CONFIRMED', words: CUSTOMER_STATUS_WORDS.CONFIRMED }), 'overview'), 'en'))
     expect(confirmed).toContain('Your order is confirmed.')
     expect(confirmed).toContain('Made from your request #2')
-    const waiting = textOf(draw(betaCase(betaRecord({ status: 'REQUESTED', words: CUSTOMER_STATUS_WORDS.REQUESTED }), 'status'), 'en'))
+    const waiting = textOf(draw(betaCase(betaRecord({ status: 'REQUESTED', words: CUSTOMER_STATUS_WORDS.REQUESTED }), 'overview'), 'en'))
     expect(waiting).toContain('We received your order: it waits for our approval.')
     expect(waiting).not.toContain('Your order is confirmed.')
-    const shipped = textOf(draw(betaCase(betaRecord({ status: 'PARTLY_SHIPPED', words: CUSTOMER_STATUS_WORDS.PARTLY_SHIPPED }), 'status', { madeFrom: null }), 'en'))
+    const shipped = textOf(draw(betaCase(betaRecord({ status: 'PARTLY_SHIPPED', words: CUSTOMER_STATUS_WORDS.PARTLY_SHIPPED }), 'overview', { madeFrom: null }), 'en'))
     expect(shipped).not.toContain('Your order is confirmed.')
     expect(shipped).not.toContain('Made from your')
   })
 
   it('a missing order draws no conversation (the same words for another customer’s order)', () => {
-    const html = draw(betaCase(betaRecord(), 'status', { state: 'missing', record: null }), 'en')
+    const html = draw(betaCase(betaRecord(), 'overview', { state: 'missing', record: null }), 'en')
     expect(html).not.toContain('<aside')
     expect(textOf(html)).toContain('It is not one of your orders, or it no longer exists.')
   })
@@ -217,41 +224,47 @@ describe('the words exist in both languages with the same placeholders', () => {
   })
 })
 
-// ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the width menu (a third · 40 % · half) and Hide / Show (⌘J),
-// kept on this device per person like the office's; PartnerThread untouched -----------------------------------------------------
-describe('F-SA-264 — the customer’s conversation: width menu, Hide / Show, remembered per person', () => {
+// ---- F-SA-264 (sales page plan N6, R6, P11, P20) + pp-w1 (w1.1; L3, L8): the dock's widths (a third · 40 % · half) and Hide / Show
+// (⌘J), kept on this device per person like the office's — drawn as rows of the thread head's ⋯ (the frame hands the thread its
+// `width` + `choose`); the first width is the office's rule; the band holds "Messages (2 new)" when the conversation is off screen ---
+describe('F-SA-264 / pp-w1 — the customer’s conversation: ONE head row, the office’s first width, Hide / Show, remembered per person', () => {
   const memory = () => {
     const store = new Map<string, string>()
     return { store, storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } }
   }
 
-  it('three widths as the office’s dock (a third · 40 % · half), 40 % by default; the 40 % columns are the frame’s old ones', () => {
+  it('three widths as the office’s dock (a third · 40 % · half); the first width is the office’s: a third below 1600 px, 40 % from 1600 (L8)', () => {
     expect([...PORTAL_DOCK_WIDTHS]).toEqual(['third', 'forty', 'half'])
-    expect(DEFAULT_PORTAL_DOCK_WIDTH).toBe('forty')
     expect(PORTAL_DOCK_COLUMNS_OF.forty).toBe(PORTAL_DOCK_COLUMNS)
     expect(PORTAL_DOCK_COLUMNS_OF.third).toBe('minmax(0, 2fr) minmax(0, 1fr)')
     expect(PORTAL_DOCK_COLUMNS_OF.half).toBe('minmax(0, 1fr) minmax(0, 1fr)')
+    expect([1280, 1440, 1599, 1600, 1920].map(portalFirstWidth)).toEqual(['third', 'third', 'third', 'forty', 'forty'])
+    // Before the window is known (a server render, a design case naming none): today's 40 %.
+    expect(DEFAULT_PORTAL_DOCK_WIDTH).toBe('forty')
   })
 
-  it('kept per person on this device: another person keeps their own; 40 % and "shown" forget; a private window keeps nothing', () => {
+  it('kept per person on this device: a chosen width (40 % too) and "hidden"; nothing chosen is null (the first width); reset forgets', () => {
     const { store, storage } = memory()
     const beta = BRAND_BETA.portalPerson.email
-    expect(readPortalDock(storage, 'u-beta')).toEqual({ width: 'forty', hidden: false })
+    expect(readPortalDock(storage, 'u-beta')).toEqual({ width: null, hidden: false })
     writePortalDock(storage, 'u-beta', { width: 'half' })
     writePortalDock(storage, 'u-beta', { hidden: true })
     expect(readPortalDock(storage, 'u-beta')).toEqual({ width: 'half', hidden: true })
-    expect(readPortalDock(storage, 'u-other')).toEqual({ width: 'forty', hidden: false })
+    expect(readPortalDock(storage, 'u-other')).toEqual({ width: null, hidden: false })
     // Keyed by the person's id, never by a name or an e-mail.
     expect([...store.keys()].sort()).toEqual([portalHiddenKey('u-beta'), portalWidthKey('u-beta')].sort())
     expect([...store.keys()].join(' ')).not.toContain(beta)
+    // 40 % chosen at 1440 (where the first width is a third) is a choice: kept.
     writePortalDock(storage, 'u-beta', { width: 'forty', hidden: false })
+    expect(readPortalDock(storage, 'u-beta')).toEqual({ width: 'forty', hidden: false })
+    writePortalDock(storage, 'u-beta', { width: null })
     expect(store.size).toBe(0)
     const closed = { getItem: () => { throw new Error('closed') }, setItem: () => { throw new Error('closed') }, removeItem: () => { throw new Error('closed') } }
-    expect(readPortalDock(closed, 'u-beta')).toEqual({ width: 'forty', hidden: false })
+    expect(readPortalDock(closed, 'u-beta')).toEqual({ width: null, hidden: false })
     expect(() => writePortalDock(closed, 'u-beta', { width: 'third', hidden: true })).not.toThrow()
   })
 
-  it('⌘J / Ctrl J hides and shows it, never with Alt or Shift (the page’s own J / K walk is without ⌘)', () => {
+  it('⌘J / Ctrl J hides and shows it, never with Alt or Shift (the page’s own J / K walk is without ⌘); the keys window names it', () => {
     const key = (more: Partial<{ key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: 'j', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...more })
     expect(isPortalThreadKey(key({ metaKey: true }))).toBe(true)
     expect(isPortalThreadKey(key({ ctrlKey: true, key: 'J' }))).toBe(true)
@@ -260,62 +273,115 @@ describe('F-SA-264 — the customer’s conversation: width menu, Hide / Show, r
     expect(isPortalThreadKey(key({}))).toBe(false)
     const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
     expect(page).toContain("if ((event.key !== 'j' && event.key !== 'k') || event.metaKey || event.ctrlKey || event.altKey) return")
+    expect(orderBandOf({ words: orderWords('en'), record: betaRecord(), prefix: PREFIX_BETA, facts: FACTS }).keys?.some((entry) => entry.keys.join('') === '⌘J')).toBe(true)
   })
 
-  it('docked: the conversation’s top row has the width menu and "Hide the conversation" (⌘J); the chosen width draws its columns', () => {
+  it('docked: ONE head row — the frame draws no tools row and no door; it hands the thread its widths, the current one and the chooser', () => {
     for (const locale of ['en', 'it'] as const) {
-      const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'docked', width: 'half' } }), locale)
-      expect(html).toContain('class="fw-prf-tools"')
-      expect(html).toContain(`aria-label="${locale === 'en' ? 'Width' : 'Larghezza'}"`)
-      expect(html).toContain(`aria-label="${locale === 'en' ? 'Hide the conversation' : 'Nascondi la conversazione'}"`)
-      expect(html).toContain('aria-keyshortcuts="Meta+J Control+J"')
+      const html = draw(betaCase(betaRecord(), 'overview', { frame: { mode: 'docked', width: 'half' } }), locale)
+      expect(html).not.toContain('fw-prf-tools')
+      expect(html).not.toContain('fw-prf-door')
       expect(html).toContain('data-width="half"')
       expect(html).toContain('--fw-prf-cols:minmax(0, 1fr) minmax(0, 1fr)')
       expect(html).not.toContain('is-hidden')
       expect(scanText(html, BRAND_ALPHA)).toEqual([])
     }
+    // The thread (PortalThread live) receives `width` + `choose`: its head's ⋯ draws a third · 40 % · half, Hide, Default (pt-'s rows).
+    const handed: Array<{ width?: unknown; choose?: unknown }> = []
+    function Probe(props: { width?: unknown; choose?: unknown }) {
+      handed.push(props)
+      return null
+    }
+    const frameOf = (design: { mode: 'docked' | 'stacked'; width?: 'third' | 'forty' | 'half'; hidden?: boolean }) =>
+      render(createElement(PortalRecordFrame, { thread: createElement(Probe), threadLabel: 'Messages: Your order 4', design, children: createElement('p', null, 'body') }))
+    frameOf({ mode: 'docked', width: 'third' })
+    expect(handed.at(-1)?.width).toEqual({ widths: ['third', 'forty', 'half'], current: 'third' })
+    expect(typeof handed.at(-1)?.choose).toBe('function')
+    // Off screen (hidden, or narrower), nothing to choose: no rows.
+    frameOf({ mode: 'docked', width: 'third', hidden: true })
+    expect(handed.at(-1)?.width).toBeUndefined()
+    frameOf({ mode: 'stacked' })
+    expect(handed.at(-1)?.choose).toBeUndefined()
   })
 
-  it('hidden: the body takes the whole width, "Show the conversation (2 new)" brings it back; the conversation stays mounted, not on screen', () => {
+  it('hidden: the body takes the whole width, the band’s "Messages (2 new)" brings it back (no lone row); the conversation stays mounted', () => {
     const html = draw(betaCase(betaRecord(), 'lines', { frame: { mode: 'docked', hidden: true, newCount: 2 } }), 'en')
     expect(html).toContain('class="fw-prf has-thread is-hidden"')
-    expect(textOf(html)).toContain('Show the conversation (2 new)')
+    expect(html).toContain('fw-pband-thread')
+    expect(textOf(html)).toContain('Messages (2 new)')
     expect(html.match(/<aside/g)?.length).toBe(1)
+    expect(html.indexOf('fw-pband-thread')).toBeLessThan(html.indexOf('id="main-content"'))
     const it = textOf(draw(betaCase(betaRecord(), 'lines', { frame: { mode: 'docked', hidden: true } }), 'it'))
-    expect(it).toContain('Mostra la conversazione')
-    expect(showButtonWords(0)).toEqual({ key: 'record.frame.show' })
-    expect(showButtonWords(3)).toEqual({ key: 'record.frame.showNew', count: 3 })
-    expect(showButtonWords(140)).toEqual({ key: 'record.frame.showMany', count: 99 })
+    expect(it).toContain('Messaggi')
+    expect(bandThreadOf({ hasThread: true, mode: 'docked', hidden: true, viewOpen: false, count: 3 })).toEqual({ count: 3 })
+    expect(bandThreadOf({ hasThread: true, mode: 'docked', hidden: false, viewOpen: false, count: 3 })).toBeNull()
+    expect(bandThreadOf({ hasThread: true, mode: 'stacked', hidden: false, viewOpen: false, count: 0 })).toEqual({ count: 0 })
+    expect(bandThreadOf({ hasThread: true, mode: 'stacked', hidden: false, viewOpen: true, count: 2 })).toBeNull()
+    expect(bandThreadOf({ hasThread: false, mode: 'stacked', hidden: false, viewOpen: false, count: 2 })).toBeNull()
     // A hidden docked conversation marks nothing read (it is not on screen).
     const frame = readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')
     expect(frame).toContain("const onScreen = (mode === 'docked' && !dockHidden) || viewOpen")
   })
 
-  it('narrower than 1280 px: no width menu, no Hide (the "Messages" button and the full-width view as before)', () => {
-    const html = draw(betaCase(betaRecord(), 'status', { frame: { mode: 'stacked', newCount: 2 } }), 'en')
-    expect(html).not.toContain('fw-prf-tools')
-    expect(textOf(html)).toContain('Messages (2 new)')
-    expect(textOf(html)).not.toContain('Show the conversation')
+  it('narrower than 1280 px: no head rows; the band’s "Messages (2 new)" opens the full-width view (one button, no body row)', () => {
+    const html = draw(betaCase(betaRecord(), 'overview', { frame: { mode: 'stacked', newCount: 2 } }), 'en')
+    expect(html).not.toContain('fw-prf-bar')
+    expect(textOf(html).match(/Messages \(2 new\)/g)?.length).toBe(1)
+    expect(html).toContain('aria-label="Messages, 2 new"')
   })
 
-  it('factory code only: PartnerThread (packages/ui) is not touched; the frame keeps the person’s choices, the design review none', () => {
+  // pt-w2 / pp-w1: the thread's face is the shared one (lib/record-thread/partner) — the frame only hands it the dock's choices.
+  it('the frame keeps the person’s choices (the design review none); "Ask a question" and an old address show a hidden conversation again', () => {
     const frame = readFileSync(new URL('../../shell/record/PortalRecordFrame.tsx', import.meta.url), 'utf8')
     expect(frame).toContain('const keepFor = design ? null : person')
     expect(frame).toContain('if (keepFor) writePortalDock(storageOf(), keepFor, { hidden: next })')
     expect(frame).toContain('if (keepFor) writePortalDock(storageOf(), keepFor, { width: next, hidden: false })')
-    // "Ask a question", `?tab=messages` / `#messages` show a hidden conversation again.
+    expect(frame).toContain('if (keepFor) writePortalDock(storageOf(), keepFor, { width: null, hidden: false })')
     expect(frame).toContain("if (mode === 'docked' && hidden) setHidden(false)")
     expect(frame).toContain('if (!narrow) setHidden(false)')
+    expect(frame).toContain('portalFirstWidth(roomy ? THIRD_BELOW : DOCK_FROM)')
   })
 
-  it('the words in both languages ("voi" pages, the catalogue’s "conversazione")', () => {
+  it('the words in both languages ("voi" pages): the band’s button reads the frame’s Messages words; the old row’s words are gone', () => {
     const en = CATALOGUE.en.portal!
     const it = CATALOGUE.it.portal!
-    expect([en['record.frame.width'], en['record.frame.third'], en['record.frame.forty'], en['record.frame.half']]).toEqual(['Width', 'A third', '40 %', 'Half'])
-    expect([it['record.frame.width'], it['record.frame.third'], it['record.frame.forty'], it['record.frame.half']]).toEqual(['Larghezza', 'Un terzo', '40 %', 'Metà'])
-    expect([en['record.frame.hide'], en['record.frame.show']]).toEqual(['Hide the conversation', 'Show the conversation'])
-    expect([it['record.frame.hide'], it['record.frame.show']]).toEqual(['Nascondi la conversazione', 'Mostra la conversazione'])
-    for (const words of [en, it]) for (const key of ['record.frame.showNew_one', 'record.frame.showNew_other', 'record.frame.showMany']) expect(words[key], key).toContain('{count}')
+    for (const words of [en, it]) {
+      for (const key of ['record.frame.messagesNew_one', 'record.frame.messagesNew_other', 'record.frame.messagesMany']) expect(words[key], key).toContain('{count}')
+      for (const gone of ['record.frame.width', 'record.frame.third', 'record.frame.forty', 'record.frame.half', 'record.frame.hide', 'record.frame.show', 'record.frame.showNew_one', 'record.frame.showMany']) expect(words[gone], gone).toBeUndefined()
+    }
   })
 })
 // ---- end F-SA-264
+
+// ---- pp-w1 (w1.4): the order's notices in the office's ONE notice slot (lib/record-frame RecordNotices), in the portal's words -----
+describe('w1.4 — the notices: one slot, the most serious first, the rest behind "N more notices"; the portal says "voi"', () => {
+  it('a failure first, then the lost connection, then what was just sent — all inside RecordNotices', () => {
+    const html = draw(betaCase(betaRecord(), 'overview', { offlineSince: '2026-11-25T08:00:00Z', notice: { tone: 'danger', key: 'docs.downloadFailed' } }), 'en')
+    expect(html.match(/class="fw-rcf-notices[" ]/g)?.length).toBe(1)
+    const slot = html.slice(html.indexOf('fw-rcf-notices-list'))
+    const failed = slot.indexOf('The document could not be downloaded.')
+    const offline = slot.indexOf('No connection — showing what was loaded at')
+    expect(failed).toBeGreaterThan(0)
+    expect(offline).toBeGreaterThan(failed)
+    const sent = draw(betaCase(betaRecord(), 'overview', { offlineSince: '2026-11-25T08:00:00Z', notice: { tone: 'success', key: 'notice.changeSent' } }), 'en')
+    const after = sent.slice(sent.indexOf('fw-rcf-notices-list'))
+    expect(after.indexOf('No connection')).toBeLessThan(after.indexOf('Your change request was sent.'))
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("import { RecordNotices } from '../../../../lib/record-frame/RecordNotices'")
+  })
+
+  it('"Hide 2 notices" in the portal reads the voi form (outside words); the office keeps its own', () => {
+    const fewer = (reader: 'office' | 'outside') => {
+      let said = ''
+      function Probe() {
+        said = useT('record-frame')('notices.fewer', { count: 2 })
+        return null
+      }
+      render(createElement(ReaderProvider, { reader }, createElement(WithMessages, { namespaces: ['record-frame'] }, createElement(Probe))), 'it')
+      return said
+    }
+    expect(fewer('outside')).toBe('Nascondete 2 avvisi')
+    expect(fewer('office')).toBe('Nascondi 2 avvisi')
+  })
+})
+// ---- end pp-w1 (w1.4)

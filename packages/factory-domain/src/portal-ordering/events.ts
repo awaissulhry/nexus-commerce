@@ -57,7 +57,7 @@ export const events = [
   defineEvent({
     type: 'portal_order_request.draft_changed',
     context: 'portal-ordering',
-    description: 'A customer started, changed or discarded a draft order in the portal (the office reads drafts read-only; nothing waits for it).',
+    description: 'A draft order was started, changed or discarded — in the portal or by the office (od-s: both doors write it; nothing waits for it).',
     payload: z.strictObject({ requestId: z.uuid(), partyId: z.uuid() }),
     live: { permission: 'orders.view', fields: ['requestId'] },
   }),

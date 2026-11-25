@@ -1,10 +1,10 @@
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { inTransitContract, listContract, progressContract, recordContract, shipmentsContract } from './contract'
+import { listContract, progressContract, recordContract, shipmentsContract } from './contract'
 import { manifest } from './manifest'
 import { listOrders, orderRecord } from './orders'
 import { orderProgressView } from './progress'
-import { inTransit, orderShipments } from './shipments'
+import { orderShipments } from './shipments'
 // B-TH-061: the customer's own sheet and its "Download all".
 import { sheetContract, sheetDownloadContract } from './contract'
 import { orderSheet, orderSheetFile } from './sheet'
@@ -15,6 +15,9 @@ import { portalOrderFiles, portalOrderFilesContract } from './files'
 import { idempotencyKeyFrom } from '../../../core/command'
 import { portalPriceCheckContract, portalSaveBrandPricesContract } from '../brand-prices/contract'
 import { readPortalPriceCheck, savePortalBrandPrices } from '../brand-prices/portal'
+// pg-s2 S2.1: the small pictures of the customer's own orders (a read POST).
+import { picturesContract } from './contract'
+import { orderPictures } from './pictures'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075 status in customer words, SAL-076 production progress per customer
@@ -24,8 +27,6 @@ import { readPortalPriceCheck, savePortalBrandPrices } from '../brand-prices/por
 export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   app.get('/portal/sales-orders', { schema: listContract }, async (request) => listOrders(app, request, request.query, appClock(app).now()))
 
-  app.get('/portal/sales-orders/in-transit', { schema: inTransitContract }, async (request) => inTransit(app, request, appClock(app).now()))
-
   // ---- B-TH-061
   app.get('/portal/sales-orders/sheet', { schema: sheetContract }, async (request) => orderSheet(app, request, request.query, appClock(app).now()))
   app.get('/portal/sales-orders/sheet/download', { schema: sheetDownloadContract }, async (request, reply) => {
@@ -33,6 +34,9 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
     return reply.type(file.contentType).header('content-disposition', attachmentDisposition(file.fileName)).header('cache-control', 'no-store').send(Buffer.from(file.bytes))
   })
   // ---- end B-TH-061
+
+  // pg-s2 S2.1 (portal grid D4, Z12): the small pictures of the customer's own orders among the ids (another's: absent).
+  app.post('/portal/sales-orders/pictures', { schema: picturesContract }, async (request) => orderPictures(app, request, request.body.orderIds, appClock(app).now()))
 
   app.get('/portal/sales-orders/:orderId', { schema: recordContract }, async (request) => orderRecord(app, request, request.params.orderId, appClock(app).now()))
 

@@ -37,7 +37,8 @@ import type { FilesRuntime } from '../../files/service'
 // ---- end B-TH-085
 import type { PartnerMessageView } from './contract'
 // ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
-import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
+import { markThreadRead, readingOf, unreadCounts } from '../reads'
+import { readOwnMessage } from '../reads' // pg-s1 S1.4: the one helper every portal write path calls
 // ---- end B-TH-027
 // ---- B-TH-079: a message erased after a privacy request is told apart from one that only carries files.
 import { erasedForOutside } from '../feed-depth'
@@ -501,8 +502,9 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
           payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: current.partyId },
         }),
       )
-      // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none).
-      if (!caller.session.preview) await moveMark(tools, current, { userId: caller.context.actorId, office: false }, { id, at: tools.now }, true)
+      // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none). pg-s1 S1.4: through the one
+      // helper of every portal write path.
+      await readOwnMessage(tools, current, { userId: caller.context.actorId, preview: caller.session.preview }, { id, at: tools.now })
       // ---- end B-TH-027
       if (!caller.session.preview) await clearDraftInCommand(tools, caller.context.actorId, ref) // B-TH-092
       const attachments = await visibleAttachments(tools.tx, caller, row.attachmentFileIds)

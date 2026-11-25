@@ -1,4 +1,4 @@
-import { DOCK_COLUMNS, DOCK_FROM, frameMode, isThreadKey, type FrameMode } from '../../../lib/record-frame/model' // pp-k1 k1.3: the frame's core
+import { defaultWidthAt, DOCK_COLUMNS, DOCK_FROM, frameMode, isThreadKey, type FrameMode } from '../../../lib/record-frame/model' // pp-k1 k1.3: the frame's core
 import { DOCK_WIDTHS, type DockWidth } from '../../../lib/record-thread/head/model' // pp-k1 k1.3: the dock's widths
 
 /**
@@ -6,10 +6,10 @@ import { DOCK_WIDTHS, type DockWidth } from '../../../lib/record-thread/head/mod
  * part, held by record-frame.vitest.test.ts. Every portal record page (a customer's order, return, complaint, repair; a supplier's
  * purchase order and delivery notice; a workshop's job; the accountant's room) docks the record's ONE conversation like the office:
  *
- * - From 1280 px the conversation is DOCKED on the right, ~40 % of the portal's main area (a 3 : 2 grid, gap 16: 1440 → ~456 px of
- *   the ~1140 px main, 1920 → ~648 px of ~1620), sticky while the body scrolls, its own scroll, the box at its foot.
- * - Below 1280 px the body leads and a "Messages" button ("Messages (2 new)") opens the conversation full width; Back returns to
- *   the same tab and scroll. On a phone the same (PL4).
+ * - From 1280 px the conversation is DOCKED on the right — pp-w1 (L8): first a third of the portal's main area below 1600 px, 40 %
+ *   from 1600 (the office's rule), a width the person chose kept — sticky while the body scrolls, its own scroll, the box at its foot.
+ * - Below 1280 px the body leads and the band's "Messages" button ("Messages (2 new)", pp-w1) opens the conversation full width; Back
+ *   returns to the same tab and scroll. On a phone the same (PL4).
  * - No Messages tab and no Ask modal: the frame's ⋯ "Ask a question" focuses the docked box (it opens the full-width view first
  *   when the page is narrower); an old `?tab=messages` address opens the record's first tab with the conversation shown (R-8).
  * - ONE conversation per page; notices stay in the body column, never above the conversation.
@@ -32,12 +32,22 @@ export const portalFrameMode: (viewport: number) => PortalFrameMode = frameMode
 /** The body : conversation columns (the gap is the grid's): 3 : 2, so ~40 % at every width (the core's 40 %). */
 export const PORTAL_DOCK_COLUMNS: string = DOCK_COLUMNS.forty
 
-// ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the office's width menu (a third · 40 % · half) and Hide /
-// Show (⌘J), remembered on this device per person (a private window keeps nothing). Factory code only: PartnerThread is untouched.
+// ---- F-SA-264 (sales page plan N6, R6, P11, P20): the portal frame gets the office's widths (a third · 40 % · half) and Hide / Show
+// (⌘J), remembered on this device per person (a private window keeps nothing). pp-w1 (w1.1, L3): they are the rows of the thread
+// head's ⋯ (the frame hands the thread `width` + `choose`); the frame draws no row of its own.
 /** pp-k1: the office dock's widths but `full`, in the office's order. */
 export type PortalDockWidth = Exclude<DockWidth, 'full'>
 export const PORTAL_DOCK_WIDTHS: readonly PortalDockWidth[] = DOCK_WIDTHS.filter((width): width is PortalDockWidth => width !== 'full')
+/** The width before the window is known (a server render; a design case that names none). */
 export const DEFAULT_PORTAL_DOCK_WIDTH: PortalDockWidth = 'forty'
+
+/**
+ * pp-w1 (w1.1, L8): the dock's FIRST width on every portal frame page is the office's rule (the core's defaultWidthAt 'grid'): a third
+ * below 1600 px, 40 % from 1600 px — so the Overview keeps its pairs at 1440 (body 749 px, not 674). A width the person chose is kept.
+ */
+export function portalFirstWidth(viewport: number): PortalDockWidth {
+  return defaultWidthAt('grid', viewport) === 'third' ? 'third' : 'forty'
+}
 
 /** The body : conversation columns of each width (the gap is the grid's): the office dock's own (the core's DOCK_COLUMNS). */
 export const PORTAL_DOCK_COLUMNS_OF: Readonly<Record<PortalDockWidth, string>> = {
@@ -52,21 +62,27 @@ export const isPortalDockWidth = (value: unknown): value is PortalDockWidth => t
 export const portalWidthKey = (personId: string) => `fw-portal.thread.width.${personId}`
 export const portalHiddenKey = (personId: string) => `fw-portal.thread.hidden.${personId}`
 
-/** What the person left on this device: the width (40 % when none) and whether the conversation was hidden. Closed storage: the defaults. */
-export function readPortalDock(storage: Pick<Storage, 'getItem'> | null, personId: string): { readonly width: PortalDockWidth; readonly hidden: boolean } {
+/**
+ * What the person left on this device: the width they chose (null: none — the first width applies, portalFirstWidth) and whether the
+ * conversation was hidden. Closed storage: nothing chosen.
+ */
+export function readPortalDock(storage: Pick<Storage, 'getItem'> | null, personId: string): { readonly width: PortalDockWidth | null; readonly hidden: boolean } {
   try {
     const width = storage?.getItem(portalWidthKey(personId))
-    return { width: isPortalDockWidth(width) ? width : DEFAULT_PORTAL_DOCK_WIDTH, hidden: storage?.getItem(portalHiddenKey(personId)) === '1' }
+    return { width: isPortalDockWidth(width) ? width : null, hidden: storage?.getItem(portalHiddenKey(personId)) === '1' }
   } catch {
-    return { width: DEFAULT_PORTAL_DOCK_WIDTH, hidden: false }
+    return { width: null, hidden: false }
   }
 }
 
-/** Keeps a width (40 %, the default, forgets it) or hidden (false forgets it). A closed storage (a private window) forgets quietly. */
-export function writePortalDock(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, personId: string, change: { readonly width?: PortalDockWidth; readonly hidden?: boolean }): void {
+/**
+ * Keeps a chosen width (pp-w1, L8: every choice, 40 % too — the first width depends on the window) or forgets it (null: back to the
+ * first width), and hidden (false forgets it). A closed storage (a private window) forgets quietly.
+ */
+export function writePortalDock(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, personId: string, change: { readonly width?: PortalDockWidth | null; readonly hidden?: boolean }): void {
   try {
     if (change.width !== undefined) {
-      if (change.width === DEFAULT_PORTAL_DOCK_WIDTH) storage?.removeItem(portalWidthKey(personId))
+      if (change.width === null) storage?.removeItem(portalWidthKey(personId))
       else storage?.setItem(portalWidthKey(personId), change.width)
     }
     if (change.hidden !== undefined) {
@@ -81,12 +97,18 @@ export function writePortalDock(storage: Pick<Storage, 'setItem' | 'removeItem'>
 /** ⌘J (Ctrl J on other systems): hide or show the docked conversation, open or close the full-width one. Never with Alt or Shift. The core's isThreadKey. */
 export const isPortalThreadKey: typeof isThreadKey = isThreadKey
 
-/** "Show the conversation", or "Show the conversation (2 new)" with the person's own new messages (99+ above 99). */
-export function showButtonWords(count: number): { readonly key: 'record.frame.show' | 'record.frame.showNew' | 'record.frame.showMany'; readonly count?: number } {
-  if (count <= 0) return { key: 'record.frame.show' }
-  return count > 99 ? { key: 'record.frame.showMany', count: 99 } : { key: 'record.frame.showNew', count }
-}
 // ---- end F-SA-264
+
+/**
+ * pp-w1 (w1.1; 10-design § 4, P0-B4): the band's thread button, the office's Thread twin — "Messages (2 new)" before the ⋯ when the
+ * conversation is not on screen: docked but hidden (it shows it again), or narrower with the full-width view closed (it opens it). On
+ * screen, none (the thread's own head holds Hide). No row of the body holds it any more.
+ */
+export function bandThreadOf(input: { readonly hasThread: boolean; readonly mode: PortalFrameMode; readonly hidden: boolean; readonly viewOpen: boolean; readonly count: number }): { readonly count: number } | null {
+  if (!input.hasThread) return null
+  const offScreen = input.mode === 'docked' ? input.hidden : !input.viewOpen
+  return offScreen ? { count: Math.max(0, input.count) } : null
+}
 
 /** The portal's main area at a window width: the window less the rail (240) and the main's padding (2 × 30), as PL3 measures it. */
 export function portalMainPixels(viewport: number): number {

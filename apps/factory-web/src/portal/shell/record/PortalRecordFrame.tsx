@@ -1,17 +1,15 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { cloneElement, createContext, isValidElement, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ArrowLeft, MessageSquare, Pencil /* F-SA-246 */ } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../lib/i18n/provider'
-import { messagesButtonWords, PORTAL_DOCK_FROM, portalArrivalCleaned, portalArrivalOf, portalFrameMode, PORTAL_THREAD_PARAM, type PortalFrameMode } from './model'
-// ---- F-SA-264: the width menu and Hide / Show (⌘J), kept per person.
-import { Columns2, PanelRightClose, PanelRightOpen } from 'lucide-react'
-import { Menu, type MenuItemDef } from '@nexus/ui/components'
-import { ToolbarButton } from '@nexus/ui/primitives'
-import { usePortalPersonId } from '../frame'
-import { DEFAULT_PORTAL_DOCK_WIDTH, isPortalThreadKey, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, readPortalDock, showButtonWords, writePortalDock, type PortalDockWidth } from './model'
+import { DOCK_FROM, THIRD_BELOW } from '../../../lib/record-frame/model' // pp-w1 (w1.1, L8): the office's first-width rule
+import { PORTAL_DOCK_FROM, portalArrivalCleaned, portalArrivalOf, portalFrameMode, PORTAL_THREAD_PARAM, type PortalFrameMode } from './model'
+// ---- F-SA-264: the widths and Hide / Show (⌘J), kept per person. pp-w1 (w1.1): the thread head's ⋯ draws them; the band its button.
+import { usePortalBandThread, usePortalPersonId } from '../frame'
+import { bandThreadOf, DEFAULT_PORTAL_DOCK_WIDTH, isPortalDockWidth, isPortalThreadKey, PORTAL_DOCK_COLUMNS_OF, PORTAL_DOCK_WIDTHS, portalFirstWidth, readPortalDock, writePortalDock, type PortalDockWidth } from './model'
 // ---- end F-SA-264
 import './record-frame.css'
 
@@ -20,19 +18,21 @@ import './record-frame.css'
  * for the record's conversation on every portal record page, like the office's RecordFrame (factory-only, the portal's own copy:
  * the views never import each other).
  *
- * - From 1280 px the conversation (the portal's PortalThread on the DS PartnerThread: two sides, never an office note) is DOCKED on
- *   the right at ~40 % (a 3 : 2 grid), sticky under the band while the body scrolls, its messages scrolling inside, the box at its
- *   foot. No Messages tab, no Ask modal: ONE conversation per page.
- * - Below 1280 px the body leads and a "Messages" button ("Messages (2 new)": the person's own new messages) opens the conversation
- *   full width; its Back returns to the same tab and scroll (the browser's Back too: `?thread=open` is in the history).
+ * - From 1280 px the conversation (the portal's PortalThread: the ONE partner face of the shared thread, lib/record-thread/partner —
+ *   two sides, never an office note) is DOCKED on the right, sticky under the band while the body scrolls, its messages scrolling
+ *   inside, the box at its foot on screen from the first load (G2). No Messages tab, no Ask modal: ONE conversation per page.
+ * - Below 1280 px the body leads and the band's "Messages (2 new)" (the person's own new messages) opens the conversation full width,
+ *   one view of the window's height (G3); its Back returns to the same tab and scroll (the browser's Back too: `?thread=open`).
  * - The frame's ⋯ "Ask a question" focuses the docked box (PortalShell sends `PORTAL_ASK_EVENT` to `#messages`, the dock); narrower,
  *   the full-width view opens first. An old `?tab=messages`, `?thread=new` or `#messages` shows the conversation on arrival (R-8).
  * - Notices stay in the body column, never above the conversation. A page with no conversation for the person (a missing record)
  *   passes `thread={null}`: no dock and no button.
- * - F-SA-264 (sales page plan N6, R6, P11): docked, the conversation's top row holds the width menu (a third · 40 % · half) and
- *   "Hide the conversation"; hidden, the body takes the whole width and "Show the conversation" brings it back; ⌘J hides and shows it
- *   (narrower: opens and closes the full-width view). The width and "hidden" are kept on this device per person (a private window
- *   keeps nothing). A hidden conversation is not on screen: it marks nothing read.
+ * - F-SA-264 (sales page plan N6, R6, P11) and pp-w1 (w1.1, L3, L8): the dock has ONE head row, the thread's own — the frame hands
+ *   PortalThread its `width` + `choose` (the office RecordFrameState's names), and the head's ⋯ draws a third · 40 % · half, Hide
+ *   and back to the first width. The first width is the office's (a third below 1600 px, 40 % from 1600); a chosen one is kept.
+ *   Hidden, the body takes the whole width and the band's "Messages (2 new)" brings it back; ⌘J hides and shows it (narrower: opens
+ *   and closes the full-width view). The width and "hidden" are kept on this device per person (a private window keeps nothing). A
+ *   hidden conversation is not on screen: it marks nothing read.
  */
 
 /** PortalShell's "Ask a question" on a page whose conversation is docked: sent to `#messages`; the frame shows and focuses its box. */
@@ -48,9 +48,7 @@ export interface PortalRecordFrameProps {
   /** The design review: the docked or the narrow layout whatever the window, the narrow view open, a new-message count. */
   // F-SA-264: + the dock's width and whether it is hidden.
   readonly design?: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly width?: PortalDockWidth; readonly hidden?: boolean }
-  // F-SA-246 (sales page plan R6; 14-change-flow §2.0 S1): a door above the conversation to the record's own ask ("Ask for a change"
-  // on an order: the page's Ask dialog), held with why (a preview, no right to ask, offline); absent or null: none.
-  readonly door?: { readonly label: string; readonly held: string | null; readonly onOpen: () => void } | null
+  // pp-w1 (w1.1; reverses F-SA-246's door above the conversation): the record's ask is the band's ONE "Ask for a change…".
 }
 
 /** What the conversation inside reads of its frame: whether it is on screen (it marks messages read only then), and the count. */
@@ -62,6 +60,10 @@ export interface PortalRecordFrameState {
   readonly reportNew: (count: number) => void
   /** A body part shows the conversation (narrower: opens the full-width view), its box focused when asked. */
   readonly showThread: (focus?: boolean) => void
+  /** pp-w1 (w1.1; the office RecordFrameState's names): the dock's width while docked and shown (null: narrower, hidden or none). */
+  readonly width: PortalDockWidth | null
+  /** pp-w1 (w1.1): a width, Hide, or back to the first width (`reset`: the office's rule, the person's choice forgotten). */
+  readonly choose: (choice: PortalDockWidth | 'hide' | 'reset') => void
 }
 
 const FrameContext = createContext<PortalRecordFrameState | null>(null)
@@ -73,7 +75,8 @@ export function usePortalRecordFrame(): PortalRecordFrameState | null {
 
 function useMedia(query: string, initial: boolean): boolean {
   const [matches, setMatches] = useState(initial)
-  useEffect(() => {
+  // pp-w1 (w1.1): read before paint — the dock's mode and its first width never jump (40 % to a third at 1440) after it drew.
+  useLayoutEffect(() => {
     const list = window.matchMedia(query)
     setMatches(list.matches)
     const onChange = () => setMatches(list.matches)
@@ -104,7 +107,7 @@ const storageOf = (): Storage | null => {
   }
 }
 
-export function PortalRecordFrame({ thread, threadLabel, children, design, door /* F-SA-246 */ }: PortalRecordFrameProps) {
+export function PortalRecordFrame({ thread, threadLabel, children, design }: PortalRecordFrameProps) {
   const t = useT('portal')
   const pathname = usePathname()
   const params = useSearchParams()
@@ -122,12 +125,15 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   const person = usePortalPersonId()
   // Kept for the signed-in person only (the design review and a page outside the portal layout keep nothing).
   const keepFor = design ? null : person
-  const [width, setWidth] = useState<PortalDockWidth>(design?.width ?? DEFAULT_PORTAL_DOCK_WIDTH)
+  // pp-w1 (w1.1, L8): the width the person chose (null: none — the office's first width at this window: a third below 1600 px).
+  const [chosen, setChosen] = useState<PortalDockWidth | null>(design?.width ?? null)
+  const roomy = useMedia(`(min-width: ${THIRD_BELOW}px)`, true)
+  const width: PortalDockWidth = chosen ?? (design ? DEFAULT_PORTAL_DOCK_WIDTH : portalFirstWidth(roomy ? THIRD_BELOW : DOCK_FROM))
   const [hidden, setHiddenNow] = useState(design?.hidden ?? false)
   useLayoutEffect(() => {
     if (!keepFor) return
     const kept = readPortalDock(storageOf(), keepFor)
-    setWidth(kept.width)
+    setChosen(kept.width)
     setHiddenNow(kept.hidden)
   }, [keepFor])
   const setHidden = useCallback(
@@ -140,11 +146,26 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   const chooseWidth = useCallback(
     (next: PortalDockWidth) => {
       if (keepFor) writePortalDock(storageOf(), keepFor, { width: next, hidden: false })
-      setWidth(next)
+      setChosen(next)
       setHiddenNow(false)
     },
     [keepFor],
   )
+  // pp-w1 (w1.1): the thread head's ⋯ — a width, Hide, or back to the first width (the choice forgotten on this device).
+  const choose = useCallback(
+    (choice: PortalDockWidth | 'hide' | 'reset') => {
+      if (choice === 'hide') return setHidden(true)
+      if (choice === 'reset') {
+        if (keepFor) writePortalDock(storageOf(), keepFor, { width: null, hidden: false })
+        setChosen(null)
+        setHiddenNow(false)
+        return
+      }
+      chooseWidth(choice)
+    },
+    [keepFor, setHidden, chooseWidth],
+  )
+  const chooseFromHead = useCallback((value: string) => (value === 'hide' || value === 'reset' || isPortalDockWidth(value) ? choose(value) : undefined), [choose])
   const docked = mode === 'docked'
   const dockHidden = docked && hidden && hasThread
   // ---- end F-SA-264
@@ -246,6 +267,9 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
   }, [viewOpen, mode, design])
 
   // The dock's top and height: under the sticky band, down to the window's foot (above a phone's bottom and action bars).
+  // pp-w1 (G2, G3): the height counts from the dock's REAL top — at the first load it sits lower than its sticky top (the main's
+  // padding, the body above the grid), so the foot and Send are on screen at once; narrower, the open full-width view gets the same
+  // height (one view of the window less the bars, its list scrolling inside). Measured again when the view opens or the dock shows.
   useLayoutEffect(() => {
     const element = root.current
     if (!element || design) return
@@ -253,9 +277,12 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
       const scroller = scrollerOf(element)
       const band = scroller?.querySelector<HTMLElement>(':scope > .fw-pband') ?? null
       const bars = [...document.querySelectorAll<HTMLElement>('.nds-bottombar, .nds-pab:not(.inline)')].reduce((sum, bar) => sum + (getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().height : 0), 0)
-      const top = (band?.getBoundingClientRect().height ?? 0) + 16
+      const sticky = (band?.getBoundingClientRect().height ?? 0) + 16
+      const shown = dock.current && getComputedStyle(dock.current).display !== 'none' ? dock.current : null
+      const real = shown && scroller ? shown.getBoundingClientRect().top - scroller.getBoundingClientRect().top : sticky
+      const top = Math.max(sticky, real)
       const room = (scroller?.clientHeight ?? window.innerHeight) - top - 16 - bars
-      element.style.setProperty('--fw-prf-top', `${Math.round(top)}px`)
+      element.style.setProperty('--fw-prf-top', `${Math.round(sticky)}px`)
       element.style.setProperty('--fw-prf-h', `${Math.max(360, Math.round(room))}px`)
     }
     measure()
@@ -267,44 +294,18 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
       observer?.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [design])
+  }, [design, mode, viewOpen, dockHidden])
 
-  const state = useMemo<PortalRecordFrameState>(() => ({ mode, onScreen, reportNew: setFresh, showThread }), [mode, onScreen, showThread])
+  // pp-w1 (w1.1, L3): the dock's ONE head row is the thread's: docked and shown, it gets the widths and the chooser (its ⋯).
+  const headWidth = docked && hasThread && !dockHidden ? width : null
+  const state = useMemo<PortalRecordFrameState>(() => ({ mode, onScreen, reportNew: setFresh, showThread, width: headWidth, choose }), [mode, onScreen, showThread, headWidth, choose])
+  const threadNode =
+    headWidth !== null && isValidElement<{ width?: unknown; choose?: unknown }>(thread) && typeof thread.type !== 'string' ? cloneElement(thread, { width: { widths: PORTAL_DOCK_WIDTHS, current: headWidth }, choose: chooseFromHead }) : thread
 
-  const words = messagesButtonWords(fresh)
-  // ---- F-SA-264: hidden, the body's bar brings it back ("Show the conversation (2 new)"); docked, its top row has the width menu and Hide.
-  const showWords = showButtonWords(fresh)
-  const showButton = dockHidden ? (
-    <div className="fw-prf-bar">
-      <Button size="sm" variant={fresh > 0 ? 'primary' : 'secondary'} aria-controls={dockId} aria-expanded={false} aria-keyshortcuts="Meta+J Control+J" title={`${t('record.frame.show')} (⌘J)`} onClick={() => setHidden(false)}>
-        <PanelRightOpen size={14} aria-hidden /> <span>{t(showWords.key, showWords.count === undefined ? undefined : { count: showWords.count })}</span>
-      </Button>
-    </div>
-  ) : null
-  const widthItems: MenuItemDef[] = PORTAL_DOCK_WIDTHS.map((entry) => ({ id: entry, label: t(`record.frame.${entry}`), checked: entry === width, onSelect: () => chooseWidth(entry) }))
-  const tools =
-    hasThread && docked ? (
-      <div className="fw-prf-tools">
-        <Menu align="right" label={<Columns2 size={16} aria-hidden />} items={widthItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('record.frame.width') }} />
-        <ToolbarButton icon={<PanelRightClose size={16} aria-hidden />} label={t('record.frame.hide')} shortcut="⌘J" tooltipAlign="end" aria-keyshortcuts="Meta+J Control+J" onClick={() => setHidden(true)} />
-      </div>
-    ) : null
-  // ---- end F-SA-264
-  const button =
-    hasThread && mode === 'stacked' && !viewOpen ? (
-      <div className="fw-prf-bar">
-        <Button
-          size="sm"
-          variant={fresh > 0 ? 'primary' : 'secondary'}
-          aria-controls={dockId}
-          aria-expanded={false}
-          aria-label={words.label ? t(words.label.key, { count: words.label.count }) : undefined}
-          onClick={() => showThread(false)}
-        >
-          <MessageSquare size={14} aria-hidden /> <span>{t(words.key, words.count === undefined ? undefined : { count: words.count })}</span>
-        </Button>
-      </div>
-    ) : null
+  // pp-w1 (w1.1; 10-design § 4, P0-B4): not on screen (hidden, or narrower with its view closed), the conversation's button is in the
+  // band, before the ⋯ — "Messages (2 new)" — never a lone row of the body. The design review draws it from its own band.
+  const bandThread = design ? null : bandThreadOf({ hasThread, mode, hidden: dockHidden, viewOpen, count: fresh })
+  usePortalBandThread(bandThread ? { count: bandThread.count, onClick: () => showThread(false) } : null)
 
   return (
     <FrameContext.Provider value={state}>
@@ -314,13 +315,9 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
         data-mode={mode}
         data-view={mode === 'stacked' && viewOpen ? 'thread' : 'body'}
         data-width={width /* F-SA-264 */}
-        style={{ ['--fw-prf-cols' as string]: PORTAL_DOCK_COLUMNS_OF[width] /* F-SA-264: the person's width (40 % by default) */ }}
+        style={{ ['--fw-prf-cols' as string]: PORTAL_DOCK_COLUMNS_OF[width] /* F-SA-264: the person's width; pp-w1 (L8): until chosen, the office's first width */ }}
       >
-        <div className="fw-prf-body">
-          {button}
-          {showButton /* F-SA-264 */}
-          {children}
-        </div>
+        <div className="fw-prf-body">{children}</div>
         {hasThread ? (
           <aside ref={dock} id="messages" className="fw-prf-dock" aria-label={threadLabel}>
             {mode === 'stacked' && viewOpen ? (
@@ -330,17 +327,8 @@ export function PortalRecordFrame({ thread, threadLabel, children, design, door 
                 </Button>
               </div>
             ) : null}
-            {tools /* F-SA-264 */}
-            {/* F-SA-246: the record's own ask, beside its conversation (PartnerThread itself is untouched). */}
-            {door ? (
-              <div className="fw-prf-back fw-prf-door">
-                <Button size="sm" heldReason={door.held} onClick={() => !door.held && door.onOpen()}>
-                  <Pencil size={14} aria-hidden /> {door.label}
-                </Button>
-              </div>
-            ) : null}
             <div id={dockId} className="fw-prf-thread">
-              {thread}
+              {threadNode}
             </div>
           </aside>
         ) : null}

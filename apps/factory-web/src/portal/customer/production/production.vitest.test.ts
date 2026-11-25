@@ -114,7 +114,7 @@ describe('the address and the order’s own name (B-TH-303: never the office’s
     expect(chipOf('LATE')).toBe('LATE')
     expect(chipOf('ALL')).toBeNull()
     expect(chipOf('constructor')).toBeNull()
-    expect(rowHref('/p/X', { id: 'o 1' })).toBe('/p/X/orders/o%201?tab=status')
+    expect(rowHref('/p/X', { id: 'o 1' })).toBe('/p/X/orders/o%201?tab=overview')
   })
 
   it('their PO first, then "Your order 4"; the SO- number is never in the name', () => {

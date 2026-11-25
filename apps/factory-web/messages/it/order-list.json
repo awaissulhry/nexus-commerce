@@ -1,0 +1,42 @@
+{
+  "customer": {
+    "group": {
+      "REQUESTS": "Richieste",
+      "CLOSED_REQUESTS": "Richieste chiuse"
+    },
+    "note": {
+      "REQUESTS": "inviate a noi, non ancora un ordine, o un ordine che aspetta il nostro sì",
+      "CONFIRMED": "abbiamo detto sì; la produzione non è iniziata",
+      "IN_PRODUCTION": "in lavorazione",
+      "READY": "pronti, in attesa di partire",
+      "SHIPPED": "partiti in parte o del tutto, non ancora tutti arrivati",
+      "DELIVERED": "ogni collo è arrivato",
+      "CANCELLED": "annullati",
+      "CLOSED_REQUESTS": "rifiutate, chiuse o ritirate"
+    },
+    "band": {
+      "label": "I vostri ordini: a che punto sono",
+      "groups": "Gruppi dei vostri ordini",
+      "open": "I vostri ordini e richieste aperti",
+      "openCount": "I vostri ordini e richieste aperti:",
+      "needsYou_one": "{count} attende la vostra risposta",
+      "needsYou_other": "{count} attendono la vostra risposta",
+      "groupTip": "Mostra: {group}",
+      "groupOnTip": "State vedendo: {group}. Premete di nuovo per vedere tutto ciò che è aperto.",
+      "sum": "Ogni ordine e richiesta sta in un solo gruppo. Aperti: da Richieste a Spediti."
+    },
+    "mark": {
+      "needsYou": "Attende la vostra risposta"
+    },
+    "promise": {
+      "was": "era il {date}",
+      "asked": "data richiesta",
+      "wanted": "desiderata"
+    },
+    "shipped": {
+      "asked": "{count} chiesti",
+      "tip": "Prossimo collo: {name} · previsto il {date}",
+      "parcel": "Vostro ordine {order} · collo {n}"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { orderProgress, type OrderProgress } from '@nexus/factory-domain/sales/o
 import { customerPromiseHistory } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { customerEtaOf, customerShipmentStatusOf, isOnTheWay, SHIPMENT_STATUS_WORDS, SHOWN_SHIPMENT_STATUSES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { chipCounts, CUSTOMER_STATUS_WORDS, customerStatusOf, DATE_MOVED_DAYS, inChip, isStillToShip, milestonesOf, type CustomerOrderStatus, type OrderChip } from '@nexus/factory-domain/sales/portal-orders/status'
+import { isOpenForCustomer } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1: needsYou on open orders only
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import { partnerOrder, portalReader } from './access'
@@ -46,7 +47,10 @@ import {
  *   GET /portal/sales-orders              the party's orders in the portal's company and its portal requests waiting for
  *                                         us, their PO first, the status in their words, the promise (moved mark), pieces
  *                                         ordered / shipped / open, the value (price grain), the next shipment; chips with
- *                                         counts; search by their PO, our number or a style; sorted by promise date
+ *                                         counts; search by their PO, our number or a style; sorted by promise date. pg-s1:
+ *                                         no office series in a row (an order's and a request's `number` null, the next
+ *                                         shipment named by its order: `parcel`), a row's "Needs your answer" (`needsYou`),
+ *                                         and a number alone searches their own number exactly ("12" is "Your order 12")
  *   GET /portal/sales-orders/:orderId     the order: the six steps with their days, the promise and every move in their
  *                                         words, the facts agreed, the deposits, the lines and sizes with what is open
  * Reads only: the partner's rows in its party's scope, then (for its own orders only) the tenant's names, audit rows and
@@ -78,7 +82,11 @@ const sumPieces = (rows: readonly { ordered: number; shipped: number; open: numb
   open: rows.reduce((sum, row) => sum + row.open, 0),
 })
 
-/** The shipment the customer waits for next: one on the way, else one packed. */
+/**
+ * The shipment the customer waits for next: one on the way, else one packed. pg-s1 S1.3 (Owner D6): named by its order ("Your order
+ * 12 · parcel 1"), never by the office's shipment series (it would tell how much others ship): `number` is null, and `parcel` says
+ * which of the order's shipments that left it is (1-based, by the moment it left, then id); a packed one not left yet is the next.
+ */
 function nextShipmentOf(shipments: readonly PortalShipmentRow[], latest: ReadonlyMap<string, TrackingStatus[]>) {
   const onTheWay = shipments.filter((row) => isOnTheWay(row.status)).sort((a, b) => (a.shippedAt?.getTime() ?? 0) - (b.shippedAt?.getTime() ?? 0))[0]
   const packed = shipments.filter((row) => row.status === 'PACKED').sort((a, b) => (a.packedAt?.getTime() ?? 0) - (b.packedAt?.getTime() ?? 0))[0]
@@ -86,7 +94,11 @@ function nextShipmentOf(shipments: readonly PortalShipmentRow[], latest: Readonl
   if (!next) return null
   const status = customerShipmentStatusOf(next.status, latest.get(next.id) ?? [])
   const eta = customerEtaOf(next.status, next.expectedDeliveryAt)
-  return { id: next.id, number: next.number, status, words: SHIPMENT_STATUS_WORDS[status], date: dayOrNull(next.shippedAt ?? next.packedAt), carrierName: next.carrierName, expectedDeliveryAt: eta ? toUtcIso(eta) : null }
+  // pg-s1 S1.3 (D6): its place among the order's shipments that left.
+  const left = shipments.filter((row) => hasLeft(row.status)).sort((a, b) => (a.shippedAt?.getTime() ?? 0) - (b.shippedAt?.getTime() ?? 0) || a.id.localeCompare(b.id))
+  const at = left.findIndex((row) => row.id === next.id)
+  const parcel = at === -1 ? left.length + 1 : at + 1
+  return { id: next.id, number: null, parcel, status, words: SHIPMENT_STATUS_WORDS[status], date: dayOrNull(next.shippedAt ?? next.packedAt), carrierName: next.carrierName, expectedDeliveryAt: eta ? toUtcIso(eta) : null }
 }
 
 /**
@@ -120,7 +132,22 @@ export interface ListQuery {
   readonly offset: number
 }
 
-export async function listOrders(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
+/** GET /portal/sales-orders: the page of the chip and search (see the module's head). */
+export async function listOrders(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date): Promise<PortalOrderList['answer']> {
+  return (await readList(app, request, query, now)).answer
+}
+
+// ---- pg-s1 S1.2 (portal grid Z3, H4): the sheet's band counts every row of the party, read BEFORE the search and the chip ----
+/** The list's answer, and every row of the party (its orders and its catalogue requests waiting) before the search and the chip. */
+export type PortalOrderList = Awaited<ReturnType<typeof readList>>
+
+/** The list's answer and every row of the party (the partner's own reads only), for the sheet's band. */
+export async function listOrdersWithRows(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date): Promise<PortalOrderList> {
+  return readList(app, request, query, now)
+}
+// ---- end pg-s1 S1.2
+
+async function readList(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
   const reader = portalReader(app, request)
   const companyId = reader.session.company.id
   const read = await request.withClient(async (client) => {
@@ -136,17 +163,26 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
   })
   const since = new Date(now.getTime() - DATE_MOVED_DAYS * 86_400_000)
   const q = query.q?.trim() ?? ''
+  // pg-s1 S1.3 (G1-B2): a number alone — "12", or "#12" — is the customer's own number, matched EXACTLY (a part of a number never:
+  // 112 is not 12): "Your order 12", or (without the "#") their PO holding it (a PO is often all digits); never the office's hidden
+  // number, never a style. Words as before: their PO, our order number (printed on its confirmation), a style's code or name.
+  const ownNumber = /^#?\d{1,9}$/.test(q) ? Number(q.replace(/^#/, '')) : null
   const styleIds = [...new Set([...read.lines.map((line) => line.styleId), ...read.requests.flatMap((request) => request.styleIds)])]
   const tenant = await reader.inTenant(async (client) => ({
     moved: await lastPromiseMoves(client, read.orders.map((order) => order.id), since),
-    matching: q === '' ? new Set<string>() : await stylesMatching(client, styleIds, q),
+    matching: q === '' || ownNumber !== null /* pg-s1 S1.3 */ ? new Set<string>() : await stylesMatching(client, styleIds, q),
     // B-PR-40: the customer's share level (the old progress switch dropped): progress from PROGRESS on.
     shared: shares(await shareLevelOf(client, reader.session.partyId), 'progress'),
   }))
   const latest = latestByShipment(read.tracking)
   const pieces = piecesOfLines(read.lines, read.shipped)
-  const found = (values: readonly (string | null)[], styles: readonly string[]): boolean =>
-    q === '' || values.some((value) => value !== null && value.toLowerCase().includes(q.toLowerCase())) || styles.some((styleId) => tenant.matching.has(styleId))
+  // fix-portal-numbers-1: the office's number is matched (never answered); pg-s1 S1.3: a number alone is the customer's own (above).
+  const found = (entry: { readonly row: { readonly customerRef: string | null; readonly yourNumber: { readonly seq: number } | null }; readonly officeNumber: string | null; readonly styles: readonly string[] }): boolean => {
+    if (q === '') return true
+    if (ownNumber !== null) return entry.row.yourNumber?.seq === ownNumber || (!q.startsWith('#') && (entry.row.customerRef ?? '').includes(q))
+    const words = q.toLowerCase()
+    return [entry.row.customerRef, entry.officeNumber].some((value) => value !== null && value.toLowerCase().includes(words)) || entry.styles.some((styleId) => tenant.matching.has(styleId))
+  }
 
   const orderRows = read.orders.map((order) => {
     const lines = read.lines.filter((line) => line.orderId === order.id)
@@ -165,7 +201,7 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
         kind: 'ORDER' as const,
         id: order.id,
         customerRef: order.customerRef,
-        number: null as string | null,
+        number: null,
         yourNumber: customerNumberOf('ORDER', order.customerSeq),
         orderedOn: dayOf(order.orderDate),
         status,
@@ -180,6 +216,9 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
         currency: order.currency,
         nextShipment: nextShipmentOf(shipments, latest),
         progressPercent: null as number | null,
+        // pg-s1 S1.2/S1.3 (Z4): the row's one mark, "Needs your answer": a revised order waits for the customer's re-confirmation —
+        // an OPEN one only (the lead's rule): a cancelled or delivered order with a stale wait never needs them.
+        needsYou: order.reapprovalNeededAt !== null && isOpenForCustomer(status),
       },
     }
   })
@@ -191,7 +230,8 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
       kind: 'REQUEST' as const,
       id: request.id,
       customerRef: request.customerRef,
-      number: request.number,
+      // pg-s1 S1.3 (G3-B1): never the office's request series (RQ-…: it would tell how much the others ask); it is only matched.
+      number: null,
       yourNumber: null,
       orderedOn: request.sentAt ? businessDate(request.sentAt) : null,
       status: 'REQUESTED' as CustomerOrderStatus,
@@ -206,9 +246,10 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
       currency: request.currency,
       nextShipment: null,
       progressPercent: null as number | null,
+      needsYou: false, // pg-s1 S1.3 (P3): a request's own state chip already says it
     },
   }))
-  const searched = [...orderRows, ...requestRows].filter((entry) => found([entry.row.customerRef, entry.officeNumber /* fix-portal-numbers-1 */], entry.styles))
+  const searched = [...orderRows, ...requestRows].filter(found)
   const inChipRows = searched.filter((entry) => inChip(query.chip, entry.row.status, entry.row.movedLately))
   inChipRows.sort((a, b) => a.sortKey.localeCompare(b.sortKey) || (a.officeNumber ?? '').localeCompare(b.officeNumber ?? ''))
   const page = inChipRows.slice(query.offset, query.offset + query.limit).map((entry) => entry.row)
@@ -220,13 +261,17 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
     }
   }
   return {
-    asOf: toUtcIso(now),
-    seesPrices: reader.seesPrices,
-    chip: query.chip,
-    chips: chipCounts(searched.map((entry) => entry.row)),
-    count: inChipRows.length,
-    items: page,
-    live: LIVE,
+    answer: {
+      asOf: toUtcIso(now),
+      seesPrices: reader.seesPrices,
+      chip: query.chip,
+      chips: chipCounts(searched.map((entry) => entry.row)),
+      count: inChipRows.length,
+      items: page,
+      live: LIVE,
+    },
+    // pg-s1 S1.2: every row of the party, before the search and the chip (the sheet's band: a search never moves it).
+    everyRow: [...orderRows, ...requestRows].map((entry) => entry.row),
   }
 }
 
@@ -345,7 +390,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     order: {
       id: order.id,
       customerRef: order.customerRef,
-      number: order.number,
+      // pp-s s.1 (O3-W1, plan §0.5 "counts do not leak"): no office series — the customer reads its own number only.
       yourNumber: customerNumberOf('ORDER', order.customerSeq),
       status,
       words: CUSTOMER_STATUS_WORDS[status],

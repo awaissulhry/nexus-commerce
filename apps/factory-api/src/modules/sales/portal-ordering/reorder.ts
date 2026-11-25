@@ -8,6 +8,7 @@ import { priceShown } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
+import { portalWriter } from './writer' // od-s s.2: the draft's reads and its 409 through the portal's writer
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView, type NewLine } from './requests'
 // B-CP-075: who saved the draft, and a 409 that names the colleague who changed it meanwhile.
@@ -140,7 +141,8 @@ export interface ReorderBody {
 
 export async function reorderInto(app: FastifyInstance, request: FastifyRequest, requestId: string, body: ReorderBody, idempotencyKey?: string) {
   const reader = portalReader(app, request)
-  const row = await ownRequest(request, reader, requestId)
+  const writer = portalWriter(app, request)
+  const row = await ownRequest(writer, requestId)
   if (row.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
   const { order, revisions } = await orderLinesOf(request, reader, body.orderId)
   const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: businessDate(appClock(app).now()), styleIds: order.lines.map((line) => line.styleId) }))
@@ -184,7 +186,7 @@ export async function reorderInto(app: FastifyInstance, request: FastifyRequest,
     draftChanged(tools, row) // B-CP-071
     return outcome
   }).catch(async (error: unknown) => {
-    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
+    throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error // B-CP-075
   })
-  return { ...(await requestView(app, request, reader, await ownRequest(request, reader, requestId))), added: result.added.length, merged: [...result.merged], kept: [...result.kept], skipped: skipped.map((entry) => ({ ...entry, notices: [...entry.notices] })) }
+  return { ...(await requestView(writer, await ownRequest(writer, requestId))), added: result.added.length, merged: [...result.merged], kept: [...result.kept], skipped: skipped.map((entry) => ({ ...entry, notices: [...entry.notices] })) }
 }

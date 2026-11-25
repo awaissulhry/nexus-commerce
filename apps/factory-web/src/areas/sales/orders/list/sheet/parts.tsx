@@ -6,9 +6,18 @@ import Link from 'next/link'
 import { Filter, Hand, X } from 'lucide-react' // F-MS-104: + Hand
 import { Button, FilterChip, Pill, Tag, Tooltip } from '@nexus/ui/primitives' // F-SA-275: + Pill; F-MS-104: + Tooltip
 import { STAGE_SET_CHECK_DAYS } from '@nexus/factory-domain/production-brand/stage-set' // F-MS-104
-import type { Door, Phrase } from './model'
 import './sheet.css'
 import './chips.css' // F-CW-101: the chips' own styles (a new file beside the new parts)
+// ---- pg-w1 (portal grid plan § 2): the shared order cells (lib/order-cells) — the door, the status chip, the mark chip, a time kept
+// whole. The sheet re-exports the door and the tail, so its importers stay as they are. Imported after the sheet's own css: the
+// shared rules (moved verbatim) load after it, the cascade keeps its order.
+import { DoorCell } from '../../../../../lib/order-cells/view/DoorCell'
+import { StateChip } from '../../../../../lib/order-cells/view/StateChip'
+import { MarkChip } from '../../../../../lib/order-cells/view/MarkChip'
+import { tailWhole } from '../../../../../lib/order-cells/tail-whole'
+export { DoorCell, tailWhole }
+export { MessagesHeader, NewMessagesBubble } from '../../../../../lib/last-message-cell/view/NewMessagesBubble' // pg-w1 (Z10): the bubble on both faces
+// ---- end pg-w1
 // ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
 import { HealthPill } from '../../../../../lib/production/view/HealthPill'
 import { ageOf } from '../../../../../lib/production/model'
@@ -19,17 +28,14 @@ import type { OrderRow } from '../../api'
 import { STATUS_TONE } from '../../model'
 import { answerHrefOf, supervisorCellOf, waitingItemsOf, type WaitingMark } from './model'
 // ---- end F-SA-275
-// ---- F-CW-102: the row's chips (Where it is, Customer urgency) and the New messages bubble ----
+// ---- F-CW-102: the row's chips (Where it is, Customer urgency); pg-w1: the New messages bubble is the shared cell's (re-exported above) ----
 import { Banknote, CirclePause, Hourglass, Lock, MessageSquare } from 'lucide-react'
 import { romeToday } from '../../model'
-import { cellOf as unreadCellOf, type Unread } from '../../../../../lib/last-message-cell/model'
-import { dockClick } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { healthChipOf, orderHref, piecesPartsOf, priorityChipOf, stageChipOf, stopChipOf, urgencyChipOf, type PiecesPart, type StopChip } from './model'
-import { PHASE_ICON } from './phase-icon'
+import { PHASE_ICON } from '../../../../../lib/order-groups/groups' // pg-w1: the group marks of both faces
 // ---- end F-CW-102
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
-const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
 
 /**
  * B-TH-225 / B-TH-226 — the parts of the Orders sheet the design system does not have (Owner yes on decision 2: they live in
@@ -40,23 +46,7 @@ const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
  */
 
 // ---- doors -------------------------------------------------------------------------------------------------------------------
-
-/** A cell's value as its door: the link (⌘-click: a new tab), the words with the reason on hover, or plain words. */
-export function DoorCell({ door, t, children, strong }: { door: Door; t: Translate; children: ReactNode; strong?: boolean }) {
-  if (door && 'href' in door)
-    return (
-      <Link className={strong ? 'fw-sheet-door strong' : 'fw-sheet-door'} href={door.href} title={say(t, door.tip)} data-door="">
-        {children}
-      </Link>
-    )
-  if (door && 'held' in door)
-    return (
-      <span className="fw-sheet-held" tabIndex={0} title={say(t, door.held)} aria-label={`${typeof children === 'string' ? children : ''} — ${say(t, door.held)}`.replace(/^ — /, '')}>
-        {children}
-      </span>
-    )
-  return <span className="fw-sheet-plain">{children}</span>
-}
+// pg-w1: the door cell (DoorCell) is the shared cells' (lib/order-cells/view/DoorCell.tsx), re-exported above.
 
 /** A value that narrows the sheet (Brand, Status, Company): a button with the funnel mark, never a page. */
 export function FunnelButton({ tip, onClick, children }: { tip: string; onClick?: () => void; children: ReactNode }) {
@@ -325,10 +315,8 @@ export function WhereItIsCell({ row, t, s, statusShown = false, waitingShown = f
         </Pill>
       )}
       {first && Icon && first.kind === 'status' && (
-        <Pill tone={STATUS_TONE[first.status]} icon={<Icon size={11} aria-hidden />} className={first.status === 'CLOSED' ? 'fw-sheet-st is-line' : 'fw-sheet-st'}>
-          {t(`status.${first.status}`)}
-          {first.shipped ? ` · ${s('shippedOf', first.shipped)}` : ''}
-        </Pill>
+        // pg-w1: the shared status chip (lib/order-cells: the portal's list and the order page draw it too) — the same Pill.
+        <StateChip chip={{ words: t(`status.${first.status}`), tone: STATUS_TONE[first.status], mark: Icon, ...(first.shipped ? { tail: s('shippedOf', first.shipped) } : {}), ...(first.status === 'CLOSED' ? { line: true } : {}) }} />
       )}
       {health && <HealthPill face="office" explain={false} computed={health} daysLate={row.daysLate} />}
       {stop && <StopChipPart chip={stop} row={row} t={t} s={s} prefix={prefix} doorHref={doorHref} dense={dense} now={now ?? Date.now()} date={(day) => formatDate(`${day}T12:00:00Z`, { locale })} />}
@@ -385,20 +373,8 @@ function StopChipPart({ chip, row, t, s, prefix, doorHref, dense, now, date }: {
     head = w.t(`parts.waiting.office.${chip.on}`)
     tail = age(chip.since)
   }
-  const full = tail ? `${head} · ${tail}` : head
-  const body = (
-    <Tag tone={tone} className={tone === 'neutral' ? 'fw-sheet-stop is-dash' : 'fw-sheet-stop'} title={href ? undefined : (tip ?? full)}>
-      {!dense && <Icon size={11} aria-hidden />}
-      {head}
-      {tail && !dense && ` · ${tail}`}
-    </Tag>
-  )
-  if (!href) return body
-  return (
-    <Link href={href} className="fw-sheet-chip-door" data-door="" title={tip ?? full}>
-      {body}
-    </Link>
-  )
+  // pg-w1: drawn by the shared mark chip (lib/order-cells: the same Tag, mark, tail and door); its eight kinds and words stay here.
+  return <MarkChip chip={{ tone, mark: Icon, head, tail, href, tip, dense }} />
 }
 
 /**
@@ -450,60 +426,15 @@ export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = f
   )
 }
 
-/**
- * F-CW-102 (10-design §3.5; lead settle S33): New messages as a count bubble — the reader's own new messages on the order ("2",
- * "99+"), a door to its thread at the first new one (a link; on a page with a dock, a button that docks it — ⌘ / Ctrl keeps the new
- * tab); nothing new: an empty cell with its words for a screen reader. The words are the shared cell's own (`last-message`).
- */
-export function NewMessagesBubble({ unread, href, record, onOpen, l }: { unread: Unread | undefined; href: string | null; record: string; onOpen?: (() => void) | null; l: Translate }) {
-  const cell = unreadCellOf(unread)
-  if (cell.kind === 'empty') return <span className="nds-vh">{l('cell.none')}</span>
-  const label = l('cell.label', { count: cell.count, record })
-  const count = cell.key === 'cell.many' ? '99+' : String(cell.count)
-  if (onOpen)
-    return (
-      <button type="button" className="fw-sheet-msgs" aria-label={label} title={label} data-door="" onClick={(event) => dockClick(event, href, onOpen)} onAuxClick={(event) => event.button === 1 && href && window.open(href, '_blank', 'noopener')}>
-        {count}
-      </button>
-    )
-  if (!href)
-    return (
-      <span className="fw-sheet-msgs" title={label}>
-        {count}
-      </span>
-    )
-  return (
-    <Link className="fw-sheet-msgs" href={href} aria-label={label} title={label} data-door="">
-      {count}
-    </Link>
-  )
-}
+// pg-w1: NewMessagesBubble and MessagesHeader are the shared message cell's (lib/last-message-cell/view/NewMessagesBubble.tsx), re-exported above.
 
-/** F-CW-102 (S33): the New messages column's header in a narrow column — the message mark; the column's name stays its accessible name. */
-export function MessagesHeader({ displayName }: { displayName?: string }) {
-  return (
-    <span className="fw-sheet-hicon" title={displayName}>
-      <MessageSquare size={14} aria-hidden />
-      <span className="nds-vh">{displayName}</span>
-    </span>
-  )
-}
+// cw fx5 (walk W-7): tailWhole — words that end with a time keep the time whole — is the shared cells' (lib/order-cells/tail-whole.ts).
 
 /**
  * Waiting on: the most urgent of a request to answer (a real link to the review window — on the customer page its door, else the
  * order's Changes), a reply that waits on us ("Reply waits · 4 h"), who acts next as the keeper keeps it ("Waiting on supplier ·
  * 2 d"); "+1 more" when more than one. Nothing waits: "—".
  */
-/**
- * cw fx5 (walk W-7): words that end with a time ("Waiting on customer · 16 d") wrap inside a narrow cell on a word's edge and
- * never inside the time — "· 16 d" goes to the second line whole (no-break spaces inside the tail and after its dot).
- */
-export function tailWhole(text: string, tail: string | null): string {
-  if (!tail || !text.endsWith(tail)) return text
-  const head = text.slice(0, text.length - tail.length)
-  return `${head.replace(/· $/, '·\u00a0')}${tail.replace(/ /g, '\u00a0')}`
-}
-
 export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: OrderRow; mark?: WaitingMark | null; prefix: string; doorHref?: ((requestId: string) => string) | null; s: Translate; now: number }) {
   const w = useProductionWords()
   const items = waitingItemsOf(row, mark)

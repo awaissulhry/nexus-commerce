@@ -13,6 +13,7 @@ import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
+import { SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes' // pp-w1 (w1.4, O3-B1): + FEE, a charge line
 
 /**
  * Every call of the customer's Orders & tracking (B-W2b-191, SCR-184; design portal.customer.orders), each answer checked
@@ -82,12 +83,16 @@ export const orderRowSchema = z.object({
   pieces,
   netAmount: price,
   currency: z.string(),
+  // pg-w2 (D6): a parcel is named by its order ("Your order 12 · parcel 2"), never the office's shipment series: `number` is null
+  // (the server stops sending it, pg-s1), `parcel` which of the order's shipments it is (1-based; an older answer has none).
   nextShipment: z
-    .object({ id: z.string(), number: z.string(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: z.string().nullable(), carrierName: z.string().nullable(), expectedDeliveryAt: z.string().nullable().optional() })
+    .object({ id: z.string(), number: z.string().nullable(), parcel: z.number().optional(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: z.string().nullable(), carrierName: z.string().nullable(), expectedDeliveryAt: z.string().nullable().optional() })
     .nullable(),
   progressPercent: z.number().nullable(),
   /** B-TH-246: the row's cells of the portal columns, by column id (the sheet's read only). */
   values: z.record(z.string(), portalCellSchema).optional(),
+  /** pg-w2 (Z4, Z16 P3): the order needs the customer's answer (a re-confirm asked); a REQUEST row never; an older answer: absent. */
+  needsYou: z.boolean().optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -101,6 +106,15 @@ export const ordersSchema = z.object({
   live,
   /** B-TH-246: the portal columns (the sheet's read only; the list's plain read has none). */
   columns: z.array(portalColumnSchema).optional(),
+  // ---- pg-w2 (Z3; pg-server § Shapes): the band's numbers, made by the server over the party's own rows BEFORE the search (the
+  // sheet's read only). A group's name is read as text (a group this page does not know is left out, never a failed read); an
+  // older answer has none: the band says "—".
+  groups: z.array(z.object({ group: z.string(), count: z.number() })).optional(),
+  /** Every open order and request (Requests … Shipped), each once. */
+  open: z.number().optional(),
+  /** The requests and orders that need the customer's answer. */
+  needsYou: z.number().optional(),
+  // ---- end pg-w2
 })
 export type OrdersRead = z.infer<typeof ordersSchema>
 
@@ -115,7 +129,8 @@ export const fetchOrders = (api: ApiClient, query: { chip?: OrderChip | null; q?
   })
 
 // ── B-TH-246: the customer's own sheet (GET /portal/sales-orders/sheet: the list's rows with the portal columns) ──
-export const fetchSheet = (api: ApiClient, query: { chip?: OrderChip | null; q?: string | null; offset?: number; limit?: number }, signal?: AbortSignal): Promise<OrdersRead> =>
+// pg-w2: the chip is the server's own word for a group (sheetChipOf: OPEN, REQUESTED, CONFIRMED …): text, the server checks it.
+export const fetchSheet = (api: ApiClient, query: { chip?: string | null; q?: string | null; offset?: number; limit?: number }, signal?: AbortSignal): Promise<OrdersRead> =>
   api.get('/portal/sales-orders/sheet', {
     query: { chip: query.chip ?? undefined, q: query.q?.trim() ? query.q.trim() : undefined, limit: query.limit ?? PAGE_SIZE, offset: query.offset ?? 0 },
     schema: ordersSchema,
@@ -123,10 +138,10 @@ export const fetchSheet = (api: ApiClient, query: { chip?: OrderChip | null; q?:
   })
 
 /**
- * "Download all (Excel)": the server writes the file in the customer's own scope (its rows and its columns only; never the office's
- * export job, Owner decision 13) — the view's chip and search, every row.
+ * "Download (Excel)": the server writes the file in the customer's own scope (its rows and its columns only; never the office's
+ * export job, Owner decision 13) — the group shown and the search, every row (Z8: under Requests the order requests only).
  */
-export async function downloadSheet(api: ApiClient, query: { chip: OrderChip | null; q: string | null; format: 'XLSX' | 'CSV'; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
+export async function downloadSheet(api: ApiClient, query: { chip: string | null; q: string | null; format: 'XLSX' | 'CSV'; locale: 'it' | 'en' }): Promise<{ bytes: Uint8Array; fileName: string | null; contentType: string }> {
   let disposition: string | null = null
   let contentType = query.format === 'XLSX' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8'
   const bytes = await api.bytes('/portal/sales-orders/sheet/download', {
@@ -159,30 +174,7 @@ const trackingEvent = z.object({ at: z.string(), status: z.string(), words, desc
 export type TrackingEvent = z.infer<typeof trackingEvent>
 const trackingLink = z.object({ url: z.string(), words })
 
-export const inTransitSchema = z.object({
-  asOf: z.string(),
-  items: z.array(
-    z.object({
-      shipmentId: z.string(),
-      number: z.string(),
-      // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's series.
-      order: z.object({ id: z.string(), customerRef: z.string().nullable(), yourNumber }),
-      status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
-      words,
-      carrierName: z.string().nullable(),
-      shippedAt: z.string().nullable(),
-      expectedDeliveryAt: z.string().nullable().optional(),
-      trackingNumbers: z.array(z.string()),
-      trackingLinks: z.array(z.object({ trackingNumber: z.string(), url: z.string(), words })).optional(),
-      lastEvent: trackingEvent.nullable(),
-    }),
-  ),
-  live,
-})
-export type InTransitRead = z.infer<typeof inTransitSchema>
-export type InTransitRow = InTransitRead['items'][number]
-
-export const fetchInTransit = (api: ApiClient, signal?: AbortSignal): Promise<InTransitRead> => api.get('/portal/sales-orders/in-transit', { schema: inTransitSchema, signal })
+// pg-w2 (D7): "On the way" left the list (it repeated orders the grid shows); its read (GET …/in-transit) is no longer called.
 
 // ── one order ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const sizeRow = z.object({ size: z.string().nullable(), ordered: z.number(), shipped: z.number(), open: z.number(), closedShort: z.number(), unitPrice: z.string().nullable().optional() })
@@ -190,7 +182,9 @@ const sizeRow = z.object({ size: z.string().nullable(), ordered: z.number(), shi
 export const orderLineSchema = z.object({
   id: z.string(),
   seq: z.number(),
-  kind: z.enum(['SIZE_GRID', 'MADE_TO_MEASURE']),
+  // pp-w1 (w1.4, O3-B1): every kind the API sends — a charge line (FEE) no longer fails the whole page; Lines and the tab strip skip
+  // it (shownLinesOf), the order's totals count it, the change rules never list it.
+  kind: z.enum(SALES_LINE_KINDS),
   style: named.nullable(),
   colourway: named.nullable(),
   description: z.string().nullable(),
@@ -222,10 +216,11 @@ export type OrderMilestone = z.infer<typeof milestoneSchema>
 export const orderRecordSchema = z.object({
   asOf: z.string(),
   seesPrices: z.boolean(),
+  // pp-w1 (13-backend C-1, O3-W1): no `number` — the office's shared series is never read here; the order is the customer's own
+  // number (`yourNumber`), the revised order is found by it too (orderNumbersOf).
   order: z.object({
     id: z.string(),
     customerRef: z.string().nullable(),
-    number: z.string(),
     // B-TH-303 (read for New order's "Reorder this line"; the order page shows it with B-TH-275)
     yourNumber,
     status: z.enum(CUSTOMER_ORDER_STATUSES),
@@ -336,7 +331,8 @@ const freeze = z.object({ state: z.enum(FREEZE_STATES).catch('OPEN'), words })
 
 export const rulesSchema = z.object({
   asOf: z.string(),
-  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), requestedDate: z.string().nullable(), promiseDate: z.string().nullable(), currency: z.string(), version: z.number() }),
+  // pp-w1 (13-backend C-1b): no office `number` (the web never read it).
+  order: z.object({ id: z.string(), customerRef: z.string().nullable(), status: z.string(), requestedDate: z.string().nullable(), promiseDate: z.string().nullable(), currency: z.string(), version: z.number() }),
   change: verdict,
   cancel: verdict,
   lines: z.array(
@@ -390,7 +386,7 @@ export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'DESIGN', 'RUSH', 'HOLD', 'RES
 export const changeRequestSchema = z.object({
   id: z.string(),
   orderId: z.string(),
-  orderNumber: z.string(),
+  // pp-w1 (13-backend C-1b): no office `orderNumber` (the web never read it); the order is the page's own.
   customerRef: z.string().nullable(),
   kind: z.enum(REQUEST_KINDS),
   kindWords: words,
@@ -578,12 +574,12 @@ export type ApprovalPage = z.infer<typeof approvalPageSchema>
 
 /**
  * F-OC fx4 (end check 1, th9 step 13): the numbers a revised order may name THIS order by. The approval page says the party's own
- * number ("#12", F-PR-16: never the office's SO-… series) — an older answer the office's; matching the office's number alone never
- * found it, and the order page said "We will ask you to confirm" for ever while the ask waited.
+ * number ("#12", F-PR-16: never the office's SO-… series; it rewrites every office number into the party's own). pp-w1 (13-backend
+ * C-1): the order read no longer carries the office's series, so the party's own number is the only one (none yet: none).
  */
-export function orderNumbersOf(number: string, ownSeq: number | null | undefined): string[] {
+export function orderNumbersOf(ownSeq: number | null | undefined): string[] {
   const own = customerRefOf('ORDER', ownSeq)
-  return own ? [number, own] : [number]
+  return own ? [own] : []
 }
 
 /**

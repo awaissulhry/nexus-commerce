@@ -141,7 +141,9 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
     const so2 = list.items[0]
     expect(so2).toMatchObject({ kind: 'ORDER', words: { en: 'Confirmed', it: 'Confermato' }, pieces: { ordered: 7, shipped: 2, open: 5 }, promiseMoved: false, movedLately: false, progressPercent: null })
     expect(typeof so2.netAmount).toBe('number')
-    expect(so2.nextShipment).toMatchObject({ number: 'SEED-SH-0001', status: 'IN_TRANSIT', words: { en: 'On the way' } })
+    // pg-s1 S1.3 (Owner D6): named by its order ("Your order 12 · parcel 1"), never the office's shipment series (SEED-SH-0001).
+    expect(so2.nextShipment).toMatchObject({ number: null, parcel: 1, status: 'IN_TRANSIT', words: { en: 'On the way' } })
+    expect(JSON.stringify(list)).not.toMatch(/SEED-SH-/)
     // SH-0002 is a DRAFT: not something the customer waits for yet.
     expect(list.items[1].nextShipment).toBeNull()
     expect(Object.fromEntries(list.chips.map((chip: Json) => [chip.chip, chip.count]))).toMatchObject({ OPEN: 3, REQUESTED: 0, ALL: 3, DELIVERED: 0, DATE_MOVED: 0 })
@@ -179,7 +181,9 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     await changePromise(office(), so1, { version: so1Version, promiseDate: addDays(TODAY, 90), reason: 'Buyer pays late: keep them waiting', lineIds: [line.id] })
 
     const record = await ok(browsers.buyer, `/portal/sales-orders/${so2}`)
-    expect(record.order).toMatchObject({ number: 'SEED-SO-0002', customerRef: 'SEED-PO-78', status: 'PARTLY_SHIPPED', words: { en: 'Partly shipped' }, promiseDate: moved, promiseMoved: true, reconfirmNeeded: false })
+    // pp-s s.1 (O3-W1): no office series in the customer's order (PG-O1 below); its PO and its own number name it.
+    expect(record.order).not.toHaveProperty('number')
+    expect(record.order).toMatchObject({ customerRef: 'SEED-PO-78', status: 'PARTLY_SHIPPED', words: { en: 'Partly shipped' }, promiseDate: moved, promiseMoved: true, reconfirmNeeded: false })
     expect(typeof record.order.netAmount).toBe('number')
     const today = businessDate(new Date())
     expect(record.milestones.map((step: Json) => [step.key, step.state, step.current])).toEqual([
@@ -220,6 +224,29 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect((await browsers.other.get(`/portal/sales-orders/${so2}`)).status).toBe(404)
     expect((await browsers.designer.get(`/portal/sales-orders/${so2}`)).status).toBe(403)
   })
+
+  // ── pp-s s.1 PG-O1 (O3-W1; plan §0.5 "counts do not leak"): the customer's order names itself by its PO and the customer's own number,
+  // never the office's series (a count across every customer of the factory); another customer's order is as unknown as a wrong id ──
+  it('PG-O1: the customer reads its own order with no office series anywhere in the answer; another customer gets 404 and no series', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    const series = (await admin<{ number: string }>('SELECT number FROM "SalesOrder" WHERE "tenantId" = $1 ORDER BY number', [T])).map((row) => row.number)
+    expect(series).toEqual(expect.arrayContaining(['SEED-SO-0001', 'SEED-SO-0002', 'SEED-SO-0003']))
+    const own = await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [so2])
+    for (const browser of [browsers.buyer, browsers.viewer]) {
+      const record = await ok(browser, `/portal/sales-orders/${so2}`)
+      expect(record.order).not.toHaveProperty('number')
+      expect(record.order).toMatchObject({ id: so2, customerRef: 'SEED-PO-78' })
+      expect(record.order.yourNumber?.seq ?? null).toBe(own.customerSeq)
+      const text = JSON.stringify(record)
+      for (const number of series) expect(text, number).not.toContain(number)
+      // A series of the office's shape (SO-2026-0142) nowhere either.
+      expect(text).not.toMatch(/\b[A-Z]+-\d{4}-\d+/)
+    }
+    const other = await browsers.other.get(`/portal/sales-orders/${so2}`)
+    expect(other.status).toBe(404)
+    for (const number of series) expect(JSON.stringify(other.body), number).not.toContain(number)
+  })
+  // ── end pp-s PG-O1 ──
 
   // ── B-OM-005 (order money tab M3-B6, M1-S4): a part payment shows to the customer, with what is still to pay ──
   it('B-OM-005: a deposit paid in part shows what is paid and the order’s still to pay; a viewer reads neither; another customer gets 404', async () => {
@@ -410,13 +437,8 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     expect((await browsers.other.get(`/portal/sales-orders/${so2}/shipments`)).status).toBe(404)
   })
 
-  it('lists what is on the way across the orders, and counts it on Home', async () => {
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.map((row: Json) => [row.number, row.order.customerRef, row.status])).toEqual([['SEED-SH-0001', 'SEED-PO-78', 'IN_TRANSIT']])
-    // fix-portal-numbers-1 (B-TH-303): its order by the customer's own number, never the office's series.
-    expect(transit.items[0].order).toEqual({ id: await orderId('SEED-SO-0002'), customerRef: 'SEED-PO-78', yourNumber: { seq: expect.any(Number), words: expect.any(Object) } })
-    expect(transit.items[0].trackingNumbers).toHaveLength(2)
-    expect((await ok(browsers.other, '/portal/sales-orders/in-transit')).items).toEqual([])
+  // pg-s3 (Owner D7): "On the way" left the list, and its read GET …/in-transit is gone; what is on the way is still counted on Home.
+  it('counts what is on the way on Home (orders.in_transit)', async () => {
     // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
     const own = ['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'orders.in_transit']
     const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => own.includes(count.key)).map((count: Json) => [count.key, count.value]))
@@ -445,10 +467,8 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
       { url: `https://tracking.example.com/${parcels[0]!.trackingNumber}`, words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } },
       null,
     ])
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items[0]).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta, trackingLinks: [{ trackingNumber: parcels[0]!.trackingNumber, url: `https://tracking.example.com/${parcels[0]!.trackingNumber}` }] })
     const list = await ok(browsers.buyer, '/portal/sales-orders?chip=ALL')
-    expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta })
+    expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: null, parcel: 1, expectedDeliveryAt: eta }) // pg-s1 S1.3 (D6)
     // The database never keeps an http page (Parcel_tracking_url_check, every login): there is none to show.
     await expect(admin('UPDATE "Parcel" SET "trackingUrl" = $2 WHERE id = $1', [parcels[1]!.id, 'http://tracking.example.com/plain'])).rejects.toThrow(/https address|parcels are added and removed/)
     // Once delivered, the customer sees the day it arrived, not an expected one.
@@ -466,7 +486,7 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
 
 // ---- B-OP-031 (order page plan N5): the number typed for a carrier booked by hand, on the customer's own shipments only ------------
 describe('B-OP-031: the customer sees the number typed for a carrier booked by hand ("No live tracking")', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('its own shipment carries the typed number (the labelled one none); "On the way" too; another customer sees nothing of it', async () => {
+  it('its own shipment carries the typed number (the labelled one none); another customer sees nothing of it', async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     // SEED-SH-0002 left with a carrier booked by hand, its number typed (written around the guards: the read is what is tested).
@@ -480,18 +500,14 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
     expect(own.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0002', typedTrackingNumber: 'T-OP031-BRT-0001' })])
     const so2 = await ok(browsers.viewer, `/portal/sales-orders/${await orderId('SEED-SO-0002')}/shipments`)
     expect(so2.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', typedTrackingNumber: null })
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001' })
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0001')).toMatchObject({ typedTrackingNumber: null })
     // The wall: another customer finds neither the order nor the number.
-    expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
-    const theirs = await ok(browsers.other, '/portal/sales-orders/in-transit')
-    expect(theirs.items).toEqual([])
-    expect(JSON.stringify(theirs)).not.toContain('T-OP031')
+    const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+    expect(theirs.status).toBe(404)
+    expect(JSON.stringify(theirs.body)).not.toContain('T-OP031')
   })
 
   // B-OP-034 (set C): the tracking link typed beside it — "Track ›" in the portal, https only; another customer never.
-  it('B-OP-034: its typed tracking link shows beside the number (order and On the way); another customer sees none', async () => {
+  it('B-OP-034: its typed tracking link shows beside the number on the order\'s shipments; another customer sees none', async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     await admin('SET session_replication_role = replica')
@@ -502,9 +518,9 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
     }
     const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
     expect(own.shipments.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001', typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
-    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
-    expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('track.example.com')
+    const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+    expect(theirs.status).toBe(404)
+    expect(JSON.stringify(theirs.body)).not.toContain('track.example.com')
   })
 })
 // ---- end B-OP-031
@@ -556,7 +572,7 @@ describe('B-OP-044: a shared shipment in the portal', { timeout: SLOW_TEST_TIMEO
 // ---- B-OS-006 (order shipments tab; X2-B1): a TEST label's number never reaches the customer. SEED-SH-0001's second parcel is given
 // a TEST label (test mode) past the guards: the read is what is tested.
 describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('its parcel is listed untracked (no number, no link); On the way lists the carrier labels only', async () => {
+  it('its parcel is listed untracked (no number, no link)', async () => {
     const so2 = await orderId('SEED-SO-0002')
     const shipment = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0001'])
     const parcels = await admin<{ id: string; seq: number; trackingNumber: string; carrierParcelId: string | null }>('SELECT id, seq, "trackingNumber", "carrierParcelId" FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq', [shipment.id])
@@ -577,11 +593,6 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === test.seq)).toMatchObject({ trackingNumber: null, trackingLink: null })
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === real.seq)).toMatchObject({ trackingNumber: real.trackingNumber })
       expect(JSON.stringify(answer)).not.toContain('TEST-OS006')
-      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0001')!
-      expect(item.trackingNumbers).toEqual([real.trackingNumber])
-      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).not.toContain('TEST-OS006-0002')
-      expect(JSON.stringify(transit)).not.toContain('TEST-OS006')
     } finally {
       await relabel(test.carrierParcelId, test.trackingNumber)
     }
@@ -590,10 +601,10 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
 // ---- end B-OS-006
 
 // ---- B-OS-022 (order shipments 1/1; Owner D4): a parcel's number typed by hand reaches its own customer's portal (the order's
-// shipments and On the way), never another customer's. SEED-SH-0002 (left with a carrier booked by hand, B-OP-031 above) gets its
+// shipments), never another customer's. SEED-SH-0002 (left with a carrier booked by hand, B-OP-031 above) gets its
 // parcel's number typed past the guards: the read is what is tested.
 describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it("A's buyer reads it with its typed link on the parcel and On the way; B's buyer never", async () => {
+  it("A's buyer reads it with its typed link on the parcel; B's buyer never", async () => {
     const so3 = await orderId('SEED-SO-0003')
     const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
     const type = async (number: string | null, url: string | null) => {
@@ -609,13 +620,10 @@ describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLO
       const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
       const row = (own.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === 1)).toMatchObject({ trackingNumber: 'AWB-OS022-P001', trackingLink: { url: 'https://track.example.com/AWB-OS022-P001' } })
-      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
-      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
-      expect(item.trackingNumbers).toContain('AWB-OS022-P001')
-      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).toContain('AWB-OS022-P001')
       // The wall: another customer finds neither the order nor the number.
-      expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
-      expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('AWB-OS022')
+      const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
+      expect(theirs.status).toBe(404)
+      expect(JSON.stringify(theirs.body)).not.toContain('AWB-OS022')
       // Another customer's scope reads no row of these parcels at all (row-level security), so none of their typed numbers.
       const read = (partyId: string) => h.database.withScope({ audience: 'partner', tenantId: T, actorId: newId(), partyId }, (client) => client.parcel.findMany({ where: { shipmentId: sh2.id }, select: { manualTrackingNumber: true } }))
       expect(await read(newId())).toEqual([])
@@ -655,3 +663,65 @@ describe('B-OF-005: the order’s files in the portal leave a priced file out fo
   })
 })
 // ---- end B-OF-005
+
+// ---- pp-s s.3 PG-O2 (O3-W2): a line's floor note ("For the floor — no prices": office only, never shared with a customer) and its
+// close-short reason never reach the customer. Today only the code holds them (the portal's LINE_SELECT, the contracts, the web
+// schema: no @internal on the columns yet), so this pins the reads: the order, the sheet and its file hold neither; another customer
+// reads none of it. The rules read (the change pop-ups) is pinned the same way in change-requests.pg.vitest.test.ts.
+describe('PG-O2: a line\'s floor note and its close-short reason stay in the office', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a line with a floor note, closed short with a reason: the order, the sheet and its file hold neither; another customer reads none', async () => {
+    const so1 = await orderId('SEED-SO-0001')
+    const line = await one<{ id: string; quantity: number; note: string | null; closeShortReason: string | null; closedShortQuantity: number | null; closedShortAt: Date | null }>(
+      'SELECT id, quantity, note, "closeShortReason", "closedShortQuantity", "closedShortAt" FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1',
+      [so1],
+    )
+    const note = 'PGO2 floor note: stitch the cuffs twice, ask Lia Modello'
+    const reason = 'PGO2 close-short reason: the leather lot came short'
+    const markers = ['PGO2', 'stitch the cuffs', 'Lia Modello', 'leather lot came short']
+    // Written around the guards (a line closes short through the office's command): the reads are what is tested.
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = now() WHERE id = $1', [line.id, note, reason, line.quantity])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    try {
+      // Not vacuous: the line holds both, and the customer's order draws that line as closed short.
+      expect(await one('SELECT note, "closeShortReason" FROM "SalesOrderLine" WHERE id = $1', [line.id])).toEqual({ note, closeShortReason: reason })
+      const record = await ok(browsers.buyer, `/portal/sales-orders/${so1}`)
+      const drawn = (record.lines as Json[]).find((entry) => entry.id === line.id)!
+      expect(drawn.closedShort).toMatchObject({ quantity: line.quantity })
+      expect(drawn).not.toHaveProperty('note')
+      expect(drawn).not.toHaveProperty('closeShortReason')
+      const csv = await browsers.buyer.get('/portal/sales-orders/sheet/download?chip=ALL&format=CSV&locale=en')
+      expect(csv.status).toBe(200)
+      const answers: [string, unknown][] = [
+        ['the order (buyer)', record],
+        ['the order (viewer)', await ok(browsers.viewer, `/portal/sales-orders/${so1}`)],
+        ['the sheet (buyer)', await ok(browsers.buyer, '/portal/sales-orders/sheet?chip=ALL')],
+        ['the sheet (viewer)', await ok(browsers.viewer, '/portal/sales-orders/sheet?chip=ALL')],
+        ['the sheet file', String(csv.response.body)],
+        ['the list (buyer)', await ok(browsers.buyer, '/portal/sales-orders?chip=ALL')],
+      ]
+      for (const [what, answer] of answers) {
+        const text = typeof answer === 'string' ? answer : JSON.stringify(answer)
+        for (const marker of markers) expect(text, `${what}: ${marker}`).not.toContain(marker)
+        expect(text, what).not.toContain('closeShortReason')
+      }
+      // Another customer: the order is as unknown as a wrong id, its sheet holds its own rows only (none here).
+      const other = await browsers.other.get(`/portal/sales-orders/${so1}`)
+      expect(other.status).toBe(404)
+      const otherSheet = await ok(browsers.other, '/portal/sales-orders/sheet?chip=ALL')
+      for (const answer of [other.body, otherSheet]) for (const marker of markers) expect(JSON.stringify(answer), marker).not.toContain(marker)
+    } finally {
+      // The line as the seed left it (nothing after this reads it, but no test leaves a planted fact behind).
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('UPDATE "SalesOrderLine" SET note = $2, "closeShortReason" = $3, "closedShortQuantity" = $4, "closedShortAt" = $5 WHERE id = $1', [line.id, line.note, line.closeShortReason, line.closedShortQuantity, line.closedShortAt])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+  })
+})
+// ---- end pp-s PG-O2

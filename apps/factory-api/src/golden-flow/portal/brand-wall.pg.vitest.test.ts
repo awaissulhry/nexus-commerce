@@ -469,6 +469,8 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
       .filter(([key, entry]) => key.startsWith('GET ') && entry.audiences !== 'public' && (entry.audiences.includes('partner') || entry.audiences.includes('link')))
     // Not vacuous: the registry holds the portal, link, file, thread and field routes the plan names.
     const keys = routes.map(([key]) => key)
+    // pp-s: + the order's requests and their rules (the customer's order page reads them; their partner answers name no series).
+    expect(keys).toEqual(expect.arrayContaining(['GET /portal/sales-orders/:orderId/change-requests', 'GET /portal/sales-orders/:orderId/change-requests/rules']))
     expect(keys).toEqual(expect.arrayContaining(['GET /portal/sales-orders/:orderId', 'GET /files/:fileId', 'GET /files/:fileId/download', 'GET /threads/:recordType/:recordId', 'GET /fields/portal/:recordType/:recordId', 'GET /link/share', 'GET /payments/link/pay']))
     const problems: string[] = []
     const called = new Set<string>()
@@ -496,8 +498,21 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     }
     expect(problems).toEqual([])
     expect(keys.filter((key) => !called.has(key) && !NOT_SWEPT[key])).toEqual([])
-    // Brand Alpha's own record answers its own portal (the control: the sweep's ids are real).
-    expect(await asBrand(alpha, seen, 'GET', `/portal/sales-orders/${id('sales:SO1')}`)).toMatchObject({ order: { number: 'SEED-SO-0001' } })
+    // ---- pg-s2 S2.2 (GAP-3): a read-POST is no GET, so the sweep above never calls it; it is named here, as T08 and T37 name POST
+    // /threads/unread, and has its own two-brand test (modules/sales/portal-orders/portal-pictures.pg). The pictures of Brand Alpha's
+    // orders asked as Brand Beta: none (absent, no error); Brand Alpha's own read answers only its own orders (the control).
+    const alphaOrders = ids.orderId!.slice(0, 200)
+    const asBeta = await asBrand(beta, seen, 'POST', '/portal/sales-orders/pictures', { orderIds: alphaOrders })
+    expect(asBeta.pictures).toEqual([])
+    expect(findMarkers(withoutEcho('/portal/sales-orders/pictures', asBeta), markers)).toEqual([])
+    const asAlpha = await asBrand(alpha, seen, 'POST', '/portal/sales-orders/pictures', { orderIds: alphaOrders })
+    expect((asAlpha.pictures as Json[]).every((row) => alphaOrders.includes(row.id) && row.fileId === null)).toBe(true)
+    // ---- end pg-s2 S2.2
+    // Brand Alpha's own record answers its own portal (the control: the sweep's ids are real). pp-s s.1: by its id and its own
+    // number — the office's series is in no customer's order.
+    const alphaOrder = await asBrand(alpha, seen, 'GET', `/portal/sales-orders/${id('sales:SO1')}`)
+    expect(alphaOrder).toMatchObject({ order: { id: id('sales:SO1') } })
+    expect(alphaOrder.order).not.toHaveProperty('number')
     G.statuses = statuses
   })
 

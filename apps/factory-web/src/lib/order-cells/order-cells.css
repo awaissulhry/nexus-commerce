@@ -1,0 +1,200 @@
+/* pg-w1 (portal grid plan § 2, § 5 pg-1.5; 18-lead-settles Z1, Z11) — the shared order cells' own styles: the office's Orders sheet
+   (Sales › Orders, Made to measure, the customer's Work tab), Incoming and the customer's portal list draw the SAME parts, so their
+   rules live here once. The blocks below are MOVED VERBATIM from the sheet (sheet/sheet.css, sheet/chips.css, orders/orders.css):
+   same selectors, same classes, the office DOM unchanged; they load after the sheet's own files (the sheet's parts import the shared
+   parts after their css), so the cascade keeps its order. Layout only; design-system tokens only (no raw colour). */
+
+/* ---- moved from sheet/sheet.css (B-TH-225 / B-TH-226): the door cell — a door (link colour, underline on hover), held, plain ---- */
+.fw-sheet-door {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--nds-radius-sm);
+}
+.fw-sheet-door.strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-sheet-door:hover,
+.fw-sheet-door:focus-visible {
+  text-decoration: underline;
+}
+.fw-sheet-door:focus-visible,
+.fw-sheet-held:focus-visible,
+.fw-sheet-funnel:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+.fw-sheet-held,
+.fw-sheet-plain {
+  color: var(--nds-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-sheet-held {
+  border-bottom: 1px dotted var(--nds-border-subtle);
+  border-radius: var(--nds-radius-sm);
+}
+
+/* ---- moved from sheet/chips.css ---- */
+/* ---- F-CW-102: Where it is — line 1 the chips (they wrap WHOLE: never half a chip, never a cut one), line 2 this order's pieces.
+   When the chips need two lines the pieces line gives way for that row (the row keeps its height; the words stay in the tooltip). ---- */
+.fw-sheet-wi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  max-height: 43px;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.fw-sheet-wi > .nds-pill,
+.fw-sheet-wi > .nds-tag,
+.fw-sheet-wi > .fw-sheet-chip-door {
+  flex: none;
+  max-width: 100%;
+}
+.fw-sheet-wi-pcs {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.3;
+}
+.fw-sheet-wi-pcs b {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* A closed order's chip: outlined, quiet (told by its word and mark). */
+.nds-pill.fw-sheet-st.is-line {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
+}
+/* Chip 3 (and "Urgent – asked"): its mark beside its words; who it waits on is outlined. */
+.nds-tag.fw-sheet-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-tag.fw-sheet-stop.is-dash {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
+}
+.fw-sheet-chip-door {
+  display: inline-flex;
+  border-radius: var(--nds-radius-pill);
+  text-decoration: none;
+}
+.fw-sheet-chip-door:hover > .nds-tag {
+  text-decoration: underline;
+}
+.fw-sheet-chip-door:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+
+/* ---- moved from sheet/chips.css (cw fx5): words that wrap inside their cell; Promised's "No promise" ---- */
+/* Words that wrap inside their cell on a word's edge instead of being cut: "No promise" / "Nessuna data promessa", the customer's
+   PO line, "nothing requested", "Waiting on customer" over "· 16 d", "Extra deposit open". The row keeps its height: three lines
+   of words at the most. */
+.fw-sheet-wraps,
+.fw-sheet-wraps .fw-sheet-door,
+.fw-sheet-wraps .fw-sheet-held,
+.fw-sheet-wraps .fw-sheet-plain {
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.2;
+}
+.fw-sheet-wraps.is-quiet .fw-sheet-door,
+.fw-sheet-wraps.is-quiet .fw-sheet-held,
+.fw-sheet-wraps.is-quiet .fw-sheet-plain {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- moved from orders/orders.css: Shipped — the bar over its words ---- */
+.fw-so-progress {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+/* ---- moved from sheet/chips.css: the phone card's frame (OrderCard) ---- */
+/* ---- cw fx5 (walk W-13), cw fx6 (re-walk R-3): the customer page's phone card — ONE block under the number: the picture at the left
+   and its lines beside it (the PO, the chips, "Promised" with the pieces line). cw fx7: the Thread door is the card's own, in its
+   top row beside ⋯. Layout only, tokens only. ---- */
+.fw-sheet-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-sheet-card-pic {
+  display: inline-flex;
+  flex: none;
+}
+.fw-sheet-card-lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+  min-width: 0;
+}
+/* The stage's chips and the customer's urgency in ONE flow: the urgency chips stand beside the stage's while the line has room
+   and wrap whole to the next line when it has not (each group's own box gives way: its chips are the flow's items). */
+.fw-sheet-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-3) var(--nds-space-4);
+  min-width: 0;
+}
+.fw-sheet-card-chips > .fw-sheet-wi.is-card,
+.fw-sheet-card-chips > .fw-sheet-urg {
+  display: contents;
+}
+.fw-sheet-card-promise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-10);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.fw-sheet-card-promise b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ---- pg-w1 (10-design § 1.4): the customer face of Promised — the day (its door) over one quiet line: "was …" (the warning words,
+   one fact one place: Z4), "date asked", "wanted". Tokens only. ---- */
+.fw-ocl-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.25;
+}
+.fw-ocl-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+.fw-ocl-sub.is-warn {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}

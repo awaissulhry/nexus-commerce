@@ -2,7 +2,8 @@ import { failureWords } from '@nexus/factory-domain/payments/online/rules'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { Locale } from '../../../../lib/i18n/locales'
 import type { OrderRecord } from '../api'
-import { orderBandOf, type OrderBandFacts } from '../band'
+import { bandProductionOf, orderBandOf, type OrderBandFacts } from '../band'
+import { problemChipOf } from '../../production/problem/model' // pp-w2: the design's problem strip
 import {
   approvalPage,
   at,
@@ -13,6 +14,7 @@ import {
   orderRecord,
   orderWords,
   PREFIX,
+  productionReadOf,
   progressRead,
   requestsOf,
   rulesOf,
@@ -21,9 +23,10 @@ import {
   threadOf,
   TODAY,
   withoutPrices,
+  withThreadButton,
   words,
 } from '../design-data'
-import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, movesOf, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
+import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
 // B-TH-275: the customer's own reference in the pop-ups; what the order was made from.
 import { orderRefOf } from '../model'
 import { CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
@@ -63,7 +66,7 @@ function recordModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = 
     // B-TH-275: docked beside the body (the 1440 picture); the narrow cases say `stacked`.
     frame: { mode: 'docked' },
     madeFrom: null,
-    tab: 'status',
+    tab: 'overview', // pp-w1 (w1.3): the first tab
     prefix: PREFIX,
     offlineSince: null,
     notice: null,
@@ -79,7 +82,6 @@ function recordModel(record: OrderRecord, over: Partial<OrderRecordViewModel> = 
     fileHeld: null,
     openLine: null,
     copied: null,
-    historyOpen: false,
     dialog: null,
     ...over,
   }
@@ -98,20 +100,20 @@ interface CaseInput {
 function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
   return (locale) => {
     const record = input.record ?? orderRecord()
-    const tab = input.tab ?? 'status'
+    const tab = input.tab ?? 'overview'
     const model = recordModel(record, { tab, ...(input.model?.(locale) ?? {}) })
     const facts: OrderBandFacts = {
-      changeHeld: model.changeHeld,
+      ask: { held: null }, // pp-w1 (w1.2): the ONE "Ask for a change…"
       cancelHeld: null,
       reconfirm: model.revision.page?.content.revisedOrder && record.order.reconfirmNeeded ? { revision: model.revision.page.content.revisedOrder.revision, held: model.reconfirmHeld } : null,
-      shipments: record.shipments.shown,
-      moves: movesOf(record.promiseHistory),
       confirmation: true,
       pay: Object.values(model.pay)[0] ?? null,
+      madeFrom: model.madeFrom ?? null, // pp-w1 (w1.2): "Made from your request #7" in the band
+      production: bandProductionOf(model.production?.read ?? null, model.production?.state === 'ready'), // pp-w2: the band's chips
       ...(input.facts?.(locale) ?? {}),
     }
     return {
-      shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
+      shell: shellOf(locale, withThreadButton(orderBandOf({ words: orderWords(locale), record, prefix: PREFIX, facts }), model.frame), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
       // B-TH-275: the order's ONE conversation docks beside every tab.
       body: { kind: 'record', model, thread: { ...threadOf(locale), ...(input.thread?.(locale) ?? {}) } /* F-CP-158 */ },
     }
@@ -222,22 +224,47 @@ export const priceCheckOf = (over: Partial<PriceCheckModel> = {}): PriceCheckMod
 // ---- end F-CP-148
 const PAY_OPEN = { [MTM.deposits[0]!.id]: { held: null } }
 
+// ---- pp-w2 (w2.4; the picture's 8 order cases × the roles; 10-design § 5.6): made up, Brand Alpha's own order ----
+const PRODUCTION = (over: Parameters<typeof productionReadOf>[0] = {}) => ({ state: 'ready' as const, read: productionReadOf(over) })
+const NO_PRODUCTION = { state: 'hidden' as const, read: null }
+const say2 = (en: string, it: string) => ({ en, it })
+const LINE_DONE = (n: number) => progressRead().lines.map((line) => ({ ...line, cut: line.ordered, sewn: line.ordered, inspected: line.ordered, packed: n === 2 ? line.ordered : 0, sizes: line.sizes.map((size) => ({ ...size, cut: size.ordered, sewn: size.ordered, inspected: size.ordered, packed: n === 2 ? size.ordered : 0 })) }))
+const PIECES_DONE = (n: number) => ({ ...productionReadOf().progress!, lines: LINE_DONE(n) })
+const MADE = { kind: 'request' as const, href: `${PREFIX}/orders/requests/0190f0e2-1910-7000-8000-000000000901`, label: '#7' }
+const IN_PRODUCTION = orderRecord({ status: 'IN_PRODUCTION', words: say2('In production', 'In produzione') })
+const OVERVIEW_CASES = [
+  { id: 'ov-prod', label: 'Overview · in production with progress (Buyer)', model: recordCase({ record: IN_PRODUCTION, model: (locale) => ({ production: PRODUCTION(), madeFrom: MADE, problem: { chip: problemChipOf(productionReadOf().problem, words(locale, 'portal-production'), orderWords(locale).day), report: { held: null } } }) }), note: 'The band: Late, Urgent, “Made from your request #7 ›”. Strips: we wait for you, a problem you reported. Progress by line, Next dates with the plan, gates and approvals.' },
+  { id: 'ov-prod-viewer', label: 'Overview · in production (Viewer: production, no prices)', model: recordCase({ record: withoutPrices(IN_PRODUCTION), model: (locale) => ({ production: PRODUCTION(), withdrawHeld: words(locale)('held.mayAsk') }), facts: (locale) => ({ ask: { held: words(locale)('held.mayAsk') } }) }), note: 'Production as today; no What you pay; Withdraw and Ask held with the words.' },
+  { id: 'ov-prod-finance', label: 'Overview · in production (Finance: prices, no production)', model: recordCase({ record: IN_PRODUCTION, model: () => ({ production: NO_PRODUCTION, progress: { state: 'ready', read: progressRead() } }) }), note: 'L7: no stage, strips, gates or Quality; Progress by line from its old progress read, the same grid; What you pay.' },
+  { id: 'ov-prod-designer', label: 'Overview · in production (Designer: no prices, no production)', model: recordCase({ record: withoutPrices(IN_PRODUCTION), model: () => ({ production: NO_PRODUCTION, progress: { state: 'ready', read: progressRead() } }) }), note: 'L7: as Finance without What you pay.' },
+  { id: 'ov-reconfirm', label: 'Overview · waiting for you to re-confirm (Buyer)', model: recordCase({ record: orderRecord({ status: 'IN_PRODUCTION', words: say2('In production', 'In produzione'), reconfirmNeeded: true }), model: () => ({ production: PRODUCTION({ waiting: { code: 'YOU', words: say2('Waiting on you', 'Tocca a voi'), since: dayAt(-1) } }), revision: { state: 'ready', page: approvalPage() } }) }), note: 'One strip says it (never a second “we wait for you”); Review and confirm.' },
+  { id: 'ov-hold', label: 'Overview · on hold (Buyer)', model: recordCase({ record: IN_PRODUCTION, model: () => ({ production: PRODUCTION({ waiting: { code: 'US', words: say2('Waiting on us', 'Tocca a noi'), since: null }, problem: null, holds: [{ kind: 'PRODUCTION', since: dayAt(-4), words: say2('Material on its way', 'Materiale in arrivo') }, { kind: 'BRAND', since: dayAt(-1), words: say2('Paused at your request', 'In pausa su vostra richiesta') }] }) }) }), note: 'The hold strip in our curated words, the rest counted, Ask a question.' },
+  { id: 'ov-shipped', label: 'Overview · shipped in part (Buyer)', model: recordCase({ record: orderRecord({ status: 'PARTLY_SHIPPED', words: say2('Partly shipped', 'Spedito in parte') }), model: () => ({ production: PRODUCTION({ waiting: { code: 'US', words: say2('Waiting on us', 'Tocca a noi'), since: null }, problem: null, progress: PIECES_DONE(1) }) }) }) },
+  { id: 'ov-delivered', label: 'Overview · delivered (Buyer)', model: recordCase({ record: orderRecord({ status: 'DELIVERED', words: say2('Delivered', 'Consegnato') }), model: () => ({ production: PRODUCTION({ inProduction: false, waiting: { code: 'US', words: say2('Waiting on us', 'Tocca a noi'), since: null }, problem: null, progress: PIECES_DONE(2), gates: null }) }) }), note: 'No Ask; all steps done; no strips.' },
+  { id: 'ov-cancelled', label: 'Overview · cancelled (Buyer)', model: recordCase({ record: orderRecord({ status: 'CANCELLED', words: say2('Cancelled', 'Annullato'), cancelledOn: dayAt(-3), promiseMoved: false }, { promiseHistory: [] }), model: () => ({ production: NO_PRODUCTION, requests: { state: 'ready', items: [] } }) }), note: 'Headline “Cancelled on …”; no Next dates, no Progress; What you pay: the deposit state and still to pay 0.' },
+  { id: 'ov-noprice', label: 'Overview · no price right (a Viewer)', model: recordCase({ record: withoutPrices(IN_PRODUCTION), model: () => ({ production: PRODUCTION() }) }) },
+  { id: 'ov-early', label: 'Overview · early: not in production yet (Buyer)', model: recordCase({ record: orderRecord({ status: 'CONFIRMED', words: say2('Confirmed', 'Confermato'), promiseMoved: false }, { promiseHistory: [] }), model: () => ({ production: NO_PRODUCTION, progress: { state: 'hidden', read: null }, notice: { tone: 'success', key: 'notice.changeSent' } }) }), note: '“Your order is confirmed.”; the notice in the shared notice slot.' },
+  { id: 'ov-fee-line', label: 'Lines · an order with a charge line (FEE): it loads, the charge is not a line of Lines', model: recordCase({ record: { ...RECORD, lines: [...RECORD.lines, { ...RECORD.lines[0]!, id: '0190f0e2-1910-7000-8000-000000000299', seq: 3, kind: 'FEE', style: null, colourway: null, description: 'Sample making charge', measurement: null, baseSize: null, quantity: 1, sizes: [], pieces: { ordered: 1, shipped: 0, open: 1 } }] }, tab: 'lines' }) },
+]
+// ---- end pp-w2
+
 export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
   screen: 'SCR-184-record',
   title: 'Customer order record (portal.customer.orders rec Order)',
   view: CustomerCase,
   cases: [
-    // ── Status & progress ──
-    { id: 'status', label: 'Status & progress', model: recordCase(), note: 'Six steps in customer words with their dates; the promise date big, first promised kept, “Date moved 2 times”; your requests (one waiting, one answered with our words); production progress per line (counts, a line’s sizes); the deposit paid; the order’s facts.' },
-    { id: 'status-history', label: 'pop:promise-history — Promise date history', model: recordCase({ model: () => ({ historyOpen: true }) }), note: 'Each move: from → to, the day, the reason in customer words (curated, never internal notes).' },
-    { id: 'status-reconfirm', label: '“Please re-confirm” (a revised version waits)', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() } }) }), note: 'The banner names the version and the day; what changed, line by line; the net value moved: the earlier acceptance no longer holds. The Status tab says “to confirm”; the band’s ⋯ opens it too.' },
-    { id: 'status-reconfirm-no-access', label: 'Re-confirm: a colleague who cannot read approvals', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'noAccess', page: null } }) }) },
-    { id: 'status-deposit', label: 'A made-to-measure order waiting for its deposit', model: recordCase({ record: MTM, model: () => ({ progress: { state: 'hidden', read: null }, requests: { state: 'ready', items: [] }, pay: PAY_OPEN }) }), note: '“Production starts when the deposit is received.” Pay by card (FIN-123). No right of withdrawal (made to measure). Progress not shared: no section, no hint.' },
-    { id: 'status-no-prices', label: 'A colleague without prices', model: recordCase({ record: withoutPrices(RECORD), model: () => ({ requests: { state: 'noAccess', items: [] } }) }), note: 'No deposit card, no amounts.' },
-    { id: 'status-cancelled', label: 'A cancelled order', model: recordCase({ record: orderRecord({ status: 'CANCELLED', words: { it: 'Annullato', en: 'Cancelled' }, cancelledOn: dayAt(-3), promiseMoved: false }, { promiseHistory: [], productionLevel: 'STATUS' }), model: () => ({ progress: { state: 'hidden', read: null }, requests: { state: 'ready', items: [] } }) }) },
-    { id: 'status-sent', label: 'A change request just sent', model: recordCase({ model: () => ({ notice: { tone: 'success', key: 'notice.changeSent' } }) }) },
-    { id: 'status-parts-loading', label: 'Parts still loading', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'loading', page: null }, progress: { state: 'loading', read: null }, requests: { state: 'loading', items: [] } }) }) },
-    { id: 'status-parts-error', label: 'Parts that could not be read', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'error', page: null }, progress: { state: 'error', read: null }, requests: { state: 'error', items: [] } }) }), note: 'Each says so with Try again; never drawn as empty.' },
+    // ── Overview (pp-w2) ──
+    { id: 'overview', label: 'Overview', model: recordCase(), note: 'pp-w2: Where your order is (the six steps, the promise once with “Date moved 2 times”), Progress by line (the shared grid), Next dates | Requests & changes, What you pay (a price holder), Order facts — on the shared overview kit.' },
+    { id: 'overview-reconfirm', label: 'Overview: a revised version waits (“Review and confirm” on the lead card)', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() } }) }), note: 'The strip names the version and the day; What changed, line by line; the Overview tab says “to confirm”; the band’s ⋯ opens it too.' },
+    { id: 'overview-reconfirm-no-access', label: 'Overview: re-confirm, a colleague who cannot read approvals', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'noAccess', page: null } }) }) },
+    { id: 'overview-deposit', label: 'Overview: a made-to-measure order waiting for its deposit (the ONE Pay door)', model: recordCase({ record: MTM, model: () => ({ progress: { state: 'hidden', read: null }, requests: { state: 'ready', items: [] }, pay: PAY_OPEN }) }), note: '“Deposit to pay by …” with Pay the deposit; What you pay says the facts only. No right of withdrawal (made to measure).' },
+    { id: 'overview-no-prices', label: 'Overview: a colleague without prices', model: recordCase({ record: withoutPrices(RECORD), model: () => ({ requests: { state: 'noAccess', items: [] } }) }), note: 'No What you pay, no amounts.' },
+    { id: 'overview-cancelled-early', label: 'Overview: a cancelled order (no production)', model: recordCase({ record: orderRecord({ status: 'CANCELLED', words: { it: 'Annullato', en: 'Cancelled' }, cancelledOn: dayAt(-3), promiseMoved: false }, { promiseHistory: [], productionLevel: 'STATUS' }), model: () => ({ progress: { state: 'hidden', read: null }, requests: { state: 'ready', items: [] } }) }) },
+    { id: 'overview-sent', label: 'Overview: a change request just sent (the notice)', model: recordCase({ model: () => ({ notice: { tone: 'success', key: 'notice.changeSent' } }) }) },
+    { id: 'overview-parts-loading', label: 'Overview: parts still loading', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'loading', page: null }, progress: { state: 'loading', read: null }, requests: { state: 'loading', items: [] } }) }) },
+    { id: 'overview-parts-error', label: 'Overview: parts that could not be read', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'error', page: null }, progress: { state: 'error', read: null }, requests: { state: 'error', items: [] } }) }), note: 'Each says so with Try again; never drawn as empty.' },
+    // ---- pp-w2 (w2.4): the picture's eight order cases, each as its readers see it (Buyer · Viewer · Finance · Designer) ----
+    ...OVERVIEW_CASES,
     // ── Lines ──
     { id: 'lines', label: 'Lines', model: recordCase({ tab: 'lines' }), note: 'Each line with pieces ordered / shipped / open, unit price and line amount, the line’s own date; the size run of each line below; the totals with the deposit paid and what is left to pay on the invoice.' },
     { id: 'lines-sizes', label: 'A line’s sizes open', model: recordCase({ tab: 'lines', model: () => ({ openLine: RECORD.lines[0]!.id }) }) },
@@ -272,13 +299,13 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'shipments-link-copied', label: 'The shipment\'s tracking link copied (B-W2b-170)', model: recordCase({ tab: 'shipments', model: () => ({ copied: `link:${shipmentsRead().shipments[0]!.id}` }) }) },
     { id: 'shipments-none', label: 'Nothing shipped yet', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'ready', read: shipmentsRead({ shipments: [], firstExpected: dayAt(9), stillToShip: [] }) } }) }), note: '“Nothing shipped yet. Expected first shipment: …”' },
     { id: 'shipments-error', label: 'Shipments could not be read', model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'error', read: null } }) }) },
-    // ── Documents ──
-    { id: 'documents', label: 'Documents', model: recordCase({ tab: 'documents' }), note: 'By version with the fingerprint; the earlier confirmation names the version that replaced it; NEW; preview and download (logged).' },
-    { id: 'documents-empty', label: 'No documents yet', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'ready', read: documentsRead({ items: [], count: 0 }) } }) }) },
-    { id: 'documents-no-access', label: 'Documents not in the role', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'noAccess', read: null } }) }) },
-    { id: 'documents-error', label: 'Documents could not be read', model: recordCase({ tab: 'documents', model: () => ({ documents: { state: 'error', read: null } }) }) },
-    { id: 'preview', label: 'A document’s preview opening', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'loading', bytes: null } } }) }) },
-    { id: 'preview-error', label: 'A document that could not be opened', model: recordCase({ tab: 'documents', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'error', bytes: null } } }) }) },
+    // ── Files ──
+    { id: 'files', label: 'Files', model: recordCase({ tab: 'files' }), note: 'By version with the fingerprint; the earlier confirmation names the version that replaced it; NEW; preview and download (logged).' },
+    { id: 'files-empty', label: 'Files: no documents yet', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'ready', read: documentsRead({ items: [], count: 0 }) } }) }) },
+    { id: 'files-no-access', label: 'Files: documents not in the role', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'noAccess', read: null } }) }) },
+    { id: 'files-error', label: 'Files: documents could not be read', model: recordCase({ tab: 'files', model: () => ({ documents: { state: 'error', read: null } }) }) },
+    { id: 'preview', label: 'A document’s preview opening', model: recordCase({ tab: 'files', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'loading', bytes: null } } }) }) },
+    { id: 'preview-error', label: 'A document that could not be opened', model: recordCase({ tab: 'files', model: () => ({ dialog: { kind: 'preview', model: { title: 'DDT-2026-0144', state: 'error', bytes: null } } }) }) },
     // ── B-TH-275: the conversation docked (no Messages tab), the state line, "Made from your request" ──
     {
       id: 'th-275-narrow',
@@ -314,7 +341,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'change-review', label: 'Ask for a change: review old → new', model: recordCase({ model: () => ({ dialog: changeDialog({ ...EDITED, step: 'review' }) }) }), note: '⌘Enter sends from the review step.' },
     { id: 'change-refused', label: 'Ask for a change: refused at the click', model: recordCase({ model: () => ({ dialog: changeDialog({ ...EDITED, step: 'review' }, { problem: 'problem.verdict.OPEN_REQUEST' }) }) }) },
     { id: 'change-discard', label: 'Ask for a change: Esc with typed work', model: recordCase({ model: () => ({ dialog: changeDialog(EDITED, { discard: true }) }) }), note: 'Discard / Stay (no draft is stored).' },
-    { id: 'change-held', label: 'Ask for a change: the order cannot change any more', model: recordCase({ model: (locale) => ({ dialog: changeDialog({}, { rules: rulesOf({ change: { possible: false, code: 'STATUS', day: null, words: { it: 'Non possibile: pronto per la spedizione', en: 'Not possible: ready to ship' } } }) }), changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }), facts: (locale) => ({ changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }) }), note: 'The band’s Ask for a change is held with the same words.' },
+    { id: 'change-held', label: 'Ask for a change: the order cannot change any more', model: recordCase({ model: (locale) => ({ dialog: changeDialog({}, { rules: rulesOf({ change: { possible: false, code: 'STATUS', day: null, words: { it: 'Non possibile: pronto per la spedizione', en: 'Not possible: ready to ship' } } }) }), changeHeld: locale === 'it' ? 'Non possibile: pronto per la spedizione' : 'Not possible: ready to ship' }) }), note: 'The change is held with its reason; the line’s ⋯ “Ask for a change on this line” is held with the same words (the band’s ONE “Ask for a change…” opens the Ask dialog).' },
     // ── pop:cancel-request ──
     { id: 'cancel', label: 'pop:cancel-request — Ask to cancel', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES' }) }) }), note: 'Per line what the cut-off rules say now (held / Free · fee); the fee words; reason and note.' },
     { id: 'cancel-chosen', label: 'Ask to cancel: a line chosen, the fee', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES', lineIds: [rulesOf().lines[1]!.lineId], reasonCode: 'NOT_NEEDED' }) }) }) },
@@ -322,11 +349,11 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'cancel-mtm', label: 'Ask to cancel: made to measure for a consumer', model: recordCase({ record: MTM, model: () => ({ requests: NO_REQUESTS, dialog: cancelDialog({}, rulesOf({ cancel: { possible: true, code: 'FREE', day: null, words: { it: 'Libero', en: 'Free' } }, noWithdrawal: NO_WITHDRAWAL_WORDS, cancelFee: { pct: null, words: { it: 'Nessuna penale', en: 'No fee' }, currency: 'EUR', wholeOrderFee: 0 } }), own(MTM)) }) }), note: '“No right of withdrawal applies (Codice del Consumo art. 59)”.' },
     // ── pop:reconfirm ──
     // ---- F-PR-13: the Ask dialog — what, the details of a production ask, what it means before Send
-    { id: 'ask', label: 'Ask us: what you would like (step 1)', model: recordCase({ model: () => ({ dialog: askDialog() }), facts: () => ({ ask: { held: null } }) }), note: 'Change and cancel, then the asks this customer’s limits open; Resume is held with its reason; a closed ask is not drawn.' },
-    { id: 'ask-rush', label: 'Ask us: make it urgent, the need-by date (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'RUSH', draft: { requestedDate: dayAt(9) } }) }), facts: () => ({ ask: { held: null } }) }) },
-    { id: 'ask-split', label: 'Ask us: ship what is ready, the first part (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SPLIT_SHIPMENT', draft: { cells: { [rulesOf().lines[1]!.lineId]: { '50': 4 } } } }) }), facts: () => ({ ask: { held: null } }) }) },
-    { id: 'ask-sample', label: 'Ask us: another sample (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SAMPLE_ROUND', draft: { lineId: rulesOf().lines[0]!.lineId } }) }), facts: () => ({ ask: { held: null } }) }), note: 'A pre-production sample is held after the leather was cut; the top of production stays open.' },
-    { id: 'ask-impact', label: 'Ask us: what it means before Send (step 3)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'impact', kind: 'RUSH', draft: { requestedDate: dayAt(9) }, impact: RUSH_IMPACT }) }), facts: () => ({ ask: { held: null } }) }), note: 'Nothing frozen, no price, the earliest date (an estimate, a date only).' },
+    { id: 'ask', label: 'Ask us: what you would like (step 1)', model: recordCase({ model: () => ({ dialog: askDialog() }) }), note: 'Change and cancel, then the asks this customer’s limits open; Resume is held with its reason; a closed ask is not drawn.' },
+    { id: 'ask-rush', label: 'Ask us: make it urgent, the need-by date (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'RUSH', draft: { requestedDate: dayAt(9) } }) }) }) },
+    { id: 'ask-split', label: 'Ask us: ship what is ready, the first part (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SPLIT_SHIPMENT', draft: { cells: { [rulesOf().lines[1]!.lineId]: { '50': 4 } } } }) }) }) },
+    { id: 'ask-sample', label: 'Ask us: another sample (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SAMPLE_ROUND', draft: { lineId: rulesOf().lines[0]!.lineId } }) }) }), note: 'A pre-production sample is held after the leather was cut; the top of production stays open.' },
+    { id: 'ask-impact', label: 'Ask us: what it means before Send (step 3)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'impact', kind: 'RUSH', draft: { requestedDate: dayAt(9) }, impact: RUSH_IMPACT }) }) }), note: 'Nothing frozen, no price, the earliest date (an estimate, a date only).' },
     {
       id: 'change-impact',
       label: 'Ask for a change: what it means (frozen, a price may apply, after release)',
@@ -349,7 +376,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     {
       id: 'office-preview',
       label: 'An office preview',
-      model: recordCase({ preview: true, model: (locale) => ({ changeHeld: words(locale)('held.preview'), withdrawHeld: words(locale)('held.preview'), fileHeld: words(locale)('held.previewFiles') }), facts: (locale) => ({ changeHeld: words(locale)('held.preview'), cancelHeld: words(locale)('held.preview') }) }),
+      model: recordCase({ preview: true, model: (locale) => ({ changeHeld: words(locale)('held.preview'), withdrawHeld: words(locale)('held.preview'), fileHeld: words(locale)('held.previewFiles') }), facts: (locale) => ({ ask: { held: words(locale)('held.preview') }, cancelHeld: words(locale)('held.preview') }) }),
       note: 'Every sending verb is held with the reason.',
     },
     { id: 'offline', label: 'No connection', model: recordCase({ model: () => ({ offlineSince: at(-1) }) }) },

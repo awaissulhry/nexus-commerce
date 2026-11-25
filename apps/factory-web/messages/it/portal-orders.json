@@ -5,8 +5,7 @@
     "retry": "Riprova"
   },
   "ref": {
-    "yours": "Vs. ordine",
-    "ours": "Ns. ordine"
+    "yours": "Vs. ordine"
   },
   "prices": {
     "none": "I prezzi non fanno parte del vostro accesso."
@@ -29,18 +28,16 @@
   "band": {
     "updated": "Aggiornato alle {time}",
     "export": "Esporta questa vista (CSV)",
-    "print": "Stampa questo elenco",
-    "change": "Chiedi una modifica",
+    "change": "Chiedi una modifica…",
     "reconfirm": "Riconferma la versione {version}",
     "cancel": "Chiedi di annullare…",
     "pay": "Paga l’acconto",
-    "history": "Storia della data promessa",
     "confirmation": "PDF della conferma d’ordine",
     "newOrder": "Nuovo ordine",
-    "downloadAll": "Scarica tutto (Excel)",
+    "downloadAll": "Scarica (Excel)",
     "downloading": "Preparazione del file…",
-    "downloadAllHint": "Tutti gli ordini di questa vista con le vostre colonne, in un unico file Excel.",
-    "ask": "Fateci una richiesta…"
+    "downloadAllHint": "Gli ordini del gruppo mostrato, con le vostre colonne, in un unico file Excel.",
+    "urgent": "Urgente"
   },
   "keys": {
     "search": "Cerca nei vostri ordini",
@@ -48,20 +45,21 @@
     "rows": "Ordine successivo / precedente",
     "orders": "Ordine successivo / precedente dell’elenco",
     "tabs": "Tra le schede",
+    "thread": "Mostra o nascondi la conversazione",
+    "send": "Invia il messaggio (dal riquadro del messaggio)",
     "close": "Chiudi la finestra"
   },
   "chips": {
     "label": "Quali ordini",
     "chip": "{name}: {count}",
-    "clear": "Togli i filtri",
-    "closedRequests": "Richieste chiuse"
+    "clear": "Togli i filtri"
   },
   "list": {
     "title": "Ordini e richieste",
     "label": "I vostri ordini e richieste",
     "fileName": "ordini",
     "search": "Cerca nei vostri ordini",
-    "searchHint": "Il vostro numero, il nostro ordine, un codice modello o l’oggetto della richiesta…",
+    "searchHint": "Vs. ordine, numero, modello o richiesta…",
     "count_one": "{count} ordine o richiesta",
     "count_other": "{count} ordini e richieste",
     "countOf": "{shown} di {count} ordini e richieste",
@@ -73,53 +71,34 @@
     "noMatch": "Nulla corrisponde a questi filtri",
     "noMatchSearch": "Nessun risultato per «{q}».",
     "noMatchChip": "Al momento in questo gruppo non c’è nulla.",
-    "clear": "Togli i filtri",
-    "requestWaits": "Da confermare da noi",
-    "asked": "data richiesta",
-    "moved": "era il {date}",
+    "clear": "Mostra tutto ciò che è aperto",
     "piecesShipped": "{shipped} di {ordered} spediti",
-    "piecesOpen_one": "{count} aperto",
-    "piecesOpen_other": "{count} aperti",
-    "allShipped": "Tutto spedito",
-    "eta": "previsto il {date}",
-    "needsYou": "Attende la vostra risposta",
-    "wanted": "desiderata",
-    "updated": "aggiornata il {date}",
-    "piecesAsked": "{count} chiesti",
-    "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini."
+    "requestsFailed": "Non è stato possibile leggere le vostre richieste: si vedono solo gli ordini.",
+    "yourPo": "Vs. ordine {ref}",
+    "emptyBodyView": "I vostri ordini appaiono qui appena li facciamo.",
+    "clearSearch": "Togli la ricerca"
   },
   "col": {
-    "yourPo": "Vostro ordine",
-    "status": "Stato",
-    "pieces": "Pezzi",
-    "ordered": "Ordinati",
     "shipped": "Spediti",
-    "open": "Aperti",
     "value": "Valore netto",
-    "currency": "Valuta",
-    "nextShipment": "Prossima spedizione",
     "actions": "Azioni",
     "number": "Numero",
-    "kind": "Tipo",
-    "yours": "Vostro numero",
-    "subject": "Oggetto",
-    "date": "Data",
-    "wanted": "Desiderata o promessa"
+    "picture": "Foto",
+    "whereItIs": "A che punto è",
+    "promised": "Promessa",
+    "orderedOn": "Data ordine"
   },
   "row": {
     "open": "Apri l’ordine",
-    "lines": "Righe",
     "shipments": "Spedizioni e tracciamento",
     "messages": "Messaggi",
     "menu": "Azioni per l’ordine {number}",
-    "openRequest": "Apri la richiesta",
-    "requestMenu": "Azioni per {name}"
+    "openRequest": "Apri la richiesta"
   },
   "bulk": {
     "export": "Esporta {count}"
   },
   "held": {
-    "noRows": "Niente da esportare in questa vista.",
     "busy": "Invio in corso…",
     "offline": "Nessuna connessione",
     "preview": "Un’anteprima dell’ufficio non può inviare nulla.",
@@ -129,25 +108,6 @@
     "mayPay": "Solo i colleghi che pagano le fatture possono pagare online: chiedete al vostro amministratore.",
     "reading": "Verifica di cosa è possibile…",
     "verdict": "{words}"
-  },
-  "transit": {
-    "title": "In viaggio",
-    "failed": "Non è stato possibile leggere i colli in viaggio",
-    "shipment": "Spedizione {number}",
-    "open": "Apre le spedizioni dell’ordine {number}",
-    "steps": "Avanzamento della spedizione {number}"
-  },
-  "print": {
-    "title": "Stampa questo elenco",
-    "toolbar": "Stampa",
-    "print": "Stampa",
-    "back": "Torna all’elenco",
-    "held": "L’elenco è ancora in lettura.",
-    "filters": "Mostrati: {chip}",
-    "filtersSearch": "Mostrati: {chip} · ricerca «{q}»",
-    "chipOpen": "Aperti",
-    "printedBy": "Stampato da {name} il {when}",
-    "capped": "I primi {shown} di {count} ordini e richieste."
   },
   "record": {
     "missing": "Ordine non trovato",
@@ -161,10 +121,10 @@
   },
   "tabs": {
     "label": "Ordine",
-    "status": "Stato e avanzamento",
+    "overview": "Panoramica",
     "lines": "Righe",
-    "shipments": "Spedizioni e tracciamento",
-    "documents": "Documenti",
+    "shipments": "Spedizioni",
+    "files": "File",
     "toConfirm": "da confermare"
   },
   "messages": {
@@ -247,7 +207,6 @@
     "title": "Dati dell’ordine",
     "orderedOn": "Ordinato il",
     "requested": "Data richiesta",
-    "promise": "Data promessa",
     "shipTo": "Indirizzo di consegna",
     "paymentTerms": "Termini di pagamento",
     "withdrawal": "Diritto di recesso",
@@ -601,17 +560,6 @@
     "catalogue": "Catalogo",
     "order": "Ordine"
   },
-  "tiles": {
-    "label": "Cosa aspetta",
-    "NEEDS_YOU": "Ci serve qualcosa da voi",
-    "OPEN_REQUESTS": "Richieste aperte",
-    "OPEN_ORDERS": "Ordini aperti",
-    "hint": {
-      "NEEDS_YOU": "Richieste su cui vi abbiamo chiesto qualcosa",
-      "OPEN_REQUESTS": "Inviate, non ancora un ordine",
-      "OPEN_ORDERS": "Non ancora consegnati"
-    }
-  },
   "sheet": {
     "yes": "Sì",
     "no": "No",
@@ -627,22 +575,14 @@
     "madeFromQuoteNone": "Nato dal vostro preventivo"
   },
   "production": {
-    "label": "Produzione di questo ordine",
     "waitingTitle": "Su questo ordine aspettiamo una vostra risposta",
     "waitingSince": "Dal {date}",
     "waitingLink": "Vedete cosa vi aspetta",
     "ask": "Fai una domanda",
-    "health": "Andamento",
-    "waitingOn": "Tocca a",
     "failed": "Impossibile caricare la produzione di questo ordine",
     "gates": {
-      "title": "Tappe e date",
-      "label": "Tappe di questo ordine",
-      "step": "Tappa",
-      "state": "Stato",
       "planned": "Prevista",
       "done": "Fatta il",
-      "review": "Vedete cosa vi aspetta",
       "none": "Per questo ordine non ci sono ancora tappe né date pianificate.",
       "states": {
         "WAITING_YOU": "Tocca a voi",
@@ -652,8 +592,6 @@
       }
     },
     "approvals": {
-      "label": "Le vostre approvazioni dei materiali",
-      "material": "Materiale",
       "sent": "Inviato",
       "answered": "Risposta il",
       "states": {
@@ -963,16 +901,6 @@
       "sent": "Richiesta inviata. Vi rispondiamo qui e nella conversazione dell'ordine."
     }
   },
-  "orderFiles": {
-    "title": "File dell'ordine ({count})",
-    "label": "I file più recenti che vi abbiamo condiviso su questo ordine e sulle sue righe",
-    "all": "Tutti in Documenti ({count})",
-    "open": "Apri",
-    "openOf": "Apri {name}",
-    "download": "Scarica",
-    "downloadOf": "Scarica {name}",
-    "failed": "Impossibile leggere i file dell'ordine."
-  },
   "reported": {
     "label": "I problemi che avete segnalato su questo ordine",
     "report": "Segnala un problema"
@@ -1021,5 +949,24 @@
     "refused": "Questi prezzi non si possono salvare così: controllate le righe segnate.",
     "notSaved": "I vostri prezzi non sono stati salvati: riprovate.",
     "failed": "Non siamo riusciti a leggere i prezzi."
+  },
+  "overview": {
+    "strips": "Cosa aspetta voi e cosa ferma l’ordine",
+    "progress": "Avanzamento per riga",
+    "piecesAsOf": "Pezzi alle {time}",
+    "dates": "Prossime date",
+    "requests": "Richieste e modifiche",
+    "nothing": "Nessuna richiesta o modifica in attesa",
+    "groupYou": "Tocca a voi · {count}",
+    "groupUs": "Tocca a noi · {count}",
+    "groupAnswered": "Con risposta · {count}",
+    "pay": "Cosa pagate",
+    "partPaid": "{paid} su {amount} pagati",
+    "total": "Totale ordine · IVA inclusa",
+    "paid": "Pagato",
+    "still": "Ancora da pagare"
+  },
+  "strip": {
+    "deposit": "Acconto da pagare entro il {date}"
   }
 }
