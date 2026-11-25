@@ -424,6 +424,18 @@ export function factsOf(input: OverviewInput): FactsModel {
 }
 
 /** Every Overview model of one page at once (the tab draws them; PW-O01 walks them). */
+/**
+ * pp-fx4 (walk W-08; § 11 "no dead space"): the paired cards in the picture's order — Next dates | Requests & changes → Quality and
+ * photos | What you pay → Order facts — paired from the cards that are PRESENT: a left-out card's partner pairs with the next one, and
+ * only an odd last card stands alone (the kit gives a lone card the whole row).
+ */
+export function pairsOf<T>(cards: readonly (T | null | undefined | false)[]): T[][] {
+  const present = cards.filter((card): card is T => card !== null && card !== undefined && card !== false)
+  const pairs: T[][] = []
+  for (let index = 0; index < present.length; index += 2) pairs.push(present.slice(index, index + 2))
+  return pairs
+}
+
 export interface OverviewModels {
   readonly where: WhereModel
   readonly progress: ProgressModel | null

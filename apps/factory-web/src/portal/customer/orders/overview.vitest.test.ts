@@ -11,7 +11,7 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import type { ChangeRequest, OrderRecord } from './api'
 import { approvalPage, at, dayAt, documentsRead, orderRecord, orderWords, PREFIX, productionReadOf, progressRead, requestsOf, shipmentsRead, withoutPrices } from './design-data'
-import { datesOf, factsOf, overviewOf, payOf, progressOf, requestsOf as requestsModelOf, whereOf, type OverviewInput } from './overview/model'
+import { datesOf, factsOf, overviewOf, pairsOf, payOf, progressOf, requestsOf as requestsModelOf, whereOf, type OverviewInput } from './overview/model'
 import { designScreen } from './record/fixtures'
 import type { CustomerCaseModel } from './view/CustomerCase'
 import type { OrderRecordViewModel } from './view/OrderRecordView'
@@ -177,6 +177,19 @@ describe('w2.1 the other cards: progress (L7), dates, requests (ONE Withdraw), w
       expect(catalogue['overview.total'], locale).toBeUndefined()
       expect(catalogue['overview.still'], locale).toBeUndefined()
     }
+  })
+
+  // pp-fx4 (walk W-08): a card whose partner was left out took a whole row ("What you pay" ≈430 px of content in 749–1620 px), and Order
+  // facts stood alone below it. The pairs are built from the cards that are present, in the picture's order.
+  it('W-08: the pairs come from the cards that are present, in the picture’s order — a left-out card’s partner pairs with the next', () => {
+    expect(pairsOf(['dates', 'requests', null, 'pay', 'facts'])).toEqual([['dates', 'requests'], ['pay', 'facts']])
+    expect(pairsOf([null, 'requests', 'quality', 'pay', 'facts'])).toEqual([['requests', 'quality'], ['pay', 'facts']])
+    expect(pairsOf(['dates', 'requests', null, null, 'facts'])).toEqual([['dates', 'requests'], ['facts']])
+    // Seed-like order: Next dates, Requests & changes, What you pay, Order facts (no Quality) — two full pairs, no lone card.
+    const html = draw(IN_PRODUCTION(), { requests: { state: 'ready', items: [] } })
+    expect(html.match(/class="fw-so-ov-pair"/g)?.length).toBe(2)
+    const view = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (')
   })
 
   // pp-fx4 (walk W-12): "Next dates" held only "Requested date —" (orders 5 and 7): a card that says nothing is left out.
