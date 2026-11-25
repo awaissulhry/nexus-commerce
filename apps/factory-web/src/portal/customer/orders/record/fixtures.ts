@@ -23,9 +23,9 @@ import {
   threadOf,
   TODAY,
   withoutPrices,
-  withThreadButton,
   words,
 } from '../design-data'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx3: from the shell's fixtures (design-data is no fixture file: check-view-boundaries)
 import { cancelHeld, changeHeld, EMPTY_CANCEL, EMPTY_CHANGE, shipToLines, type CancelDraft, type ChangeDraft, type RecordTab } from '../model'
 // B-TH-275: the customer's own reference in the pop-ups; what the order was made from.
 import { orderRefOf } from '../model'
