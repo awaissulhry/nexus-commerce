@@ -83,7 +83,7 @@ import { ACCEPT, type UploadRow } from '../../../lib/order-draft/view/files'
 import { changeCustomLine, type CustomLineFields, type DraftChoice } from './api'
 import { customLinesOf, draftFilesOf, lineCountOf, ownPriceWriteOf, personBody, personChanges, personDraftOf, personProblems, type PersonDraft } from './model'
 // ---- od-w1.2 (THE SIMPLE ORDER START R1): the mail and the products table — the shared part's rows, windows and words.
-import { changedByOf, choicesTyped, draftMailName, draftViewOf, filesAddHeld, HEADER_FIELDS, optionHeld, productRowsOf, uploadsOpenOf } from '../../../lib/order-draft/model'
+import { TYPING_PAUSE_MS, changedByOf, choicesTyped, draftMailName, draftViewOf, filesAddHeld, HEADER_FIELDS, optionHeld, productRowsOf, uploadsOpenOf } from '../../../lib/order-draft/model'
 import type { SavedBy } from '../../../lib/order-draft/schema'
 import { piecesOpenOf, type PiecesMode } from '../../../lib/order-draft/view/RowWindows'
 import { CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
@@ -251,6 +251,8 @@ function NewOrderContainer() {
   recordRef.current = record
   const headerRef = useRef(header)
   headerRef.current = header
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => (typingTimer.current ? clearTimeout(typingTimer.current) : undefined), [])
   const sheetFile = useRef<{ fileName: string; contentType: string; content: string } | null>(null)
   const handled = useRef<string | null>(null)
 
@@ -1187,6 +1189,12 @@ function NewOrderContainer() {
         onHeader: (field, value) => {
           setHeader((now) => ({ ...now, [field]: value }))
           headerRef.current = { ...headerRef.current, [field]: value }
+          // od-fx12: the draft saves as you type — after a short pause (the first words make the draft), and again on leaving the box.
+          if (typingTimer.current) clearTimeout(typingTimer.current)
+          typingTimer.current = setTimeout(() => {
+            typingTimer.current = null
+            void saveHeader(field)
+          }, TYPING_PAUSE_MS)
         },
         onHeaderLeave: (field) => void saveHeader(field),
         onAddAddress: () => setAddress({ draft: EMPTY_ADDRESS, showProblems: false, busy: false, failed: null, refused: {} }),

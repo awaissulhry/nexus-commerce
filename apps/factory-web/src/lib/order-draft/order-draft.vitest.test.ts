@@ -227,3 +227,21 @@ describe('od-fx10 — re-walk 1 of the shared part (W-12, W-17, W-19, W-22, W-27
   })
 })
 
+describe('od-fx12 — the Owner’s look: nothing required, the mail saves as you type', () => {
+  it('a draft with no product says no "Add at least one line." (a missing value); an invalid one (a past date) is still said', () => {
+    const empty = draftRecord({ lines: [], request: { problems: [{ code: 'NO_LINES', lineId: null, size: null }] } })
+    for (const locale of ['it', 'en'] as const) expect(page('portal', { draft: draftViewOf(empty) }, locale), locale).not.toContain(td(locale)('problem.NO_LINES'))
+    const past = draftRecord({ request: { problems: [{ code: 'DATE_PAST', lineId: null, size: null }] } })
+    expect(page('portal', { draft: draftViewOf(past) })).toContain(td('en')('problem.DATE_PAST'))
+  })
+
+  it('both hosts save the mail after a short pause in typing (the hint says "the draft saves as you type")', () => {
+    for (const host of ['../../portal/customer/neworder/NewOrderPage.tsx', '../../areas/sales/orders/draft/OfficeDraftPage.tsx']) {
+      const src = readFileSync(new URL(host, import.meta.url), 'utf8')
+      expect(src, host).toContain('typingTimer.current = setTimeout(() => {')
+      expect(src, host).toContain('}, TYPING_PAUSE_MS)')
+    }
+    expect(td('en')('mail.nothing')).toContain('saves as you type')
+  })
+})
+

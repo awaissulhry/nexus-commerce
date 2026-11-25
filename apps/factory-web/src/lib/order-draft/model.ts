@@ -32,6 +32,9 @@ export interface HeaderDraft {
 export type HeaderField = keyof HeaderDraft
 /** Every field of the header, in the page's order (od- R2: the subject first). */
 export const HEADER_FIELDS: HeaderField[] = ['subject', 'note', 'customerRef', 'shipToAddressId', 'requestedDate']
+/** od-fx12: the mail saves itself after this pause in typing (as its hint says: "the draft saves as you type"), and on leaving a box. */
+export const TYPING_PAUSE_MS = 1200
+
 /** The subject's limit (addendum R2: 1–200, trimmed). */
 export const SUBJECT_MAX = 200
 
