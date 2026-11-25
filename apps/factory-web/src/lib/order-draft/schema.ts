@@ -99,6 +99,9 @@ export const stillOpenItemSchema = z.object({
   /** NOT_DECIDED in the draft; MISSING lives only in the office's Confirm window. */
   state: z.string(),
   confirmNeeds: z.boolean(),
+  /** od-fx7 / od-fx8: whether the ORDER already has what it needs here (a style, a colour of ours, pieces by size, an address in use);
+   * absent from an older answer (the Confirm card then reads the rows themselves). */
+  confirmReady: z.boolean().optional().catch(undefined),
 })
 export type StillOpenItem = z.infer<typeof stillOpenItemSchema>
 export const stillOpenSchema = z.object({ items: z.array(stillOpenItemSchema), openCount: z.number(), confirmHeld: z.boolean() })

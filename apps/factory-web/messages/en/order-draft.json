@@ -27,16 +27,11 @@
         "document": "document"
       }
     },
-    "kind": {
-      "CATALOGUE": "From the catalogue",
-      "DESCRIBED": "Described by you",
-      "MADE_TO_MEASURE": "Made to measure"
-    },
     "line": {
       "inSheet": "People: in the attached sheet"
     },
     "measure": {
-      "LATER": "Sending later",
+      "LATER": "We send the measures later.",
       "SHEET": "Measurement sheet",
       "SIZE": "Size"
     },
@@ -76,8 +71,8 @@
     },
     "roster": {
       "add": "Add a person",
-      "attach": "Attach their measurement sheet to this line: drop it here or choose it",
-      "attachClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}» and line {seq}.",
+      "attach": "Attach their measurement sheet to this row: drop it here or choose it",
+      "attachClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}» and row {seq}.",
       "change": "Change…",
       "col": {
         "how": "How we get the size",
@@ -86,14 +81,14 @@
         "number": "Number",
         "what": "What is there"
       },
-      "empty": "No one named yet: add the people, or attach their measurement sheet to this line.",
+      "empty": "No one named yet: add the people, or attach their measurement sheet to this row.",
       "inSheet": "People: in the attached sheet",
       "personMenu": "More for {name}",
       "privacy": "The names and measures of your riders and team are personal data: we use them only to make this order, and at the factory only the people who handle measurements open the measurement sheets.",
       "remove": "Remove",
       "sheetGone": "a sheet no longer on the draft",
-      "sheetOnLine": "Measurement sheet on this line: {names}",
-      "title": "Line {seq} · {kind} · {title} — one row per person"
+      "sheetOnLine": "Measurement sheet on this row: {names}",
+      "title": "Row {seq} · {kind} · {title} — one line per person"
     }
   },
   "head": {
@@ -119,11 +114,13 @@
     "shipToWaiting": "We check this new address before the first delivery. You can still send the request: we check it when we confirm.",
     "waiting": "waits for our check",
     "design": "The factory is working on the design.",
-    "savedBy": "Saved {time} by {name}",
-    "savedByFactory": "Saved {time} by the factory",
+    "savedBy": "Saved {when} by {name}",
+    "savedByFactory": "Saved {when} by the factory",
     "shared": "The factory reads this draft from the first save.",
     "untitled": "Draft order {date}",
-    "title": "Draft order · {title}"
+    "title": "Draft order · {title}",
+    "at": "{time}",
+    "on": "{day}, {time}"
   },
   "lines": {
     "colour": "Colour",
@@ -196,7 +193,10 @@
   },
   "add": {
     "from": "Add from:",
-    "product": "Add a product"
+    "product": "Add a product",
+    "catalogue": "catalogue",
+    "pastOrder": "a past order",
+    "sheet": "a sheet"
   },
   "cell": {
     "catalogue": "Catalogue",
@@ -248,6 +248,14 @@
       "fromOwnRef": "from the customer’s order {seq} (their PO {ref})",
       "fromDay": "from the customer’s order of {day}",
       "fromDayRef": "from the customer’s order of {day} (their PO {ref})"
+    },
+    "head": {
+      "savedByCustomer": "Saved {when} by {name} ({customer})"
+    },
+    "draftPage": {
+      "measure": {
+        "LATER": "They send the measures later."
+      }
     }
   },
   "col": {
@@ -308,7 +316,7 @@
   "price": {
     "frozen": "Frozen when you send. The factory checks it against its own price (Price check on the order).",
     "title": "Your price",
-    "yours": "Your price (without VAT)"
+    "col": "Without VAT"
   },
   "row": {
     "date": "Requested delivery date",
@@ -319,7 +327,7 @@
   },
   "save": {
     "changedByFactory": "Changed by the factory a moment ago.",
-    "draftSaved": "Draft saved {time}",
+    "draftSaved": "Draft saved {when}",
     "notYet": "Saves when you type",
     "readonly": "This request was sent: our answer comes under Orders. To change it, withdraw it in Orders or ask us.",
     "saving": "Saving…"
@@ -393,7 +401,12 @@
     "make": "Make style draft",
     "none": "No style draft yet.",
     "seen": "The customer sees it under Quotes & samples by itself.",
-    "title": "Design work"
+    "title": "Design work",
+    "status": {
+      "DRAFT": "draft",
+      "ACTIVE": "active",
+      "ARCHIVED": "archived"
+    }
   },
   "line": {
     "styleDraft": "Style draft {code} · {name} · {status}"
@@ -401,7 +414,8 @@
   "need": {
     "colour": "colour",
     "pieces": "pieces by size",
-    "style": "style"
+    "style": "style",
+    "shipTo": "a delivery address in use"
   },
   "pm": {
     "noList": "No list price for a new style: you type it at Confirm.",
@@ -413,5 +427,8 @@
   },
   "thread": {
     "title": "Messages · this draft"
+  },
+  "rf": {
+    "title": "Files · row {seq} · {product}"
   }
 }

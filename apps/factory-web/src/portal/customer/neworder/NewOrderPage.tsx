@@ -85,7 +85,7 @@ import { customLinesOf, draftFilesOf, lineCountOf, ownPriceWriteOf, personBody, 
 // ---- od-w1.2 (THE SIMPLE ORDER START R1): the mail and the products table — the shared part's rows, windows and words.
 import { changedByOf, choicesTyped, draftMailName, draftViewOf, filesAddHeld, HEADER_FIELDS, optionHeld, productRowsOf, uploadsOpenOf } from '../../../lib/order-draft/model'
 import type { SavedBy } from '../../../lib/order-draft/schema'
-import { piecesModesOf, type PiecesMode } from '../../../lib/order-draft/view/RowWindows'
+import { piecesOpenOf, type PiecesMode } from '../../../lib/order-draft/view/RowWindows'
 import { CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 // ---- end F-CP-154
 
@@ -566,10 +566,7 @@ function NewOrderContainer() {
   const openPieces = (rowId: string) => {
     const row = rowOf(rowId)
     if (!row) return
-    const modes = piecesModesOf(row)
-    const mode: PiecesMode = row.pieces.mode !== 'NONE' && modes.includes(row.pieces.mode) ? row.pieces.mode : modes[0]!
-    const cells = row.pieces.mode === 'SIZES' ? Object.fromEntries(row.pieces.sizes.map((entry) => [entry.size, entry.quantity])) : {}
-    setPiecesWin({ rowId, mode, total: row.pieces.mode === 'TOTAL' || (row.pieces.mode === 'SIZES' && !row.catalogue) ? String(row.pieces.total) : '', cells, busy: false, failed: null })
+    setPiecesWin({ rowId, ...piecesOpenOf(row), busy: false, failed: null }) // od-fx8 W-15: on what the row holds
   }
 
   const savePieces = async () => {

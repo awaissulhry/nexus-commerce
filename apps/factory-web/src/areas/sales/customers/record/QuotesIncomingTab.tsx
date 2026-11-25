@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { formatDate } from '../../../../lib/i18n/format'
+import { DRAFT_NS } from '../../../../lib/order-draft/words'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { getPortalAccess } from '../../../admin/users/partners/api' // cq fx5 W3-2: the customer's portal, read once for Reply's hold
 import { portalStateOf, type PortalState } from '../../orders/list/reply-many' // cq fx5 W3-2
@@ -28,7 +30,7 @@ import './quotes-tab/quotes-tab.css'
 import { pictureReader } from '../../../../lib/record-picture/api'
 import { useCustomerDrafts } from './drafts/use-customer-drafts'
 import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
-import { draftPick, draftTitle } from './drafts/model'
+import { draftPick, draftTitle, untitledOf } from './drafts/model'
 import type { DraftRow } from './drafts/api'
 
 /**
@@ -55,7 +57,7 @@ import type { DockPick } from './view/WorkTab'
 
 export function QuotesIncomingTab({ party, counts, onPick, onFocus, shown }: { party: { id: string; name: string }; /** F-CQ-302: the page's one count read. */ counts: PageCounts; onPick?: (pick: DockPick) => void; /* F-SA-279 */ onFocus?: (pick: DockPick) => void; shown?: DockPick | null }) {
   return (
-    <WithMessages namespaces={['parties', BEFORE_ORDER_NS]}>
+    <WithMessages namespaces={['parties', BEFORE_ORDER_NS, DRAFT_NS /* od-fx8 W-03: the drafts list's "N still open" and names */]}>
       <Tab party={party} counts={counts} onPick={onPick} onFocus={onFocus} shown={shown ?? null} />
     </WithMessages>
   )
@@ -244,15 +246,16 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden, repl
 
 /**
  * F-CQ-205 (10-design §3.5; settles C3, C14): "Customer is writing" — the customer's portal drafts, the Work tab's own parts mounted here
- * (one list, no copy): read only, no selection, no export; a row docks the draft's own thread, Open shows its read-only window. Read
+ * (one list, no copy): no selection, no export; a row docks the draft's own thread, Open opens the office draft page (od-w2.3). Read
  * only while the section shows (no door, or the WRITING door) and the counts say there is one; never counted but in WRITING.
  */
 function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps) {
-  const t = useT('parties')
   const b = useT(BEFORE_ORDER_NS)
   const api = useOfficeApi()
   const readPictures = useMemo(() => pictureReader(api), [api])
-  const untitled = t('customers.drafts.untitled')
+  const dt = useT(DRAFT_NS)
+  const locale = useLocale()
+  const untitled = (row: DraftRow) => untitledOf(row, dt, (iso) => formatDate(iso, { locale }))
   const count = tab.counts?.byKind.drafts ?? null
   const showing = tab.terms.drafts && !hidden && count !== 0
   const drafts = useCustomerDrafts(party.id, showing)
@@ -265,8 +268,8 @@ function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps
       <CustomerDraftsList
         model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, room: tab.room /* cq fx2 W-04 */, pictures: { read: readPictures, header: b('drafts.picture') } }}
         actions={{
-          ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))) } : {}),
-          ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled))) } : {}),
+          ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled(row)))) } : {}),
+          ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled(row)))) } : {}),
           onOpen: drafts.onOpen,
           onRetry: drafts.onRetry,
           onShowUpdates: drafts.onShowUpdates,

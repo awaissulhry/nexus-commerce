@@ -37,7 +37,7 @@
   "door": {
     "showAll": "Show everything ({count})",
     "why": {
-      "WRITING": "drafts in the customer’s portal: read only, never counted as waiting on us",
+      "WRITING": "drafts in the customer’s portal: open one to fill or confirm it, never counted as waiting on us",
       "TO_ANSWER": "requests New or In progress, and portal orders sent: they wait on us",
       "PREPARING": "quotes in Draft, or Approved and not sent yet",
       "APPROVAL": "quotes an approver decides",
@@ -54,7 +54,7 @@
     "countOpen": "{open} open · {closed} closed left out",
     "countNotClosed": "{open} not closed · {closed} closed left out",
     "countGroup": "{count} in “{group}”",
-    "writingSub": "drafts in {customer}’s portal · read only · never counted as waiting on us",
+    "writingSub": "drafts in {customer}’s portal · open one to fill or confirm it · never counted as waiting on us",
     "countAll": "{count}, every state"
   },
   "empty": {

@@ -57,6 +57,8 @@ export interface DraftPageModel {
   uploads: readonly UploadRow[]
   /** The keys of the page (the ONE information icon at the foot). */
   keys: readonly { keys: string[]; words: string }[]
+  /** od-fx8 W-09: the office's customer name ("Saved 11:20 by Bianca Brand (Seed Racing)"); the portal passes none. */
+  customer?: string | null
 }
 
 export interface DraftPageActions {
@@ -182,7 +184,7 @@ function DraftBody({ model, actions, slots, onSendKey }: { model: DraftPageModel
           <SaveStatus state={model.save} formatTime={words.time} labels={ds.saveStatus} onRetry={actions?.onRetrySave} retryHeld={model.writeHeld} />
         ) : (
           <span className="fw-od-quiet" role="status">
-            {request ? savedByWords(request, t, words.time) : t('save.notYet')}
+            {request ? savedByWords(request, t, { time: words.time, day: words.day, today: model.today, door, customer: model.customer ?? null }) : t('save.notYet')}
           </span>
         )}
       </div>

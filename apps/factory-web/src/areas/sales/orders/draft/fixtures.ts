@@ -113,5 +113,8 @@ export const designScreen = defineDesignScreen<Builder>({
       },
     },
     { id: 'read-only', label: 'A reader who may not change it (orders.view only)', model: (locale) => model({ writeHeld: words(locale).t('save.readonly'), mayConfirm: false, mayStyles: false }) },
+    // od-fx8 (walk W-06, W-08, W-10, W-28): the Production manager reads the order and makes the style draft; a reader's start.
+    { id: 'reader-styles', label: 'The Production manager: reads the order (windows open to read), makes the style draft', model: (locale) => model({ writeHeld: words(locale).t('save.readonly'), mayConfirm: false, mayStyles: true }) },
+    { id: 'start-reader', label: 'A reader’s start: said in words, no customer read, no typed order', model: (locale) => model({ record: null, writeHeld: words(locale).t('save.readonly'), start: { customers: { state: 'loading', rows: [] }, partyId: null, drafts: { state: 'off', rows: [] } } }) },
   ],
 })

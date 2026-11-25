@@ -281,19 +281,18 @@
     "drafts": {
       "col": {
         "draft": "Draft",
-        "lines": "Lines",
+        "lines": "Products",
         "files": "Files",
-        "ready": "Ready",
+        "ready": "Still open",
         "changed": "Last change",
         "wanted": "Wanted by",
         "value": "Value at the prices shown",
         "messages": "Messages"
       },
-      "untitled": "Untitled draft",
       "started": "Started {date} by {name}",
       "startedNoName": "Started {date}",
-      "lineCount_one": "{count} line",
-      "lineCount_other": "{count} lines",
+      "lineCount_one": "{count} product",
+      "lineCount_other": "{count} products",
       "pieceCount_one": "{count} piece",
       "pieceCount_other": "{count} pieces",
       "peopleCount_one": "{count} person",
@@ -319,8 +318,7 @@
       "retry": "Try again",
       "open": "Open",
       "openOf": "Open {draft}",
-      "noun": "draft",
-      "readOnly": "Read only: {customer} is still writing it."
+      "noun": "draft"
     },
     "designer": {
       "label": "Factory designer",

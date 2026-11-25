@@ -27,16 +27,11 @@
         "document": "documento"
       }
     },
-    "kind": {
-      "CATALOGUE": "Dal catalogo",
-      "DESCRIBED": "Descritto da voi",
-      "MADE_TO_MEASURE": "Su misura"
-    },
     "line": {
       "inSheet": "Persone: nella scheda allegata"
     },
     "measure": {
-      "LATER": "Le mandiamo dopo",
+      "LATER": "Le misure ve le mandiamo dopo.",
       "SHEET": "Scheda misure",
       "SIZE": "Taglia"
     },
@@ -93,7 +88,7 @@
       "remove": "Togli",
       "sheetGone": "una scheda non più sulla bozza",
       "sheetOnLine": "Scheda misure su questa riga: {names}",
-      "title": "Riga {seq} · {kind} · {title} — una riga per persona"
+      "title": "Riga {seq} · {kind} · {title} — una persona per riga"
     }
   },
   "head": {
@@ -119,11 +114,13 @@
     "shipToWaiting": "Verifichiamo questo nuovo indirizzo prima della prima consegna. Potete comunque inviare la richiesta: lo verifichiamo quando confermiamo.",
     "waiting": "in attesa della nostra verifica",
     "design": "La fabbrica sta lavorando al design.",
-    "savedBy": "Salvata alle {time} da {name}",
-    "savedByFactory": "Salvata alle {time} dalla fabbrica",
+    "savedBy": "Salvata {when} da {name}",
+    "savedByFactory": "Salvata {when} dalla fabbrica",
     "shared": "La fabbrica legge questa bozza dal primo salvataggio.",
     "untitled": "Bozza d’ordine del {date}",
-    "title": "Bozza d’ordine · {title}"
+    "title": "Bozza d’ordine · {title}",
+    "at": "alle {time}",
+    "on": "il {day} alle {time}"
   },
   "lines": {
     "colour": "Colore",
@@ -196,7 +193,10 @@
   },
   "add": {
     "from": "Aggiungi da:",
-    "product": "Aggiungi un prodotto"
+    "product": "Aggiungi un prodotto",
+    "catalogue": "catalogo",
+    "pastOrder": "un ordine passato",
+    "sheet": "un foglio"
   },
   "cell": {
     "catalogue": "Catalogo",
@@ -248,6 +248,14 @@
       "fromOwnRef": "dall’ordine {seq} del cliente (suo numero {ref})",
       "fromDay": "dall’ordine del cliente del {day}",
       "fromDayRef": "dall’ordine del cliente del {day} (suo numero {ref})"
+    },
+    "head": {
+      "savedByCustomer": "Salvata {when} da {name} ({customer})"
+    },
+    "draftPage": {
+      "measure": {
+        "LATER": "Le misure le mandano dopo."
+      }
     }
   },
   "col": {
@@ -308,7 +316,7 @@
   "price": {
     "frozen": "Si blocca quando inviate. La fabbrica lo confronta con il proprio prezzo (Verifica prezzi sull’ordine).",
     "title": "Il vostro prezzo",
-    "yours": "Il vostro prezzo (IVA esclusa)"
+    "col": "IVA esclusa"
   },
   "row": {
     "date": "Data di consegna richiesta",
@@ -319,7 +327,7 @@
   },
   "save": {
     "changedByFactory": "Modificata dalla fabbrica poco fa.",
-    "draftSaved": "Bozza salvata alle {time}",
+    "draftSaved": "Bozza salvata {when}",
     "notYet": "Si salva quando scrivete",
     "readonly": "Questa richiesta è stata inviata: la nostra risposta arriva negli Ordini. Per cambiarla ritiratela negli Ordini o chiedeteci.",
     "saving": "Salvataggio…"
@@ -393,7 +401,12 @@
     "make": "Crea bozza di modello",
     "none": "Ancora nessuna bozza di modello.",
     "seen": "Il cliente la vede da solo in Preventivi e campioni.",
-    "title": "Lavoro di design"
+    "title": "Lavoro di design",
+    "status": {
+      "DRAFT": "bozza",
+      "ACTIVE": "attivo",
+      "ARCHIVED": "archiviato"
+    }
   },
   "line": {
     "styleDraft": "Bozza di modello {code} · {name} · {status}"
@@ -401,7 +414,8 @@
   "need": {
     "colour": "colore",
     "pieces": "pezzi per taglia",
-    "style": "modello"
+    "style": "modello",
+    "shipTo": "un indirizzo di consegna in uso"
   },
   "pm": {
     "noList": "Nessun prezzo di listino per un modello nuovo: lo scrivi alla conferma.",
@@ -413,5 +427,8 @@
   },
   "thread": {
     "title": "Messaggi · questa bozza"
+  },
+  "rf": {
+    "title": "File · riga {seq} · {product}"
   }
 }

@@ -25,7 +25,7 @@ import type { ScaleOption, StyleDetail } from '../../../inquiries/api'
 import type { StyleDraftDraft } from '../../../inquiries/model'
 import type { DraftRow } from '../../../customers/record/drafts/api'
 import type { ConfirmAnswer, OfficeRead } from '../api'
-import { cellsOf, confirmAsOf, confirmHeldOf, missingOf, sizesTextOf, type ConfirmEntry } from '../confirm-model'
+import { cardAsksOf, cellsOf, confirmAsOf, confirmHeldOf, missingOf, sizesTextOf, type ConfirmEntry } from '../confirm-model'
 import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import './office-draft.css'
@@ -146,6 +146,7 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
         saving: model.saving,
         uploads: model.uploads,
         keys: [{ keys: ['⌘', '↵'], words: t('cf.go') }],
+        customer: model.customer?.name ?? null,
       }}
       actions={{
         onHeader: actions?.onHeader,
@@ -165,12 +166,15 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
               <span id="od-customer" className="fw-od-label">
                 {t('start.customer')}
               </span>
-              {start.customers.state === 'error' ? (
+              {/* od-fx8 W-08: a reader (no orders.manage) starts nothing: said in words, and no customer is read. */}
+              {model.writeHeld ? (
+                <p className="fw-od-held">{model.writeHeld}</p>
+              ) : start.customers.state === 'error' ? (
                 <p className="fw-od-held">{t('refusal.other')}</p>
               ) : (
                 <Combobox options={start.customers.rows.map((row) => ({ value: row.id, label: row.label }))} value={start.partyId ?? ''} labelledBy="od-customer" onChange={(value) => actions?.onCustomer?.(value)} />
               )}
-              <p className="fw-od-quiet">{start.partyId ? t('start.customerHint') : t('start.customerHeld')}</p>
+              {model.writeHeld ? null : <p className="fw-od-quiet">{start.partyId ? t('start.customerHint') : t('start.customerHeld')}</p>}
             </div>
           </Card>
         ) : null,
@@ -181,9 +185,13 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
             onOpen={(id) => actions?.onContinue?.(id)}
             foot={
               <>
-                <Link href={`${model.prefix}/sales/orders?new=1${start.partyId ? `&party=${encodeURIComponent(start.partyId)}` : ''}`}>
-                  <PencilLine size={14} aria-hidden /> {t('start.typed')}
-                </Link>
+                {/* od-fx8 W-28: today's typed editor (the orders list's New order window, its customer picked) — for a writer, once the
+                    customer is picked; a reader never sees it. */}
+                {!model.writeHeld && start.partyId ? (
+                  <Link href={`${model.prefix}/sales/orders?new=1&party=${encodeURIComponent(start.partyId)}`}>
+                    <PencilLine size={14} aria-hidden /> {t('start.typed')}
+                  </Link>
+                ) : null}
                 <span className="fw-od-quiet">
                   {t('start.prospect')} {/* od-w2.7: Incoming reads `party` as its list filter, never as New request's customer: the link opens New request alone. */}
                   <Link href={`${model.prefix}/sales/incoming?new=1`}>{t('start.request')}</Link>
@@ -193,12 +201,18 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
           />
         ) : null,
         cards: record ? <HostCards model={model} actions={actions} record={record} /> : null,
-        actionBar: record ? <ConfirmButton model={model} actions={actions} rows={productRowsOf(record.request).length} quote={confirmAsOf(productRowsOf(record.request)) === 'QUOTE'} /> : null,
+        actionBar: record ? <ConfirmButton model={model} actions={actions} rows={productRowsOf(record.request).length} /> : null,
         dialogs: <Windows model={model} actions={actions} record={record} />,
       }}
     />
   )
-  if (!record) return <div className="fw-od">{page}</div>
+  // od-fx8 W-20: the start has its own band, "‹ Orders · New order" (no thread before the first save).
+  if (!record)
+    return (
+      <RecordFrame recordType="PortalOrderRequest" personId={null} threadLabel={t('thread.title')} thread={null} band={{ back, title: to('newOrder.pageTitle') }}>
+        {page}
+      </RecordFrame>
+    )
   return (
     <RecordFrame
       recordType="PortalOrderRequest"
@@ -222,8 +236,7 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
   const { t } = useDraftWords()
   const say = useT('sales-inquiries')
   const rows = productRowsOf(record.request)
-  const asks = rows.map((row) => ({ row, needs: missingOf(row, { rowId: row.id, needs: true, styleId: row.style?.id ?? null, colourwayId: row.colourwayId, sizesText: row.pieces.mode === 'SIZES' ? 'x' : '', unitPrice: '' }) })).filter((entry) => entry.needs.length > 0)
-  const quote = confirmAsOf(rows) === 'QUOTE'
+  const asks = cardAsksOf(record.request.stillOpen, rows, t) // od-fx8 W-05: what the ORDER still lacks (od-fx7 confirmReady)
   const custom = rows.find((row) => row.sizing === 'MADE_TO_MEASURE')
   const styles = model.office?.request.styles ?? []
   return (
@@ -241,9 +254,9 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
             </p>
           ) : (
             <ul className="fw-od-notes">
-              {asks.map(({ row, needs }) => (
-                <li key={row.id}>
-                  <strong>{rowLabelOf(row, t)}</strong>: {needs.map((key) => t(key)).join(', ')}
+              {asks.map((ask) => (
+                <li key={ask.id}>
+                  <strong>{ask.label}</strong>: {ask.needs.map((key) => t(key)).join(', ')}
                 </li>
               ))}
             </ul>
@@ -256,7 +269,7 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
           <p className="fw-od-quiet">
             <Info size={14} aria-hidden /> {t('cf.choices')}
           </p>
-          <ConfirmButton model={model} actions={actions} rows={rows.length} quote={quote} className="fw-od-hostgo" />
+          <ConfirmButton model={model} actions={actions} rows={rows.length} className="fw-od-hostgo" />
         </section>
       </Card>
       <Card padded>
@@ -270,14 +283,15 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
             <ul className="fw-od-notes">
               {styles.map((style) => (
                 <li key={style.id}>
-                  <Shirt size={14} aria-hidden /> {t('line.styleDraft', { code: style.code, name: style.name, status: style.status })}
+                  <Shirt size={14} aria-hidden /> {t('line.styleDraft', { code: style.code, name: style.name, status: STYLE_STATUS_WORDS.has(style.status) ? t(`dw.status.${style.status}`) : '' })}
                 </li>
               ))}
             </ul>
           )}
           <p className="fw-od-quiet">{t('dw.seen')}</p>
           <span>
-            <Button variant="secondary" heldReason={model.writeHeld ?? (model.mayStyles ? null : say('held.needs', { right: say('right.product.styles.manage') }))} onClick={() => actions?.style?.onOpen?.()}>
+            {/* od-fx8 W-06 (plan 6.4 a): held ONLY by the styles right — the Production manager presses it while reading the order. */}
+            <Button variant="secondary" heldReason={model.mayStyles ? null : say('held.needs', { right: say('right.product.styles.manage') })} onClick={() => actions?.style?.onOpen?.()}>
               <Plus size={14} aria-hidden /> {t('dw.make')}
             </Button>
           </span>
@@ -288,15 +302,18 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
   )
 }
 
-/** The ONE "Confirm order…" button: in its card, and (od-w2.6) in the page's sticky bar on a phone. */
-function ConfirmButton({ model, actions, rows, quote, className }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; quote: boolean; className?: string }) {
+/** The ONE "Confirm order…" button (it opens the window; od-fx8 W-26: the window's final button says "as a quote"): in its card, and
+ * (od-w2.6) in the page's sticky bar on a phone. */
+function ConfirmButton({ model, actions, rows, className }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; className?: string }) {
   const { t } = useDraftWords()
   return (
     <Button variant="primary" heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
-      {quote ? t('cf.goQuote') : t('cf.go')}
+      {t('cf.go')}
     </Button>
   )
 }
+
+const STYLE_STATUS_WORDS: ReadonlySet<string> = new Set(['DRAFT', 'ACTIVE', 'ARCHIVED'])
 
 /** Price (the price grain only): the customer's own price per row; a new style has no list price — it is typed at Confirm. */
 function PriceCard({ record, rows }: { record: DraftRecord; rows: readonly ProductRow[] }) {
@@ -315,7 +332,7 @@ function PriceCard({ record, rows }: { record: DraftRecord; rows: readonly Produ
           stackOnPhone
           columns={[t('col.product'), t('pm.theirs')]}
           align={['left', 'right']}
-          rows={rows.map((row) => ({ id: row.id, cells: [`${row.seq} · ${rowProductOf(row) ?? t('state.OPEN')}`, money(own(row.id))] }))}
+          rows={rows.map((row) => ({ id: row.id, cells: [<span key="p" className="fw-od-wrap">{`${row.seq} · ${rowProductOf(row) ?? t('state.OPEN')}`}</span>, money(own(row.id))] }))}
         />
         <p className="fw-od-quiet">{t('pm.noList')}</p>
       </section>
