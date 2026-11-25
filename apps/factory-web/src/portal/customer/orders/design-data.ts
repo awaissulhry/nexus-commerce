@@ -57,8 +57,6 @@ const LEGAL = {
 } as const
 const ALL = (permission: string) => permission.startsWith('portal.') || permission === 'files.read' || permission === 'threads.read'
 
-// pp-fx1: the band's thread button of a design case is the shell's (every record host's design case draws it).
-export { withThreadButton } from '../../shell/fixtures'
 
 export function shellOf(locale: Locale, band: PortalBand, over: Partial<PortalShellViewModel> = {}): PortalShellViewModel {
   // B-TH-275 (wall W02): the footer's terms link follows the reader's own prefix, as the real shell's does (PortalShell:
