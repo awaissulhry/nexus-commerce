@@ -82,12 +82,16 @@ export const orderRowSchema = z.object({
   pieces,
   netAmount: price,
   currency: z.string(),
+  // pg-w2 (D6): a parcel is named by its order ("Your order 12 · parcel 2"), never the office's shipment series: `number` is null
+  // (the server stops sending it, pg-s1), `parcel` which of the order's shipments it is (1-based; an older answer has none).
   nextShipment: z
-    .object({ id: z.string(), number: z.string(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: z.string().nullable(), carrierName: z.string().nullable(), expectedDeliveryAt: z.string().nullable().optional() })
+    .object({ id: z.string(), number: z.string().nullable(), parcel: z.number().optional(), status: z.enum(CUSTOMER_SHIPMENT_STATUSES), words, date: z.string().nullable(), carrierName: z.string().nullable(), expectedDeliveryAt: z.string().nullable().optional() })
     .nullable(),
   progressPercent: z.number().nullable(),
   /** B-TH-246: the row's cells of the portal columns, by column id (the sheet's read only). */
   values: z.record(z.string(), portalCellSchema).optional(),
+  /** pg-w2 (Z4, Z16 P3): the order needs the customer's answer (a re-confirm asked); a REQUEST row never; an older answer: absent. */
+  needsYou: z.boolean().optional(),
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -101,6 +105,15 @@ export const ordersSchema = z.object({
   live,
   /** B-TH-246: the portal columns (the sheet's read only; the list's plain read has none). */
   columns: z.array(portalColumnSchema).optional(),
+  // ---- pg-w2 (Z3; pg-server § Shapes): the band's numbers, made by the server over the party's own rows BEFORE the search (the
+  // sheet's read only). A group's name is read as text (a group this page does not know is left out, never a failed read); an
+  // older answer has none: the band says "—".
+  groups: z.array(z.object({ group: z.string(), count: z.number() })).optional(),
+  /** Every open order and request (Requests … Shipped), each once. */
+  open: z.number().optional(),
+  /** The requests and orders that need the customer's answer. */
+  needsYou: z.number().optional(),
+  // ---- end pg-w2
 })
 export type OrdersRead = z.infer<typeof ordersSchema>
 
