@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Info, PencilLine, Plus, Shirt } from 'lucide-react'
 import { Banner, Card, Field, SummaryTable } from '@nexus/ui/components'
@@ -19,7 +20,6 @@ import { OptionsWindow, PiecesWindow, RowFilesWindow, useSizeCopy, type OptionsW
 import { PersonDialog, type PersonDialogActions } from '../../../../../lib/order-draft/view/PeopleRoster'
 import { personProblems, draftFilesOf, customLinesOf, uploadsOpenOf, draftMailName, filesAddHeld, type PersonDraft } from '../../../../../lib/order-draft/model'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import { StyleDraftDialog } from '../../../inquiries/view/Dialogs'
 import type { ScaleOption, StyleDetail } from '../../../inquiries/api'
 import type { StyleDraftDraft } from '../../../inquiries/model'
@@ -91,7 +91,8 @@ export interface OfficeDraftActions {
   style?: { onOpen?: () => void; onDraft?: (patch: Partial<StyleDraftDraft>) => void; onSubmit?: () => void; onClose?: () => void }
 }
 
-export function OfficeDraftView({ model, actions }: { model: OfficeDraftModel; actions?: OfficeDraftActions }) {
+/** `thread`: the draft's office thread (the container's live OfficeRecordThread; a design case passes its own or none). */
+export function OfficeDraftView({ model, actions, thread = null }: { model: OfficeDraftModel; actions?: OfficeDraftActions; thread?: ReactNode }) {
   const words = useDraftWords()
   const { t } = words
   const to = useT('orders')
@@ -198,8 +199,6 @@ export function OfficeDraftView({ model, actions }: { model: OfficeDraftModel; a
     />
   )
   if (!record) return <div className="fw-od">{page}</div>
-  const threadRecord = { type: 'PortalOrderRequest', id: record.request.id, companyId: null }
-  const thread = <OfficeRecordThread docked record={threadRecord} title={title ?? ''} recordLabel={title ?? ''} party={model.customer ? { id: model.customer.id, name: model.customer.name } : null} partyRole="customer" />
   return (
     <RecordFrame
       recordType="PortalOrderRequest"

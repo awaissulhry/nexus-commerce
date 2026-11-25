@@ -29,6 +29,7 @@ import { officeDraftHref } from '../../customers/record/drafts/model'
 import { confirmDraft, createOfficeDraft, makeDraftStyle, officeDraftPort, readOfficeRequest, type ConfirmAnswer, type ConfirmBody, type OfficeRead } from './api'
 import { confirmBodyOf, confirmHeldOf, confirmRowsOf, type ConfirmEntry } from './confirm-model'
 import { OfficeDraftView } from './view/OfficeDraftView'
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 
 /**
  * `/w/<co>/sales/orders/new` (no `?party=`) — the office's door to the ONE draft order (THE SIMPLE ORDER START, od-w2.1; R1–R3): the
@@ -583,8 +584,13 @@ function OfficeDraftContainer() {
   const optionsRow = optionsWin ? rows.find((row) => row.id === optionsWin.rowId) : undefined
   const filesRow = rowFilesId ? rows.find((row) => row.id === rowFilesId) : undefined
 
+  // The draft's office thread (office notes allowed; the customer reads its messages in the portal), docked by the record frame.
+  const title = record ? draftTitleOf(record.request, t, locale, words.day) : ''
+  const thread = record ? <OfficeRecordThread docked record={{ type: 'PortalOrderRequest', id: record.request.id, companyId: null }} title={title} recordLabel={title} party={office ? { id: office.request.party.id, name: office.request.party.name } : null} partyRole="customer" /> : null
+
   return (
     <OfficeDraftView
+      thread={thread}
       model={{
         prefix,
         load: draftId ? load : 'ready',
