@@ -27,6 +27,8 @@ import { askImpactSchema, changeRequestSchema } from './api'
 // B-SA-046d: each line named with its small picture.
 import { rulesSchema } from './api'
 import { linePictureOf } from './view/AskDialog'
+import { ChangeStep } from './view/Dialogs' // pp-fx4 (walk W-05)
+import { EMPTY_CHANGE } from './model' // pp-fx4 (walk W-05)
 
 /**
  * F-PR-13 — the portal Ask dialog (production plan §3 "Brand asks, we decide", §5; 06-tree B.2 P-ORD-ask; wall PW-P06): step 1
@@ -502,3 +504,41 @@ describe('F-OP-317: the portal line picture address goes through /api', () => {
   })
 })
 // ---- end F-OP-317
+
+// ---- pp-fx4 (walk W-05; plan § 1.3 "one Ask, the same pop-up", P0-B11): a line's ⋯ opens the ONE Ask pop-up at the change step ----
+describe('pp-fx4 W-05: one Ask pop-up — the band and a line’s ⋯ open the same one; a change is its steps 2 and 3', () => {
+  const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+  const ask = readFileSync(new URL('./view/AskDialog.tsx', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+  const dialogs = readFileSync(new URL('./view/Dialogs.tsx', import.meta.url), 'utf8')
+
+  it('ONE slot draws the Ask, a change included (the same Modal stays open as the steps move); no second change pop-up', () => {
+    expect(view).toContain("{dialog?.kind === 'ask' ? <AskDialog flow={{ kind: 'ask', model: dialog.model, actions: actions?.dialog?.ask }} /> : dialog?.kind === 'change' ? <AskDialog flow={{ kind: 'change', model: dialog.model, actions: actions?.dialog?.change }} /> : null}")
+    expect(view.match(/<AskDialog\b/g)?.length).toBe(2)
+    expect(view).not.toMatch(/<ChangeDialog\b/)
+    expect(dialogs).not.toMatch(/export function ChangeDialog\b/)
+    expect(dialogs.slice(dialogs.indexOf('export function ChangeStep('), dialogs.indexOf('export function ChangeDiscard('))).not.toMatch(/<Modal\b/)
+  })
+
+  it('the same title and the same steps: "Ask us · Your order N", a change at "Step 2 of 3" then "Step 3 of 3"', () => {
+    expect(ask).toContain("title={t('ask.title', { number: flow.model.number })} subtitle={t(STEP_KEY[step])}")
+    expect(ask).toContain("change ? (change.model.draft.step === 'review' ? 'impact' : 'details')")
+    expect(dialogs).not.toContain("t('change.title'")
+    expect(dialogs).not.toContain("t('change.editStep')")
+  })
+
+  it('a line’s ⋯ opens it at the change step with that line chosen (only that line is drawn); Back leads to "What you would like"', () => {
+    expect(page).toContain("onChangeLine: (lineId) => openAsk('CHANGE', lineId)")
+    expect(page).toContain("if (kind === 'CHANGE') return openChange(line)")
+    expect(page).toContain("changeDirty ? { ...current, discard: true, discardTo: 'what' } : askAtWhat('CHANGE')")
+    const read = rulesOf()
+    const chosen = read.lines[1]!
+    const model = { state: 'ready' as const, number: 'Your order 4', rules: read, draft: { ...EMPTY_CHANGE, focusLine: chosen.lineId }, held: null, busy: false, problem: null, discard: false, shipTo: [], today: TODAY }
+    const one = render(createElement(ChangeStep, { model }), 'en')
+    expect(one.match(/class="fw-pord-change-line"/g)?.length).toBe(1)
+    expect(one).toContain('data-focus=""')
+    const all = render(createElement(ChangeStep, { model: { ...model, draft: { ...EMPTY_CHANGE } } }), 'en')
+    expect(all.match(/class="fw-pord-change-line"/g)?.length).toBe(read.lines.length)
+  })
+})
+// ---- end pp-fx4 W-05

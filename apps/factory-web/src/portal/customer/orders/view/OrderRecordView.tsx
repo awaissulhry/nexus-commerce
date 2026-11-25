@@ -26,7 +26,7 @@ import { TabLink } from '../../../../lib/tab-link/TabLink'
 import { orderTabsOf } from '../band'
 import { RecordNotices } from '../../../../lib/record-frame/RecordNotices' // w1.4: the office's notice slot, shared
 // ---- end pp-w1
-import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
+import { CancelDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
 import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-238
 import { LinesTab } from './LinesTab'
@@ -240,14 +240,13 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
         {model.tab === 'files' ? <DocumentsTab model={model} actions={actions} /> : null}
-        {dialog?.kind === 'change' ? <ChangeDialog model={dialog.model} actions={actions?.dialog?.change} /> : null}
+        {/* pp-fx4 (walk W-05): ONE Ask pop-up — a change is its steps 2 and 3 (the same Modal stays open as the steps move). */}
+        {dialog?.kind === 'ask' ? <AskDialog flow={{ kind: 'ask', model: dialog.model, actions: actions?.dialog?.ask }} /> : dialog?.kind === 'change' ? <AskDialog flow={{ kind: 'change', model: dialog.model, actions: actions?.dialog?.change }} /> : null}
         {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} actions={actions?.dialog?.cancel} /> : null}
         {dialog?.kind === 'reconfirm' ? <ReconfirmDialog model={dialog.model} actions={actions?.dialog?.reconfirm} /> : null}
         {dialog?.kind === 'pay' ? <PayDialog model={dialog.model} actions={actions?.dialog?.pay} /> : null}
         {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
         {/* F-PR-12c */}
-        {/* F-PR-13 */}
-        {dialog?.kind === 'ask' ? <AskDialog model={dialog.model} actions={actions?.dialog?.ask} /> : null}
         {dialog?.kind === 'photo' ? <QualityPhotoDialog model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
         {/* F-PR-24 */}
         {model.report ? <ReportProblemDialog model={model.report} actions={actions?.report} /> : null}

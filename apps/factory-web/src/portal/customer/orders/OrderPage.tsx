@@ -141,7 +141,7 @@ function OrderRoute({ id }: { id: string }) {
 
 // F-PR-13: the impact read before Send (change, cancel and the production asks), and the Ask dialog's own state.
 type ImpactPart = { state: 'loading' | 'error' | 'ready'; view: ImpactView | null }
-type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null }
+type ChangeState = { kind: 'change'; draft: ChangeDraft; busy: boolean; problem: string | null; discard: boolean; impact?: ImpactPart | null; /** pp-fx4 (W-05): Discard goes back to step 1, not out. */ discardTo?: 'what' }
 type CancelState = { kind: 'cancel'; draft: CancelDraft; busy: boolean; problem: string | null; impact?: ImpactPart | null }
 type AskState = {
   kind: 'ask'
@@ -542,6 +542,8 @@ function OrderContainer({ id }: { id: string }) {
    * Opens the dialog at its first step, or at a kind (`?ask=RUSH`, a row's "Ask us"): a production ask at its details. pp-w1 (w1.2):
    * the line ⋯ "Ask for a change on this line" opens the same dialog at Change, at that line (`line`).
    */
+  /** pp-fx4 (walk W-05): the Ask at its step 1, a kind already chosen (Back from a change's sizes). */
+  const askAtWhat = (kind: AskKind | null): AskState => ({ kind: 'ask', step: 'what', ask: kind, draft: EMPTY_ASK, impact: null, busy: false, problem: null, withdrawing: null })
   const openAsk = (kind: AskKind | null = null, line: string | null = null) => {
     if (kind === 'CHANGE') return openChange(line)
     if (kind === 'CANCEL') return openCancel()
@@ -1191,8 +1193,11 @@ function OrderContainer({ id }: { id: string }) {
             onBack: () => setDialog((current) => (current?.kind === 'change' ? { ...current, draft: { ...current.draft, step: 'edit' } } : current)),
             onSend: sendChange,
             onClose: () => setDialog((current) => (current?.kind === 'change' && !current.busy ? (changeDirty ? { ...current, discard: true } : null) : current)),
-            onDiscard: () => setDialog(null),
-            onStay: () => setDialog((current) => (current?.kind === 'change' ? { ...current, discard: false } : current)),
+            onDiscard: () => setDialog((current) => (current?.kind === 'change' && current.discardTo === 'what' ? askAtWhat('CHANGE') : null)),
+            onStay: () => setDialog((current) => (current?.kind === 'change' ? { ...current, discard: false, discardTo: undefined } : current)),
+            // pp-fx4 (walk W-05): the change is steps 2 and 3 of the ONE Ask: Back on its sizes returns to "What you would like" (a typed
+            // change asks first).
+            onWhat: () => setDialog((current) => (current?.kind !== 'change' || current.busy ? current : changeDirty ? { ...current, discard: true, discardTo: 'what' } : askAtWhat('CHANGE'))),
             onRetry: () => void loadRules(),
           },
           cancel: {

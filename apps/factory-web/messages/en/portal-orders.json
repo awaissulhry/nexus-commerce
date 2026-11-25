@@ -432,8 +432,6 @@
     "go": "Discard"
   },
   "change": {
-    "title": "Ask for a change on order {number}",
-    "editStep": "Step 1 of 2: what to change",
     "reviewStep": "Step 2 of 2: check and send",
     "failed": "What may change could not be read",
     "hint": "Change the pieces per size, the date or the delivery address. We answer here and by e-mail.",

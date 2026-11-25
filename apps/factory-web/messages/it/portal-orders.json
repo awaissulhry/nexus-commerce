@@ -432,8 +432,6 @@
     "go": "Scarta"
   },
   "change": {
-    "title": "Chiedi una modifica sull’ordine {number}",
-    "editStep": "Passo 1 di 2: cosa cambiare",
     "reviewStep": "Passo 2 di 2: controllate e inviate",
     "failed": "Non è stato possibile leggere cosa si può cambiare",
     "hint": "Cambiate i pezzi per taglia, la data o l’indirizzo di consegna. Rispondiamo qui e via e-mail.",
