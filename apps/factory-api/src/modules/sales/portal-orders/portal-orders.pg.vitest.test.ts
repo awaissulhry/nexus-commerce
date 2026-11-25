@@ -141,7 +141,9 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
     const so2 = list.items[0]
     expect(so2).toMatchObject({ kind: 'ORDER', words: { en: 'Confirmed', it: 'Confermato' }, pieces: { ordered: 7, shipped: 2, open: 5 }, promiseMoved: false, movedLately: false, progressPercent: null })
     expect(typeof so2.netAmount).toBe('number')
-    expect(so2.nextShipment).toMatchObject({ number: 'SEED-SH-0001', status: 'IN_TRANSIT', words: { en: 'On the way' } })
+    // pg-s1 S1.3 (Owner D6): named by its order ("Your order 12 · parcel 1"), never the office's shipment series (SEED-SH-0001).
+    expect(so2.nextShipment).toMatchObject({ number: null, parcel: 1, status: 'IN_TRANSIT', words: { en: 'On the way' } })
+    expect(JSON.stringify(list)).not.toMatch(/SEED-SH-/)
     // SH-0002 is a DRAFT: not something the customer waits for yet.
     expect(list.items[1].nextShipment).toBeNull()
     expect(Object.fromEntries(list.chips.map((chip: Json) => [chip.chip, chip.count]))).toMatchObject({ OPEN: 3, REQUESTED: 0, ALL: 3, DELIVERED: 0, DATE_MOVED: 0 })
@@ -466,7 +468,7 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
       null,
     ])
     const list = await ok(browsers.buyer, '/portal/sales-orders?chip=ALL')
-    expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: 'SEED-SH-0001', expectedDeliveryAt: eta })
+    expect(list.items.find((row: Json) => row.id === so2).nextShipment).toMatchObject({ number: null, parcel: 1, expectedDeliveryAt: eta }) // pg-s1 S1.3 (D6)
     // The database never keeps an http page (Parcel_tracking_url_check, every login): there is none to show.
     await expect(admin('UPDATE "Parcel" SET "trackingUrl" = $2 WHERE id = $1', [parcels[1]!.id, 'http://tracking.example.com/plain'])).rejects.toThrow(/https address|parcels are added and removed/)
     // Once delivered, the customer sees the day it arrived, not an expected one.
