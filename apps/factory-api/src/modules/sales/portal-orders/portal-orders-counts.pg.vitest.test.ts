@@ -27,7 +27,7 @@ import { startHarness, type Browser, type Harness, type TestTenant } from '../..
  *   - no office series in any list or sheet answer: no RQ-, SH-, SEED-SO- (and none of this test's own office numbers).
  *   - a number alone searches the customer's own number exactly: "12" and "#12" find "Your order 12" only (never 112, never an order
  *     whose hidden office number holds 12, never another customer's "Your order 12"); the band does not follow the search.
- *   - a REQUEST row's number is null; an order's `needsYou` follows its re-confirmation wait.
+ *   - a REQUEST row's number is null; an OPEN order's `needsYou` follows its re-confirmation wait (a cancelled or delivered one never).
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-orders`.
  */
 
@@ -320,5 +320,13 @@ describe('pg-s1 S1.5 the band of Portal › Orders counts each customer’s own 
     expect((await numbers('a')).needsYou).toBe(before.needsYou - 1)
     // Brand B's own order to re-confirm still waits for Brand B only.
     expect((await numbers('b')).needsYou).toBe(EVERY_GROUP.needsYou)
+    // Only an OPEN order needs the customer: a cancelled or delivered order with a stale re-confirmation wait is not needsYou, in the
+    // row and in the band.
+    const stale = await numbers('a')
+    await forced('UPDATE "SalesOrder" SET "reapprovalNeededAt" = now() WHERE id = ANY($1::uuid[])', [[made.A.cancelled, made.A.delivered]])
+    const rows = new Map(((await sheetOf('a', '?chip=ALL&limit=200')).items as Json[]).map((entry) => [entry.id as string, entry]))
+    expect(rows.get(made.A.cancelled)).toMatchObject({ status: 'CANCELLED', needsYou: false })
+    expect(rows.get(made.A.delivered)).toMatchObject({ status: 'DELIVERED', needsYou: false })
+    expect((await numbers('a')).needsYou).toBe(stale.needsYou)
   })
 })

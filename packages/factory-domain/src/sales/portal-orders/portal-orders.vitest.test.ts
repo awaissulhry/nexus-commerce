@@ -138,13 +138,15 @@ describe('the band of Portal › Orders (pg-s1 S1.2)', () => {
       row('PARTLY_SHIPPED'),
       row('SHIPPED'),
       row('DELIVERED'),
-      row('CANCELLED', true), // a cancelled order never counts as open, but its mark still says it waits for them
+      row('CANCELLED', true), // a cancelled order with a stale re-confirmation wait: neither open nor needing them
+      row('DELIVERED', true), // … nor a delivered one
       inquiry('DECLINED'),
       inquiry('WITHDRAWN'),
       inquiry('ORDER_CONFIRMED'),
     ]
-    expect(countsOf(rows)).toEqual({ REQUESTS: 4, CONFIRMED: 1, IN_PRODUCTION: 1, READY: 1, SHIPPED: 2, DELIVERED: 1, CANCELLED: 1, CLOSED_REQUESTS: 2 })
-    expect(bandCounts(rows)).toMatchObject({ open: 9, needsYou: 3 })
+    expect(countsOf(rows)).toEqual({ REQUESTS: 4, CONFIRMED: 1, IN_PRODUCTION: 1, READY: 1, SHIPPED: 2, DELIVERED: 2, CANCELLED: 1, CLOSED_REQUESTS: 2 })
+    // Needs you: the NEED_INFO request and the OPEN order to re-confirm — never the cancelled or delivered one (the lead's rule).
+    expect(bandCounts(rows)).toMatchObject({ open: 9, needsYou: 2 })
     expect(bandCounts([])).toEqual({ groups: ORDER_GROUPS.map((group) => ({ group, count: 0 })), open: 0, needsYou: 0 })
   })
 

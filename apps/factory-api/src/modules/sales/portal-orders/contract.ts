@@ -70,7 +70,7 @@ const row = output({
   nextShipment: nextShipment.nullable(),
   /** With progress=true, for the first 10 rows of the page when the customer shares progress (C1); else null. */
   progressPercent: z.number().int().nullable(),
-  /** pg-s1 (Z4): the row's one mark "Needs your answer" — an order whose revision waits for their re-confirmation; a request: false. */
+  /** pg-s1 (Z4): the row's one mark "Needs your answer" — an OPEN order whose revision waits for their re-confirmation; a request: false. */
   needsYou: z.boolean(),
 })
 
@@ -332,7 +332,7 @@ export const sheetContract = defineContract({
       groups: z.array(output({ group: z.enum(ORDER_GROUPS), count: z.number().int() })),
       /** Every open order and request (Requests … Shipped), each once. */
       open: z.number().int(),
-      /** The requests we asked something about (NEED_INFO) and the orders waiting for their re-confirmation. */
+      /** The requests we asked something about (NEED_INFO) and the OPEN orders waiting for their re-confirmation. */
       needsYou: z.number().int(),
       // ---- end pg-s1 S1.2
       /** The portal columns: every customer's fields shown in the portal and this customer's own. */

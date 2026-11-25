@@ -168,7 +168,7 @@ export interface BandCounts {
   readonly groups: { group: OrderGroup; count: number }[]
   /** Every row of Requests … Shipped, each once. */
   readonly open: number
-  /** The requests we asked something about (NEED_INFO) and the orders waiting for the customer's re-confirmation. */
+  /** The requests we asked something about (NEED_INFO) and the OPEN orders waiting for the customer's re-confirmation. */
   readonly needsYou: number
 }
 
@@ -176,7 +176,8 @@ export interface BandCounts {
 export function bandCounts(rows: readonly BandRow[]): BandCounts {
   const groups = ORDER_GROUPS.map((group) => ({ group, count: rows.filter((row) => groupOf(row) === group).length }))
   const open = groups.filter((entry) => OPEN_GROUPS.includes(entry.group)).reduce((sum, entry) => sum + entry.count, 0)
-  const needsYou = rows.filter((row) => (row.kind === 'ROW' ? row.needsYou : row.state === 'NEED_INFO')).length
+  // Only an open order needs the customer (the lead's rule): a cancelled or delivered one with a stale re-confirmation wait never counts.
+  const needsYou = rows.filter((row) => (row.kind === 'ROW' ? row.needsYou && isOpenForCustomer(row.status) : row.state === 'NEED_INFO')).length
   return { groups, open, needsYou }
 }
 // ---- end pg-s1 S1.2

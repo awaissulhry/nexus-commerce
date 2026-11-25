@@ -8,6 +8,7 @@ import { orderProgress, type OrderProgress } from '@nexus/factory-domain/sales/o
 import { customerPromiseHistory } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { customerEtaOf, customerShipmentStatusOf, isOnTheWay, SHIPMENT_STATUS_WORDS, SHOWN_SHIPMENT_STATUSES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { chipCounts, CUSTOMER_STATUS_WORDS, customerStatusOf, DATE_MOVED_DAYS, inChip, isStillToShip, milestonesOf, type CustomerOrderStatus, type OrderChip } from '@nexus/factory-domain/sales/portal-orders/status'
+import { isOpenForCustomer } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1: needsYou on open orders only
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import { partnerOrder, portalReader } from './access'
@@ -215,8 +216,9 @@ async function readList(app: FastifyInstance, request: FastifyRequest, query: Li
         currency: order.currency,
         nextShipment: nextShipmentOf(shipments, latest),
         progressPercent: null as number | null,
-        // pg-s1 S1.2/S1.3 (Z4): the row's one mark, "Needs your answer": a revised order waits for the customer's re-confirmation.
-        needsYou: order.reapprovalNeededAt !== null,
+        // pg-s1 S1.2/S1.3 (Z4): the row's one mark, "Needs your answer": a revised order waits for the customer's re-confirmation —
+        // an OPEN one only (the lead's rule): a cancelled or delivered order with a stale wait never needs them.
+        needsYou: order.reapprovalNeededAt !== null && isOpenForCustomer(status),
       },
     }
   })
