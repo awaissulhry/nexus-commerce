@@ -215,7 +215,7 @@ export const fetchPins = (api: ApiClient, type: string, id: string, signal?: Abo
 // ---- end B-TH-286
 // B-TH-229: the person read the conversation up to a message (a preview of the portal by the office writes nothing: the API's rule).
 export const markThreadRead = (api: ApiClient, type: string, id: string, messageId: string) =>
-  api.post(`${recordPath(type, id)}/read`, { body: { messageId }, schema: z.object({ reading: z.object({ newCount: z.number().int() }).passthrough() }), idempotencyKey: newIdempotencyKey() })
+  api.post(`${recordPath(type, id)}/read`, { body: { messageId }, schema: z.object({ reading: z.object({ newCount: z.number().int(), firstNewMessageId: z.string().nullable().optional() }).passthrough() }), idempotencyKey: newIdempotencyKey() })
 
 // ── the portal terms (B-W2b-159) ─────────────────────────────────────────────────────────────────────────────────────────
 export const termsSchema = z.object({

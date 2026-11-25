@@ -1,4 +1,4 @@
-import type { PortalQuote, PortalThreadMessage } from '../../lib/record-thread/partner/model'
+import { partnerUnreadOf, type PortalQuote, type PortalThreadMessage } from '../../lib/record-thread/partner/model'
 import type { PartnerLinkRead, PartnerMessageRead } from './api'
 import { MAX_BODY } from '../../lib/record-thread/composer/model'
 
@@ -160,3 +160,20 @@ export function sizeText(bytes: number, locale: string): string {
   return `${new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'it-IT', { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(value)} ${units[unit]}`
 }
 // ---- end pt-w2 W2.3
+
+/**
+ * pt-fx2 (walk W-01b): the record frame's "Messages (n new)" — the face's own count (`partnerUnreadOf`, the band's and the down
+ * button's rule: the reader's own messages are never new), never the server's, which counts them. `newestFirst`: the loaded messages
+ * as the API pages them. `after` (a mark that moved): only what is newer than the marked message can still be new; what is not loaded
+ * yet is counted when its read arrives.
+ */
+export function frameNewCount(
+  newestFirst: readonly Pick<PortalThreadMessage, 'id' | 'author'>[],
+  reading: { readonly firstNewMessageId?: string | null | undefined; readonly newCount: number } | null | undefined,
+  after?: string,
+): number {
+  if (!reading) return 0
+  const cut = after === undefined ? -1 : newestFirst.findIndex((message) => message.id === after)
+  const loaded = cut === -1 ? newestFirst : newestFirst.slice(0, cut)
+  return partnerUnreadOf(loaded.slice().reverse(), { firstNewId: reading.firstNewMessageId ?? null, newCount: reading.newCount }).newCount
+}
