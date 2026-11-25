@@ -19,20 +19,7 @@
     "close": "Close"
   },
   "start": {
-    "title": "How do you want to order?",
-    "intro": "Three ways in, one draft: you can mix them before you send.",
     "keeps": "Choosing a way keeps what is already in the draft.",
-    "way": {
-      "pick": "Pick styles",
-      "reorder": "Reorder a past order",
-      "upload": "Upload a sheet"
-    },
-    "wayHint": {
-      "pick": "From your catalogue, with the whole size run in one grid.",
-      "reorder": "Copy a past order at today's prices; every difference is spelled out.",
-      "upload": "A spreadsheet for big size runs, checked row by row before anything is added."
-    },
-    "drafts": "Your drafts",
     "draftsFailed": "We could not read your drafts.",
     "draft_one": "Continue your draft from {day} · {count} line",
     "draft_other": "Continue your draft from {day} · {count} lines",
@@ -49,7 +36,6 @@
     "title_one": "Lines ({count})",
     "title_other": "Lines ({count})",
     "addStyles": "Add styles",
-    "unitPrice": "Unit price",
     "amount": "Line amount"
   },
   "reorder": {
@@ -143,7 +129,6 @@
     "lines": "Lines",
     "pieces": "Pieces",
     "net": "Net total",
-    "netHint": "At the prices of your price list shown on each line; VAT and shipping come with our confirmation.",
     "notice": "This is a request: our answer confirms price, quantities and date; you will see it under Orders.",
     "pricesChanged_one": "Prices changed since you started — {count} line",
     "pricesChanged_other": "Prices changed since you started — {count} lines",
@@ -451,19 +436,14 @@
     "title": "Draft order",
     "titleOf": "Draft order · {title}",
     "back": "New order",
-    "send": "Send to the factory",
     "sendHeld": "Only colleagues who may order send it: {names}.",
     "sendHeldNone": "Only colleagues who may order send it: ask your admin.",
     "discard": "Discard…",
     "discardHeld": "Only the colleague who started this draft, or one who may send orders, discards it.",
     "reorderHeld": "Your access does not show orders.",
     "price": {
-      "line": "Line",
-      "ours": "Our list price",
-      "yours": "Your price (without VAT)",
       "cell": "Your price for line {seq}",
       "total": "Total",
-      "frozen": "Frozen when you send. The factory checks it against its own price (Price check on the order).",
       "missing_one": "{count} line still without your price",
       "missing_other": "{count} lines still without your price",
       "problem": "A price of 0 or more, with up to 6 decimals."
@@ -477,20 +457,8 @@
     "keySend": "Send to the factory",
     "keyThread": "Show or hide the conversation",
     "files": {
-      "kind": {
-        "vector": "vector",
-        "picture": "picture",
-        "document": "document"
-      },
       "notNow": "Files cannot be uploaded here right now: e-mail them to your contact at the factory."
     },
-    "start": {
-      "words": "Just write it in words",
-      "describe": "Describe it",
-      "describeHint": "In your own words: what you need, the colours, how many — or one row per person. The factory reads it from the first save."
-    },
-    "addDescribed": "Describe it",
-    "addMtm": "Made to measure",
     "line": {
       "removed": "Line {seq} removed."
     }

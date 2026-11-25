@@ -3,7 +3,7 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import type { ServerDraftBody } from '../../../lib/request-compose/server-draft' // B-TH-287
 // od-w1.1: the draft order's record is the ONE shape both doors read (src/lib/order-draft/schema.ts); the portal's fetchers stay here.
 import type { OrderDraftPort } from '../../../lib/order-draft/api-port'
-import { draftFileSchema, named, noticeSchema, ownNumber, pair, presignedSchema, recordSchema, sizeRow, SOURCES, STATUSES, type CustomLineFields, type CustomLineKind, type DraftFile, type DraftFileAnnounce, type DraftRecord, type HeaderBody, type NewLine, type PersonFields, type RequestSource, type SizeAsk } from '../../../lib/order-draft/schema'
+import { draftFileSchema, named, noticeSchema, ownNumber, pair, presignedSchema, recordSchema, sizeRow, SOURCES, STATUSES, type CustomLineFields, type CustomLineKind, type DraftChoice, type DraftFile, type DraftFileAnnounce, type DraftRecord, type HeaderBody, type NewLine, type PersonFields, type RequestSource, type SizeAsk, type Sizing, savedBySchema } from '../../../lib/order-draft/schema'
 export * from '../../../lib/order-draft/schema'
 
 /**
@@ -29,6 +29,14 @@ export const draftRowSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   version: z.number(),
+  // od- R1 (od-s: under `draft`, null once sent): each "Continue a draft" row names the draft (the subject, else row 1's product), says
+  // what is still open and who saved it when.
+  subject: z.string().nullable().optional(),
+  draft: z
+    .object({ title: z.string().nullable(), savedBy: savedBySchema.optional().catch(undefined), savedAt: z.string().optional(), openCount: z.number().optional() })
+    .nullable()
+    .optional()
+    .catch(undefined),
 })
 export type DraftRow = z.infer<typeof draftRowSchema>
 export const draftsSchema = z.object({ requests: z.array(draftRowSchema), seesPrices: z.boolean() })
@@ -45,6 +53,7 @@ export { fetchColleagues } from '../../shared/account/api'
 
 const path = (id: string) => `/portal/order-requests/${encodeURIComponent(id)}`
 
+/** od- R2: the draft starts as a mail — what was typed first (`subject`, `note` = the message) comes with the create; nothing is required. */
 export const createDraft = (api: ApiClient, body: { source: RequestSource } & HeaderBody, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.post('/portal/order-requests', { body, schema: recordSchema, idempotencyKey })
 
@@ -57,7 +66,7 @@ export const changeHeader = (api: ApiClient, id: string, body: { version: number
 export const addLines = (api: ApiClient, id: string, body: { version: number; lines: NewLine[] }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.post(`${path(id)}/lines`, { body, schema: recordSchema, idempotencyKey })
 
-export const changeLine = (api: ApiClient, id: string, lineId: string, body: { version: number; sizes?: SizeAsk[]; colourwayId?: string; note?: string | null; brandUnitPrice?: string | null /* F-CP-154 */ }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+export const changeLine = (api: ApiClient, id: string, lineId: string, body: { version: number; sizes?: SizeAsk[]; colourwayId?: string; note?: string | null; brandUnitPrice?: string | null /* F-CP-154 */; sizing?: Sizing | null; choices?: DraftChoice[] | null /* od- R3 */ }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.request('PUT', `${path(id)}/lines/${encodeURIComponent(lineId)}`, { body, schema: recordSchema, idempotencyKey })
 
 export const removeLine = (api: ApiClient, id: string, lineId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>

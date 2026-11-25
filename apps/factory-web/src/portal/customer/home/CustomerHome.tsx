@@ -527,7 +527,9 @@ function HomeContainer() {
           // ---- F-CP-152
           mayDraft,
           draftOrders: mayDraft && !preview && draftRows ? draftOrdersOf(draftRows, prefix, t, words.day) : null,
-          wordsHref: buyer ? wordsHref(prefix) : null,
+          // od-w1.2 (S1-B6): the request like an e-mail is the door of one WITHOUT the drafts right (the drafts right starts the draft);
+          // an unsent message someone already began there stays reachable.
+          wordsHref: buyer && (!mayDraft || Boolean(draft)) ? wordsHref(prefix) : null,
           // ---- end F-CP-152
         },
         welcome: first

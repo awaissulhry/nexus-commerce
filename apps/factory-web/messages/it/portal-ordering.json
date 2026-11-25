@@ -19,20 +19,7 @@
     "close": "Chiudi"
   },
   "start": {
-    "title": "Come volete ordinare?",
-    "intro": "Tre modi, una bozza: potete combinarli prima di inviare.",
     "keeps": "Scegliere un modo mantiene quanto è già nella bozza.",
-    "way": {
-      "pick": "Scegli i modelli",
-      "reorder": "Riordina un ordine passato",
-      "upload": "Carica un foglio"
-    },
-    "wayHint": {
-      "pick": "Dal vostro catalogo, con tutta la serie di taglie in una griglia.",
-      "reorder": "Copiate un ordine passato ai prezzi di oggi: ogni differenza è scritta.",
-      "upload": "Un foglio di calcolo per grandi serie di taglie, controllato riga per riga prima di aggiungere."
-    },
-    "drafts": "Le vostre bozze",
     "draftsFailed": "Non è stato possibile leggere le vostre bozze.",
     "draft_one": "Continua la bozza del {day} · {count} riga",
     "draft_other": "Continua la bozza del {day} · {count} righe",
@@ -49,7 +36,6 @@
     "title_one": "Righe ({count})",
     "title_other": "Righe ({count})",
     "addStyles": "Aggiungi modelli",
-    "unitPrice": "Prezzo unitario",
     "amount": "Importo riga"
   },
   "reorder": {
@@ -143,7 +129,6 @@
     "lines": "Righe",
     "pieces": "Pezzi",
     "net": "Totale netto",
-    "netHint": "Ai prezzi del vostro listino mostrati su ogni riga; IVA e spedizione arrivano con la nostra conferma.",
     "notice": "Questa è una richiesta: la nostra risposta conferma prezzo, quantità e data; la vedrete negli Ordini.",
     "pricesChanged_one": "I prezzi sono cambiati da quando avete iniziato — {count} riga",
     "pricesChanged_other": "I prezzi sono cambiati da quando avete iniziato — {count} righe",
@@ -451,19 +436,14 @@
     "title": "Bozza d'ordine",
     "titleOf": "Bozza d'ordine · {title}",
     "back": "Nuovo ordine",
-    "send": "Invia alla fabbrica",
     "sendHeld": "Solo chi può ordinare la invia: {names}.",
     "sendHeldNone": "Solo chi può ordinare la invia: chiedete al vostro amministratore.",
     "discard": "Elimina…",
     "discardHeld": "La elimina solo il collega che ha iniziato questa bozza o chi può inviare ordini.",
     "reorderHeld": "Il vostro accesso non mostra gli ordini.",
     "price": {
-      "line": "Riga",
-      "ours": "Il nostro prezzo di listino",
-      "yours": "Il vostro prezzo (IVA esclusa)",
       "cell": "Il vostro prezzo per la riga {seq}",
       "total": "Totale",
-      "frozen": "Si blocca quando inviate. La fabbrica lo confronta con il proprio prezzo (Verifica prezzi sull'ordine).",
       "missing_one": "{count} riga ancora senza il vostro prezzo",
       "missing_other": "{count} righe ancora senza il vostro prezzo",
       "problem": "Un prezzo da 0 in su, con al massimo 6 decimali."
@@ -477,20 +457,8 @@
     "keySend": "Invia alla fabbrica",
     "keyThread": "Mostra o nascondi la conversazione",
     "files": {
-      "kind": {
-        "vector": "vettoriale",
-        "picture": "foto",
-        "document": "documento"
-      },
       "notNow": "In questo momento qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica."
     },
-    "start": {
-      "words": "Scrivetelo semplicemente a parole",
-      "describe": "Descrivetelo",
-      "describeHint": "Con parole vostre: cosa vi serve, i colori, quanti pezzi — o una riga per persona. La fabbrica la legge dal primo salvataggio."
-    },
-    "addDescribed": "Descrivetelo",
-    "addMtm": "Su misura",
     "line": {
       "removed": "Riga {seq} tolta."
     }

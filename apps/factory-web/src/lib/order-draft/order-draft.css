@@ -60,10 +60,6 @@
   }
 }
 
-.fw-od-field-wide {
-  grid-column: 1 / -1;
-}
-
 .fw-od-shipto {
   display: flex;
   flex-wrap: wrap;
@@ -75,94 +71,6 @@
 .fw-od-shipto > :first-child {
   flex: 1 1 260px;
   min-width: 0;
-}
-
-.fw-od-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-12);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fw-od-line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-.fw-od-line:focus {
-  outline: 2px solid var(--nds-primary);
-  outline-offset: 2px;
-}
-
-.fw-od-linehead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-.fw-od-linetitle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-2);
-  min-width: 0;
-}
-
-.fw-od-linename {
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text-strong);
-  overflow-wrap: anywhere;
-}
-
-.fw-od-lineactions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--nds-space-8);
-}
-
-.fw-od-linefoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  min-width: 0;
-}
-
-.fw-od-linefoot > :first-child {
-  flex: 1 1 240px;
-  min-width: 0;
-  max-width: 420px;
-}
-
-.fw-od-figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-16);
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-od-figures > div {
-  display: flex;
-  flex-direction: column;
-}
-
-.fw-od-figures dt {
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
-.fw-od-figures dd {
-  margin: 0;
-  font-weight: var(--nds-font-weight-semibold);
 }
 
 .fw-od-notes {
@@ -200,13 +108,6 @@
   gap: var(--nds-space-8);
   color: var(--nds-warning-text);
   font-size: var(--nds-font-size-sm);
-}
-
-.fw-od-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8);
 }
 
 .fw-od-buttons {
@@ -247,99 +148,6 @@
   font-size: var(--nds-font-size-sm);
 }
 
-.fw-od-chips {
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.fw-od-chips ol {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(112px, 1fr));
-  gap: var(--nds-space-8);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fw-od-chip {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  width: 100%;
-  height: 100%;
-  padding: var(--nds-space-8);
-  border: 1px solid var(--nds-border-subtle);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface);
-  color: var(--nds-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.fw-od-chip:hover {
-  background: var(--nds-surface-hover);
-}
-
-.fw-od-chip:focus-visible {
-  outline: 2px solid var(--nds-focus-ring);
-  outline-offset: 2px;
-}
-
-.fw-od-chip.is-missing {
-  border-color: var(--nds-danger);
-}
-
-.fw-od-chip.is-optional {
-  border-style: dashed;
-}
-
-.fw-od-chiptop {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--nds-space-4);
-}
-
-.fw-od-chipname {
-  font-size: var(--nds-font-size-sm);
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text-strong);
-}
-
-.fw-od-partnum {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  border-radius: var(--nds-radius-full);
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-  font-weight: var(--nds-font-weight-semibold);
-}
-
-.fw-od-chipstate {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-2);
-}
-
-.fw-od-chipstate.is-ready {
-  color: var(--nds-success-text);
-}
-
-.fw-od-chipstate.is-later {
-  color: var(--nds-warning-text);
-}
-
-.fw-od-chipstate.is-missing {
-  color: var(--nds-danger-text);
-}
-
 .fw-od-parthead {
   display: flex;
   flex-wrap: wrap;
@@ -353,71 +161,16 @@
   gap: var(--nds-space-8);
 }
 
-.fw-od-partaction {
-  margin-left: auto;
-}
-
-.fw-od-partstate {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-}
-
-.fw-od-menulabel {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-}
-
-.fw-od-linecard + .fw-od-linecard,
-.fw-od-lines > li + li .fw-od-linecard {
-  padding-top: var(--nds-space-12);
-  border-top: 1px solid var(--nds-border-subtle);
-}
-
-.fw-od-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--nds-space-16);
-  align-items: stretch;
-}
-
-@media (min-width: 960px) {
-  .fw-od-pair {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.fw-od-peoplelines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--nds-font-size-sm);
-}
-
-.fw-od-peoplelines .is-missing a {
-  color: var(--nds-danger-text);
-}
-
 .fw-od-draftfoot {
   display: flex;
   justify-content: flex-end;
 }
 
-.fw-od-files,
-.fw-od-sheets {
+.fw-od-files {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-8);
   min-width: 0;
-}
-
-.fw-od-sheets {
-  padding-top: var(--nds-space-12);
-  border-top: 1px solid var(--nds-border-subtle);
 }
 
 .fw-od-filelist {
@@ -445,39 +198,6 @@
 .fw-od-mailway > svg {
   flex: 0 0 auto;
   margin-top: 2px;
-}
-
-.fw-od-later {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-2);
-}
-
-.fw-od-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  vertical-align: middle;
-}
-
-.fw-od-ownwords {
-  margin: 0;
-  white-space: pre-line;
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text);
-}
-
-.fw-od-linefacts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-4) var(--nds-space-16);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-2);
 }
 
 .fw-od-privacy {
@@ -524,3 +244,336 @@
 .fw-od-personname {
   font-weight: 600;
 }
+
+/* ---- od-w1.2 (THE SIMPLE ORDER START R1; 10-design-r1 § 2–§ 4): the mail, the products table, Still open, the host cards. Tokens only;
+   no dead space: the table's tracks are fr with minimums (rows reach the right edge), the host cards auto-fit ONE row. */
+.fw-od-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-od-design {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-left: var(--nds-space-12);
+  color: var(--nds-text-strong);
+}
+
+/* The products table: one grid per row (a container query gives the two-line form below 800 px and a stacked card on a phone). */
+.fw-od-tablewrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.fw-od-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-od-trow {
+  display: grid;
+  grid-template-columns: 32px minmax(160px, 2fr) minmax(140px, 1.3fr) minmax(120px, 1.1fr) minmax(110px, 1fr) minmax(130px, 1.4fr) 56px 40px;
+  grid-template-areas: 'n product sizing colour pieces options files more';
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-od-trow + .fw-od-trow {
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-od-trow.is-saving {
+  opacity: 0.7;
+}
+
+.fw-od-thead {
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-od-tempty {
+  display: block;
+}
+
+.fw-od-c-n {
+  grid-area: n;
+  padding-top: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-od-c-product { grid-area: product; min-width: 0; }
+.fw-od-c-sizing { grid-area: sizing; min-width: 0; }
+.fw-od-c-colour { grid-area: colour; min-width: 0; }
+.fw-od-c-pieces { grid-area: pieces; min-width: 0; }
+.fw-od-c-options { grid-area: options; min-width: 0; }
+.fw-od-c-files { grid-area: files; min-width: 0; }
+.fw-od-c-more { grid-area: more; justify-self: end; }
+
+.fw-od-celllabel {
+  display: none;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-od-product {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding-top: var(--nds-space-6);
+  overflow-wrap: anywhere;
+}
+
+.fw-od-productmeta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-od-sizing {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-od-sizing > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-od-cellbtn {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-4);
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-od-cellbtn:hover {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-od-cellbtn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+.fw-od-cellbtn[aria-disabled='true'] {
+  cursor: default;
+}
+
+.fw-od-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+
+.fw-od-pieces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-od-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-od-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.fw-od-chip.is-open {
+  color: var(--nds-text-2);
+}
+
+.fw-od-tablefoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+/* Below 800 px: line 1 = # · Product · Sizing · Colour · Pieces · ⋯; line 2 = Options (under Product → Colour) and Files (under Pieces). */
+@container (max-width: 799px) {
+  .fw-od-trow {
+    grid-template-columns: 28px minmax(140px, 2fr) minmax(120px, 1.3fr) minmax(100px, 1fr) minmax(100px, 1fr) 40px;
+    grid-template-areas:
+      'n product sizing colour pieces more'
+      '. options options options files .';
+  }
+  .fw-od-thead .fw-od-c-options,
+  .fw-od-thead .fw-od-c-files {
+    display: none;
+  }
+  .fw-od-c-options .fw-od-celllabel,
+  .fw-od-c-files .fw-od-celllabel {
+    display: block;
+  }
+}
+
+/* A phone: one stacked card per row — head # · Product · ⋯, then labelled cells in two columns. */
+@container (max-width: 519px) {
+  .fw-od-thead {
+    display: none;
+  }
+  .fw-od-trow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'product more'
+      'sizing colour'
+      'pieces options'
+      'files files';
+  }
+  .fw-od-c-n {
+    display: none;
+  }
+  .fw-od-celllabel {
+    display: block;
+  }
+}
+
+/* Still open: items in auto-fill columns; an item is a button that moves the focus to its row. */
+.fw-od-still {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-stillitem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+  margin: 0;
+  padding: var(--nds-space-4);
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-od-stillitem:hover {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-od-stillitem:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+.fw-od-stillname {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+/* The host's own cards: ONE row under Still open (auto-fit collapses empty tracks, so 1, 2 or 3 cards fill it). */
+.fw-od-hostrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-16);
+  align-items: stretch;
+}
+
+/* The Options window. */
+.fw-od-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-option {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .fw-od-option {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fw-od-option > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-od-addoption {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* Continue a draft: its rows side by side (auto-fit ≥ 280 px). */
+.fw-od-continue {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-od-rowtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  text-align: left;
+}
+
+.fw-od-continuefoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-od-mail .fw-od-files {
+  gap: var(--nds-space-6);
+}
+/* ---- end od-w1.2 */

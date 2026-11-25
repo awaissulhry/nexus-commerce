@@ -1,21 +1,18 @@
 'use client'
 
-import { Clock, FileText, Mail, MoreHorizontal, Shirt, ShieldCheck, UserPlus } from 'lucide-react'
+import { Clock, FileText, Mail, MoreHorizontal, Shirt, UserPlus } from 'lucide-react'
 import { Banner, Field, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { FileDropzone, Modal } from '../../i18n/ds-parts'
-import type { DraftFile, DraftPerson, MeasureBy } from '../schema'
+import type { DraftFile, DraftFilePart, DraftPerson, MeasureBy } from '../schema'
 import {
   customTitleOf,
-  entriesInOrder,
-  entryPeopleOf,
   kindKey,
   MEASURES,
   measureKey,
   peopleInOrder,
   personWhat,
   problemWords,
-  rosterLinesOf,
   sheetsOfLine,
   type DraftView,
   type DraftViewCustomLine,
@@ -23,7 +20,7 @@ import {
   type PersonField,
 } from '../model'
 import { useDraftWords } from '../words'
-import { ACCEPT, DraftSheets, type DraftFilesActions, type DraftFilesModel } from './DraftFiles'
+import { ACCEPT } from './files'
 
 /**
  * F-CP-154 (customer page plan C5; 12 §2 part 4 "People & sizes"; review A5, G6; lead pick: no "Saved measurements" in v1): the
@@ -42,11 +39,17 @@ export interface PeopleRosterModel {
   draft: DraftView
   /** Why nothing can be written now (words), or null. */
   writeHeld: string | null
-  /** The draft's measurement sheets block (its files, the drop area or the e-mail way, "Sending later"). */
-  sheets: DraftFilesModel
+  /** Files go up here now (else the e-mail way, naming the draft). */
+  uploadsOpen: boolean
+  /** Why a sheet cannot be added now (words: the cap), or null. */
+  addHeld: string | null
+  /** How the e-mail way names the draft (their PO, else its title). */
+  draftName: string
 }
 
-export interface PeopleRosterActions extends DraftFilesActions {
+export interface PeopleRosterActions {
+  /** A measurement sheet onto the row (it stands for its roster while no one is named). */
+  onFiles?: (part: DraftFilePart, files: File[], lineId?: string | null) => void
   onAddPerson?: (lineId: string) => void
   onChangePerson?: (lineId: string, personId: string) => void
   onRemovePerson?: (lineId: string, personId: string) => void
@@ -54,43 +57,8 @@ export interface PeopleRosterActions extends DraftFilesActions {
 
 const MEASURE_ICON: Readonly<Record<MeasureBy, typeof Shirt>> = { SIZE: Shirt, SHEET: FileText, LATER: Clock }
 
-export function PeopleRoster({ model, actions }: { model: PeopleRosterModel; actions?: PeopleRosterActions }) {
-  const words = useDraftWords()
-  const { t } = words
-  const request = model.draft.request
-  const entries = entriesInOrder(request)
-  const rosters = rosterLinesOf(request)
-  return (
-    <>
-      {entries.length === 0 ? (
-        <p className="fw-od-quiet">{t('draftPage.people.empty')}</p>
-      ) : (
-        <ul className="fw-od-peoplelines">
-          {entries.map((entry) => {
-            const people = entryPeopleOf(entry, t, words.pieces)
-            return (
-              <li key={entry.line.id} className={people.missing ? 'is-missing' : undefined}>
-                <a href={`#${people.target}`}>{people.words}</a>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      {/* Review G6: the people's names and measures are personal data — said where they are typed. */}
-      <p className="fw-od-quiet fw-od-privacy">
-        <ShieldCheck size={14} aria-hidden /> {t('draftPage.roster.privacy')}
-      </p>
-      {rosters.map((line) => (
-        <LineRoster key={line.id} line={line} model={model} actions={actions} />
-      ))}
-      {/* F-CP-151: the draft's measurement sheets (body data) and who opens them. */}
-      <DraftSheets model={model.sheets} actions={actions} />
-    </>
-  )
-}
-
 /** One by-person line's roster: its people, "Add a person", its own measurement sheet ("People: in the attached sheet"). */
-function LineRoster({ line, model, actions }: { line: DraftViewCustomLine; model: PeopleRosterModel; actions?: PeopleRosterActions }) {
+export function LineRoster({ line, model, actions }: { line: DraftViewCustomLine; model: PeopleRosterModel; actions?: PeopleRosterActions }) {
   const words = useDraftWords()
   const { t, locale } = words
   const request = model.draft.request
@@ -139,17 +107,17 @@ function LineRoster({ line, model, actions }: { line: DraftViewCustomLine; model
           ))}
         </ul>
       ) : null}
-      {onLine.length > 0 ? <p className="fw-od-quiet">{t('draftPage.roster.sheetOnLine', { names: onLine.map((file) => file.originalName).join(', ') })}</p> : null}
-      {model.sheets.open ? (
-        (held ?? model.sheets.addHeld) ? (
-          <p className="fw-od-held">{held ?? model.sheets.addHeld}</p>
+      {onLine.length > 0 ? <p className="fw-od-quiet">{t('draftPage.roster.sheetOnLine', { names: onLine.map((file) => file.originalName ?? '—').join(', ') })}</p> : null}
+      {model.uploadsOpen ? (
+        (held ?? model.addHeld) ? (
+          <p className="fw-od-held">{held ?? model.addHeld}</p>
         ) : (
           <FileDropzone multiple accept={ACCEPT.SHEET} hint={t('draftPage.roster.attach')} onFiles={(files) => actions?.onFiles?.('SHEET', files, line.id)} />
         )
       ) : (
         // D14: on live, until the virus scanner runs — the e-mail way, naming the draft and the line.
         <p className="fw-od-mailway" role="note">
-          <Mail size={16} aria-hidden /> <span>{t('draftPage.roster.attachClosed', { draft: model.sheets.draftName, seq: line.seq })}</span>
+          <Mail size={16} aria-hidden /> <span>{t('draftPage.roster.attachClosed', { draft: model.draftName, seq: line.seq })}</span>
         </p>
       )}
     </section>

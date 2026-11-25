@@ -103,41 +103,6 @@
   color: var(--nds-danger-text);
 }
 
-/* How do you want to order? */
-.fw-pno-ways {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--nds-space-12);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-
-@media (max-width: 899px) {
-  .fw-pno-ways {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.fw-pno-ways legend {
-  padding: 0;
-  margin-bottom: var(--nds-space-8);
-}
-
-.fw-pno-drafts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Order details. */
-
-/* Lines. */
-
 .fw-pno-notes {
   display: flex;
   flex-direction: column;
@@ -273,29 +238,7 @@
   }
 }
 
-.fw-pno-waytitle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-6);
-}
-
 /* follow-up 22 (cp-fx12): a way in is the DS Card that is a button — its title over its hint, as the radio card drew them. */
-.fw-pno-way {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-2);
-}
-
-.fw-pno-way .fw-pno-waytitle {
-  font-size: var(--nds-font-size-base);
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text);
-}
-
-.fw-pno-wayhint {
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
-}
 
 /* The note to us: two or three lines, it grows when typed into. */
 .fw-pno-notefield textarea {
@@ -419,18 +362,6 @@
   list-style: none;
 }
 
-.fw-pno-locked {
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  margin: 0;
-  padding: var(--nds-space-8) var(--nds-space-12);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
 /* ---- end F-CP-150 */
 
 /* ---- F-CP-154 (12 §2 part 6; review E4): "Your price" (od-w1.1: the lines and the roster moved to src/lib/order-draft). */
@@ -454,3 +385,19 @@
   text-align: right;
 }
 /* ---- end F-CP-154 */
+
+/* od-w1.2 (THE SIMPLE ORDER START R1): "Add from: catalogue · a past order · a sheet" beside "Add a product". */
+.fw-pno-addfrom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pno-addway {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}

@@ -13,7 +13,7 @@ import { ppeKey, styleName, typeKey } from '../../catalogue/model'
 import { StyleCardView } from '../../catalogue/view/StyleCards'
 import { piecesOfCells } from '../model'
 import { useOrderingWords } from '../words'
-import { useSizeCopy } from '../../../../lib/order-draft/view/LinesSection' // od-w1.1: the size grid's words are the draft part's
+import { useSizeCopy } from '../../../../lib/order-draft/view/RowWindows' // od-w1.1: the size grid's words are the draft part's
 import { Loading, PricesNote, ReadFailed } from './parts'
 
 /**

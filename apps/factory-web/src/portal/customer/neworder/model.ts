@@ -1,10 +1,10 @@
 import { formatNumber } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
-import type { DraftRecord, DraftRequest, PastLine, RequestSource, RequestStatus, Verdict } from './api'
+import type { DraftRecord, DraftRequest, PastLine, ProblemCode, RequestSource, RequestStatus, Verdict } from './api'
 // B-TH-304: the customer's own order numbers.
 import type { OwnNumber } from './api'
 // od-w1.1: the ONE draft order's pure parts live in src/lib/order-draft (both doors draw them); the portal's own stay here.
-import { customLinesOf, customTitleOf, entriesInOrder, writeHeld, type AddKind, type DraftEntry, type WriteFacts } from '../../../lib/order-draft/model'
+import { customLinesOf, customTitleOf, entriesInOrder, writeHeld, type DraftEntry, type WriteFacts } from '../../../lib/order-draft/model'
 export * from '../../../lib/order-draft/model'
 
 /**
@@ -24,7 +24,6 @@ export const WAYS = ['pick', 'reorder', 'upload'] as const
 export type Way = (typeof WAYS)[number]
 export const isWay = (value: unknown): value is Way => typeof value === 'string' && (WAYS as readonly string[]).includes(value)
 
-export const WAY_SOURCE: Readonly<Record<Way, RequestSource>> = { pick: 'PICKER', reorder: 'REORDER', upload: 'UPLOAD' }
 export const SOURCE_WAY: Readonly<Record<RequestSource, Way>> = { PICKER: 'pick', REORDER: 'reorder', UPLOAD: 'upload' }
 
 export interface NewOrderQuery {
@@ -35,8 +34,6 @@ export interface NewOrderQuery {
   /** A past order to reorder (the order record's "Reorder this line"), and the line. */
   reorder?: string | null
   line?: string | null
-  /** F-CP-154: the start's "Describe it" — the new draft opens with its "Describe what you need" window. */
-  add?: AddKind | null
 }
 
 /** `/p/<party>/orders/new?draft=&way=&styles=&reorder=&line=`. */
@@ -47,7 +44,6 @@ export function newOrderHref(prefix: string, query: NewOrderQuery = {}): string 
   if (query.styles && query.styles.length > 0) search.set('styles', query.styles.join(','))
   if (query.reorder) search.set('reorder', query.reorder)
   if (query.line) search.set('line', query.line)
-  if (query.add) search.set('add', query.add) // F-CP-154
   const text = search.toString()
   return `${prefix}/orders/new${text ? `?${text}` : ''}`
 }
@@ -87,14 +83,20 @@ export function priceText(value: string | null | undefined, currency: string, lo
 /** The sizes a past order's line asked that the copy leaves out. */
 export const droppedOf = (line: Pick<PastLine, 'sizesOrdered' | 'sizes'>): string[] => line.sizesOrdered.map((row) => row.size).filter((size) => !line.sizes.some((row) => row.size === size))
 
-/** Why the send cannot go (key + count), or null. Typed work is saved first by the send itself. */
-export function sendHeld(request: Pick<DraftRequest, 'problems' | 'status'>, facts: WriteFacts & { emptyLine: boolean }): { key: string; count?: number } | null {
+/**
+ * od-w1.2 (THE SIMPLE ORDER START R1): the problems that hold Send — an INVALID value only (a date that passed, an address no longer in
+ * use, a style no longer sold, a stale price …), never a missing one (no line, no sizes, no total, no people). The server's own rule
+ * (factory-domain `holdsSend`, od-s); a draft may go with nothing in it.
+ */
+export const SEND_HOLDING: ReadonlySet<ProblemCode> = new Set<ProblemCode>(['TOO_MANY_LINES', 'DATE_PAST', 'SHIP_TO_ARCHIVED', 'STYLE_NOT_SOLD', 'COLOUR_DISCONTINUED', 'SIZE_NOT_OFFERED', 'SIZES_NOT_TOTAL', 'MTM_CLOSED', 'GARMENT_TYPE_GONE', 'PRICE_CHANGED'])
+
+/** Why the send cannot go (key + count), or null: an invalid value only (R1). Typed work is saved first by the send itself. */
+export function sendHeld(request: Pick<DraftRequest, 'problems' | 'status'>, facts: WriteFacts): { key: string; count?: number } | null {
   const held = writeHeld(facts)
   if (held) return { key: held }
   if (request.status !== 'DRAFT') return { key: 'held.notDraft' }
-  if (facts.emptyLine) return { key: 'lines.held.empty' }
-  if (request.problems.length > 0) return { key: 'held.problems', count: request.problems.length }
-  return null
+  const holding = request.problems.filter((problem) => SEND_HOLDING.has(problem.code)).length
+  return holding > 0 ? { key: 'held.problems', count: holding } : null
 }
 
 /** How the draft is named in the start's "Continue your draft" row. */
@@ -181,7 +183,7 @@ export function whoMayOrder(people: readonly { readonly id: string; readonly dis
  * Why "Send to the factory" cannot go now (key, count, names), or null — held, never hidden: a preview, offline, saving; not a
  * draft any more; a colleague who fills drafts but may not order (the names of who can); a line with no piece; problems.
  */
-export function draftSendHeld(request: Pick<DraftRequest, 'problems' | 'status' | 'may'>, facts: WriteFacts & { emptyLine: boolean }, names: readonly string[]): { key: string; count?: number; names?: string } | null {
+export function draftSendHeld(request: Pick<DraftRequest, 'problems' | 'status' | 'may'>, facts: WriteFacts, names: readonly string[]): { key: string; count?: number; names?: string } | null {
   const held = writeHeld(facts)
   if (held) return { key: held }
   if (request.status !== 'DRAFT') return { key: 'held.notDraft' }

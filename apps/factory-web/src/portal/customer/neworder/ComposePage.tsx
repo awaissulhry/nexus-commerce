@@ -39,7 +39,6 @@ import { requestBandOf } from './band'
 import { NS, stylesOf, todayIn } from './model'
 import { closedRefusal, failedKey, goesToOf, openItems, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
 // B-TH-304
-import { catalogueDoorOf } from './request-model'
 import { RequestPageView, type RequestPageModel } from './view/RequestPageView'
 // B-TH-282: the customer's files go right after Send, onto the new request (B-TH-085).
 import { filesOutcome } from '../../../lib/request-compose/files'
@@ -476,7 +475,8 @@ function ComposeContainer() {
           allHref: pageBuilt('orders.list') ? `${frame.prefix}/orders?chip=REQUESTED` : null,
           returnsHref,
           // B-TH-304: the catalogue door, open again (catalogue orders land in Sales › Incoming; no answer-time promise).
-          catalogue: catalogueDoorOf(frame.prefix),
+          // od-w1.2 (S1-B6): no ways to the draft from here — this door is for one without the drafts right (the loop is gone).
+          catalogue: null,
         },
         receipt: answer ? receiptOf(answer.answer, answer.draft, choices, frame.prefix, at) : null,
         discardOpen,

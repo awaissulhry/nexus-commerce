@@ -1,58 +1,40 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, Eye, RefreshCw, WifiOff } from 'lucide-react'
-import { Banner, Card, Field, type MenuItemDef } from '@nexus/ui/components'
+import { Eye, PencilLine, RefreshCw, WifiOff } from 'lucide-react'
+import { Banner, Card, Field } from '@nexus/ui/components'
 import { SaveStatus, type SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
 import { Button, Input, Select } from '@nexus/ui/primitives'
-import { DateField, Textarea, useDsWords } from '../../i18n/ds-parts'
+import { DateField, useDsWords } from '../../i18n/ds-parts'
 import { ListKeysInfo } from '../../../list-frame/ListKeysInfo'
-import type { DraftFilePart } from '../schema'
-import {
-  draftBannerOf,
-  draftFilesOf,
-  draftMailName,
-  filesAddHeld,
-  LATER_PART_OF,
-  laterToggleOf,
-  problemPlace,
-  problemWords,
-  savedWords,
-  shipToOptions,
-  uploadsOpenOf,
-  type DraftChip,
-  type DraftPart,
-  type DraftView,
-  type HeaderDraft,
-  type HeaderField,
-} from '../model'
+import { draftBannerOf, draftFilesOf, draftMailName, filesAddHeld, problemWords, productRowsOf, savedByWords, shipToOptions, stillOpenEntries, uploadsOpenOf, type DraftView, type HeaderDraft, type HeaderField, type StillOpenEntry } from '../model'
+import type { SavedBy } from '../schema'
 import { DraftDoorProvider, useDraftWords, type DraftDoor } from '../words'
-import { DraftFilesCard, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
-import { LinesSection, type LinesActions } from './LinesSection'
-import { DraftChecklist, PartHeading } from './parts'
-import { PeopleRoster, type PeopleRosterActions } from './PeopleRoster'
+import { ACCEPT, type FilesBoxActions, type UploadRow } from './files'
+import { OrderMail } from './OrderMail'
+import { ProductsTable, type ProductsTableActions } from './ProductsTable'
+import { StillOpen } from './StillOpen'
+import '../order-draft.css'
 
 /**
- * The ONE draft order's page body (THE SIMPLE ORDER START, od-w1.1 — moved out of the portal's `NewOrderView`, F-CP-150…154): ONE
- * banner by weight, the meta line (who reads it, when it was saved), the checklist strip, the host's panels, the part cards — What you
- * need (the lines, "Add a line ▾"), Logos ‖ References, People and sizes, Date and delivery ‖ Notes —, the host's own cards, the keys
- * in ONE information icon at the foot. No frame, no band, no thread, no price: each host draws its frame around it (the portal's
- * record frame, the office's), gives its commands through `actions` and its own cards through `cards` (money lives only there).
- * `kind` picks the door's whole word set.
+ * The ONE draft order's page (THE SIMPLE ORDER START R1; 10-design-r1 § 1–§ 4) — the same part in both doors, from the start to Send /
+ * Confirm: ONE banner by weight, the head's meta line, the MAIL (Subject · Message · Attachments), the PRODUCTS table, Date and
+ * delivery, Still open (information only) and the host's own cards in ONE row under it, the keys in ONE information icon at the foot.
+ * The start is the same page before its first save (`draft` null): the mail and an empty table, nothing required, no Start button —
+ * the first input makes the draft; the host adds what continues a draft under it (`continueSlot`). No frame, no band, no thread, no
+ * price: each host draws its frame around it, gives its commands through `actions`, its own cards through `cards` (money lives only
+ * there), its windows through `dialogs`. `kind` picks the door's whole word set.
  */
 
 export interface DraftPageModel {
-  /** The draft without a single price (`draftViewOf`). */
-  draft: DraftView
+  /** The draft without a single price (`draftViewOf`); null = the start, before its first save. */
+  draft: DraftView | null
   /** Today in the site's zone: the earliest requested date. */
   today: string
   header: HeaderDraft
   /** Field → a key of the part's words. */
   headerErrors: Partial<Record<HeaderField, string>>
   save: SaveStatusState
-  cells: Readonly<Record<string, Readonly<Record<string, number>>>>
-  notes: Readonly<Record<string, string>>
-  saving: readonly string[]
   /** Why nothing can be written now (words), or null. */
   writeHeld: string | null
   /** "Add a new address": held with the reason (words), or null. */
@@ -61,18 +43,18 @@ export interface DraftPageModel {
   problem: string | null
   /** The draft changed elsewhere while something was typed here. */
   stale: boolean
-  /** Who changed it meanwhile (a name), or null. */
-  staleBy?: string | null
+  /** Who changed it meanwhile (a colleague by name; any office save is "the factory" on the portal), or null. */
+  staleBy?: SavedBy | null
   notice: { lines: readonly string[]; undo: boolean } | null
-  /** The problems are listed (after Show me). */
-  showProblems: boolean
   offlineSince: string | null
-  /** The checklist strip (the host counts its own parts). */
-  chips: readonly DraftChip[]
-  /** "Add a line ▾": the host's ways in. */
-  addLine: readonly MenuItemDef[]
+  /** "Add a product" drew a row that is not saved yet. */
+  pending: boolean
+  /** The styles the Product cell offers (the customer's catalogue); null while not read. */
+  styles: readonly { readonly id: string; readonly code: string; readonly name: string }[] | null
+  /** Rows being saved. */
+  saving: readonly string[]
   /** The files going up now, or that did not go (their words). */
-  uploads?: readonly UploadRow[]
+  uploads: readonly UploadRow[]
   /** The keys of the page (the ONE information icon at the foot). */
   keys: readonly { keys: string[]; words: string }[]
 }
@@ -81,50 +63,53 @@ export interface DraftPageActions {
   onHeader?: (field: HeaderField, value: string) => void
   onHeaderLeave?: (field: HeaderField) => void
   onAddAddress?: () => void
-  onShowMe?: () => void
   onUndo?: () => void
   onDismissNotice?: () => void
   onReload?: () => void
   onRetrySave?: () => void
-  onChip?: (target: string) => void
-  files?: DraftFilesActions
-  lines?: LinesActions
-  people?: PeopleRosterActions
+  /** The mail's Attachments (the draft's own files). */
+  files?: FilesBoxActions
+  table?: ProductsTableActions
+  /** A Still open item: the focus moves to its row (or the date card). */
+  onStillOpen?: (entry: StillOpenEntry) => void
 }
 
-export function DraftPage({ kind, model, actions, panels, cards, dialogs, onSendKey }: { kind: DraftDoor; model: DraftPageModel; actions?: DraftPageActions; panels?: ReactNode; cards?: ReactNode; dialogs?: ReactNode; onSendKey?: () => void }) {
+export interface DraftPageSlots {
+  /** The office's customer picker, above the mail (the start). */
+  above?: ReactNode
+  /** The host's panels between the mail and the table (the portal's past orders and sheet). */
+  panels?: ReactNode
+  /** Under the table, beside "Add a product" (the portal's "Add from: catalogue · a past order · a sheet"). */
+  addFrom?: ReactNode
+  /** The start: "Continue a draft" under the table. */
+  continueSlot?: ReactNode
+  /** The host's own cards (Send · Your price / Confirm · Design work · Price), in ONE row under Still open. */
+  cards?: ReactNode
+  dialogs?: ReactNode
+}
+
+export function DraftPage({ kind, model, actions, slots, onSendKey }: { kind: DraftDoor; model: DraftPageModel; actions?: DraftPageActions; slots?: DraftPageSlots; onSendKey?: () => void }) {
   return (
     <DraftDoorProvider door={kind}>
-      <DraftBody model={model} actions={actions} panels={panels} cards={cards} onSendKey={onSendKey} />
-      {dialogs}
+      <DraftBody model={model} actions={actions} slots={slots} onSendKey={onSendKey} />
+      {slots?.dialogs}
     </DraftDoorProvider>
   )
 }
 
-function DraftBody({ model, actions, panels, cards, onSendKey }: { model: DraftPageModel; actions?: DraftPageActions; panels?: ReactNode; cards?: ReactNode; onSendKey?: () => void }) {
+function DraftBody({ model, actions, slots, onSendKey }: { model: DraftPageModel; actions?: DraftPageActions; slots?: DraftPageSlots; onSendKey?: () => void }) {
   const words = useDraftWords()
-  const { t } = words
+  const { t, door } = words
   const ds = useDsWords()
-  const request = model.draft.request
-  const chip = (part: DraftPart): DraftChip => model.chips.find((entry) => entry.part === part)!
-  const kind = draftBannerOf({ offline: model.offlineSince !== null, stale: model.stale, refused: model.problem !== null, notice: model.notice !== null, problems: request.problems.length })
-  const kit = { t, price: () => null, locale: words.locale }
-  const files = draftFilesOf(request)
-  const capKey = filesAddHeld(request, { preview: false, offline: false, busy: false })
-  const filesModel = (part: DraftFilePart): DraftFilesModel => {
-    const later = laterToggleOf(request, LATER_PART_OF[part])
-    return {
-      part,
-      files: part === 'LOGO' ? files.logos : part === 'REFERENCE' ? files.references : files.sheets,
-      lines: request.lines,
-      uploading: model.uploads ?? [],
-      open: uploadsOpenOf(request),
-      addHeld: model.writeHeld ?? (capKey ? t(capKey) : null),
-      removeHeld: model.writeHeld,
-      later: later ? { on: later.on, held: model.writeHeld } : null,
-      draftName: draftMailName(request, t),
-    }
-  }
+  const request = model.draft?.request ?? null
+  const banner = draftBannerOf({ offline: model.offlineSince !== null, stale: model.stale, refused: model.problem !== null, notice: model.notice !== null, problems: 0 })
+  const rows = request ? productRowsOf(request, words.locale) : []
+  const files = request ? draftFilesOf(request) : null
+  const capKey = request ? filesAddHeld(request, { preview: false, offline: false, busy: false }) : null
+  const own = files ? [...files.logos, ...files.references].filter((file) => file.lineId === null) : []
+  const entries = request ? stillOpenEntries(request.stillOpen, rows, t) : []
+  const headerProblems = request ? request.problems.filter((problem) => problem.lineId === null) : []
+  const saved = model.save.kind === 'saving' || model.save.kind === 'failed'
   return (
     <div
       className="fw-od fw-od-draft"
@@ -136,8 +121,8 @@ function DraftBody({ model, actions, panels, cards, onSendKey }: { model: DraftP
       }}
     >
       {/* ONE banner, by weight. */}
-      {kind === 'offline' && model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: words.time(model.offlineSince) })} /> : null}
-      {kind === 'stale' ? (
+      {banner === 'offline' && model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: words.time(model.offlineSince) })} /> : null}
+      {banner === 'stale' ? (
         <Banner
           tone="warning"
           title={t('draft.stale')}
@@ -147,11 +132,11 @@ function DraftBody({ model, actions, panels, cards, onSendKey }: { model: DraftP
             </Button>
           }
         >
-          {model.staleBy ? <p>{t('draftPage.changedBy', { name: model.staleBy })}</p> : null}
+          {model.staleBy ? <p>{model.staleBy.who === 'FACTORY' && door === 'portal' ? t('save.changedByFactory') : t('draftPage.changedBy', { name: model.staleBy.name ?? '' })}</p> : null}
         </Banner>
       ) : null}
-      {kind === 'refused' && model.problem ? <Banner tone="danger" title={model.problem} /> : null}
-      {kind === 'notice' && model.notice ? (
+      {banner === 'refused' && model.problem ? <Banner tone="danger" title={model.problem} /> : null}
+      {banner === 'notice' && model.notice ? (
         <Banner
           tone="success"
           title={model.notice.lines[0]}
@@ -177,82 +162,83 @@ function DraftBody({ model, actions, panels, cards, onSendKey }: { model: DraftP
           ) : null}
         </Banner>
       ) : null}
-      {kind === 'problems' ? (
-        <Banner
-          tone="warning"
-          icon={<AlertTriangle size={16} aria-hidden />}
-          title={t('draftPage.problems', { count: request.problems.length })}
-          action={
-            <Button size="sm" variant="secondary" onClick={() => actions?.onShowMe?.()}>
-              {t('summary.showMe')}
-            </Button>
-          }
-        >
-          {model.showProblems ? (
-            <ul className="fw-od-notes">
-              {request.problems.map((problem, index) => (
-                <li key={index} className="fw-od-note is-danger">
-                  <a href={`#${problemPlace(problem)}`}>{problemWords(problem, request.lines, kit, request.customLines ?? [])}</a>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </Banner>
-      ) : null}
+      {/* The head's meta line: who reads it (portal), the design started (portal), when and by whom it was saved. */}
       <div className="fw-od-draftmeta">
-        <span className="fw-od-shared">
-          <Eye size={14} aria-hidden /> {t('draftPage.shared')}
-        </span>
-        {model.save.kind === 'saving' || model.save.kind === 'failed' ? (
+        {door === 'portal' && request ? (
+          <span className="fw-od-shared">
+            <Eye size={14} aria-hidden /> {t('head.shared')}
+            {request.designStarted ? (
+              <strong className="fw-od-design">
+                <PencilLine size={14} aria-hidden /> {t('head.design')}
+              </strong>
+            ) : null}
+          </span>
+        ) : (
+          <span />
+        )}
+        {saved ? (
           <SaveStatus state={model.save} formatTime={words.time} labels={ds.saveStatus} onRetry={actions?.onRetrySave} retryHeld={model.writeHeld} />
         ) : (
           <span className="fw-od-quiet" role="status">
-            {savedWords(request, t, words.time)}
+            {request ? savedByWords(request, t, words.time) : t('save.notYet')}
           </span>
         )}
       </div>
-      <DraftChecklist chips={model.chips} onChip={actions?.onChip} />
-      {panels}
-      <Card padded>
-        <LinesSection model={{ draft: model.draft, cells: model.cells, notes: model.notes, saving: model.saving, writeHeld: model.writeHeld, chip: chip('NEED'), addLine: model.addLine }} actions={actions?.lines} />
-      </Card>
-      {/* F-CP-151: 2 Logos beside 3 References; the measurement sheets inside 4 People and sizes. */}
-      <div className="fw-od-pair">
-        <DraftFilesCard chip={chip('LOGOS')} model={filesModel('LOGO')} actions={actions?.files} />
-        <DraftFilesCard chip={chip('REFERENCES')} model={filesModel('REFERENCE')} actions={actions?.files} />
-      </div>
-      <Card padded>
-        <section className="fw-od-section" id={chip('PEOPLE').target} tabIndex={-1} aria-labelledby="part-people-title">
-          <PartHeading chip={chip('PEOPLE')} id="part-people-title" />
-          <PeopleRoster model={{ draft: model.draft, writeHeld: model.writeHeld, sheets: filesModel('SHEET') }} actions={{ ...actions?.files, ...actions?.people }} />
-        </section>
-      </Card>
-      <div className="fw-od-pair">
-        <DateCard model={model} actions={actions} chip={chip('DATE')} />
-        <NotesCard model={model} actions={actions} chip={chip('NOTES')} />
-      </div>
-      {cards}
-      {/* review G3: the page's keys in ONE information icon at its foot, never as hints above the cards. */}
-      <div className="fw-od-draftfoot">
-        <ListKeysInfo keys={model.keys.map((entry) => ({ keys: entry.keys, does: entry.words }))} />
-      </div>
+      {slots?.above}
+      <OrderMail
+        model={{
+          start: request === null,
+          header: model.header,
+          headerErrors: model.headerErrors,
+          writeHeld: model.writeHeld,
+          attachments: {
+            files: own,
+            logos: files ? files.logos.map((file) => file.id) : [],
+            uploading: model.uploads.filter((row) => !row.lineId),
+            open: request ? uploadsOpenOf(request) : true,
+            addHeld: model.writeHeld ?? (capKey ? t(capKey) : null),
+            removeHeld: model.writeHeld,
+            draftName: request ? draftMailName(request, t) : '',
+            dropKey: 'mail.drop',
+            accept: ACCEPT.REFERENCE,
+          },
+        }}
+        actions={{ onHeader: actions?.onHeader, onHeaderLeave: actions?.onHeaderLeave, files: actions?.files }}
+      />
+      {slots?.panels}
+      <ProductsTable model={{ rows, pending: model.pending, writeHeld: model.writeHeld, styles: model.styles, saving: model.saving }} actions={actions?.table} below={slots?.addFrom} />
+      {request ? (
+        <>
+          <DateCard model={model} actions={actions} problems={headerProblems.map((problem) => problemWords(problem, [], { t, price: () => null, locale: words.locale }))} />
+          <StillOpen entries={entries} openCount={request.stillOpen?.openCount ?? entries.length} noProducts={rows.length === 0} onGo={actions?.onStillOpen} />
+          {slots?.cards ? <div className="fw-od-hostrow">{slots.cards}</div> : null}
+          {/* review G3: the page's keys in ONE information icon at its foot, never as hints above the cards. */}
+          <div className="fw-od-draftfoot">
+            <ListKeysInfo keys={model.keys.map((entry) => ({ keys: entry.keys, does: entry.words }))} />
+          </div>
+        </>
+      ) : (
+        slots?.continueSlot
+      )}
     </div>
   )
 }
 
-/** 5 Date and delivery: their PO, the date wanted, ship-to with "Add a new address" — each saved on leaving the field. */
-function DateCard({ model, actions, chip }: { model: DraftPageModel; actions?: DraftPageActions; chip: DraftChip }) {
+/** Date and delivery: the date wanted, their PO, ship-to with "Add a new address" — each saved on leaving the field. */
+function DateCard({ model, actions, problems }: { model: DraftPageModel; actions?: DraftPageActions; problems: readonly string[] }) {
   const { t } = useDraftWords()
-  const options = shipToOptions(model.draft.addresses, model.header.shipToAddressId || null)
+  const options = shipToOptions(model.draft?.addresses ?? [], model.header.shipToAddressId || null)
   const chosen = options.find((option) => option.id === model.header.shipToAddressId)
   const error = (field: HeaderField) => (model.headerErrors[field] ? t(model.headerErrors[field]!) : undefined)
   const held = model.writeHeld !== null
   return (
     <Card padded>
-      <section className="fw-od-section" id={chip.target} tabIndex={-1} aria-labelledby="head-title">
-        <PartHeading chip={chip} id="head-title" />
+      <section className="fw-od-section" id="od-date" tabIndex={-1} aria-labelledby="od-date-title">
+        <h2 id="od-date-title" className="fw-od-h2">
+          {t('date.title')}
+        </h2>
         <div className="fw-od-fields">
-          <Field label={t('head.date')} hint={t('head.dateHint')} error={error('requestedDate')}>
+          <Field label={t('row.date')} error={error('requestedDate')}>
             <DateField
               value={model.header.requestedDate}
               min={model.today}
@@ -264,55 +250,46 @@ function DateCard({ model, actions, chip }: { model: DraftPageModel; actions?: D
               }}
             />
           </Field>
-          <Field label={t('head.ref')} hint={t('head.refHint')} error={error('customerRef')}>
+          <Field label={t('date.ref')} error={error('customerRef')}>
             <Input value={model.header.customerRef} maxLength={100} disabled={held} onChange={(event) => actions?.onHeader?.('customerRef', event.target.value)} onBlur={() => actions?.onHeaderLeave?.('customerRef')} />
           </Field>
-          <div className="fw-od-field-wide">
-            <Field
-              label={t('head.shipTo')}
-              hint={chosen?.state === 'WAITING' ? t('head.shipToWaiting') : chosen?.state === 'ARCHIVED' ? t('head.shipToGone') : options.length === 0 ? t('head.shipToNone') : t('head.shipToHint')}
-              error={error('shipToAddressId')}
-            >
-              <div className="fw-od-shipto">
-                <Select
-                  value={model.header.shipToAddressId}
-                  disabled={held}
-                  onChange={(event) => {
-                    actions?.onHeader?.('shipToAddressId', event.target.value)
-                    actions?.onHeaderLeave?.('shipToAddressId')
-                  }}
-                >
-                  <option value="">{t('head.shipToChoose')}</option>
-                  {options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {[option.name, option.line].filter(Boolean).join(' — ')}
-                      {option.isDefault ? ` (${t('head.default')})` : option.state === 'WAITING' ? ` (${t('head.waiting')})` : option.state === 'ARCHIVED' ? ` (${t('head.archived')})` : ''}
-                    </option>
-                  ))}
-                </Select>
-                <Button variant="secondary" heldReason={model.addAddressHeld} onClick={() => actions?.onAddAddress?.()}>
-                  {t('head.addAddress')}
-                </Button>
-              </div>
-            </Field>
-          </div>
+          <Field
+            label={t('row.shipTo')}
+            hint={chosen?.state === 'WAITING' ? t('head.shipToWaiting') : chosen?.state === 'ARCHIVED' ? t('head.shipToGone') : options.length === 0 ? t('head.shipToNone') : undefined}
+            error={error('shipToAddressId')}
+          >
+            <div className="fw-od-shipto">
+              <Select
+                value={model.header.shipToAddressId}
+                disabled={held}
+                onChange={(event) => {
+                  actions?.onHeader?.('shipToAddressId', event.target.value)
+                  actions?.onHeaderLeave?.('shipToAddressId')
+                }}
+              >
+                <option value="">{t('head.shipToChoose')}</option>
+                {options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {[option.name, option.line].filter(Boolean).join(' — ')}
+                    {option.isDefault ? ` (${t('head.default')})` : option.state === 'WAITING' ? ` (${t('head.waiting')})` : option.state === 'ARCHIVED' ? ` (${t('head.archived')})` : ''}
+                  </option>
+                ))}
+              </Select>
+              <Button variant="secondary" heldReason={model.addAddressHeld} onClick={() => actions?.onAddAddress?.()}>
+                {t('head.addAddress')}
+              </Button>
+            </div>
+          </Field>
         </div>
-      </section>
-    </Card>
-  )
-}
-
-/** 7 Notes: their note to us (saved on leaving the field). */
-function NotesCard({ model, actions, chip }: { model: DraftPageModel; actions?: DraftPageActions; chip: DraftChip }) {
-  const { t } = useDraftWords()
-  const error = model.headerErrors.note ? t(model.headerErrors.note) : undefined
-  return (
-    <Card padded>
-      <section className="fw-od-section" id={chip.target} tabIndex={-1} aria-labelledby="part-notes-title">
-        <PartHeading chip={chip} id="part-notes-title" />
-        <Field label={t('head.note')} hint={t('head.noteHint')} error={error}>
-          <Textarea value={model.header.note} rows={4} maxLength={4000} disabled={model.writeHeld !== null} onChange={(event) => actions?.onHeader?.('note', event.target.value)} onBlur={() => actions?.onHeaderLeave?.('note')} />
-        </Field>
+        {problems.length > 0 ? (
+          <ul className="fw-od-notes">
+            {problems.map((words, index) => (
+              <li key={index} className="fw-od-note is-danger">
+                {words}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
     </Card>
   )

@@ -20,11 +20,25 @@ export const DRAFT_NS = 'order-draft'
 export type DraftDoor = 'portal' | 'office'
 
 /**
- * The keys the office says in its own voice (`order-draft` `office.<key>`: "What the customer needs", IT "tu"). Any other key reads
- * the same words in both doors. od-w1.1 moves the portal's words as they are: the office's voice comes with the face (w1.2) and the
- * office's host (w2), key by key.
+ * The keys the office says in its own voice (`order-draft` `office.<key>`: "The customer's message", IT "tu"; 10-design-r1 § 6's office
+ * voice). Any other key reads the same words in both doors.
  */
-export const OFFICE_VOICE: ReadonlySet<string> = new Set<string>()
+export const OFFICE_VOICE: ReadonlySet<string> = new Set([
+  'cell.productPh',
+  'date.ref',
+  'mail.attHint',
+  'mail.drop',
+  'mail.message',
+  'mail.nothing',
+  'opt.alwaysOpen',
+  'opt.namesOnly',
+  'opt.needChoices',
+  'opt.needTopic',
+  'save.notYet',
+  'siz.peopleFirst',
+  'start.continue',
+  'still.info',
+])
 
 export interface DraftWords {
   readonly t: (key: string, params?: Readonly<Record<string, string | number>>) => string

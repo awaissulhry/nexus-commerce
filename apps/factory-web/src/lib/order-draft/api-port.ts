@@ -1,4 +1,4 @@
-import type { CustomLineFields, CustomLineKind, DraftFile, DraftFileAnnounce, DraftRecord, HeaderBody, PersonFields, SizeAsk } from './schema'
+import type { CustomLineFields, CustomLineKind, DraftChoice, DraftFile, DraftFileAnnounce, DraftRecord, HeaderBody, PersonFields, SizeAsk, Sizing } from './schema'
 
 /**
  * The ONE draft order's commands (THE SIMPLE ORDER START, od-w1.1): each host gives them through this port — the portal on
@@ -8,12 +8,14 @@ import type { CustomLineFields, CustomLineKind, DraftFile, DraftFileAnnounce, Dr
  * write carries the DRAFT's version and an Idempotency-Key; a body names no party and no company.
  */
 
-/** A catalogue line's change: its sizes, its colour, its note. */
+/** A catalogue row's change: its sizes, its colour, its note, its sizing and open options (od- R3). */
 export interface LineChange {
   version: number
   sizes?: SizeAsk[]
   colourwayId?: string
   note?: string | null
+  sizing?: Sizing | null
+  choices?: DraftChoice[] | null
 }
 
 /** Where a file's bytes go once it is announced (a presigned PUT). */

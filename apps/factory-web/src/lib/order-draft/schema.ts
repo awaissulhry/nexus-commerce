@@ -58,7 +58,9 @@ export const draftFileSchema = z.object({
   id: z.string(),
   /** The line it is on (null: the draft's own). */
   lineId: z.string().nullable(),
-  originalName: z.string(),
+  /** od-s: null while `locked` (an office reader without the measurements right: a measurement sheet's name is personal data). */
+  originalName: z.string().nullable(),
+  locked: z.boolean().optional(),
   kind: z.string(),
   contentType: z.string(),
   sizeBytes: z.number(),
@@ -68,12 +70,47 @@ export const draftFileSchema = z.object({
 })
 export type DraftFile = z.infer<typeof draftFileSchema>
 
+// ---- od- (THE SIMPLE ORDER START R1; 13-backend § 1a, § 3; addendum R1–R3): a row's sizing, its open options, who saved the draft
+// last and what is still open — every one optional (an older answer: absent). A shape this page cannot read is left out (`catch`).
+export const SIZINGS = ['STANDARD', 'MADE_TO_MEASURE'] as const
+export type Sizing = (typeof SIZINGS)[number]
+/** Standard sizes · Custom size (made to measure) · null = Not decided yet. */
+export const sizingSchema = z.enum(SIZINGS).nullable().optional().catch(undefined)
+/** An option of a row: "Leather" with its choices "Cowhide · Kangaroo"; `picked` null = Not decided yet. Names only, never a price. */
+export const choiceSchema = z.object({ topic: z.string(), options: z.array(z.string()), picked: z.string().nullable() })
+export type DraftChoice = z.infer<typeof choiceSchema>
+export const choicesSchema = z.array(choiceSchema).nullable().optional().catch(undefined)
+export const SAVED_BY_WHO = ['YOU', 'COLLEAGUE', 'FACTORY'] as const
+export type SavedByWho = (typeof SAVED_BY_WHO)[number]
+/** FACTORY: any office save, read in the portal — its name is always null there (the portal never names a factory worker). */
+export const savedBySchema = z.object({ who: z.enum(SAVED_BY_WHO), name: z.string().nullable() })
+export type SavedBy = z.infer<typeof savedBySchema>
+/** What a still-open item names (R1): a row's product, sizing, colour, pieces or one of its options; the delivery date; the ship-to. */
+export const STILL_OPEN_KINDS = ['PRODUCT', 'SIZING', 'COLOUR', 'PIECES', 'CHOICE', 'DATE', 'SHIP_TO'] as const
+export type StillOpenKind = (typeof STILL_OPEN_KINDS)[number]
+export const stillOpenItemSchema = z.object({
+  /** A kind this page does not know is left out (`stillOpenRows`). */
+  kind: z.string(),
+  /** The row items name their row. */
+  lineId: z.string().nullable(),
+  seq: z.number().nullable(),
+  /** CHOICE only: the option's name. */
+  topic: z.string().nullable(),
+  /** NOT_DECIDED in the draft; MISSING lives only in the office's Confirm window. */
+  state: z.string(),
+  confirmNeeds: z.boolean(),
+})
+export type StillOpenItem = z.infer<typeof stillOpenItemSchema>
+export const stillOpenSchema = z.object({ items: z.array(stillOpenItemSchema), openCount: z.number(), confirmHeld: z.boolean() })
+export type StillOpen = z.infer<typeof stillOpenSchema>
+// ---- end od-
+
 export const lineSchema = z.object({
   id: z.string(),
   seq: z.number(),
   version: z.number(),
   style: named,
-  colourway: named,
+  colourway: named.nullable(), // od- R3: a catalogue row may leave its colour "Not decided yet"
   sizes: z.array(z.object({ size: z.string(), quantity: z.number(), offered: z.boolean() })),
   /** The colourway's sizes offered today, in range order: the grid's columns. */
   offered: z.array(z.string()),
@@ -90,6 +127,9 @@ export const lineSchema = z.object({
   problems: z.array(problemSchema),
   /** F-CP-154 (B-CP-076): "Your price" — the customer's own net unit price (price grain only; absent without it). */
   brandUnitPrice: z.string().nullable().optional(),
+  // od- R1: Standard sizes · Custom size · null = Not decided yet; the line's open options (names only).
+  sizing: sizingSchema,
+  choices: choicesSchema,
 })
 export type DraftLine = z.infer<typeof lineSchema>
 
@@ -137,6 +177,9 @@ export const customLineSchema = z.object({
   problems: z.array(problemSchema),
   /** "Your price" (price grain only). */
   brandUnitPrice: z.string().nullable().optional(),
+  // od- R1: Standard sizes · Custom size (made to measure) · null = Not decided yet; the line's open options (names only).
+  sizing: sizingSchema,
+  choices: choicesSchema,
 })
 export type CustomLine = z.infer<typeof customLineSchema>
 
@@ -184,6 +227,14 @@ export const requestSchema = z.object({
   // once sent; absent from an older answer: none, and made to measure open — the default).
   customLines: z.array(customLineSchema).optional(),
   madeToMeasure: madeToMeasureSchema.nullable().optional(),
+  // ---- od- (THE SIMPLE ORDER START R1, 13-backend § 3 + addendum R2): the mail's subject (the draft's title), who saved last (the
+  // portal reads "the factory" for any office save — never a worker's name), what is still open (information only; the server's
+  // `stillOpenOf`, no price item), and — portal only — whether the factory works on the design (a yes/no, never a style id).
+  subject: z.string().nullable().optional(),
+  savedBy: savedBySchema.optional().catch(undefined),
+  stillOpen: stillOpenSchema.optional().catch(undefined),
+  designStarted: z.boolean().optional().catch(undefined),
+  // ---- end od-
   // ---- end F-CP-154
 })
 export type DraftRequest = z.infer<typeof requestSchema>
@@ -211,6 +262,8 @@ export const recordSchema = z.object({ request: requestSchema, addresses: z.arra
 export type DraftRecord = z.infer<typeof recordSchema>
 
 export interface HeaderBody {
+  /** od- R2: the mail's subject (1–200, trimmed; null = none): the draft's title. */
+  subject?: string | null
   customerRef?: string | null
   shipToAddressId?: string | null
   requestedDate?: string | null
@@ -243,6 +296,10 @@ export interface CustomLineFields {
   sizes?: SizeAsk[]
   note?: string | null
   brandUnitPrice?: string | null
+  /** od- R3: Standard sizes · Custom size · null = Not decided yet (the server changes the row's kind with it, in one update). */
+  sizing?: Sizing | null
+  /** od-: the row's open options (names only; null clears them). */
+  choices?: DraftChoice[] | null
 }
 
 export interface PersonFields {

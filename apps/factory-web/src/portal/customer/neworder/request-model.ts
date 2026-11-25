@@ -8,7 +8,7 @@ import type { RequestRow, SendAnswer } from '../requests/api'
 import { requestHref, requestOrder, stateTone, yourNumberText } from '../requests/model'
 import type { OpenRequestItem, RequestReceipt } from './view/RequestPageView'
 // B-TH-304: the catalogue door's ways and addresses.
-import { newOrderHref, WAYS, type Way } from './model'
+import { newOrderHref } from './model'
 
 /**
  * Portal › New order as an e-mail (B-TH-220, B-TH-303), pure: whether the catalogue door shows, the fixed recipient line, the
@@ -57,15 +57,6 @@ export function newOrderDoorOf(search: Pick<URLSearchParams, 'get'> | null, fact
 
 // ── B-TH-304: the catalogue door on New order ────────────────────────────────────────────────────────────────────────────
 /** The door's three ways in (B-W2b-194's start), each its page's address; null while the door is closed. */
-export interface CatalogueDoor {
-  readonly ways: readonly { readonly way: Way; readonly href: string }[]
-}
-
-export function catalogueDoorOf(prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): CatalogueDoor | null {
-  if (!open) return null
-  return { ways: WAYS.map((way) => ({ way, href: newOrderHref(prefix, { way }) })) }
-}
-
 /** Where the catalogue's "Start an order" leads: the door's style picker while it is open, else the request like an e-mail. */
 export const catalogueStartHref = (prefix: string, open: boolean = CATALOGUE_DOOR_OPEN): string => (open ? newOrderHref(prefix, { way: 'pick' }) : newOrderHref(prefix))
 

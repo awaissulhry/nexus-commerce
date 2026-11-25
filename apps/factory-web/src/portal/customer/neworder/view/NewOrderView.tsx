@@ -1,53 +1,49 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, ClipboardList, FileSpreadsheet, History, Lock, Shirt, WifiOff } from 'lucide-react'
-import { Banner, Card, PressableRow, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { AlertTriangle, Send, WifiOff } from 'lucide-react'
+import { Banner, Card, SummaryTable } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
-import { Button } from '@nexus/ui/primitives' // follow-up 22: the start's ways are Cards that are buttons, no RadioCard
+import { Button } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { DraftRecord, DraftRow, RequestStatus } from '../api'
 import type { NewOrderPhase } from '../band'
-import { draftRowWords, requestedHref, WAYS, newOrderHref, type HeaderDraft, type HeaderField, type Way } from '../model'
+import { draftRowWords, requestedHref, newOrderHref, type HeaderDraft, type HeaderField, type Way } from '../model'
 import { useOrderingWords } from '../words'
 import { DiscardDialog, NewAddressDialog, StylePickerDialog, type AddressDialogActions, type AddressDialogModel, type DiscardModel, type PickerActions, type PickerModel } from './Dialogs'
 import { Loading, ReadFailed } from './parts'
 import { ReorderPanel, type ReorderActions, type ReorderModel } from './ReorderPanel'
 import { UploadPanel, type UploadActions, type UploadModel } from './UploadPanel'
-// ---- F-CP-150 (customer page plan C5, D9–D11; 12 §2; picture 22): the draft order page — the portal record frame with the draft's
-// conversation docked; od-w1.1: its body is the ONE draft order's shared part (src/lib/order-draft), the portal adds its own cards.
+// ---- F-CP-150 (customer page plan C5, D9–D11; 12 §2): the draft order page — the portal record frame with the draft's conversation
+// docked; od-w1: its body is the ONE draft order's shared part (src/lib/order-draft), the portal adds its ways in and its own cards.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalDockWidth, PortalFrameMode } from '../../../shell/record/model'
 import { draftKeys } from '../band'
-import { closedOf, draftChips, reorderHeldKey, type DraftChip } from '../model'
-import { draftViewOf } from '../../../../lib/order-draft/model'
+import { closedOf, reorderHeldKey } from '../model'
+import { draftTitleOf, draftViewOf, productRowsOf } from '../../../../lib/order-draft/model'
+import type { SavedBy } from '../../../../lib/order-draft/schema'
 import { useDraftWords } from '../../../../lib/order-draft/words'
 import { DraftPage } from '../../../../lib/order-draft/view/DraftPage'
-import { PartHeading } from '../../../../lib/order-draft/view/parts'
-import type { DraftFilesActions, UploadRow } from '../../../../lib/order-draft/view/DraftFiles'
-import { CustomLineDialog, type CustomLineDialogActions, type CustomLineDialogModel, type LinesActions } from '../../../../lib/order-draft/view/LinesSection'
+import { ContinueDrafts, useContinueLine } from '../../../../lib/order-draft/view/ContinueDrafts'
+import type { FilesBoxActions, UploadRow } from '../../../../lib/order-draft/view/files'
+import type { ProductsTableActions } from '../../../../lib/order-draft/view/ProductsTable'
+import { OptionsWindow, PiecesWindow, RowFilesWindow, type OptionsWindowActions, type OptionsWindowModel, type PiecesWindowActions, type PiecesWindowModel, type RowFilesWindowModel } from '../../../../lib/order-draft/view/RowWindows'
 import { PersonDialog, type PeopleRosterActions, type PersonDialogActions, type PersonDialogModel } from '../../../../lib/order-draft/view/PeopleRoster'
 // ---- end F-CP-150
-import { wordsHref } from '../request-model' // F-CP-152: "Just write it in words"
-// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6): lines of every kind, the People and sizes roster, "Your price".
-import { NotebookPen, Ruler } from 'lucide-react'
-import { mtmHeldKey, ownTotalOf, priceRowsOf, yourPriceAccess, type AddKind } from '../model'
+// ---- F-CP-154 (customer page plan C5; 12 §2 part 6): "Your price" — the portal's own card, a price holder only.
+import { ownTotalOf, priceRowsOf, yourPriceAccess } from '../model'
 import { YourPriceCell } from './parts'
 // ---- end F-CP-154
 
 /**
- * SCR-185 › New order & reorder (design portal.customer.neworder): sec:start "How do you want to order?" (the ways in, one
- * draft; the drafts to continue) and the draft order page. F-CP-150 (customer page plan C5, D9–D11; 12 §2; picture 22): the
- * ONE draft order — the portal record frame with the draft's conversation docked (from 1280 px; narrower behind "Messages (2
- * new)"), ONE banner, "The factory can read this draft. Work starts only when you send it." with when it was saved, the
- * checklist of seven parts as chips (a click scrolls to the part), then the part cards: 1 What you need (the lines, "Add a line
- * ▾"), 4 People and sizes (each line's pieces; the roster comes with F-CP-154), 5 Date and delivery (their PO, the date wanted,
- * ship-to with "Add a new address") beside 7 Notes, 6 Your price (our list prices and the net for a price holder; "Prices are not
- * part of your access" for anyone else). Logos and References come with F-CP-151. Send and Discard… live in the band, held with
- * words (a Designer reads who may send it). The keys in one information icon at the foot. A draft no longer a draft (sent,
- * refused, withdrawn, accepted) keeps its conversation beside its end state. The pop-ups: Add styles, New delivery address,
- * Discard this draft?
+ * SCR-185 › New order & reorder (design portal.customer.neworder) — od-w1.2 (THE SIMPLE ORDER START R1; 10-design-r1): the start and
+ * the draft order are ONE page, the shared part (src/lib/order-draft): a MAIL (Subject · Message · Attachments) and ONE products
+ * table, nothing required, no Start button — the first input makes the draft (`?draft=`). The start adds "Continue a draft" under the
+ * table; both add "Add from: catalogue · a past order · a sheet" (today's windows; the draft is made at the first Add). From the first
+ * save the portal record frame docks the draft's conversation. The portal's own cards sit in ONE row under Still open: Send to the
+ * factory (always on: nothing is required — held only for a colleague who may not order, a preview, offline) and Your price (a price
+ * holder only; no card at all for anyone else). A draft no longer a draft keeps its conversation beside its end state.
  */
 
 export interface NewOrderViewModel {
@@ -56,16 +52,14 @@ export interface NewOrderViewModel {
   prefix: string
   /** Today in the site's zone: the earliest requested date. */
   today: string
-  start: { state: 'loading' | 'error' | 'ready'; drafts: readonly DraftRow[]; choosing: Way | null; held: string | null; /** F-CP-154: "Describe it" is making the draft. */ describing?: boolean }
+  /** The start's "Continue a draft" (the team's drafts). */
+  start: { state: 'loading' | 'error' | 'ready'; drafts: readonly DraftRow[] }
   way: Way | null
   record: DraftRecord | null
   header: HeaderDraft
-  /** Field → a key. */
+  /** Field → a key of the draft part's words. */
   headerErrors: Partial<Record<HeaderField, string>>
   save: SaveStatusState
-  cells: Readonly<Record<string, Readonly<Record<string, number>>>>
-  notes: Readonly<Record<string, string>>
-  saving: readonly string[]
   /** Why nothing can be written now (words), or null. */
   writeHeld: string | null
   /** "Add a new address": held with the reason (words), or null. */
@@ -79,23 +73,29 @@ export interface NewOrderViewModel {
   notice: { lines: readonly string[]; undo: boolean } | null
   /** Send's held reason (words), or null. */
   sendHeld: string | null
-  /** The problems are listed (after Show me, or a send that was held). */
-  showProblems: boolean
   /** B-TH-304 (pick A): no office number — their PO, the lines, the pieces. */
   sent: { customerRef: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
   closed: { status: RequestStatus; salesOrder: { id: string } | null } | null
   offlineSince: string | null
+  /** "Add a product" drew a row that is not saved yet. */
+  pending: boolean
+  /** The styles the Product cell offers (the customer's catalogue); null while not read. */
+  styles: readonly { readonly id: string; readonly code: string; readonly name: string }[] | null
+  /** Rows being saved. */
+  saving: readonly string[]
   dialogs: {
     picker: PickerModel | null
     address: AddressDialogModel | null
     discard: DiscardModel | null
-    // F-CP-154: a described or made-to-measure line's window; a person's window.
-    customLine?: CustomLineDialogModel | null
     person?: PersonDialogModel | null
+    // od-w1.2: a row's windows (Pieces, Options, Files).
+    pieces?: PiecesWindowModel | null
+    options?: OptionsWindowModel | null
+    rowFiles?: RowFilesWindowModel | null
   }
   // ---- F-CP-150
-  /** The colleague who changed the draft meanwhile (a 409's re-read names them once B-CP-075 says who), or null. */
-  staleBy?: string | null
+  /** Who changed the draft meanwhile (a 409's re-read), or null. */
+  staleBy?: SavedBy | null
   /** The reader's access shows orders (portal.salesOrders.view): a sent or accepted draft leads there; else who follows it. */
   seesOrders?: boolean
   /** The reader may order (portal.orderRequests.manage): Reorder a past order; else held with why (D11). */
@@ -112,13 +112,13 @@ export interface NewOrderViewModel {
 }
 
 export interface NewOrderActions {
+  /** "Add from: catalogue · a past order · a sheet" (the draft is made at the first Add). */
   onWay?: (way: Way) => void
   onContinue?: (draftId: string) => void
   onRetryStart?: () => void
   onHeader?: (field: HeaderField, value: string) => void
   onHeaderLeave?: (field: HeaderField) => void
   onAddAddress?: () => void
-  onShowMe?: () => void
   onSend?: () => void
   onTakePrices?: () => void
   onUndo?: () => void
@@ -126,26 +126,22 @@ export interface NewOrderActions {
   onReload?: () => void
   onRetry?: () => void
   onRetrySave?: () => void
-  /** F-CP-150: a chip of the checklist — scroll to its part and focus it. */
-  onChip?: (target: string) => void
-  /** F-CP-151: a part's files — add, take out, "Sending later". */
-  files?: DraftFilesActions
-  lines?: LinesActions
-  // ---- F-CP-154: "Describe it" / "Made to measure" (a new line in the customer's own words), the roster, "Your price", their windows.
-  onAddKind?: (kind: AddKind) => void
+  /** od-w1.2: the mail's Attachments, the products table, a row's windows, a Still open item. */
+  files?: FilesBoxActions
+  table?: ProductsTableActions
+  pieces?: PiecesWindowActions
+  options?: OptionsWindowActions
+  rowFiles?: FilesBoxActions & { onClose?: () => void }
+  onStillOpen?: (target: { rowId: string | null }) => void
   people?: PeopleRosterActions
   price?: { onType?: (lineId: string, text: string) => void; onLeave?: (lineId: string) => void }
-  customLine?: CustomLineDialogActions
   person?: PersonDialogActions
-  // ---- end F-CP-154
   reorder?: ReorderActions
   upload?: UploadActions
   picker?: PickerActions
   address?: AddressDialogActions
   discard?: { onConfirm?: () => void; onCancel?: () => void }
 }
-
-const WAY_ICON: Readonly<Record<Way, ReactNode>> = { pick: <Shirt size={18} aria-hidden />, reorder: <History size={18} aria-hidden />, upload: <FileSpreadsheet size={18} aria-hidden /> }
 
 /**
  * `children`: the draft's conversation (PortalThread live on `PortalOrderRequest`, the design's ThreadView), docked by the portal
@@ -156,6 +152,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
   const { t } = words
   const dw = useDraftWords()
   const ds = useDsWords()
+  const continueLine = useContinueLine()
   const offline = model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: words.time(model.offlineSince) })} /> : null
   const seesOrders = model.seesOrders ?? true
   // F-CP-150: the draft's conversation stays beside its end state (sent, refused, withdrawn, accepted).
@@ -176,7 +173,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
           title={t('sent.title')}
           // B-TH-220 (with B-TH-041): no answer-time promise. B-TH-304 (pick A): their PO, never the office's request number.
           body={sent.customerRef ? t('sent.bodyYours', { ref: sent.customerRef }) : t('sent.bodyNone')}
-          next={[t('summary.notice'), t('draftPage.sentThread')]}
+          next={[t('summary.notice'), t('draftPage.sentThread'), dw.t('send.later')]}
           facts={[
             { label: t('summary.lines'), value: String(sent.lines) },
             { label: t('summary.pieces'), value: words.pieces(sent.pieces) },
@@ -232,244 +229,186 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
     )
   }
 
-  if (model.phase === 'start') {
-    return (
-      <div className="fw-pno">
-        {offline}
-        <StartSection model={model} actions={actions} />
-      </div>
-    )
-  }
-
-  if (model.state === 'loading' || (model.state === 'ready' && !model.record)) {
+  if (model.phase !== 'start' && (model.state === 'loading' || (model.state === 'ready' && !model.record))) {
     return (
       <div className="fw-pno">
         <Loading rows={4} height={96} />
       </div>
     )
   }
-  if (model.state === 'error' || !model.record) {
+  // ── od-w1.2: the start and the draft are ONE page, the shared part; the portal adds its ways in, its panels and its own cards. ─────
+  const record = model.record
+  // A draft that could not be read (the start has none to read).
+  if (model.phase !== 'start' && (model.state === 'error' || !record)) {
     return (
       <div className="fw-pno">
         <ReadFailed title={t('draft.failed')} onRetry={actions?.onRetry} />
       </div>
     )
   }
-
-  // ── F-CP-150: the draft order page — od-w1.1: the ONE draft order's body is the shared part (src/lib/order-draft), drawn inside the
-  // portal's record frame; the portal adds its ways in, its panels, its dialogs and its own price card.
-  const record = model.record
-  const request = record.request
-  const chips = draftChips(record)
   const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
-  // F-CP-154: "Describe it" and "Made to measure" first (made to measure held with words only where the office switched it off).
-  const mtmHeld = mtmHeldKey(request)
-  const mtmWords = mtmHeld ? dw.t(mtmHeld) : null // od-w1.1: the draft part's words
-  const addKinds: MenuItemDef[] = [
-    { id: 'described', label: t('draftPage.addDescribed'), icon: <NotebookPen size={14} aria-hidden />, disabled: model.writeHeld !== null, description: model.writeHeld ?? undefined, onSelect: () => actions?.onAddKind?.('described') },
-    { id: 'mtm', label: t('draftPage.addMtm'), icon: <Ruler size={14} aria-hidden />, disabled: (model.writeHeld ?? mtmWords) !== null, description: model.writeHeld ?? mtmWords ?? undefined, onSelect: () => actions?.onAddKind?.('mtm') },
-  ]
-  const addLine: MenuItemDef[] = [
-    ...addKinds,
-    ...WAYS.map((way) => {
-      const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : model.writeHeld
-      return { id: way, label: t(`start.way.${way}`), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onWay?.(way) }
-    }),
-  ]
+  const writeHeld = model.writeHeld
+  // "Add from: catalogue · a past order · a sheet" (10-design-r1 § 2): today's windows; a past order held with why without orders.
+  const addFrom = (
+    <span className="fw-pno-addfrom">
+      <span className="fw-pno-quiet">{dw.t('add.from')}</span>
+      {(['pick', 'reorder', 'upload'] as const).map((way, index) => {
+        const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : writeHeld
+        return (
+          <span key={way} className="fw-pno-addway">
+            {index > 0 ? <span aria-hidden>·</span> : null}
+            <Button size="sm" variant="quiet" heldReason={held} onClick={() => actions?.onWay?.(way)}>
+              {dw.t(way === 'pick' ? 'add.catalogue' : way === 'reorder' ? 'add.pastOrder' : 'add.sheet')}
+            </Button>
+          </span>
+        )
+      })}
+    </span>
+  )
+  const panels = (
+    <>
+      {model.way === 'reorder' && model.reorder ? <ReorderPanel model={model.reorder} actions={actions?.reorder} /> : null}
+      {model.way === 'upload' && model.upload ? <UploadPanel model={model.upload} actions={actions?.upload} /> : null}
+    </>
+  )
+  const dialogs = (
+    <>
+      {model.dialogs.picker ? <StylePickerDialog model={model.dialogs.picker} actions={actions?.picker} /> : null}
+      {model.dialogs.address ? <NewAddressDialog model={model.dialogs.address} actions={actions?.address} /> : null}
+      {model.dialogs.discard ? <DiscardDialog model={model.dialogs.discard} onConfirm={actions?.discard?.onConfirm} onCancel={actions?.discard?.onCancel} /> : null}
+      {/* A row's windows (their refusals already in words) and a person's window (its refusal in this page's words). */}
+      {model.dialogs.pieces ? <PiecesWindow model={model.dialogs.pieces} actions={actions?.pieces} /> : null}
+      {model.dialogs.options ? <OptionsWindow model={model.dialogs.options} actions={actions?.options} /> : null}
+      {model.dialogs.rowFiles ? <RowFilesWindow model={model.dialogs.rowFiles} actions={actions?.rowFiles} onClose={actions?.rowFiles?.onClose} /> : null}
+      {model.dialogs.person ? <PersonDialog model={{ ...model.dialogs.person, failed: model.dialogs.person.failed ? t(model.dialogs.person.failed) : null }} actions={actions?.person} /> : null}
+    </>
+  )
+  const page = (
+    <DraftPage
+      kind="portal"
+      model={{
+        draft: record ? draftViewOf(record) : null,
+        today: model.today,
+        header: model.header,
+        headerErrors: model.headerErrors,
+        save: model.save,
+        writeHeld,
+        addAddressHeld: model.addAddressHeld,
+        problem: model.problem ? t(model.problem) : null,
+        stale: model.stale,
+        staleBy: model.staleBy ?? null,
+        notice: model.notice,
+        offlineSince: model.offlineSince,
+        pending: model.pending,
+        styles: model.styles,
+        saving: model.saving,
+        uploads: model.uploads ?? [],
+        keys: draftKeys(words),
+      }}
+      actions={{
+        onHeader: actions?.onHeader,
+        onHeaderLeave: actions?.onHeaderLeave,
+        onAddAddress: actions?.onAddAddress,
+        onUndo: actions?.onUndo,
+        onDismissNotice: actions?.onDismissNotice,
+        onReload: actions?.onReload,
+        onRetrySave: actions?.onRetrySave,
+        files: actions?.files,
+        table: actions?.table,
+        onStillOpen: (entry) => actions?.onStillOpen?.({ rowId: entry.rowId }),
+      }}
+      onSendKey={() => (model.sendHeld ? undefined : actions?.onSend?.())}
+      slots={{
+        panels,
+        addFrom,
+        dialogs,
+        cards: record ? (
+          <>
+            <SendCard held={model.sendHeld} onSend={actions?.onSend} />
+            {record.seesPrices && productRowsOf(record.request).length > 0 ? <PriceCard model={model} actions={actions} /> : null}
+          </>
+        ) : null,
+        continueSlot:
+          model.start.state === 'loading' ? (
+            <Loading rows={2} height={44} label={dw.t('start.continue')} />
+          ) : model.start.state === 'error' ? (
+            <ReadFailed title={t('start.draftsFailed')} onRetry={actions?.onRetryStart} />
+          ) : (
+            <ContinueDrafts
+              title={dw.t('start.continue')}
+              rows={model.start.drafts.map((row) => ({
+                id: row.id,
+                title: row.draft?.title ?? row.subject ?? draftTitleOf({ lines: [], createdAt: row.createdAt }, dw.t, words.locale, words.day),
+                line: continueLine({ openCount: row.draft?.openCount, savedAt: row.draft?.savedAt, savedBy: row.draft?.savedBy }, draftRowWords(row, t, words.day)),
+              }))}
+              onOpen={(id) => actions?.onContinue?.(id)}
+            />
+          ),
+      }}
+    />
+  )
+  // The start draws no frame (no conversation before the first save); the draft docks its conversation from the first save.
+  if (model.phase === 'start' || !record) return <div className="fw-pno">{offline}{page}</div>
   return (
     <PortalRecordFrame thread={children ?? null} threadLabel={t('draftPage.thread')} design={model.frame}>
-      <DraftPage
-        kind="portal"
-        model={{
-          draft: draftViewOf(record),
-          today: model.today,
-          header: model.header,
-          headerErrors: model.headerErrors,
-          save: model.save,
-          cells: model.cells,
-          notes: model.notes,
-          saving: model.saving,
-          writeHeld: model.writeHeld,
-          addAddressHeld: model.addAddressHeld,
-          problem: model.problem ? t(model.problem) : null,
-          stale: model.stale,
-          staleBy: model.staleBy ?? null,
-          notice: model.notice,
-          showProblems: model.showProblems,
-          offlineSince: model.offlineSince,
-          chips,
-          addLine,
-          uploads: model.uploads ?? [],
-          keys: draftKeys(words),
-        }}
-        actions={{
-          onHeader: actions?.onHeader,
-          onHeaderLeave: actions?.onHeaderLeave,
-          onAddAddress: actions?.onAddAddress,
-          onShowMe: actions?.onShowMe,
-          onUndo: actions?.onUndo,
-          onDismissNotice: actions?.onDismissNotice,
-          onReload: actions?.onReload,
-          onRetrySave: actions?.onRetrySave,
-          onChip: actions?.onChip,
-          files: actions?.files,
-          lines: actions?.lines,
-          people: actions?.people,
-        }}
-        onSendKey={() => (model.sendHeld ? undefined : actions?.onSend?.())}
-        panels={
-          <>
-            {model.way === 'reorder' && model.reorder ? <ReorderPanel model={model.reorder} actions={actions?.reorder} /> : null}
-            {model.way === 'upload' && model.upload ? <UploadPanel model={model.upload} actions={actions?.upload} /> : null}
-          </>
-        }
-        cards={<PriceCard model={model} actions={actions} chip={chips.find((entry) => entry.part === 'PRICE')!} />}
-        dialogs={
-          <>
-            {model.dialogs.picker ? <StylePickerDialog model={model.dialogs.picker} actions={actions?.picker} /> : null}
-            {model.dialogs.address ? <NewAddressDialog model={model.dialogs.address} actions={actions?.address} /> : null}
-            {model.dialogs.discard ? <DiscardDialog model={model.dialogs.discard} onConfirm={actions?.discard?.onConfirm} onCancel={actions?.discard?.onCancel} /> : null}
-            {/* F-CP-154: a described or made-to-measure line's window; a person's window (their refusal in this page's words). */}
-            {model.dialogs.customLine ? <CustomLineDialog model={{ ...model.dialogs.customLine, failed: model.dialogs.customLine.failed ? t(model.dialogs.customLine.failed) : null }} actions={actions?.customLine} /> : null}
-            {model.dialogs.person ? <PersonDialog model={{ ...model.dialogs.person, failed: model.dialogs.person.failed ? t(model.dialogs.person.failed) : null }} actions={actions?.person} /> : null}
-          </>
-        }
-      />
+      {page}
     </PortalRecordFrame>
   )
 }
 
-function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: NewOrderActions }) {
-  const words = useOrderingWords()
-  const { t } = words
-  // F-CP-152 (12 §2 Doors): the draft order's start — Pick styles, Reorder a past order (held with why for an access without
-  // orders), Upload a sheet; "Just write it in words" leads to the request like an e-mail (for who may order); the drafts to
-  // continue. ("Describe it" comes with the described lines, F-CP-154.)
-  const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
-  const wordsLink = (model.mayOrder ?? true) ? wordsHref(model.prefix) : null
-  // follow-up 22 (cp-fx12): while a way makes its draft, another press starts nothing (one draft per deliberate press).
-  const startBusy = model.start.choosing !== null || model.start.describing === true
+/** Send to the factory (R1): always on — nothing is required; held only for a colleague who may not order (their names), a preview, offline. */
+function SendCard({ held, onSend }: { held: string | null; onSend?: () => void }) {
+  const dw = useDraftWords()
   return (
     <Card padded>
-      <section className="fw-pno-section" aria-labelledby="start-title">
-        <h2 id="start-title" className="fw-pno-h2">
-          {t('start.title')}
+      <section className="fw-pno-section" aria-labelledby="od-send-title">
+        <h2 id="od-send-title" className="fw-pno-h2">
+          {dw.t('send.title')}
         </h2>
-        <fieldset className="fw-pno-ways" disabled={model.start.held !== null}>
-          <legend className="fw-pno-quiet">{t('start.intro')}</legend>
-          {/* F-CP-154 (12 §2 Doors): "Describe it" first — the new draft opens with its "Describe what you need" window. */}
-          <WayCard
-            id="describe"
-            icon={<NotebookPen size={18} aria-hidden />}
-            title={t('draftPage.start.describe')}
-            hint={model.start.describing ? t('state.saving') : t('draftPage.start.describeHint')}
-            busy={startBusy}
-            onStart={() => actions?.onAddKind?.('described')}
-          />
-          {WAYS.map((way) => {
-            const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : null
-            return (
-              <WayCard
-                key={way}
-                id={way}
-                icon={WAY_ICON[way]}
-                title={t(`start.way.${way}`)}
-                hint={model.start.choosing === way ? t('state.saving') : (held ?? t(`start.wayHint.${way}`))}
-                held={held !== null}
-                busy={startBusy}
-                onStart={() => actions?.onWay?.(way)}
-              />
-            )
-          })}
-        </fieldset>
-        {model.start.held ? <p className="fw-pno-held">{model.start.held}</p> : null}
-        {wordsLink ? (
-          <p className="fw-pno-quiet">
-            <a href={wordsLink}>{t('draftPage.start.words')}</a>
-          </p>
-        ) : null}
-        {model.start.state === 'loading' ? (
-          <Loading rows={2} height={44} label={t('start.drafts')} />
-        ) : model.start.state === 'error' ? (
-          <ReadFailed title={t('start.draftsFailed')} onRetry={actions?.onRetryStart} />
-        ) : model.start.drafts.length > 0 ? (
-          <div className="fw-pno-stack">
-            <h3 className="fw-pno-h3">{t('start.drafts')}</h3>
-            <ul className="fw-pno-drafts">
-              {model.start.drafts.map((row) => (
-                <li key={row.id}>
-                  <PressableRow leading={<ClipboardList size={16} aria-hidden />} label={draftRowWords(row, t, words.day)} onClick={() => actions?.onContinue?.(row.id)} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <p className="fw-pno-quiet">{dw.t('send.body')}</p>
+        <Button variant="primary" heldReason={held} onClick={() => onSend?.()}>
+          <Send size={14} aria-hidden /> {dw.t('send.title')}
+        </Button>
       </section>
     </Card>
   )
 }
 
-// ---- follow-up 22 (cp-fx12; design 12 §2 Doors): a way in is an ACTION, not a choice. As radio cards an arrow key moved AND picked,
-// so ArrowDown from "Describe it" started a "Pick styles" draft nobody asked for. Each way is the design system's Card that is a button
-// (`Card onClick`): only Enter, Space or a click starts it; Tab goes from way to way and an arrow key starts nothing. Its name is the
-// title, its hint (or "Saving…", or why it is held) its description; a held way stays focusable, says why and starts nothing.
-function WayCard({ id, icon, title, hint, held = false, busy, onStart }: { id: string; icon: ReactNode; title: string; hint: string; held?: boolean; busy: boolean; onStart: () => void }) {
-  const titleId = `start-way-${id}`
-  const hintId = `start-way-${id}-hint`
-  return (
-    <Card padded className="fw-pno-way" onClick={() => (held || busy ? undefined : onStart())} aria-labelledby={titleId} aria-describedby={hintId} aria-disabled={held ? true : undefined}>
-      <span id={titleId} className="fw-pno-waytitle">
-        {icon} {title}
-      </span>
-      <span id={hintId} className="fw-pno-wayhint">
-        {hint}
-      </span>
-    </Card>
-  )
-}
-// ---- end follow-up 22
-
-// ── F-CP-150: the portal's own part card ──────────────────────────────────────────────────────────────────────────────────────
-
 /**
- * 6 Your price: for a price holder (the customer's Buyer, Finance, Admin) every line by seq with its pieces, our list price beside it on
- * catalogue lines, and the ONE "Your price (without VAT)" cell (F-CP-154; saved on leaving it; frozen when sent); the total row carries
- * our net and their total (when every line has their price, else how many lines lack it); prices that changed since the draft began,
- * with "Take today's prices". Anyone else: "Prices are not part of your access" — no amount, no total, no count of priced lines (the
- * API sends none and refuses one, M-CP-2).
+ * Your price (F-CP-154; R1: one row per product): a price holder's own price per row (typed while the draft may be written, saved on
+ * leaving the cell, frozen when sent); prices that changed since the draft began, with "Take today's prices". No card at all for a
+ * reader without the price grain (S1-B9) — the API sends no price to them and refuses one from them (M-CP-2).
  */
-function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions?: NewOrderActions; chip: DraftChip }) {
+function PriceCard({ model, actions }: { model: NewOrderViewModel; actions?: NewOrderActions }) {
   const words = useOrderingWords()
-  const dw = useDraftWords() // od-w1.1: a line's name and the part's name are the draft part's words
+  const dw = useDraftWords()
   const { t } = words
   const record = model.record!
   const request = record.request
   const price = (value: string | null | undefined) => words.price(value, request.currency) ?? '—'
-  // F-CP-154: the customer's own price per line, typed by a price holder while the draft may be written.
-  const access = yourPriceAccess(record.seesPrices, request.status === 'DRAFT' ? model.writeHeld : t('held.notDraft'))
+  // Drawn only for a price holder: edit while the draft may be written, else read.
+  const access = yourPriceAccess(record.seesPrices, request.status === 'DRAFT' ? model.writeHeld : t('held.notDraft')) === 'edit' ? 'edit' : 'read'
   const rows = priceRowsOf(request, dw.t, words.locale)
   const typed = model.ownPrices ?? {}
   const own = ownTotalOf(rows, typed)
   return (
     <Card padded>
-      <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="part-price-title">
-        <PartHeading chip={chip} id="part-price-title" />
-        {access !== 'none' ? (
-          <>
+      <section className="fw-pno-section" aria-labelledby="od-price-title">
+        <h2 id="od-price-title" className="fw-pno-h2">
+          {dw.t('price.title')}
+        </h2>
             <SummaryTable
-              label={dw.t('draftPage.part.PRICE')}
+              label={dw.t('price.title')}
               density="roomy"
               stackOnPhone
-              columns={[t('draftPage.price.line'), t('summary.pieces'), t('draftPage.price.ours'), t('draftPage.price.yours')]}
-              align={['left', 'right', 'right', 'right']}
-              widths={['40%', undefined, undefined, '200px']}
+              columns={[dw.t('col.product'), dw.t('price.yours')]}
+              align={['left', 'right']}
+              widths={[undefined, '180px']}
               rows={[
                 ...rows.map((row) => ({
                   id: row.id,
                   cells: [
                     `${row.seq} · ${row.label}`,
-                    words.pieces(row.pieces),
-                    row.kind === 'CATALOGUE' ? price(row.ours) : '—',
                     <YourPriceCell
                       key="yours"
                       seq={row.seq}
@@ -483,20 +422,10 @@ function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions
                     />,
                   ],
                 })),
-                {
-                  id: 'total',
-                  cells: [
-                    <strong key="l">{t('draftPage.price.total')}</strong>,
-                    <strong key="p">{words.pieces(request.summary.pieces)}</strong>,
-                    <strong key="o">{price(request.summary.net)}</strong>,
-                    own.total !== null ? <strong key="y">{price(own.total)}</strong> : <span key="y" className="fw-pno-quiet">{t('draftPage.price.missing', { count: own.missing })}</span>,
-                  ],
-                },
+                { id: 'total', cells: [<strong key="l">{t('draftPage.price.total')}</strong>, own.total !== null ? <strong key="y">{price(own.total)}</strong> : <span key="y" className="fw-pno-quiet">{t('draftPage.price.missing', { count: own.missing })}</span>] },
               ]}
             />
-            <p className="fw-pno-quiet">
-              {t('summary.netHint')} {t('draftPage.price.frozen')}
-            </p>
+            <p className="fw-pno-quiet">{dw.t('price.frozen')}</p>
             {request.pricesChanged > 0 ? (
               <p className="fw-pno-held">
                 <AlertTriangle size={14} aria-hidden /> {t('summary.pricesChanged', { count: request.pricesChanged })}
@@ -505,12 +434,6 @@ function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions
                 </Button>
               </p>
             ) : null}
-          </>
-        ) : (
-          <p className="fw-pno-locked">
-            <Lock size={14} aria-hidden /> {t('prices.none')}
-          </p>
-        )}
       </section>
     </Card>
   )
