@@ -90,7 +90,7 @@
   },
   "row": {
     "open": "Apri l’ordine",
-    "shipments": "Spedizioni e tracciamento",
+    "shipments": "Spedizioni",
     "messages": "Messaggi",
     "menu": "Azioni per l’ordine {number}",
     "openRequest": "Apri la richiesta"
