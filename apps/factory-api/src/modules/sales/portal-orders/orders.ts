@@ -177,11 +177,12 @@ async function readList(app: FastifyInstance, request: FastifyRequest, query: Li
   const latest = latestByShipment(read.tracking)
   const pieces = piecesOfLines(read.lines, read.shipped)
   // fix-portal-numbers-1: the office's number is matched (never answered); pg-s1 S1.3: a number alone is the customer's own (above).
-  const found = (entry: { readonly row: { readonly customerRef: string | null; readonly yourNumber: { readonly seq: number } | null }; readonly officeNumber: string | null; readonly styles: readonly string[] }): boolean => {
+  // pg-fx4: words find a request by its subject too (the party's own rows only: the partner read above).
+  const found = (entry: { readonly row: { readonly customerRef: string | null; readonly subject: string | null; readonly yourNumber: { readonly seq: number } | null }; readonly officeNumber: string | null; readonly styles: readonly string[] }): boolean => {
     if (q === '') return true
     if (ownNumber !== null) return entry.row.yourNumber?.seq === ownNumber || (!q.startsWith('#') && (entry.row.customerRef ?? '').includes(q))
     const words = q.toLowerCase()
-    return [entry.row.customerRef, entry.officeNumber].some((value) => value !== null && value.toLowerCase().includes(words)) || entry.styles.some((styleId) => tenant.matching.has(styleId))
+    return [entry.row.customerRef, entry.officeNumber, entry.row.subject].some((value) => value !== null && value.toLowerCase().includes(words)) || entry.styles.some((styleId) => tenant.matching.has(styleId))
   }
 
   const orderRows = read.orders.map((order) => {
@@ -201,6 +202,7 @@ async function readList(app: FastifyInstance, request: FastifyRequest, query: Li
         kind: 'ORDER' as const,
         id: order.id,
         customerRef: order.customerRef,
+        subject: null as string | null, // pg-fx4: a request's only
         number: null,
         yourNumber: customerNumberOf('ORDER', order.customerSeq),
         orderedOn: dayOf(order.orderDate),
@@ -230,6 +232,8 @@ async function readList(app: FastifyInstance, request: FastifyRequest, query: Li
       kind: 'REQUEST' as const,
       id: request.id,
       customerRef: request.customerRef,
+      // pg-fx4 (Z5): the sent draft's subject (its title) names the row; null: none (the PO, else the kind's words, name it).
+      subject: request.subject,
       // pg-s1 S1.3 (G3-B1): never the office's request series (RQ-…: it would tell how much the others ask); it is only matched.
       number: null,
       yourNumber: null,

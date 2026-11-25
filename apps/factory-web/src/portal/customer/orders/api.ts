@@ -69,6 +69,8 @@ export const orderRowSchema = z.object({
   kind: z.enum(['ORDER', 'REQUEST']),
   id: z.string(),
   customerRef: z.string().nullable(),
+  /** pg-fx4 (Z5): a REQUEST row's subject (the sent draft's title); null: none (an ORDER row always); an older answer: absent. */
+  subject: z.string().nullable().optional(),
   number: z.string().nullable(),
   // B-TH-303
   yourNumber,

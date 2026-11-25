@@ -68,8 +68,15 @@
   }
 }
 
-/* The phone card: the PO or the request's subject wraps (never cut). */
-.fw-ocl-sub.fw-pgl-wrap {
+/* The phone card: the PO or the request's subject wraps (never cut); pg-fx4: its title too (an order request's subject). */
+.fw-ocl-sub.fw-pgl-wrap,
+.fw-sheet-plain.fw-pgl-wrap {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* pg-fx4 (Z5): an order request's name in the Number cell — plain (no page, Z7) but strong, as every row's name; one line, cut with
+   an ellipsis (the plain cell's own), the whole of it in its tip. */
+.fw-sheet-plain.fw-pgl-strong {
+  font-weight: var(--nds-font-weight-semibold);
 }

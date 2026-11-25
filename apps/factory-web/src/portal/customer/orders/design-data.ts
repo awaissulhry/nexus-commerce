@@ -193,6 +193,18 @@ export const BETA_ROWS: readonly OrderRow[] = [
 export function betaOrdersRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
   return readOf(BETA_ROWS, chip, rows, over)
 }
+/**
+ * pg-fx4 (Z5): Brand Beta's two drafts sent from New order and not decided yet (REQUEST rows, no PO): one named by its subject (one
+ * custom-size suit, as the Owner's walk), one with neither subject nor PO ("Order request"). Never "Catalogue".
+ */
+export const BETA_DRAFTS: readonly OrderRow[] = [
+  { ...betaRow(9, 'REQUESTED'), kind: 'REQUEST', customerRef: null, subject: 'Custom motorcycle suit, made to measure for our lead rider', number: null, yourNumber: null, orderedOn: dayAt(-2), promiseDate: null, originalPromiseDate: null, requestedDate: dayAt(40), netAmount: null, pieces: { ordered: 1, shipped: 0, open: 1 } },
+  { ...betaRow(10, 'REQUESTED'), kind: 'REQUEST', customerRef: null, subject: null, number: null, yourNumber: null, orderedOn: dayAt(-1), promiseDate: null, originalPromiseDate: null, requestedDate: null, netAmount: null, pieces: { ordered: 12, shipped: 0, open: 12 } },
+]
+/** Brand Beta's list read with its sent drafts (its own rows and chip counts). */
+export function betaDraftsRead(chip: OrderChip = 'OPEN', rows: readonly OrderRow[] | null = null, over: Partial<OrdersRead> = {}): OrdersRead {
+  return readOf([...BETA_DRAFTS, ...BETA_ROWS], chip, rows, over)
+}
 // ── end B-TH-223 (fix-portal-1) ──
 
 // ── one order ────────────────────────────────────────────────────────────────────────────────────────────────────────

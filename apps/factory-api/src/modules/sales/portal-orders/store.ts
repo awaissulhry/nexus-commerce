@@ -5,6 +5,9 @@ import type { ProductionShareLevel } from '@nexus/factory-domain/production-bran
 import type { PromiseMove } from '@nexus/factory-domain/sales/portal-orders/promise'
 // B-OP-044 (order page N6, lines-derived): a shipment's orders are its lines' orders.
 import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
+// pg-fx4: a sent draft's pieces by the od- lane's ONE rule, over its own partner reads of the lines and their people.
+import { piecesOfLine } from '../portal-ordering/people'
+import { readLines as readDraftLines, readPeople as readDraftPeople } from '../portal-ordering/store'
 
 /**
  * The reads of customer orders in the portal (B-W2b-175). Two kinds, never mixed in one query:
@@ -194,18 +197,23 @@ export async function requestSends(db: Reader, orderIds: readonly string[]): Pro
 export async function sentRequests(db: Reader, companyId: string) {
   const requests = await db.portalOrderRequest.findMany({
     where: { companyId, status: 'SENT' },
-    select: { id: true, number: true, customerRef: true, requestedDate: true, sentAt: true, currency: true },
+    // pg-fx4: its subject (the draft's title, od- s.3: partner-readable) names the row. NEVER `styleIds` or `decidedById` here: the
+    // partner role cannot read them (the whole read would fail).
+    select: { id: true, number: true, customerRef: true, subject: true, requestedDate: true, sentAt: true, currency: true },
     orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
     take: ORDERS_MAX,
   })
   if (requests.length === 0) return []
-  const lines = await db.portalOrderRequestLine.findMany({ where: { requestId: { in: requests.map((row) => row.id) } }, select: { id: true, requestId: true, styleId: true } })
-  const sizes = lines.length > 0 ? await db.portalOrderRequestSize.groupBy({ by: ['lineId'], where: { lineId: { in: lines.map((line) => line.id) } }, _sum: { quantity: true } }) : []
-  const piecesOf = new Map(sizes.map((row) => [row.lineId, row._sum.quantity ?? 0]))
+  // pg-fx4: every line kind counts (was: size rows only, so a custom-size line read "0 asked"): a by-person line its people, a
+  // described line its total, else its sizes — portal-ordering's piecesOfLine, over the od- lane's own partner selects of the
+  // lines and their people (partner-readable tables; read in this same partner scope: the party's own rows only).
+  const ids = requests.map((row) => row.id)
+  const lines = await readDraftLines(db, ids)
+  const people = await readDraftPeople(db, ids)
   return requests.map((request) => {
     const mine = lines.filter((line) => line.requestId === request.id)
     // B-CP-005 (schema wave "customer page 1/1"): the styles its lines name; a described or made-to-measure line may name none.
-    return { ...request, styleIds: [...new Set(mine.flatMap((line) => (line.styleId === null ? [] : [line.styleId])))], pieces: mine.reduce((sum, line) => sum + (piecesOf.get(line.id) ?? 0), 0) }
+    return { ...request, styleIds: [...new Set(mine.flatMap((line) => (line.styleId === null ? [] : [line.styleId])))], pieces: mine.reduce((sum, line) => sum + piecesOfLine(line, people), 0) }
   })
 }
 
