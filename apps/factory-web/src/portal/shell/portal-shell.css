@@ -860,5 +860,20 @@
     margin: 0 var(--nds-space-16);
     padding-bottom: calc(64px + env(safe-area-inset-bottom) + var(--nds-space-16));
     flex-direction: column;
+    /* pp-fx5 (walk W-15; 0 sideways at 375, Owner rule): a COLUMN that wraps put "Free for suppliers…" (`flex: 1 1 100%`) in a second
+       column off the screen (x 383–655, the page 280 px sideways). One column, its parts one under the other. */
+    flex-wrap: nowrap;
+  }
+
+  .fw-pfoot-free {
+    flex: 0 0 auto;
+  }
+
+  /* pp-fx5 (walk W-15): a band's tab row (a supplier order's Lines · Confirm or propose · Ship notices) longer than the phone scrolls
+     inside itself — its last tab sat 6 px past the screen's edge, the page sideways. */
+  .fw-ptabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
   }
 }

@@ -228,6 +228,16 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(phone).toContain('.fw-pband .nds-ref-value {\n    overflow-wrap: normal;\n    white-space: nowrap;\n  }')
     expect(phone).not.toMatch(/\.nds-detailhdr-meta \{\s*order: 1;\s*flex: 1 1 0;/)
   })
+
+  // pp-fx5 (walk W-15; old shell code, 0 sideways at 375 is an Owner rule): a supplier order scrolled 280 px sideways at 375 — the foot, a
+  // wrapping COLUMN, put "Free for suppliers…" in a second column off the screen; the band's tab row sat 6 px past the edge.
+  it('W-15: at 375 the foot is one column (no wrap into a second column) and a band’s tab row scrolls inside itself', () => {
+    const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
+    const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
+    expect(phone).toMatch(/\.fw-pfoot \{[^}]*flex-direction: column;[^}]*flex-wrap: nowrap;/)
+    expect(phone).toContain('.fw-pfoot-free {\n    flex: 0 0 auto;\n  }')
+    expect(phone).toContain('.fw-ptabs {\n    min-width: 0;\n    max-width: 100%;\n    overflow-x: auto;\n  }')
+  })
 })
 
 describe('L4 — the band’s status is the shared status chip (lib/order-cells StateChip: the orders list’s chip, the office’s tone)', () => {
