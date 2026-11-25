@@ -13,9 +13,8 @@ import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useT } from '../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../lib/pdf/labels'
 import { FAKE_SCENARIOS, type ApprovalPage, type ChangeRules, type FakeScenario, type RuleLine } from '../api'
-import { cancelFeeOf, changedCells, MAX_NOTE, wantedSizes, type CancelDraft, type ChangeDraft, type ReconfirmDecision } from '../model'
+import { cancelFeeOf, changedCells, MAX_NOTE, netMoved, sizeMoves, wantedSizes, type CancelDraft, type ChangeDraft, type ReconfirmDecision } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
-import { RevisionReview } from './StatusTab'
 import { Loading, ReadFailed } from './parts'
 // F-PR-13: what the ask means, before Send (frozen, cost, earliest date), in the change and the cancel pop-ups too.
 import { AskImpact, type AskImpactModel } from './AskImpact'
@@ -590,5 +589,46 @@ export function PreviewDialog({ model, onClose, onDownload, onRetry }: { model: 
         <PdfViewer src={model.bytes} title={model.title} onDownload={onDownload} labels={pdfViewerLabels(shell)} height="min(70vh, 760px)" />
       )}
     </Modal>
+  )
+}
+
+// pp-w2 (w2.4): moved here from StatusTab (deleted) — the Re-confirm dialog and the Overview's re-confirm strip draw it.
+/** The revised order's changes line by line, old → new (ChangeReview without ticks: they all go together). */
+export function RevisionReview({ page, words }: { page: ApprovalPage; words: OrderWords }) {
+  const { t } = words
+  const order = page.content.revisedOrder
+  if (!order) return null
+  const items = order.lines.map((line) => {
+    const prices = order.prices?.find((row) => row.lineId === line.lineId) ?? null
+    const values: KeyValueItem[] = [
+      { label: t('revision.pieces'), value: t('revision.oldNew', { old: line.piecesBefore, new: line.piecesAfter }) },
+      ...(sizeMoves(line).length > 0 ? [{ label: t('revision.sizes'), value: sizeMoves(line).map((size) => t('revision.size', { size: size.size, old: size.before, new: size.after })).join(' · ') }] : []),
+      ...(prices ? [{ label: t('revision.amount'), value: t('revision.oldNew', { old: words.money(prices.netBefore, order.currency), new: words.money(prices.netAfter, order.currency) }) }] : []),
+    ]
+    return {
+      id: line.lineId,
+      label: t('revision.line', { seq: line.seq, style: line.style.code, colour: line.colour.name }),
+      status: t(`revision.change.${line.change}`),
+      note: line.style.name,
+      selectable: false,
+      values,
+    }
+  })
+  const header = order.header.map((change) => ({
+    id: `h-${change.field}`,
+    label: t(`revision.field.${change.field}`),
+    status: t('revision.change.CHANGED'),
+    note: '',
+    selectable: false,
+    values: [{ label: t('revision.was'), value: change.before ? (change.field === 'requestedDate' ? words.day(change.before) : change.before) : '—' }, { label: t('revision.now'), value: change.after ? (change.field === 'requestedDate' ? words.day(change.after) : change.after) : '—' }],
+  }))
+  return (
+    <div className="fw-pord-stack">
+      <ChangeReview label={t('revision.label', { version: order.revision })} items={[...header, ...items]} selectedIds={[]} onSelectionChange={() => undefined} tick={false} />
+      {order.netAmountBefore !== undefined && order.netAmountAfter !== undefined ? (
+        <p className="fw-pord-total-move">{t('revision.net', { old: words.money(order.netAmountBefore, order.currency), new: words.money(order.netAmountAfter, order.currency) })}</p>
+      ) : null}
+      {netMoved(order) ? <p className="fw-pord-hint">{t('revision.voids')}</p> : null}
+    </div>
   )
 }
