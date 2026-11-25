@@ -7,13 +7,13 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { OrderPhase } from '../../../orders/api'
 import { NAMESPACE as SHEET_NS, phasePhrase } from '../../../orders/list/sheet/model'
-import { PHASE_ICON } from '../../../orders/list/sheet/phase-icon'
 import type { BeforeLinePart } from '../before-order'
 import type { StripTile } from '../use-customer-work'
 import type { BandChip, BandGroup, BandPicture } from '../work-band'
 // F-CQ-B (band consistency, Owner 2026-11-23): the band is drawn by the customer page's ONE band part (the design system's tiles and chips).
-import { CustomerBand } from '../../../../../lib/customer-band/CustomerBand'
-import type { BandChipItem, BandTile } from '../../../../../lib/customer-band/customer-band'
+// pg-w1: through the ONE groups band of both faces (lib/order-groups: the band frame, the groups' words, marks and tips per face).
+import { GroupsBand } from '../../../../../lib/order-groups/view/GroupsBand'
+import type { BandChipItem } from '../../../../../lib/customer-band/customer-band'
 
 /**
  * F-CW-101 (customer Work tab plan §1; 10-design §2; picture 20; lead settles S2, S3, S16, S24, S27, S32, S38) — the Work tab's band,
@@ -94,28 +94,11 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
     const words = phasePhrase(phase)
     return words.orders ? o(words.key) : s(words.key)
   }
-  const all = t('customers.work.band.all', { customer })
   const whys = model.whys.map((entry) => t(`customers.work.band.why.${entry.why}`, { count: entry.count })).join(' · ')
 
-  // The seven groups: a door only with its handler (a count of an older answer's group of two states has none: never a held door).
-  const tileOf = (group: BandGroup): BandTile => {
-    const label = groupWords(group.phase)
-    const on = model.shown === group.phase
-    const door = !!(group.door && actions?.onGroup)
-    return {
-      id: group.phase,
-      label,
-      count: group.count,
-      value: <span className="fw-cwb-num">{number(group.count)}</span>,
-      ...(door ? { title: t(on ? 'customers.work.band.groupOnTip' : 'customers.work.band.groupTip', { group: label }) } : {}),
-      note: s(`phase.note.${group.phase}`),
-      icon: PHASE_ICON[group.phase],
-      door,
-      pressed: on,
-    }
-  }
-  const live = picture.groups.filter((group) => group.phase !== 'CANCELLED').map(tileOf)
-  const cancelled = picture.groups.filter((group) => group.phase === 'CANCELLED').map(tileOf)
+  // The seven groups (pg-w1: their words, tips, notes and marks are the groups band's, office face): a door only with its handler (a
+  // count of an older answer's group of two states has none: never a held door). Cancelled stands apart (the face's closed group).
+  const groups = picture.groups.map((group) => ({ group: group.phase, count: group.count, door: !!group.door }))
   const onGroup = (id: string) => {
     const group = picture.groups.find((each) => each.phase === id)
     if (group) actions?.onGroup?.(group)
@@ -189,16 +172,10 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
       )}
     </>
   )
-  // cw fx6 (re-walk R-4): the groups could not be read — said ONCE in the chips' own words ("Couldn't be read · Try again"); the press
-  // reads the board again (the retry of the chips this same read feeds).
+  // cw fx6 (re-walk R-4): the groups could not be read — said ONCE in the chips' own words ("Couldn't be read · Try again"), by the
+  // groups band (pg-w1); its press reads the board again (the retry of the chips this same read feeds: 'late').
   const failedWords = t('customers.work.tile.failed')
-  const failed = actions?.onRetry ? (
-    <button type="button" className="fw-cb-link" onClick={() => actions.onRetry?.('late')}>
-      {failedWords}
-    </button>
-  ) : (
-    failedWords
-  )
+  const onRetry = actions?.onRetry ? { onRetry: () => actions.onRetry?.('late') } : {}
   const state = model.failed || picture.state === 'failed' ? 'failed' : picture.state === 'ready' ? 'ready' : 'reading'
   const chips = model.chips.map((chip) => {
     const item = chipOf(chip, t(`customers.work.tile.${chip.tile}`, { customer }), t(`customers.work.strip.${chip.group}`, { customer }), failedWords, model, actions)
@@ -207,22 +184,21 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
     return chip.tile === 'customer' ? { ...item, short: t('customers.work.tile.customerShort') } : item
   })
 
+  // pg-w1: the groups band (office face) says the band's name, the groups' name, the ⓘ, everything and the window's title in the
+  // customer page's own words (customers.work.band.*, with the customer's name); the Work tab hands it its own facts.
   return (
-    <CustomerBand
+    <GroupsBand
       model={{
-        label: all,
-        groupsLabel: t('customers.work.band.pipeline'),
-        groups: live,
+        face: 'office',
+        groups,
+        total: picture.total,
+        shown: model.shown,
         state,
-        failed,
-        closed: { groups: cancelled },
-        notes,
-        chips: { label: t('customers.work.strip.label'), items: chips },
-        info: t('customers.work.band.info'), // F-CQ-B fx1 (walk B-06): the ONE ⓘ of both tabs (it opens the groups' window)
-        everything: { label: all, value: <span className="fw-cwb-num">{number(picture.total)}</span> },
-        window: { title: all, notes: windowNotes, ...(model.windowOpen ? { open: true } : {}) },
+        customer,
+        officeFacts: { line: notes, chips: { label: t('customers.work.strip.label'), items: chips }, window: windowNotes },
+        ...(model.windowOpen ? { windowOpen: true } : {}),
       }}
-      actions={{ onGroup }}
+      actions={{ ...(actions?.onGroup ? { onGroup } : {}), ...onRetry }}
     />
   )
 }

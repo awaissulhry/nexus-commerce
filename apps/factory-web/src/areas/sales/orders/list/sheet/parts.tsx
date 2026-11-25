@@ -25,7 +25,7 @@ import { romeToday } from '../../model'
 import { cellOf as unreadCellOf, type Unread } from '../../../../../lib/last-message-cell/model'
 import { dockClick } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { healthChipOf, orderHref, piecesPartsOf, priorityChipOf, stageChipOf, stopChipOf, urgencyChipOf, type PiecesPart, type StopChip } from './model'
-import { PHASE_ICON } from './phase-icon'
+import { PHASE_ICON } from '../../../../../lib/order-groups/groups' // pg-w1: the group marks of both faces
 // ---- end F-CW-102
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string

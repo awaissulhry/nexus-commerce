@@ -178,14 +178,20 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
   const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('Work: the seven groups (Cancelled apart), the number class `fw-cwb-num`, the group named customers.work.band.pipeline', () => {
     const work = src('../../areas/sales/customers/record/view/WorkBand.tsx')
-    expect(work).toContain('<CustomerBand')
-    expect(work).toContain('value: <span className="fw-cwb-num">{number(group.count)}</span>,')
-    expect(work).toContain("groupsLabel: t('customers.work.band.pipeline'),")
-    expect(work).toContain("const cancelled = picture.groups.filter((group) => group.phase === 'CANCELLED').map(tileOf)")
-    expect(work).toContain('closed: { groups: cancelled },')
+    // pg-w1: the Work band draws the ONE groups band (office face), which draws this band frame with the face's words.
+    const groups = src('../order-groups/view/GroupsBand.tsx')
+    expect(work).toContain('<GroupsBand')
+    expect(work).toContain("face: 'office',")
+    expect(groups).toContain('<CustomerBand')
+    expect(groups).toContain('value: <span className="fw-cwb-num">{number(entry.count)}</span>,')
+    expect(groups).toContain("const groupsLabel = office ? parties('customers.work.band.pipeline') : list('customer.band.groups')")
+    expect(groups).toContain('const closed = model.groups.filter((entry) => isClosedGroup(model.face, entry.group)).map(tileOf)')
+    expect(groups).toContain('closed: { groups: closed },')
+    expect(src('../order-groups/groups.ts')).toMatch(/office: Object\.freeze\(\['CANCELLED'\] as const\),/)
     // fx1 (walk B-07): "Work orders of <customer> ›" on the notes line only from 1040 px (the window says it below), Cancelled stays.
     expect(work).toContain('{workOrders && <span className="fw-cb-roomy">{workOrders}</span>}')
-    expect(work).toContain("info: t('customers.work.band.info'),")
+    expect(work).toContain('officeFacts: { line: notes, chips: { label: t(\'customers.work.strip.label\'), items: chips }, window: windowNotes },')
+    expect(groups).toContain("info: parties('customers.work.band.info'),")
     // The two doors that navigate: the host's (WorkTab: router.push), the view stays pure.
     expect(work).toContain('onPress: () => actions?.onGo?.(href, true)')
     expect(src('../../areas/sales/customers/record/view/WorkTab.tsx')).toContain('onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),')

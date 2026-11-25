@@ -427,7 +427,9 @@ describe('walk W-15, W-26, W-32: the foot, the "Waiting for <customer>" window, 
     expect(win.indexOf("t('customers.work.band.beforeNote')")).toBeGreaterThan(0)
     expect(win.indexOf('href={model.workOrdersHref}')).toBeGreaterThan(win.indexOf("t('customers.work.band.beforeNote')"))
     expect(win).toContain("{t('customers.band.workOrders', { customer })}")
-    expect(band).toContain('window: { title: all, notes: windowNotes')
+    // pg-w1: the Work band hands its window lines to the ONE groups band (office face), which gives them to the band's window.
+    expect(band).toContain('window: windowNotes },')
+    expect(read('../../../../lib/order-groups/view/GroupsBand.tsx')).toContain('window: { title: all, notes: office ? model.officeFacts?.window : customerWindow')
     // The phone (the band's own room < 720): the notes line folds away; the window says it.
     expect(read('../../../../lib/customer-band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
     for (const locale of LOCALES) expect(words(locale, 'parties')('customers.band.workOrders', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
@@ -564,8 +566,14 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
   it('R-4: a failed read of the groups says so once (F-CQ-B: in the strip\'s place), with the retry the chips use', () => {
     const band = read('../../customers/record/view/WorkBand.tsx')
     // F-CQ-B: the ONE band part draws the host's `failed` words in the strip's place, once; the Work band hands it the chips' words.
+    // pg-w1: the groups band (both faces) says them with the same words and the host's retry; the Work band's retry reads the board ('late').
     const failed = band.slice(band.indexOf("const failedWords = t('customers.work.tile.failed')"), band.indexOf('const state = '))
-    expect(failed).toContain("onClick={() => actions.onRetry?.('late')}")
+    expect(failed).toContain("const onRetry = actions?.onRetry ? { onRetry: () => actions.onRetry?.('late') } : {}")
+    expect(band).toContain('actions={{ ...(actions?.onGroup ? { onGroup } : {}), ...onRetry }}')
+    const groups = read('../../../../lib/order-groups/view/GroupsBand.tsx')
+    const said = groups.slice(groups.indexOf("const failedWords = parties('customers.work.tile.failed')"), groups.indexOf('const chips = '))
+    expect(said).toContain('onClick={() => actions.onRetry?.()}')
+    expect(groups.match(/\bfailed,$/gm)?.length).toBe(1) // handed to the band frame once
     expect(band).toContain("const state = model.failed || picture.state === 'failed' ? 'failed'")
     expect(band.match(/model\.failed/g)?.length).toBe(1) // once
     const part = read('../../../../lib/customer-band/CustomerBand.tsx')
