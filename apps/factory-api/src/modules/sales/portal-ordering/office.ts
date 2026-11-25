@@ -20,7 +20,7 @@ import { assertMay, officeContextOf } from '../orders/access'
 import { duplicateInto, type Dropped } from '../quotes/duplicate'
 import { approveWaitingInCommand } from './address-check'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
-import { dayText, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type RequestRow } from './store'
+import { dayText, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type Reader, type RequestRow } from './store'
 import { catalogueLines, isCatalogueLine, ownWordsOf } from './store' // B-CP-005
 // B-CP-071 (customer page plan D10): the office reads drafts read-only, per customer.
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
@@ -37,7 +37,7 @@ import { customLineProblems, lineHasPieces } from '@nexus/factory-domain/sales/p
 import { readPeople, type PersonRow } from './store'
 // B-CP-077: the accept's line map (a described or made-to-measure line made into style lines), its checks, the logos' carry.
 import { DomainError, type Issue } from '@nexus/factory-domain/core/errors'
-import { ACCEPT_WORDS, acceptPlanOf, lineMapOf, type AcceptLineFacts, type AcceptLineMapEntry, type AcceptMapEntry, type AcceptPlan, type PlannedLine } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { ACCEPT_WORDS, acceptPlanOf, completeLine, lineMapOf, type AcceptLineFacts, type AcceptLineMapEntry, type AcceptMapEntry, type AcceptPlan, type PlannedLine } from '@nexus/factory-domain/sales/portal-ordering/office'
 import type { CommandTx } from '../../../core/command'
 import { processFiles, type FilesRuntime } from '../../../platform/files/service'
 import { lineTarget } from '../quotes/lines'
@@ -47,6 +47,15 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { brandPricesOfAccept, draftValueOf } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, type PricedOrder } from '../brand-prices/store'
 import { ownPriceView } from './people'
+// od-s s.4 (order start): Still open on the office's drafts; Confirm = send (if still a draft) + the accept, in ONE command.
+import type { ConfirmTyped, StillOpen } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+import { confirmHeldWords } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+import { choicesOf } from '@nexus/factory-domain/sales/portal-ordering/choices'
+import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { draftStillOpen, peopleSizesOf, shipToInUseOf } from './people'
+import { sendProblems } from './requests'
+import { allocateNumber } from '../../../platform/numbering/allocate'
+import type { CommandTools } from '../../../core/command'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
@@ -170,6 +179,12 @@ interface DraftView {
   readonly files: Record<'logos' | 'references' | 'sheets', OfficeDraftFile[]>
   /** B-CP-076 (review B4): its value at the prices on it (minor units; price grain: null for a reader without it). */
   readonly draftValueAmount: Money<'price', number | null> // B-CP-076 (end-check fix): the price grain, as the contract marks it
+  // ---- od-s s.4 (lead addition B): the "Continue a draft" facts — Still open items not decided yet, whether the order still needs
+  // one (the Confirm window asks it), who saved it last from the office's side (a customer's person or a colleague, named), when.
+  readonly openCount: number
+  readonly confirmHeld: boolean
+  readonly savedBy: { readonly who: 'YOU' | 'COLLEAGUE' | 'FACTORY'; readonly name: string | null }
+  readonly savedAt: string
 }
 
 /** B-CP-072: a draft's file as the office reads it; `locked`: a measurement sheet this reader may not open (no name). */
@@ -198,6 +213,21 @@ async function lastEditors(caller: CommandCaller, ids: readonly string[]): Promi
   return new Map(rows.map((row) => [row.recordId, { actorId: row.actorId, at: row.at }]))
 }
 
+// ---- od-s s.4 (lead addition B): who saved a draft, from the office's side, and its Still open count --------------------------------
+/** YOU (the reader), COLLEAGUE (a person of the draft's customer), FACTORY (another office person) — the office names each. */
+async function savedByOffice(caller: CommandCaller, readerId: string, userIds: readonly (string | null)[]): Promise<(partyId: string, userId: string | null) => DraftView['savedBy']> {
+  const ids = [...new Set(userIds.filter((id): id is string => id !== null && isUuid(id)))]
+  const users = ids.length === 0 ? new Map<string, { displayName: string; audience: string; partyId: string | null }>() : await caller.withClient(async (client) => new Map((await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true, audience: true, partyId: true } })).map((user) => [user.id, user])))
+  return (partyId, userId) => {
+    if (userId === null) return { who: 'COLLEAGUE', name: null }
+    const user = users.get(userId)
+    if (userId === readerId) return { who: 'YOU', name: user?.displayName ?? null }
+    return { who: user?.audience === 'PARTNER' && user.partyId === partyId ? 'COLLEAGUE' : 'FACTORY', name: user?.displayName ?? null }
+  }
+}
+const openFacts = (open: StillOpen): { readonly openCount: number; readonly confirmHeld: boolean } => ({ openCount: open.openCount, confirmHeld: open.confirmHeld })
+// ---- end od-s s.4
+
 /** The drafts' office facts (rows of ONE customer, any of its companies), one read per kind. */
 async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly RequestRow[], lines: readonly LineRow[], /* B-CP-075 */ people: readonly PersonRow[]): Promise<Map<string, DraftView>> {
   const out = new Map<string, DraftView>()
@@ -219,6 +249,10 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
   }
   const addressIds = [...new Set(rows.flatMap((row) => (row.shipToAddressId ? [row.shipToAddressId] : [])))]
   const addresses = new Map(addressIds.length === 0 ? [] : (await caller.withClient((client) => client.partyAddress.findMany({ where: { id: { in: addressIds } }, select: { id: true, status: true } }))).map((row) => [row.id, row.status]))
+  // od-s s.4: the customers' default delivery addresses (a draft that names none uses it) and who saved each draft, by side.
+  const partyIds = [...new Set(rows.map((row) => row.partyId))]
+  const defaults = new Set((await caller.withClient((client) => client.partyAddress.findMany({ where: { partyId: { in: partyIds }, status: 'ACTIVE', isDefaultShipTo: true, kinds: { has: 'SHIP_TO' } }, select: { partyId: true } }))).map((row) => row.partyId))
+  const savers = await savedByOffice(caller, officeContextOf(caller).actorId, rows.map((row) => row.lastEditedById ?? row.createdById))
   const threads = new Map(
     (await caller.withClient((client) => client.thread.findMany({ where: { recordType: 'PortalOrderRequest', recordId: { in: ids } }, select: { recordId: true, lastMessageAt: true, _count: { select: { messages: true } } } }))).map((row) => [row.recordId, row]),
   )
@@ -284,6 +318,10 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       files: { logos: files.logos.map((file) => officeFileOf(file, false)), references: files.references.map((file) => officeFileOf(file, false)), sheets: files.sheets.map((file) => officeFileOf(file, sheetsLocked)) },
       // B-CP-076: each line at the price shown, else the customer's own, × its pieces — only for a price holder.
       draftValueAmount: asMoney('price', seesPrice ? draftValueOf(own.map((line) => ({ priceShown: isCatalogueLine(line) ? priceOrNull(line.unitPriceShown) : null, brandUnitPrice: priceOrNull(line.brandUnitPrice), pieces: piecesOfLine(line, roster) })), row.currency) : null),
+      // od-s s.4 (lead addition B)
+      ...openFacts(draftStillOpen(own, roster, row, row.shipToAddressId === null ? defaults.has(row.partyId) : addresses.get(row.shipToAddressId) === 'ACTIVE', day)),
+      savedBy: savers(row.partyId, row.lastEditedById ?? row.createdById),
+      savedAt: iso(row.lastEditedAt ?? row.updatedAt)!,
     })
   }
   return out
@@ -438,7 +476,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       summary: { lines: totals.lines, pieces: totals.pieces, netShown: asMoney('price', totals.net) },
       draft, // B-CP-071: a draft's office facts (null once sent)
       customLines: customViews, // B-CP-075
-      acceptMap: acceptMapOf(lines), // B-CP-077: the lines to map before the accept, and why it is not an order
+      acceptMap: acceptMapOf(lines, people), // B-CP-077: the lines to map before the accept, and why it is not an order
       subject: row.subject, // od-s s.3 (addendum R2)
       styles, // od-s s.3: the style drafts made for it (office only)
     },
@@ -470,8 +508,9 @@ function acceptFactsOf(lines: readonly LineRow[], people: readonly PersonRow[]):
     id: line.id,
     seq: line.seq,
     kind: line.kind as AcceptLineFacts['kind'],
-    styleId: isCatalogueLine(line) ? line.styleId : null,
-    colourwayId: isCatalogueLine(line) ? line.colourwayId : null,
+    // od-s s.4 (addendum R3): every row's own style and colour (a row with both and its pieces by size is a line as it is).
+    styleId: line.styleId,
+    colourwayId: line.colourwayId,
     sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })),
     quantity: line.quantity,
     byPerson: line.byPerson,
@@ -479,6 +518,7 @@ function acceptFactsOf(lines: readonly LineRow[], people: readonly PersonRow[]):
     note: line.note,
     ownWords: isCatalogueLine(line) ? null : ownWordsOf(line),
     colourText: line.colourText,
+    choices: choicesOf(line.choices), // od-s s.4: their words go to the order line's note
   }))
 }
 
@@ -522,12 +562,140 @@ function byPlannedLine(error: ValidationError, planned: readonly PlannedLine[]):
 }
 
 /** What the accept of this request needs: the lines to map (ids, in the request's order) and why it is not an order (null: it may be). */
-function acceptMapOf(lines: readonly LineRow[]): { readonly lineIds: string[]; readonly orderHeld: string | null } {
-  const custom = lines.filter((line) => !isCatalogueLine(line)).sort((a, b) => a.seq - b.seq)
-  const madeToMeasure = custom.filter((line) => line.kind === 'MADE_TO_MEASURE').map((line) => line.seq)
+function acceptMapOf(lines: readonly LineRow[], people: readonly PersonRow[]): { readonly lineIds: string[]; readonly orderHeld: string | null } {
+  // od-s s.4: a row with its style, colour and pieces by size is a line as it is; the rest are mapped (a catalogue row too).
+  const complete = new Set(acceptFactsOf(lines, people).filter(completeLine).map((line) => line.id))
+  const custom = lines.filter((line) => !isCatalogueLine(line) && !complete.has(line.id)).sort((a, b) => a.seq - b.seq)
+  const madeToMeasure = [...lines].sort((a, b) => a.seq - b.seq).filter((line) => line.kind === 'MADE_TO_MEASURE').map((line) => line.seq) // od-s s.4: complete or not, a quote first
   return { lineIds: custom.map((line) => line.id), orderHeld: madeToMeasure.length > 0 ? ACCEPT_WORDS.madeToMeasureOrder(madeToMeasure) : null }
 }
 // ---- end B-CP-077
+
+/** S4-B1 (lean pick, words only): the customer's note reaches the office-only internal note labelled, never as the office's own. */
+const customerNoteWords = (number: string | null, note: string | null): string | null => (note ? `Customer's note (order request ${number ?? 'without a number'}): ${note}` : null)
+
+/**
+ * od-s s.4 (13-backend § 5): the accept's own work, inside its command — the request `current` is locked and SENT. MOVED as it was
+ * from acceptRequest (which calls it, as does the office's Confirm); changed only by S4-B1 (the customer's note in the internal note
+ * in words, labelled), S4-B2 (a quote keeps the customer's note and the wanted date in its internal note) and the rows' open choices
+ * (their words on the order line's note, in the plan).
+ */
+export async function acceptInCommand(tools: CommandTools, current: RequestRow, body: AcceptBody, actorId: string) {
+  const { tx, now } = tools
+  // B-CP-077: the lines as they are now (a sent request's lines never change; read again inside the command), every kind by the map.
+  const read = await readLines(tx, [current.id])
+  const plan = planOf({ number: current.number, as: body.as, lines: acceptFactsOf(read, await readPeople(tx, [current.id])), map: body.map ?? [], prices: body.lines ?? [] })
+  await checkMapped(tx, current, plan.lines)
+  const byId = new Map(read.map((line) => [line.id, line]))
+  let lineMap: AcceptLineMapEntry[]
+  let brandPrices = 0 // B-CP-076: the customer's prices the order took over
+  // end B-CP-077
+  // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
+  // approves it first, in this command (the order or quote may then use it).
+  if (current.shipToAddressId) await approveWaitingInCommand(tools, current.shipToAddressId, { type: 'PortalOrderRequest', id: current.id, number: current.number })
+  let salesOrderId: string | null = null
+  let quoteId: string | null = null
+  let made: { number: string; dropped: Dropped[]; warnings: string[] }
+  const requested = dayText(current.requestedDate)
+  const customerNote = customerNoteWords(current.number, current.note) // S4-B1
+  if (body.as === 'ORDER') {
+    const shipTo = current.shipToAddressId ? await tx.partyAddress.findFirst({ where: { id: current.shipToAddressId, partyId: current.partyId }, select: { status: true } }) : null
+    const order: ManualOrderBody = {
+      companyId: current.companyId,
+      partyId: current.partyId,
+      customerRef: current.customerRef,
+      requestedDate: requested !== null && requested >= businessDate(now) ? requested : null,
+      promiseDate: body.promiseDate ?? null,
+      ...(shipTo?.status === 'ACTIVE' ? { shipToAddressId: current.shipToAddressId } : {}),
+      // S4-B1 (od-s s.4): the customer's note labelled as theirs (the customer keeps reading it on its request).
+      internalNote: customerNote ? customerNote.slice(0, 4000) : `Order request ${current.number}.`,
+      // B-CP-077: every planned line (a catalogue line as it is; a mapped line as the office made it), in the request's order.
+      lines: plan.lines.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })), unitPrice: line.unitPrice, description: line.description, note: line.note })),
+    }
+    // B-W2b-304 (SAL-244): an order from the portal is checked as such (PORTAL).
+    let outcome: Awaited<ReturnType<typeof makeManualOrderInCommand>>
+    try {
+      outcome = await makeManualOrderInCommand(tools, order, null, 'PORTAL')
+    } catch (error) {
+      throw error instanceof ValidationError ? byPlannedLine(error, plan.lines) : error // B-CP-077: said where it is
+    }
+    salesOrderId = outcome.orderId
+    made = { number: outcome.number, dropped: [], warnings: [...plan.warnings] }
+    // B-CP-077: the order's lines are made in the plan's order, one for each planned line.
+    const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true, quantity: true }, orderBy: { seq: 'asc' } })
+    lineMap = lineMapOf(plan.lines, orderLines)
+    // ---- B-CP-076: the customer's prices carried onto the order by the map, in this command (never by place); never converted.
+    const priced: PricedOrder = { id: outcome.orderId, companyId: current.companyId, partyId: current.partyId }
+    const currency = (await tx.salesOrder.findUniqueOrThrow({ where: { id: outcome.orderId }, select: { currency: true } })).currency
+    const pieces = new Map(orderLines.map((line) => [line.id, Number(line.quantity)]))
+    const carry = brandPricesOfAccept({
+      currency,
+      prices: read.map((line) => ({ requestLineId: line.id, brandUnitPrice: priceOrNull(line.brandUnitPrice) })),
+      map: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, into: entry.into.map((line) => ({ lineId: line.lineId, pieces: pieces.get(line.lineId) ?? 0 })) })),
+    })
+    if (carry.length > 0 && currency !== current.currency) made.warnings.push(`The customer's prices are in ${current.currency}, the order in ${currency}: they were not carried (a price is never converted).`)
+    else {
+      for (const entry of carry) {
+        const data = { id: newId(), companyId: current.companyId, partyId: current.partyId, salesOrderId: outcome.orderId, salesOrderLineId: entry.orderLineId, unitPrice: entry.unitPrice, netAmount: entry.netAmount, currency, source: 'PORTAL' as const, sourceFileId: null, note: null, enteredById: null, enteredAt: now }
+        await tx.orderBrandPrice.create({ data: { ...data, createdAt: now, updatedAt: now }, select: { id: true } })
+        auditBrandPrice(tools, priced, { action: 'brandPrices.fromRequest', after: { ...brandPriceAuditView({ ...data, version: 1 }), requestId: current.id, requestLineIds: [...entry.requestLineIds] } })
+      }
+      if (carry.length > 0) announceBrandPrices(tools, priced)
+      brandPrices = carry.length
+    }
+    // ---- end B-CP-076
+  } else {
+    const party = await tx.party.findUniqueOrThrow({ where: { id: current.partyId }, select: { language: true, paymentTermsId: true, paymentTerms: true, defaultDepositPct: true } })
+    // S4-B2 (od-s s.4): the quote keeps the customer's note and the date they want in its internal note (the office promises).
+    const quoteNote = [customerNote ?? `Order request ${current.number}.`, ...(requested !== null ? [`Wanted by ${requested}`] : [])].join(' · ').slice(0, 4000)
+    const outcome = await duplicateInto(
+      tools,
+      {
+        from: { requestId: current.id },
+        companyId: current.companyId,
+        partyId: current.partyId,
+        basis: 'NET',
+        contactId: null,
+        language: party.language,
+        billToAddressId: null,
+        shipToAddressId: current.shipToAddressId,
+        promiseDate: null,
+        paymentTermsId: party.paymentTermsId,
+        paymentTerms: party.paymentTerms,
+        termsText: null,
+        termsVersion: null,
+        depositPct: party.defaultDepositPct === null ? null : party.defaultDepositPct.toString(),
+        depositKind: null,
+        // A line priced at the list (the price shown) takes the customer's list price today; one with no price shown is 0
+        // until the office types it on the quote. B-CP-077: a mapped line has no price shown; each planned line goes by its
+        // place in the plan (1, 2, …), and what the copy leaves out is said by the request's own line number below.
+        lines: plan.lines.map((line, place) => {
+          const shown = priceText((line.kind === 'CATALOGUE' ? priceOrNull(byId.get(line.requestLineId)!.unitPriceShown) : null) ?? '0')
+          return { seq: place + 1, kind: 'SIZE_GRID' as const, styleId: line.styleId, colourwayId: line.colourwayId, description: line.description, note: line.note, unitPrice: shown, listUnitPrice: shown, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: null })) }
+        }),
+      },
+      { customerRef: current.customerRef, internalNote: quoteNote },
+    )
+    quoteId = outcome.quoteId
+    const number = (await tx.quote.findUniqueOrThrow({ where: { id: outcome.quoteId }, select: { number: true } })).number
+    // B-CP-077: a place the copy left out whole (a style no longer sold) has no quote line; what it left out names the request's line.
+    const left = new Set(outcome.dropped.filter((entry) => entry.size === null).map((entry) => entry.seq - 1))
+    made = { number, dropped: outcome.dropped.map((entry) => ({ ...entry, seq: plan.lines[entry.seq - 1]?.requestSeq ?? entry.seq })), warnings: [...plan.warnings, ...outcome.warnings] }
+    lineMap = lineMapOf(plan.lines, await tx.quoteLine.findMany({ where: { quoteVersion: { quoteId: outcome.quoteId } }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } }), left)
+  }
+  await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'ACCEPTED', decidedAt: now, decidedById: actorId, salesOrderId, quoteId, version: current.version + 1 }, select: { id: true } })
+  // B-CP-077: + the map (ids and places only: each request line and the lines made from it) and the mapped lines' typed prices.
+  const typed = [...(body.lines ?? []), ...(body.map ?? []).flatMap((entry) => entry.into.flatMap((into) => (into.unitPrice === undefined ? [] : [{ lineId: entry.lineId, styleId: into.styleId, unitPrice: into.unitPrice }])))]
+  tools.audit({
+    recordType: 'PortalOrderRequest',
+    recordId: current.id,
+    companyId: current.companyId,
+    before: { status: 'SENT' },
+    after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })) },
+  })
+  tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
+  return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap.map((entry) => ({ ...entry, into: entry.into.map((line) => ({ ...line })) })) /* B-CP-077: the answer's own copy (the contract's arrays) */, brandPrices: asMoney('price', brandPrices) /* B-CP-076: how many customer prices it carried, the price grain (contract) */ }
+}
 
 /** `clock`: the routes pass the app's (B-W2b-F13b: a waiting ship-to approved here is never decided before it was asked). */
 export async function acceptRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey?: string, clock: Clock = serverClock, files: FilesRuntime | null = null /* B-CP-077: the logos' carry */) {
@@ -538,128 +706,89 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   const problem = decisionProblem(row.status as RequestStatus)
   if (problem) throw new InvalidStateError(problem)
   // B-CP-077: the lines and their map judged first (400 / 409 in words, nothing written); again inside the command.
-  const planInput = (lines: readonly LineRow[], roster: readonly PersonRow[], number: string | null) => ({ number, as: body.as, lines: acceptFactsOf(lines, roster), map: body.map ?? [], prices: body.lines ?? [] })
-  planOf(planInput(await caller.withClient((client) => readLines(client, [row.id])), await caller.withClient((client) => readPeople(client, [row.id])), row.number))
+  planOf({ number: row.number, as: body.as, lines: acceptFactsOf(await caller.withClient((client) => readLines(client, [row.id])), await caller.withClient((client) => readPeople(client, [row.id]))), map: body.map ?? [], prices: body.lines ?? [] })
   const { result } = await runCommand(caller, { name: 'portalOrdering.accept', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
-    const { tx, now } = tools
-    const current = await lockRequest(tx, requestId, body.version)
+    const current = await lockRequest(tools.tx, requestId, body.version)
     const again = decisionProblem(current.status as RequestStatus)
     if (again) throw new InvalidStateError(again)
-    // B-CP-077: the lines as they are now (a sent request's lines never change; read again inside the command), every kind by the map.
-    const read = await readLines(tx, [current.id])
-    const plan = planOf(planInput(read, await readPeople(tx, [current.id]), current.number))
-    await checkMapped(tx, current, plan.lines)
-    const byId = new Map(read.map((line) => [line.id, line]))
-    let lineMap: AcceptLineMapEntry[]
-    let brandPrices = 0 // B-CP-076: the customer's prices the order took over
-    // end B-CP-077
-    // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
-    // approves it first, in this command (the order or quote may then use it).
-    if (current.shipToAddressId) await approveWaitingInCommand(tools, current.shipToAddressId, { type: 'PortalOrderRequest', id: current.id, number: current.number })
-    let salesOrderId: string | null = null
-    let quoteId: string | null = null
-    let made: { number: string; dropped: Dropped[]; warnings: string[] }
-    if (body.as === 'ORDER') {
-      const shipTo = current.shipToAddressId ? await tx.partyAddress.findUnique({ where: { id: current.shipToAddressId }, select: { status: true } }) : null
-      const requested = dayText(current.requestedDate)
-      const order: ManualOrderBody = {
-        companyId: current.companyId,
-        partyId: current.partyId,
-        customerRef: current.customerRef,
-        requestedDate: requested !== null && requested >= businessDate(now) ? requested : null,
-        promiseDate: body.promiseDate ?? null,
-        ...(shipTo?.status === 'ACTIVE' ? { shipToAddressId: current.shipToAddressId } : {}),
-        internalNote: current.note ? `Order request ${current.number}: ${current.note}`.slice(0, 4000) : `Order request ${current.number}.`,
-        // B-CP-077: every planned line (a catalogue line as it is; a mapped line as the office made it), in the request's order.
-        lines: plan.lines.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })), unitPrice: line.unitPrice, description: line.description, note: line.note })),
-      }
-      // B-W2b-304 (SAL-244): an order from the portal is checked as such (PORTAL).
-      let outcome: Awaited<ReturnType<typeof makeManualOrderInCommand>>
-      try {
-        outcome = await makeManualOrderInCommand(tools, order, null, 'PORTAL')
-      } catch (error) {
-        throw error instanceof ValidationError ? byPlannedLine(error, plan.lines) : error // B-CP-077: said where it is
-      }
-      salesOrderId = outcome.orderId
-      made = { number: outcome.number, dropped: [], warnings: [...plan.warnings] }
-      // B-CP-077: the order's lines are made in the plan's order, one for each planned line.
-      const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true, quantity: true }, orderBy: { seq: 'asc' } })
-      lineMap = lineMapOf(plan.lines, orderLines)
-      // ---- B-CP-076: the customer's prices carried onto the order by the map, in this command (never by place); never converted.
-      const priced: PricedOrder = { id: outcome.orderId, companyId: current.companyId, partyId: current.partyId }
-      const currency = (await tx.salesOrder.findUniqueOrThrow({ where: { id: outcome.orderId }, select: { currency: true } })).currency
-      const pieces = new Map(orderLines.map((line) => [line.id, Number(line.quantity)]))
-      const carry = brandPricesOfAccept({
-        currency,
-        prices: read.map((line) => ({ requestLineId: line.id, brandUnitPrice: priceOrNull(line.brandUnitPrice) })),
-        map: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, into: entry.into.map((line) => ({ lineId: line.lineId, pieces: pieces.get(line.lineId) ?? 0 })) })),
-      })
-      if (carry.length > 0 && currency !== current.currency) made.warnings.push(`The customer's prices are in ${current.currency}, the order in ${currency}: they were not carried (a price is never converted).`)
-      else {
-        for (const entry of carry) {
-          const data = { id: newId(), companyId: current.companyId, partyId: current.partyId, salesOrderId: outcome.orderId, salesOrderLineId: entry.orderLineId, unitPrice: entry.unitPrice, netAmount: entry.netAmount, currency, source: 'PORTAL' as const, sourceFileId: null, note: null, enteredById: null, enteredAt: now }
-          await tx.orderBrandPrice.create({ data: { ...data, createdAt: now, updatedAt: now }, select: { id: true } })
-          auditBrandPrice(tools, priced, { action: 'brandPrices.fromRequest', after: { ...brandPriceAuditView({ ...data, version: 1 }), requestId: current.id, requestLineIds: [...entry.requestLineIds] } })
-        }
-        if (carry.length > 0) announceBrandPrices(tools, priced)
-        brandPrices = carry.length
-      }
-      // ---- end B-CP-076
-    } else {
-      const party = await tx.party.findUniqueOrThrow({ where: { id: current.partyId }, select: { language: true, paymentTermsId: true, paymentTerms: true, defaultDepositPct: true } })
-      const outcome = await duplicateInto(
-        tools,
-        {
-          from: { requestId: current.id },
-          companyId: current.companyId,
-          partyId: current.partyId,
-          basis: 'NET',
-          contactId: null,
-          language: party.language,
-          billToAddressId: null,
-          shipToAddressId: current.shipToAddressId,
-          promiseDate: null,
-          paymentTermsId: party.paymentTermsId,
-          paymentTerms: party.paymentTerms,
-          termsText: null,
-          termsVersion: null,
-          depositPct: party.defaultDepositPct === null ? null : party.defaultDepositPct.toString(),
-          depositKind: null,
-          // A line priced at the list (the price shown) takes the customer's list price today; one with no price shown is 0
-          // until the office types it on the quote. B-CP-077: a mapped line has no price shown; each planned line goes by its
-          // place in the plan (1, 2, …), and what the copy leaves out is said by the request's own line number below.
-          lines: plan.lines.map((line, place) => {
-            const shown = priceText((line.kind === 'CATALOGUE' ? priceOrNull(byId.get(line.requestLineId)!.unitPriceShown) : null) ?? '0')
-            return { seq: place + 1, kind: 'SIZE_GRID' as const, styleId: line.styleId, colourwayId: line.colourwayId, description: line.description, note: line.note, unitPrice: shown, listUnitPrice: shown, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: null })) }
-          }),
-        },
-        { customerRef: current.customerRef },
-      )
-      quoteId = outcome.quoteId
-      const number = (await tx.quote.findUniqueOrThrow({ where: { id: outcome.quoteId }, select: { number: true } })).number
-      // B-CP-077: a place the copy left out whole (a style no longer sold) has no quote line; what it left out names the request's line.
-      const left = new Set(outcome.dropped.filter((entry) => entry.size === null).map((entry) => entry.seq - 1))
-      made = { number, dropped: outcome.dropped.map((entry) => ({ ...entry, seq: plan.lines[entry.seq - 1]?.requestSeq ?? entry.seq })), warnings: [...plan.warnings, ...outcome.warnings] }
-      lineMap = lineMapOf(plan.lines, await tx.quoteLine.findMany({ where: { quoteVersion: { quoteId: outcome.quoteId } }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } }), left)
-    }
-    await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'ACCEPTED', decidedAt: now, decidedById: context.actorId, salesOrderId, quoteId, version: current.version + 1 }, select: { id: true } })
-    // B-CP-077: + the map (ids and places only: each request line and the lines made from it) and the mapped lines' typed prices.
-    const typed = [...(body.lines ?? []), ...(body.map ?? []).flatMap((entry) => entry.into.flatMap((into) => (into.unitPrice === undefined ? [] : [{ lineId: entry.lineId, styleId: into.styleId, unitPrice: into.unitPrice }])))]
-    tools.audit({
-      recordType: 'PortalOrderRequest',
-      recordId: current.id,
-      companyId: current.companyId,
-      before: { status: 'SENT' },
-      after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })) },
-    })
-    tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
-    return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap.map((entry) => ({ ...entry, into: entry.into.map((line) => ({ ...line })) })) /* B-CP-077: the answer's own copy (the contract's arrays) */, brandPrices: asMoney('price', brandPrices) /* B-CP-076: how many customer prices it carried, the price grain (contract) */ }
+    return acceptInCommand(tools, current, body, context.actorId) // od-s s.4: the accept's body, moved
   }, { ...COMMAND_SETTINGS, clock })
   // B-CP-077: the request's logos carried to what it became (after the command: the order stands even when a file cannot be copied).
   const artwork = await carryArtwork(() => files ?? processFiles(), caller, { id: row.id, companyId: row.companyId, partyId: row.partyId, number: row.number }, result)
   const warnings = [...result.warnings, ...artwork.notCarried.map((entry) => `The logo ${entry.name} was not carried: ${entry.reason}`)]
   return { ...(await officeRequestView(caller, requestId)), made: { ...result, warnings, artwork } }
 }
+
+// ---- od-s s.4 (order start, 13-backend § 5; L6, L10 b; Owner yes 2a): Confirm -------------------------------------------------------
+/**
+ * What the Confirm body types for each row (the office's map: a style and colour on every line it is made into, the sizes — or, for
+ * one line made into one, the row's own size run or its people's sizes when each has one); a row not in the map keeps its own.
+ */
+function typedByBody(lines: readonly LineRow[], people: readonly PersonRow[], body: AcceptBody): Map<string, ConfirmTyped> {
+  const out = new Map<string, ConfirmTyped>()
+  for (const entry of body.map ?? []) {
+    const line = lines.find((row) => row.id === entry.lineId)
+    if (!line || entry.into.length === 0) continue
+    const own = line.sizes.length > 0 || (line.byPerson && peopleSizesOf(line, people).length > 0 && peopleSizesOf(line, people).every((size) => size !== null))
+    out.set(line.id, { style: true, colour: true, pieces: entry.into.every((into) => (into.sizes?.length ?? 0) > 0) || (entry.into.length === 1 && own) })
+  }
+  return out
+}
+
+/** The Confirm's hold, before anything is written (and again inside its command): 409 in words when the order still lacks something. */
+async function confirmHold(db: Reader, row: RequestRow, body: AcceptBody): Promise<void> {
+  const lines = await readLines(db, [row.id])
+  const people = await readPeople(db, [row.id])
+  const address = row.shipToAddressId === null ? await db.partyAddress.findFirst({ where: { partyId: row.partyId, status: 'ACTIVE', isDefaultShipTo: true, kinds: { has: 'SHIP_TO' } }, select: { id: true, status: true, isDefaultShipTo: true } }) : await db.partyAddress.findFirst({ where: { id: row.shipToAddressId, partyId: row.partyId }, select: { id: true, status: true, isDefaultShipTo: true } })
+  const open = draftStillOpen(lines, people, row, shipToInUseOf(row, address ? [address] : []), businessDate(serverClock.now()), typedByBody(lines, people, body))
+  const words = confirmHeldWords(open, lines.length)
+  if (words) throw new DomainError('conflict', words.en, [{ path: 'refusal/CONFIRM_HELD', message: words.en }, ...open.items.filter((item) => item.state === 'MISSING').map((item) => ({ path: item.seq === null ? `stillOpen/${item.kind}` : `stillOpen/lines/${item.seq}/${item.kind}`, message: words.en }))])
+}
+
+/**
+ * POST /sales/order-requests/:requestId/confirm — ONE command as the office person: the request locked at its version; if it is
+ * still a DRAFT, the Send's checks (only what holds a Send: an invalid value, never a missing one), its number (PORTAL_REQUEST),
+ * DRAFT → SENT (sent by the office person, audited `byOffice`, portal_order_request.sent); then the accept, as acceptRequest's
+ * (`acceptInCommand`). Held (409, in words) while, after the body, a row still has no style, colour or pieces by size, or no
+ * delivery address is in use; an open choice never holds it (its words go to the order line). A made-to-measure row is a quote
+ * first (GATE-MTM, today's words). orders.manage over the company and the customer (quotes.manage too for a quote).
+ */
+export async function confirmRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey?: string, clock: Clock = serverClock, files: FilesRuntime | null = null) {
+  const { context, row } = await officeRequest(caller, requestId)
+  const scope = { companyId: row.companyId, partyId: row.partyId }
+  assertMay(context, ORDERS_MANAGE, scope, 'Order request')
+  if (body.as === 'QUOTE' && !can(actorOf(context), QUOTES_MANAGE, scope)) throw new ForbiddenError('Making a quote needs the right to make quotes for this customer.')
+  if (row.status !== 'DRAFT' && row.status !== 'SENT') throw new InvalidStateError(decisionProblem(row.status as RequestStatus) ?? 'This request is no longer open.')
+  await caller.withClient((client) => confirmHold(client, row, body))
+  planOf({ number: row.number, as: body.as, lines: acceptFactsOf(await caller.withClient((client) => readLines(client, [row.id])), await caller.withClient((client) => readPeople(client, [row.id]))), map: body.map ?? [], prices: body.lines ?? [] })
+  const { result } = await runCommand(caller, { name: 'portalOrdering.confirm', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    let current = await lockRequest(tx, requestId, body.version)
+    if (current.status !== 'DRAFT' && current.status !== 'SENT') throw new InvalidStateError(decisionProblem(current.status as RequestStatus) ?? 'This request is no longer open.')
+    await confirmHold(tx, current, body)
+    if (current.status === 'DRAFT') {
+      const day = businessDate(now)
+      const lines = await readLines(tx, [current.id])
+      const people = await readPeople(tx, [current.id])
+      // The office prices again: no price check of the customer's (seesPrices false); only what holds a Send.
+      const problems = (await sendProblems(tx, current, lines, day, false, people)).filter((entry) => holdsSend(entry.code))
+      if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length === 1 ? '1 problem holds' : `${problems.length} problems hold`} the send: fix ${problems.length === 1 ? 'it' : 'them'} first.`, problems.map((entry) => ({ path: entry.lineId ? `lines/${entry.lineId}` : 'request', message: entry.words.en })))
+      const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })
+      await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number: number.formatted, sentAt: now, sentById: context.actorId, version: current.version + 1 }, select: { id: true } })
+      const pieces = Math.max(1, lines.reduce((sum, line) => sum + piecesOfLine(line, people), 0))
+      tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number: number.formatted, lines: lines.length, pieces, byOffice: true } })
+      tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
+      current = (await readRequest(tx, current.id))!
+    }
+    return acceptInCommand(tools, current, body, context.actorId)
+  }, { ...COMMAND_SETTINGS, clock })
+  // The request's own number now (a draft got its number inside the command), for the logos' carry.
+  const numbered = await caller.withClient((client) => readRequest(client, requestId))
+  const artwork = await carryArtwork(() => files ?? processFiles(), caller, { id: row.id, companyId: row.companyId, partyId: row.partyId, number: numbered?.number ?? row.number }, result)
+  const warnings = [...result.warnings, ...artwork.notCarried.map((entry) => `The logo ${entry.name} was not carried: ${entry.reason}`)]
+  return { ...(await officeRequestView(caller, requestId)), made: { ...result, warnings, artwork } }
+}
+// ---- end od-s s.4
 
 export async function refuseRequest(caller: CommandCaller, requestId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const { context, row } = await officeRequest(caller, requestId)

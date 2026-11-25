@@ -46,13 +46,14 @@ import {
   officeStartContract, // od-s s.3
   officeDraftContract,
   styleDraftContract,
+  confirmContract, // od-s s.4
 } from './contract'
 import { manifest } from './manifest'
 import { portalWriter } from './writer' // od-s s.2: the portal's draft commands take the portal's writer
 // od-s s.3: the office's door to a customer's draft (the SAME commands through the office writer), and Make style draft.
 import { officeAddCustomLine, officeAddPeople, officeAnnounceFile, officeChangeCustomLine, officeChangeHeader, officeChangeLine, officeChangePerson, officeCompleteFile, officeDiscard, officeDraftView, officeRemoveFile, officeRemoveLine, officeRemovePerson, officeStartDraft } from './office-drafts'
 import { styleDraftOfRequest } from './style-draft'
-import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
+import { acceptRequest, confirmRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
 import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
@@ -147,6 +148,8 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/sales/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => officeCompleteFile(processFiles(), app, request, request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
   app.delete('/sales/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => officeRemoveFile(processFiles(), app, request, request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/sales/order-requests/:requestId/style-draft', { schema: styleDraftContract }, async (request) => styleDraftOfRequest(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  // od-s s.4: Confirm — send (if still a draft) + accept, in one command (13-backend § 5).
+  app.post('/sales/order-requests/:requestId/confirm', { schema: confirmContract }, async (request) => confirmRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
   // B-CQ-030 (customer page › Quotes & incoming): a page of portal orders' pictures in one read (drafts too); absent ids say nothing.
   app.post('/sales/order-requests/pictures', { schema: orderRequestPicturesContract }, async (request) => recordPictures(request, 'portalOrder', request.body.requestIds))
 

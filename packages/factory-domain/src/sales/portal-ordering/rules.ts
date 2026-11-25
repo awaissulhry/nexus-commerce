@@ -211,6 +211,31 @@ export function headerProblems(facts: DraftHeaderFacts, today: BusinessDate): Pr
   return out
 }
 
+/**
+ * od-s s.4 (order start; the Owner's change of 2026-11-25 10:12, addendum R1: "we should not keep any requirements at all"): whether a
+ * problem holds the Send. Only an INVALID value does (a date in the past, an archived address, a style no longer sold, a colour
+ * discontinued, a size not offered, sizes that do not add up to the total, made to measure switched off, a garment type gone, too
+ * many lines, a price shown that is no longer today's — the customer takes today's price first: what is sent is what was shown); a
+ * MISSING one never does (no line, no sizes, no total, no people — the office's Confirm window asks them).
+ */
+export const SEND_HOLDING: Readonly<Record<ProblemCode, boolean>> = Object.freeze({
+  NO_LINES: false,
+  TOO_MANY_LINES: true,
+  DATE_PAST: true,
+  SHIP_TO_ARCHIVED: true,
+  STYLE_NOT_SOLD: true,
+  COLOUR_DISCONTINUED: true,
+  SIZE_NOT_OFFERED: true,
+  NO_SIZES: false,
+  PRICE_CHANGED: true,
+  NO_TOTAL: false,
+  SIZES_NOT_TOTAL: true,
+  NO_PEOPLE: false,
+  MTM_CLOSED: true,
+  GARMENT_TYPE_GONE: true,
+})
+export const holdsSend = (code: ProblemCode): boolean => SEND_HOLDING[code]
+
 /** "2 problems — Show me": the send's held reason in words. */
 export function heldWords(count: number): Words | null {
   if (count === 0) return null
@@ -290,9 +315,15 @@ export type CustomLineKind = (typeof CUSTOM_LINE_KINDS)[number]
 
 export const CUSTOM_LINE_LIMITS = Object.freeze({ description: 2000, colourText: 200, garmentType: 40, total: 100_000 })
 
-/** What a described or made-to-measure line holds (a new one, or one as it would be after a change). */
+/**
+ * What a described or made-to-measure line holds (a new one, or one as it would be after a change). od-s s.4 (addendum R3, the
+ * products table): every cell is optional — the words, the garment type, the colour; `sizing` (null: not decided yet) says the
+ * kind (custom size = MADE_TO_MEASURE); the row's open `choices` (names only, ./choices.ts).
+ */
 export interface CustomLineInput {
   readonly kind: CustomLineKind
+  readonly sizing?: 'STANDARD' | 'MADE_TO_MEASURE' | null | undefined
+  readonly choices?: readonly { readonly topic: string; readonly options: readonly string[]; readonly picked: string | null }[] | null | undefined
   readonly description?: string | null | undefined
   readonly colourText?: string | null | undefined
   readonly styleId?: string | null | undefined
@@ -311,11 +342,11 @@ export function customLineShapeProblems(line: CustomLineInput): string[] {
   const out: string[] = []
   const sizes = line.sizes ?? []
   const byPerson = line.kind === 'MADE_TO_MEASURE' ? true : line.byPerson === true
-  if (line.kind === 'DESCRIBED' && !filled(line.description)) out.push('Say in your words what you need (1 to 2000 characters).')
+  // od-s s.4 (addendum R3): a described row may have no words yet; a made-to-measure row no garment type yet.
   if (filled(line.description) && line.description!.trim().length > CUSTOM_LINE_LIMITS.description) out.push(`A description is at most ${CUSTOM_LINE_LIMITS.description} characters.`)
   if (filled(line.colourText) && line.colourText!.trim().length > CUSTOM_LINE_LIMITS.colourText) out.push(`The colours in words are at most ${CUSTOM_LINE_LIMITS.colourText} characters.`)
   if (line.kind === 'MADE_TO_MEASURE') {
-    if (!filled(line.garmentType) || line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push('Choose the garment type to make to measure.')
+    if (filled(line.garmentType) && line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push(`A garment type is at most ${CUSTOM_LINE_LIMITS.garmentType} characters.`)
     if (line.byPerson === false) out.push('A made-to-measure line is always by person.')
     if (line.quantity !== undefined && line.quantity !== null) out.push('A made-to-measure line counts its people, not a total.')
   } else if (line.quantity !== undefined && line.quantity !== null && (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CUSTOM_LINE_LIMITS.total)) {

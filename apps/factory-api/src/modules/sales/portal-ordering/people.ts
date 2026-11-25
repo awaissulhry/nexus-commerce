@@ -9,6 +9,12 @@ import { draftFilesWhere, type DraftFileRow, type LineRow, type PersonRow, type 
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { priceShown } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { priceOrNull } from './store'
+// od-s s.4 (addendum R3, the products table): a row's sizing and its open choices (names only).
+import { choicesOf, choicesRow, type DraftChoice } from '@nexus/factory-domain/sales/portal-ordering/choices'
+import type { Prisma } from '@nexus/factory-db'
+import { stillOpenOf, type ConfirmTyped, type StillOpen } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+import type { BusinessDate } from '@nexus/factory-domain/core/time'
+import { dayText } from './store'
 
 /**
  * B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2): a draft's lines of the customer's own kinds — DESCRIBED
@@ -124,6 +130,8 @@ export function customLineView(line: LineRow & { readonly kind: CustomLineKind }
     note: line.note,
     problems: customLineProblems(customLineFactsOf(line, people, sheetLines, catalogue, mtm)).map(problemView),
     brandUnitPrice: ownPriceView(line), // B-CP-076
+    sizing: line.sizing, // od-s s.4: null = not decided yet
+    choices: choicesOf(line.choices), // od-s s.4: null = none
   }
 }
 
@@ -146,9 +154,9 @@ export function checkCustomLine(line: CustomLineInput, catalogue: CustomerCatalo
   const styleId = blankToNull(line.styleId)
   const style = styleId ? catalogue.styles.get(styleId) : undefined
   if (styleId) {
-    // A described line names the customer's OWN label (its private-label style); a made-to-measure line any style of its catalogue.
+    // od-s s.4 (addendum R3): a product row names any style of the customer's catalogue (the open range or its own label; never
+    // another customer's own label: the catalogue holds only what may be offered to this customer).
     if (!style) issues.push({ path: `${at}/styleId`, message: 'Not a style of your catalogue.' })
-    else if (line.kind === 'DESCRIBED' && !style.ownLabel) issues.push({ path: `${at}/styleId`, message: 'A described line names a style of your own label only (else pick it from the catalogue).' })
   }
   const colourwayId = blankToNull(line.colourwayId)
   if (style && colourwayId && !style.colourways.some((entry) => entry.id === colourwayId && entry.available)) issues.push({ path: `${at}/colourwayId`, message: `Not an available colour of ${style.code}.` })
@@ -156,8 +164,11 @@ export function checkCustomLine(line: CustomLineInput, catalogue: CustomerCatalo
   return issues
 }
 
-/** The line's own columns as written but its kind (blanks as null; a made-to-measure line always by person, never a total). */
-export function customLineData(line: CustomLineInput) {
+/**
+ * The line's own columns as written but its kind (blanks as null; a made-to-measure line always by person, never a total). od-s
+ * s.4: its sizing (a made-to-measure line is sized MADE_TO_MEASURE: the line guard). Its choices are written by `writeChoices`.
+ */
+export function customLineData(line: Omit<CustomLineInput, 'choices'>) {
   const mtm = line.kind === 'MADE_TO_MEASURE'
   return {
     description: blankToNull(line.description),
@@ -168,15 +179,55 @@ export function customLineData(line: CustomLineInput) {
     quantity: mtm ? null : (line.quantity ?? null),
     byPerson: mtm ? true : line.byPerson === true,
     note: blankToNull(line.note),
-    // od-s s.1 (the line guard): a made-to-measure line is sized MADE_TO_MEASURE (the guard refuses it otherwise).
-    ...(mtm ? { sizing: 'MADE_TO_MEASURE' as const } : {}),
+    // od-s s.1 (the line guard): a made-to-measure line is sized MADE_TO_MEASURE (the guard refuses it otherwise); od-s s.4: else the
+    // sizing asked (STANDARD, or null: not decided yet), kept when the input names none.
+    ...(mtm ? { sizing: 'MADE_TO_MEASURE' as const } : line.sizing !== undefined ? { sizing: line.sizing === 'MADE_TO_MEASURE' ? null : line.sizing } : {}),
   }
 }
 
+// ---- od-s s.4 (addendum R3): "Still open" of a draft (information only: it never holds Send), for both doors' reads ----------------
+/** The draft's delivery address is in use: its own, active; or none named and the customer has an active default one. */
+export const shipToInUseOf = (row: Pick<RequestRow, 'shipToAddressId'>, addresses: readonly { readonly id: string; readonly status: string; readonly isDefaultShipTo: boolean }[]): boolean =>
+  row.shipToAddressId !== null ? addresses.some((address) => address.id === row.shipToAddressId && address.status === 'ACTIVE') : addresses.some((address) => address.isDefaultShipTo && address.status === 'ACTIVE')
+
+/** Each row's people's sizes in roster order (null: by a sheet, or later). */
+export const peopleSizesOf = (line: Pick<LineRow, 'id'>, people: readonly PersonRow[]): (string | null)[] => people.filter((person) => person.lineId === line.id).map((person) => (person.measureBy === 'SIZE' ? person.size : null))
+
+/** The draft's Still open list (`typed`: the Confirm's body per row — what is still open after it is MISSING). */
+export function draftStillOpen(lines: readonly LineRow[], people: readonly PersonRow[], row: Pick<RequestRow, 'requestedDate'>, shipToInUse: boolean, today: BusinessDate, typed?: ReadonlyMap<string, ConfirmTyped>): StillOpen {
+  return stillOpenOf(
+    {
+      lines: lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, styleId: line.styleId, colourwayId: line.colourwayId, sizing: line.sizing, sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity })), byPerson: line.byPerson, peopleSizes: peopleSizesOf(line, people), choices: choicesOf(line.choices) })),
+      requestedDate: dayText(row.requestedDate),
+      today,
+      shipToInUse,
+    },
+    typed,
+  )
+}
+// ---- end od-s s.4
+
+// ---- od-s s.4 (addendum R3): a row's open choices, names only (null: none). factory-db exports Prisma's types, not its runtime DbNull:
+// a JSON column is cleared in SQL (as modules/sales/terms does).
+/** The `choices` column's value for a create or an update (none: the key left out, the column stays as it is or null). */
+export function choicesData(choices: readonly DraftChoice[] | null | undefined): { choices?: Prisma.InputJsonValue } {
+  const row = choicesRow(choices)
+  return row === null ? {} : { choices: row as unknown as Prisma.InputJsonValue }
+}
+
+/** Inside a draft command: the row's choices as asked (undefined: kept; null or []: cleared, in SQL). */
+export async function writeChoices(tx: CommandTx, lineId: string, choices: readonly DraftChoice[] | null | undefined): Promise<void> {
+  if (choices === undefined) return
+  const row = choicesRow(choices)
+  if (row === null) await tx.$executeRaw`UPDATE "PortalOrderRequestLine" SET "choices" = NULL WHERE "id" = ${lineId}::uuid AND "choices" IS NOT NULL`
+  else await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { choices: row as unknown as Prisma.InputJsonValue }, select: { id: true } })
+}
+// ---- end od-s s.4
+
 /** Writes a described or made-to-measure line and its sizes (partner scope, inside the draft's command). */
-export async function insertCustomLine(tx: CommandTx, row: RequestRow, line: CustomLineInput & OwnPriced /* B-CP-076 */, seq: number, actorId: string, now: Date): Promise<string> {
+export async function insertCustomLine(tx: CommandTx, row: Pick<RequestRow, 'id' | 'partyId'>, line: CustomLineInput & OwnPriced /* B-CP-076 */, seq: number, actorId: string, now: Date): Promise<string> {
   const id = newId()
-  await tx.portalOrderRequestLine.create({ data: { id, partyId: row.partyId, requestId: row.id, seq, kind: line.kind, ...customLineData(line), sourceOrderLineId: null, unitPriceShown: null, brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, createdById: actorId, createdAt: now, updatedAt: now }, select: { id: true } })
+  await tx.portalOrderRequestLine.create({ data: { id, partyId: row.partyId, requestId: row.id, seq, kind: line.kind, ...customLineData(line), ...choicesData(line.choices) /* od-s s.4 */, sourceOrderLineId: null, unitPriceShown: null, brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, createdById: actorId, createdAt: now, updatedAt: now }, select: { id: true } })
   const sizes = line.sizes ?? []
   if (sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId: id, size: ask.size.trim(), quantity: ask.quantity, createdById: actorId, createdAt: now, updatedAt: now })) })
   return id

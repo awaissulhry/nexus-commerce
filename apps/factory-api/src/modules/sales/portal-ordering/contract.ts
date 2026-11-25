@@ -17,6 +17,9 @@ import { MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-CQ-030
 // od-s s.3 (order start): the draft's subject; Make style draft takes the Inquiry's body.
 import { styleDraftBody } from '@nexus/factory-domain/sales/inquiries/contracts'
+// od-s s.4 (order start; addendum R1–R3): a row's sizing and open choices; Still open (information only).
+import { CHOICE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/choices'
+import { DRAFT_SIZINGS, STILL_OPEN_KINDS, STILL_OPEN_STATES } from '@nexus/factory-domain/sales/portal-ordering/still-open'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -53,6 +56,25 @@ const ownPriceText = () => z.string().regex(/^\d{1,12}(\.\d{1,6})?$/, 'A price o
 const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string().nullable(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at, locked: z.boolean() })
 const draftFiles = output({ logos: z.array(draftFile), references: z.array(draftFile), sheets: z.array(draftFile) })
 // ---- end B-CP-072
+
+// ---- od-s s.4 (addendum R3, the products table): a row's sizing (null: not decided yet) and its open choices (names only; the pick
+// null: "Not decided yet"; none: null, never []). Still open: what is not decided yet — information, it never holds Send.
+const sizing = z.enum(DRAFT_SIZINGS)
+const choiceView = output({ topic: z.string(), options: z.array(z.string()), picked: z.string().nullable() })
+const choiceInput = input({
+  topic: z.string().trim().min(1).max(CHOICE_LIMITS.topic),
+  options: z.array(z.string().trim().min(1).max(CHOICE_LIMITS.option)).min(CHOICE_LIMITS.optionsMin).max(CHOICE_LIMITS.optionsMax),
+  picked: z.string().trim().min(1).max(CHOICE_LIMITS.option).nullable(),
+})
+const choicesInput = z.array(choiceInput).max(CHOICE_LIMITS.perLine).nullish()
+const stillOpen = output({
+  items: z.array(output({ kind: z.enum(STILL_OPEN_KINDS), lineId: id().nullable(), seq: z.number().int().nullable(), topic: z.string().nullable(), state: z.enum(STILL_OPEN_STATES), confirmNeeds: z.boolean() })),
+  /** Items not DECIDED. */
+  openCount: z.number().int(),
+  /** An item the order needs is open: the office's Confirm window asks it (never a hold on Send). */
+  confirmHeld: z.boolean(),
+})
+// ---- end od-s s.4
 
 // ---- od-s s.2 (order start, W2): who saved (or started) a draft, from the reader's side — YOU, COLLEAGUE (a person of the customer),
 // FACTORY (an office person: the portal never gets a name for it, the office always does).
@@ -96,6 +118,10 @@ const customLine = output({
   problems: z.array(problem),
   /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
   brandUnitPrice: money.price(z.string().nullable()),
+  /** od-s s.4: standard sizes or custom size (made to measure); null: not decided yet. */
+  sizing: sizing.nullable(),
+  /** od-s s.4: the row's open choices (null: none). */
+  choices: z.array(choiceView).nullable(),
 })
 // ---- end B-CP-075
 
@@ -187,6 +213,10 @@ const line = output({
   problems: z.array(problem),
   /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
   brandUnitPrice: money.price(z.string().nullable()),
+  /** od-s s.4: STANDARD for a size run of the catalogue (null: not decided yet). */
+  sizing: sizing.nullable(),
+  /** od-s s.4: the row's open choices (null: none). */
+  choices: z.array(choiceView).nullable(),
 })
 
 const requestBody = output({
@@ -243,6 +273,8 @@ const requestBody = output({
   savedBy,
   /** od-s s.3 (L5): the portal's read only — the factory made a style draft for it ("The factory is working on the design."); never an id. */
   designStarted: z.boolean().optional(),
+  /** od-s s.4: what is not decided yet, per row and for the draft (information only; no price item, ever). */
+  stillOpen,
 })
 
 const address = output({
@@ -308,7 +340,7 @@ export const listRequestsContract = defineContract({
            * od-s s.2: a draft's "Continue a draft" facts (null once sent) — its title (line 1's own words, else its style), who started
            * it and who saved it last (the reader's side: an office person is "the factory", never named), when.
            */
-          draft: output({ title: z.string().nullable(), startedBy: savedBy, savedBy, savedAt: at }).nullable(),
+          draft: output({ title: z.string().nullable(), startedBy: savedBy, savedBy, savedAt: at, /* od-s s.4 */ openCount: z.number().int(), confirmHeld: z.boolean() }).nullable(),
         }),
       ),
       seesPrices: notMoney(z.boolean()),
@@ -322,7 +354,8 @@ export const changeRequestContract = defineContract({ params: requestParams, bod
 export const addLinesContract = defineContract({ params: requestParams, body: input({ version, lines: z.array(newLine).min(1).max(ORDERING_LIMITS.lines) }), response: { 200: record } })
 export const changeLineContract = defineContract({
   params: input({ requestId: id(), lineId: id() }),
-  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: money.price(ownPriceText()) /* B-CP-076 */ }),
+  // od-s s.4: + sizing (custom size makes the row made to measure: its size run goes) and the row's open choices.
+  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: money.price(ownPriceText()) /* B-CP-076 */, sizing: sizing.nullish(), choices: choicesInput }),
   response: { 200: record },
 })
 export const removeLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
@@ -350,6 +383,10 @@ const customLineFields = {
   note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(),
   /** B-CP-076: "Your price" (price grain; null clears it). */
   brandUnitPrice: money.price(ownPriceText()),
+  /** od-s s.4: the Sizing cell — STANDARD, MADE_TO_MEASURE (the row becomes made to measure), null: not decided yet. */
+  sizing: sizing.nullish(),
+  /** od-s s.4: the row's open choices (null or [] clears them). */
+  choices: choicesInput,
 }
 const personFields = {
   name: z.string().trim().min(1).max(PEOPLE_LIMITS.name),
@@ -362,7 +399,8 @@ const personFields = {
 }
 const lineParams = input({ requestId: id(), lineId: id() })
 const personParams = input({ requestId: id(), lineId: id(), personId: id() })
-export const addCustomLineContract = defineContract({ params: requestParams, body: input({ version, line: input({ kind: z.enum(CUSTOM_LINE_KINDS), ...customLineFields }) }), response: { 200: record } })
+// od-s s.4 (addendum R3): every cell optional — the kind too (it follows the Sizing cell; a body may still name it).
+export const addCustomLineContract = defineContract({ params: requestParams, body: input({ version, line: input({ kind: z.enum(CUSTOM_LINE_KINDS).optional(), ...customLineFields }) }), response: { 200: record } })
 export const changeCustomLineContract = defineContract({ params: lineParams, body: input({ version, ...customLineFields }), response: { 200: record } })
 export const addPeopleContract = defineContract({ params: lineParams, body: input({ version, people: z.array(input(personFields)).min(1).max(PEOPLE_LIMITS.perLine) }), response: { 200: record } })
 export const changePersonContract = defineContract({
@@ -578,6 +616,12 @@ const officeDraft = output({
    * pieces, minor units of the draft's currency; null: a line has neither. Price grain.
    */
   draftValueAmount: money.price(z.number().int().nullable()),
+  // ---- od-s s.4 (lead addition B): the "Continue a draft" facts — Still open items not decided yet, whether the order still needs
+  // one, who saved it last from the office's side (named), when.
+  openCount: z.number().int(),
+  confirmHeld: z.boolean(),
+  savedBy,
+  savedAt: at,
 })
 // ---- end B-CP-071
 
@@ -746,6 +790,12 @@ export const acceptContract = defineContract({
     }),
   },
 })
+/**
+ * od-s s.4 (13-backend § 5; Owner yes 2a): POST /sales/order-requests/:requestId/confirm — the accept's body and answer: it sends a
+ * draft for the customer (if still one) and accepts it in ONE command; 409 in words while the order still lacks a row's style,
+ * colour or pieces by size after the body, or a delivery address.
+ */
+export const confirmContract = acceptContract
 export const refuseContract = defineContract({ params: requestParams, body: input({ version, reason: z.string().trim().min(1).max(ORDERING_LIMITS.reason) }), response: { 200: officeRecord } })
 
 // ---- the office's check of the delivery addresses customers add (B-W2b-F13b, wave 23) ----------------------------------

@@ -39,6 +39,10 @@ import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 import { officeDraftStaleWords, OFFICE_DRAFT_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import type { SheetOf } from './people'
+// od-s s.4 (order start; addendum R1–R3): Send holds only on an invalid value; Still open; a row's sizing and open choices.
+import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { choiceProblems, choicesOf, type DraftChoice } from '@nexus/factory-domain/sales/portal-ordering/choices'
+import { draftStillOpen, shipToInUseOf, writeChoices } from './people'
 import { dayText, dayValue, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type Reader, type RequestRow } from './store'
 import { catalogueLines, isCatalogueLine, ownWordsOf, type CatalogueLineRow } from './store' // B-CP-005
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
@@ -267,6 +271,8 @@ function lineView(line: CatalogueLineRow, catalogue: CustomerCatalogue, source: 
     notices: source ? [...reorderPlan(source.line, facts, seesPrices).notices] : [],
     problems: lineProblems({ id: line.id, sizes, unitPriceShown: shown }, facts, seesPrices).map(problemView),
     brandUnitPrice: ownPriceView(line), // B-CP-076
+    sizing: line.sizing, // od-s s.4: null = not decided yet
+    choices: choicesOf(line.choices), // od-s s.4: null = none
   }
 }
 
@@ -348,7 +354,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       lines: views,
       summary: { lines: totals.lines, pieces: totals.pieces, net: asMoney('price', totals.net) },
       problems,
-      held: heldWords(problems.length),
+      // od-s s.4 (addendum R1): only an invalid value holds the Send; a missing one is information (Still open, the Confirm asks it).
+      held: heldWords(problems.filter((entry) => holdsSend(entry.code)).length),
       pricesChanged: views.filter((line) => line.problems.some((problem) => problem.code === 'PRICE_CHANGED')).length,
       notice: REQUEST_NOTICE,
       // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
@@ -365,6 +372,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       madeToMeasure: draft ? { open: mtm.open, words: mtm.open ? null : MTM_CLOSED_WORDS, garmentTypes: mtm.open ? [...mtm.garmentTypes] : [] } : null,
       // ---- end B-CP-075
       savedBy, // od-s s.2 (W2)
+      // od-s s.4: what is not decided yet (information only; `confirmHeld`: the office's Confirm window will ask what the order needs).
+      stillOpen: draftStillOpen(lines, people, row, shipToInUseOf(row, addresses), day),
       // od-s s.3 (L5): the portal reads only whether the factory works on the design, never a style id (the office reads its own styles).
       ...(writer.door === 'portal' ? { designStarted: await designStartedOf(writer, row.id) } : {}),
     },
@@ -449,11 +458,15 @@ export async function listRequests(writer: DraftWriter, query: { readonly status
   const firstStyles = [...new Set([...firstLines.values()].flatMap((line) => (line && isCatalogueLine(line) ? [line.styleId] : [])))]
   const styleNames = firstStyles.length === 0 ? new Map<string, string>() : await writer.inTenant(async (db) => new Map((await db.style.findMany({ where: { id: { in: firstStyles } }, select: { id: true, code: true, name: true } })).map((style) => [style.id, `${style.code} ${style.name}`.trim()])))
   const whoSaved = await savedByAll(writer, writer.partyId, drafts.flatMap((row) => [row.createdById, row.lastEditedById]))
+  // od-s s.4 (lead addition B): each draft's Still open count (information only) for the "Continue a draft" row.
+  const addresses = drafts.length === 0 ? [] : await shipToAddresses(writer)
+  const day = today(writer.app)
   const draftOf = (row: RequestRow) => {
     if (row.status !== 'DRAFT') return null
+    const open = draftStillOpen(lines.filter((line) => line.requestId === row.id), people.filter((person) => person.requestId === row.id), row, shipToInUseOf(row, addresses), day)
     const first = firstLines.get(row.id)
     // od-s s.3 (addendum R2): the subject is the title; else line 1's words or style.
-    return { title: row.subject ?? (first ? (isCatalogueLine(first) ? (styleNames.get(first.styleId) ?? null) : ownWordsOf(first)) : null), startedBy: whoSaved(row.createdById), savedBy: whoSaved(row.lastEditedById), savedAt: iso(row.lastEditedAt ?? row.updatedAt)! }
+    return { title: row.subject ?? (first ? (isCatalogueLine(first) ? (styleNames.get(first.styleId) ?? null) : ownWordsOf(first)) : null), startedBy: whoSaved(row.createdById), savedBy: whoSaved(row.lastEditedById), savedAt: iso(row.lastEditedAt ?? row.updatedAt)!, openCount: open.openCount, confirmHeld: open.confirmHeld }
   }
   // ---- end od-s s.2
   return {
@@ -646,7 +659,7 @@ export function checkNewLines(lines: readonly NewLine[], catalogue: CustomerCata
 async function insertLine(tx: CommandTx, row: RequestRow, line: NewLine, seq: number, price: string | null, actorId: string, now: Date): Promise<string> {
   const id = newId()
   await tx.portalOrderRequestLine.create({
-    data: { id, partyId: row.partyId, requestId: row.id, seq, styleId: line.styleId, colourwayId: line.colourwayId, sourceOrderLineId: line.sourceOrderLineId ?? null, unitPriceShown: price, note: blankToNull(line.note), brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, createdById: actorId, createdAt: now, updatedAt: now },
+    data: { id, partyId: row.partyId, requestId: row.id, seq, styleId: line.styleId, colourwayId: line.colourwayId, sourceOrderLineId: line.sourceOrderLineId ?? null, unitPriceShown: price, note: blankToNull(line.note), brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, sizing: 'STANDARD' /* od-s s.4: a size run of the catalogue */, createdById: actorId, createdAt: now, updatedAt: now },
     select: { id: true },
   })
   await tx.portalOrderRequestSize.createMany({ data: line.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId: id, size: ask.size.trim(), quantity: ask.quantity, createdById: actorId, createdAt: now, updatedAt: now })) })
@@ -745,11 +758,22 @@ export async function changeLine(
   writer: DraftWriter,
   requestId: string,
   lineId: string,
-  body: { readonly version: number; readonly colourwayId?: string | undefined; readonly sizes?: readonly SizeAsk[] | undefined; readonly note?: string | null | undefined } & OwnPriced /* B-CP-076 */,
+  body: {
+    readonly version: number
+    readonly colourwayId?: string | undefined
+    readonly sizes?: readonly SizeAsk[] | undefined
+    readonly note?: string | null | undefined
+    /** od-s s.4: the Sizing cell (custom size makes the row made to measure: by person, its size run goes; null: not decided yet). */
+    readonly sizing?: 'STANDARD' | 'MADE_TO_MEASURE' | null | undefined
+    /** od-s s.4: the row's open choices (names only; null or [] clears them). */
+    readonly choices?: readonly DraftChoice[] | null | undefined
+  } & OwnPriced /* B-CP-076 */,
   idempotencyKey?: string,
 ) {
   const row = await ownDraft(writer, requestId)
   const line = await writer.scoped((client) => ownCatalogueLine(client, row, lineId)) // B-CP-005: a catalogue line
+  checkChoices(body.choices, 'body/choices') // od-s s.4
+  if (body.sizing === 'MADE_TO_MEASURE') return catalogueToCustomSize(writer, row, line, body, idempotencyKey) // od-s s.4
   const next: NewLine = { styleId: line.styleId, colourwayId: body.colourwayId ?? line.colourwayId, sizes: (body.sizes ?? sizesOf(line)).map((ask) => ({ size: ask.size.trim(), quantity: ask.quantity })), note: body.note === undefined ? line.note : body.note }
   const catalogue = await writer.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(writer.app), styleIds: [line.styleId] }))
   // Only a change of sizes or colour is checked against today's catalogue: a note alone keeps the line as it was.
@@ -772,17 +796,41 @@ export async function changeLine(
     }
     // B-CP-076: "Your price" with the line (absent keeps it, null clears it).
     const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {}
-    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { colourwayId: next.colourwayId, note: blankToNull(next.note), unitPriceShown: price, ...own, version: { increment: 1 } }, select: { id: true } })
+    const sizing = body.sizing !== undefined ? { sizing: body.sizing } : {} // od-s s.4: STANDARD, or null (not decided yet)
+    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { colourwayId: next.colourwayId, note: blankToNull(next.note), unitPriceShown: price, ...own, ...sizing, version: { increment: 1 } }, select: { id: true } })
+    await writeChoices(tx, lineId, body.choices) // od-s s.4
     tools.audit({
       recordType: 'PortalOrderRequest',
       recordId: row.id,
       companyId: row.companyId,
-      before: { lineId, colourwayId: current.colourwayId, sizes: sizesOf(current), note: current.note, unitPriceShown: markMoney('price', priceOrNull(current.unitPriceShown)), brandUnitPrice: markMoney('price', priceOrNull(current.brandUnitPrice)) /* B-CP-076 */ },
-      after: { lineId, colourwayId: next.colourwayId, sizes: next.sizes, note: blankToNull(next.note), unitPriceShown: markMoney('price', price), brandUnitPrice: markMoney('price', body.brandUnitPrice === undefined ? priceOrNull(current.brandUnitPrice) : body.brandUnitPrice) /* B-CP-076 */ },
+      before: { lineId, colourwayId: current.colourwayId, sizes: sizesOf(current), note: current.note, unitPriceShown: markMoney('price', priceOrNull(current.unitPriceShown)), brandUnitPrice: markMoney('price', priceOrNull(current.brandUnitPrice)) /* B-CP-076 */, sizing: current.sizing, choices: current.choices },
+      after: { lineId, colourwayId: next.colourwayId, sizes: next.sizes, note: blankToNull(next.note), unitPriceShown: markMoney('price', price), brandUnitPrice: markMoney('price', body.brandUnitPrice === undefined ? priceOrNull(current.brandUnitPrice) : body.brandUnitPrice) /* B-CP-076 */, ...sizing, ...(body.choices !== undefined ? { choices: body.choices } : {}) },
     })
     return null
   })
   return requestView(writer, (await ownRequest(writer, requestId))!)
+}
+
+/**
+ * od-s s.4 (addendum R3): a catalogue row whose Sizing cell turns to custom size — in ONE update it becomes made to measure (by
+ * person; the style and colour stay as its hint, its size run and the price shown go: its people carry the sizes, the office prices
+ * a made-to-measure row at Confirm). Made to measure switched off for the customer: refused in its words.
+ */
+async function catalogueToCustomSize(writer: DraftWriter, row: RequestRow, line: CatalogueLineRow, body: { readonly version: number; readonly note?: string | null | undefined; readonly choices?: readonly DraftChoice[] | null | undefined } & OwnPriced, idempotencyKey?: string) {
+  const mtm = await writer.inTenant((db) => madeToMeasureOf(db, row.companyId, row.partyId))
+  if (!mtm.open) throw mtmClosed(writer)
+  await onDraft(writer, 'portalOrdering.changeLine', row, body.version, { requestId: row.id, lineId: line.id, ...body }, idempotencyKey, async (tools) => {
+    const { tx } = tools
+    const current = await ownLine(tx, row, line.id)
+    await tx.portalOrderRequestSize.deleteMany({ where: { lineId: line.id } })
+    const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {}
+    const note = body.note === undefined ? {} : { note: blankToNull(body.note) }
+    await tx.portalOrderRequestLine.update({ where: { id: line.id }, data: { kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', byPerson: true, quantity: null, unitPriceShown: null, ...note, ...own, version: { increment: 1 } }, select: { id: true } })
+    await writeChoices(tx, line.id, body.choices)
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { lineId: line.id, kind: current.kind, sizing: current.sizing, sizes: sizesOf(current), unitPriceShown: markMoney('price', priceOrNull(current.unitPriceShown)) }, after: { lineId: line.id, kind: 'MADE_TO_MEASURE', sizing: 'MADE_TO_MEASURE', sizes: [], unitPriceShown: markMoney('price', null) } })
+    return null
+  })
+  return requestView(writer, (await ownRequest(writer, row.id))!)
 }
 
 export async function removeLine(writer: DraftWriter, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
@@ -848,8 +896,11 @@ export async function discardDraft(writer: DraftWriter, requestId: string, versi
 
 // ---- send and withdraw -------------------------------------------------------------------------------------------------
 
-/** The problems of a draft today (the send's check): its header's and every line's, as the record shows them. */
-async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly LineRow[], day: BusinessDate, seesPrices: boolean, /* B-CP-075 */ people: readonly PersonRow[]): Promise<Problem[]> {
+/**
+ * The problems of a draft today (the send's check): its header's and every line's, as the record shows them. od-s s.4: the Send and
+ * the office's Confirm keep only those that hold it (`holdsSend`: an invalid value, never a missing one).
+ */
+export async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly LineRow[], day: BusinessDate, seesPrices: boolean, /* B-CP-075 */ people: readonly PersonRow[]): Promise<Problem[]> {
   // B-CP-005: the catalogue's checks (sold, colour, sizes offered, price shown) for its own lines; the header counts every line.
   // B-CP-075: a described or made-to-measure line's own (its total, its people or sheet, made to measure open, its garment type).
   const listed = catalogueLines(lines)
@@ -886,7 +937,7 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
     const day = businessDate(now)
     const lines = await readLines(tx, [current.id])
     const people = await readPeople(tx, [current.id]) // B-CP-075
-    const problems = await sendProblems(tx, current, lines, day, reader.seesPrices, people)
+    const problems = (await sendProblems(tx, current, lines, day, reader.seesPrices, people)).filter((entry) => holdsSend(entry.code)) // od-s s.4
     if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length === 1 ? '1 problem holds' : `${problems.length} problems hold`} the send: fix ${problems.length === 1 ? 'it' : 'them'} first.`, problems.map((entry) => ({ path: entry.lineId ? `lines/${entry.lineId}` : 'request', message: entry.words.en })))
     const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })
     await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number: number.formatted, sentAt: now, sentById: session.userId, version: current.version + 1 }, select: { id: true } })
@@ -957,18 +1008,41 @@ function mtmClosed(writer: DraftWriter): DomainError {
   return new DomainError('invalid_state', words, [{ path: 'refusal/MTM_CLOSED', message: words }])
 }
 
-export async function addCustomLine(writer: DraftWriter, requestId: string, body: { readonly version: number; readonly line: CustomLineInput & OwnPriced /* B-CP-076 */ }, idempotencyKey?: string) {
-  const row = await ownDraft(writer, requestId)
-  const { catalogue, mtm } = await customFactsOf(writer, row, [body.line.styleId])
-  if (body.line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
-  const issues = checkCustomLine(body.line, catalogue, mtm)
+/**
+ * od-s s.4 (addendum R3, the products table): a row's kind follows its Sizing cell — custom size is MADE_TO_MEASURE (always by
+ * person), standard sizes or not decided yet a DESCRIBED row (a CATALOGUE row comes from the catalogue's own picker, reorder or
+ * upload); a body may still name the kind as before. Refused in words when the two disagree (400).
+ */
+function rowKindOf(kind: CustomLineKind | undefined, sizing: CustomLineInput['sizing']): CustomLineKind {
+  if (sizing === 'MADE_TO_MEASURE') {
+    if (kind === 'DESCRIBED') throw new ValidationError('A custom-size row is made to measure.', [{ path: 'body/line/kind', message: 'A custom-size row is made to measure.' }])
+    return 'MADE_TO_MEASURE'
+  }
+  if (sizing !== undefined && kind === 'MADE_TO_MEASURE') throw new ValidationError('A made-to-measure row has custom sizes.', [{ path: 'body/line/sizing', message: 'A made-to-measure row has custom sizes.' }])
+  return kind ?? 'DESCRIBED'
+}
+
+/** A row's choices (400 in words when malformed); [] is none. */
+function checkChoices(choices: readonly DraftChoice[] | null | undefined, at: string): void {
+  if (choices === undefined || choices === null || choices.length === 0) return
+  const issues = choiceProblems(choices, at)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-  await onDraft(writer, 'portalOrdering.addCustomLine', row, body.version, { requestId, line: body.line }, idempotencyKey, async (tools) => {
+}
+
+export async function addCustomLine(writer: DraftWriter, requestId: string, body: { readonly version: number; readonly line: Omit<CustomLineInput, 'kind'> & { readonly kind?: CustomLineKind | undefined } & OwnPriced /* B-CP-076 */ }, idempotencyKey?: string) {
+  const row = await ownDraft(writer, requestId)
+  const line: CustomLineInput & OwnPriced = { ...body.line, kind: rowKindOf(body.line.kind, body.line.sizing) } // od-s s.4
+  checkChoices(line.choices, 'body/line/choices')
+  const { catalogue, mtm } = await customFactsOf(writer, row, [line.styleId])
+  if (line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
+  const issues = checkCustomLine(line, catalogue, mtm)
+  if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
+  await onDraft(writer, 'portalOrdering.addCustomLine', row, body.version, { requestId, line }, idempotencyKey, async (tools) => {
     const existing = await readLines(tools.tx, [row.id])
     if (existing.length >= ORDERING_LIMITS.lines) throw new ValidationError(`At most ${ORDERING_LIMITS.lines} lines per request.`, [{ path: 'body/line', message: `At most ${ORDERING_LIMITS.lines} lines per request.` }])
-    const seq = existing.reduce((max, line) => Math.max(max, line.seq), 0) + 1
-    const id = await insertCustomLine(tools.tx, row, body.line, seq, writer.userId, tools.now)
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: id, seq, kind: body.line.kind, ...customLineData(body.line), sizes: body.line.sizes ?? [], brandUnitPrice: markMoney('price', body.line.brandUnitPrice ?? null) /* B-CP-076 */ } })
+    const seq = existing.reduce((max, entry) => Math.max(max, entry.seq), 0) + 1
+    const id = await insertCustomLine(tools.tx, row, line, seq, writer.userId, tools.now)
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: id, seq, kind: line.kind, ...customLineData(line), sizes: line.sizes ?? [], choices: line.choices ?? null, brandUnitPrice: markMoney('price', line.brandUnitPrice ?? null) /* B-CP-076 */ } })
     return null
   })
   return requestView(writer, (await ownRequest(writer, requestId))!)
@@ -985,20 +1059,26 @@ export async function changeCustomLine(writer: DraftWriter, requestId: string, l
   const row = await ownDraft(writer, requestId)
   const line = await writer.scoped((client) => ownCustomLine(client, row, lineId))
   const keep = <T>(asked: T | undefined, now: T): T => (asked === undefined ? now : asked)
+  // od-s s.4 (addendum R3): the Sizing cell changes the row's kind in this one update — custom size: made to measure (by person; its
+  // total and size run go, its people carry the sizes); standard or not decided: a described row (the garment type goes).
+  const kind: CustomLineKind = body.sizing === undefined ? line.kind : body.sizing === 'MADE_TO_MEASURE' ? 'MADE_TO_MEASURE' : 'DESCRIBED'
+  const toMtm = kind === 'MADE_TO_MEASURE' && line.kind !== 'MADE_TO_MEASURE'
+  checkChoices(body.choices, 'body/choices')
   const next: CustomLineInput = {
-    kind: line.kind,
+    kind,
+    sizing: keep(body.sizing, line.sizing),
     description: keep(body.description, line.description),
     colourText: keep(body.colourText, line.colourText),
     styleId: keep(body.styleId, line.styleId),
     colourwayId: body.styleId !== undefined && body.colourwayId === undefined && body.styleId !== line.styleId ? null : keep(body.colourwayId, line.colourwayId),
     garmentType: keep(body.garmentType, line.garmentType),
-    quantity: keep(body.quantity, line.quantity),
-    byPerson: keep(body.byPerson, line.byPerson),
-    sizes: body.sizes ?? sizesOf(line),
+    quantity: toMtm ? null : keep(body.quantity, line.quantity),
+    byPerson: kind === 'MADE_TO_MEASURE' ? true : keep(body.byPerson, line.byPerson),
+    sizes: toMtm ? [] : (body.sizes ?? sizesOf(line)),
     note: keep(body.note, line.note),
   }
   const { catalogue, mtm } = await customFactsOf(writer, row, [next.styleId])
-  if (line.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
+  if (next.kind === 'MADE_TO_MEASURE' && !mtm.open) throw mtmClosed(writer)
   // The shape always; against today's catalogue and garment types only what this change asks (a style that stopped being sold, or a
   // garment type no longer offered, stays a problem of the line to fix, never a refusal of an unrelated change).
   const styleAsked = body.styleId !== undefined || body.colourwayId !== undefined
@@ -1009,13 +1089,15 @@ export async function changeCustomLine(writer: DraftWriter, requestId: string, l
     const current = await ownCustomLine(tx, row, lineId)
     const people = await tx.portalOrderRequestPerson.count({ where: { lineId } })
     if (current.byPerson && next.byPerson === false && people > 0) throw new InvalidStateError(`Line ${current.seq} has its people: take them off before it stops being by person.`)
-    if (body.sizes !== undefined) {
+    if (body.sizes !== undefined || toMtm) {
       await tx.portalOrderRequestSize.deleteMany({ where: { lineId } })
-      if (body.sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: body.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size.trim(), quantity: ask.quantity, createdById: writer.userId, createdAt: now, updatedAt: now })) })
+      const asked = toMtm ? [] : (body.sizes ?? [])
+      if (asked.length > 0) await tx.portalOrderRequestSize.createMany({ data: asked.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size.trim(), quantity: ask.quantity, createdById: writer.userId, createdAt: now, updatedAt: now })) })
     }
     const data = customLineData(next)
     const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {} // B-CP-076: absent keeps it, null clears it
-    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { ...data, ...own, version: { increment: 1 } }, select: { id: true } })
+    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { kind: next.kind /* od-s s.4 */, ...data, ...own, version: { increment: 1 } }, select: { id: true } })
+    await writeChoices(tx, lineId, body.choices) // od-s s.4: absent keeps them, null or [] clears them
     tools.audit({
       recordType: 'PortalOrderRequest',
       recordId: row.id,

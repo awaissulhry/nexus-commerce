@@ -68,6 +68,8 @@ export const manifest = defineManifest({
   'POST /sales/order-requests/:requestId/files/:fileId/complete': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'DELETE /sales/order-requests/:requestId/files/:fileId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/style-draft': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // od-s s.4 (Owner yes 2a): Confirm = send (if still a draft) + the accept, in ONE command (quotes.manage too for a quote: the handler).
+  'POST /sales/order-requests/:requestId/confirm': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   // B-CQ-030 (customer page › Quotes & incoming): the small pictures of a page of portal orders, drafts too (each one's orders.view).
   'POST /sales/order-requests/pictures': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-W2b-F13b: the delivery addresses customers add wait for the office's check (whoever takes the customer's orders).
