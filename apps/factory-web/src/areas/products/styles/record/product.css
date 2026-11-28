@@ -19,3 +19,7 @@
 .fw-pd-sizes { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
 .fw-pd-size { display: inline-flex; align-items: center; padding: var(--nds-space-2) var(--nds-space-8); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); font-size: var(--nds-font-size-sm); font-variant-numeric: tabular-nums; }
 .fw-pd-size.is-base { border-color: var(--nds-primary); font-weight: var(--nds-font-weight-semibold); }
+.fw-pd-mtm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-12); }
+.fw-pd-howto { margin: 0; padding-left: var(--nds-space-20); display: grid; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); }
+.fw-pd-howto li { display: flex; flex-wrap: wrap; gap: var(--nds-space-2) var(--nds-space-8); }
+.fw-pd-howto li > span { color: var(--nds-text-2); }

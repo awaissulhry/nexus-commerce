@@ -130,6 +130,43 @@
       "rangeMtmNoBase": "{from} to {to}. No base size yet. Made to measure too.",
       "mtm": "Made to measure. Each piece is cut to the rider's measurements.",
       "none": "No size is chosen yet."
+    },
+    "readOnly": "Read only: the sizes change with the right to manage products, or by the designer on a draft.",
+    "mtm": {
+      "label": "Made to measure",
+      "on": "Yes: each piece can be cut to a rider's measurements",
+      "off": "No: in sizes only"
+    },
+    "table": {
+      "title": "Size table",
+      "held": "Your role does not read the size table.",
+      "heldWhy": "The size table, how to measure and the protectors are read with the materials right.",
+      "info": "One row for each measurement point, one column for each size, in millimetres."
+    },
+    "riders": {
+      "title": "Riders' measurement sheets",
+      "none": "No open made-to-measure order line yet.",
+      "waiting_one": "{count} sheet is not here yet.",
+      "waiting_other": "{count} sheets are not here yet.",
+      "allHere": "Every sheet is here.",
+      "info": "A product made to measure has a rider's sheet with each order line: a file, or typed. The order's Files hold it.",
+      "col": {
+        "order": "Order",
+        "customer": "Customer",
+        "sheet": "Measurement sheet"
+      },
+      "state": {
+        "FILE": "Here: a file",
+        "TYPED": "Here: typed",
+        "MISSING": "Not here yet"
+      }
+    },
+    "howTo": {
+      "title": "How to measure",
+      "none": "No measurement point yet.",
+      "noWords": "No words for this point yet.",
+      "failed": "How to measure could not be read: the size table above says why.",
+      "info": "One plain sentence for each point. The customer reads the same words, and they are in the tech pack. The words are the point's own (Products › Sizes)."
     }
   }
 }

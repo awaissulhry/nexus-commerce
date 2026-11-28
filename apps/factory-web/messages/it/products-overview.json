@@ -130,6 +130,43 @@
       "rangeMtmNoBase": "Da {from} a {to}. Ancora nessuna taglia base. Anche su misura.",
       "mtm": "Su misura. Ogni pezzo si taglia sulle misure del pilota.",
       "none": "Ancora nessuna taglia scelta."
+    },
+    "readOnly": "Sola lettura: le taglie cambiano con il permesso di gestire i prodotti, o dal designer su una bozza.",
+    "mtm": {
+      "label": "Su misura",
+      "on": "Sì: ogni pezzo si può tagliare sulle misure di un pilota",
+      "off": "No: solo in taglie"
+    },
+    "table": {
+      "title": "Tabella taglie",
+      "held": "Il tuo ruolo non legge la tabella taglie.",
+      "heldWhy": "La tabella taglie, come misurare e le protezioni si leggono con il permesso sui materiali.",
+      "info": "Una riga per ogni punto di misura, una colonna per ogni taglia, in millimetri."
+    },
+    "riders": {
+      "title": "Schede misure dei piloti",
+      "none": "Ancora nessuna riga d'ordine su misura aperta.",
+      "waiting_one": "{count} scheda non è ancora arrivata.",
+      "waiting_other": "{count} schede non sono ancora arrivate.",
+      "allHere": "Ogni scheda è arrivata.",
+      "info": "Un prodotto su misura ha la scheda del pilota con ogni riga d'ordine: un file, o scritta. La tengono i File dell'ordine.",
+      "col": {
+        "order": "Ordine",
+        "customer": "Cliente",
+        "sheet": "Scheda misure"
+      },
+      "state": {
+        "FILE": "Arrivata: un file",
+        "TYPED": "Arrivata: scritta",
+        "MISSING": "Non ancora arrivata"
+      }
+    },
+    "howTo": {
+      "title": "Come misurare",
+      "none": "Ancora nessun punto di misura.",
+      "noWords": "Ancora nessuna parola per questo punto.",
+      "failed": "Come misurare non si è potuto leggere: la tabella taglie qui sopra dice perché.",
+      "info": "Una frase semplice per ogni punto. Il cliente legge le stesse parole, e sono nella scheda tecnica. Le parole sono del punto stesso (Prodotti › Taglie)."
     }
   }
 }

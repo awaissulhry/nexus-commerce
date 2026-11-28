@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
-import { DEMO_ROUTE, DEMO_STYLE_ORDERS, demoStyle, recordModel, STYLE_ID, StyleDesign } from '../demo/fixtures'
+import { DEMO_ROUTE, DEMO_STYLE_ORDERS, demoStyle, recordModel, REVISIONS, STYLE_ID, StyleDesign } from '../demo/fixtures'
+import { demoProtectors } from './protectors/fixtures'
+import { protectorsHeld } from './protectors/protectors-model'
+import { demoSpec } from './spec/fixtures'
+import { cellProblemOf, specHeld } from './spec/spec-model'
 import { abilitiesOf, bandPrimaryOf, grainsOf, mayEditDraftParts, mayEditFacts, startRevisionHeld, STYLE_TABS, tabsFor } from '../model'
 import { productSheetOf } from '../sheet/sheet-model'
-import { howItIsMadeOf, isSheet, overviewSectionsFor, routeSummaryOf, sheetHref, whereUsedOf } from './product-model'
+import { howItIsMadeOf, howToOf, isSheet, overviewSectionsFor, ridersOf, routeSummaryOf, sheetHref, sizesAnswerOf, whereUsedOf } from './product-model'
 
 /**
  * owb-pd4 — the product page's rules, written per step (not run: Owner rule, checks at the end).
@@ -144,5 +148,48 @@ describe('step 4.3 — the Overview in the section kit, per person', () => {
   })
   it('the Overview never shows money without its grain: no agreed price for the production manager or the designer', () => {
     for (const role of ['production', 'designer'] as const) expect(renderView(StyleDesign, recordModel(role), 'en'), role).not.toContain('€')
+  })
+})
+
+describe('step 4.4 — the Sizes tab', () => {
+  it('a frozen (released) revision shows no field to type in — for the manager and for the designer alike', () => {
+    const released = demoSpec({ revision: 'released' })
+    expect(specHeld(released, { manage: true })).toBe('spec.held.frozen')
+    expect(specHeld(released, { manage: mayEditDraftParts(abilitiesOf(DESIGNER)) })).toBe('spec.held.frozen')
+    expect(specHeld(demoSpec(), { manage: mayEditDraftParts(abilitiesOf(DESIGNER)) })).toBeNull()
+    expect(specHeld(demoSpec(), { manage: mayEditDraftParts(abilitiesOf(SALES)) })).toBe('spec.held.noManage')
+    expect(protectorsHeld(demoProtectors({ revision: REVISIONS.find((revision) => revision.status !== 'DRAFT') }), true)).toBe('protectors.held.frozen')
+  })
+  it('a size value of 0 mm or less is refused with words; a positive one passes', () => {
+    expect(cellProblemOf('0')).toBe('spec.problem.nominal')
+    expect(cellProblemOf('-4')).toBe('spec.problem.nominal')
+    expect(cellProblemOf('520')).toBeNull()
+    expect(cellProblemOf(null)).toBeNull()
+  })
+  it('the riders\' sheets come from the orders read: one row per made-to-measure line, the missing ones first', () => {
+    const rows = ridersOf(DEMO_STYLE_ORDERS.lines)
+    expect(rows.map((row) => [row.orderNumber, row.state])).toEqual([
+      ['SO-2026-0158', 'MISSING'],
+      ['SO-2026-0152', 'FILE'],
+    ])
+    expect(ridersOf(DEMO_STYLE_ORDERS.lines.filter((line) => line.measurement === null))).toEqual([])
+  })
+  it('how to measure: one sentence per point in the spec\'s order, the archived points left out', () => {
+    const rows = howToOf(demoSpec().points, 'en')
+    expect(rows.length).toBe(demoSpec().points.filter((point) => point.status !== 'ARCHIVED').length)
+    expect(rows.every((row) => typeof row.name === 'string' && row.name.length > 0)).toBe(true)
+  })
+  it('the Sizes answer: the range and its base, made to measure, or none yet', () => {
+    expect(sizesAnswerOf({ sizes: ['S', 'M', 'L', 'XL', 'XXL'], baseSize: 'L', mtmAllowed: false })).toEqual({ key: 'sizes.answer.range', params: { from: 'S', to: 'XXL', base: 'L' } })
+    expect(sizesAnswerOf({ sizes: [], baseSize: null, mtmAllowed: true })).toEqual({ key: 'sizes.answer.mtm' })
+    expect(sizesAnswerOf({ sizes: [], baseSize: null, mtmAllowed: false })).toEqual({ key: 'sizes.answer.none' })
+  })
+  it('sales reads the tab and presses nothing: no size field, no Made-to-measure switch', () => {
+    const html = renderView(StyleDesign, recordModel('sales', { tab: 'sizes' }), 'en')
+    expect(textOf(html)).toContain('Sizes')
+    expect(html).not.toContain('role="switch" aria-checked="false" class="nds-toggle" aria-label="Made to measure"')
+    expect(html).not.toContain('aria-label="Made to measure"')
+    const owner = renderView(StyleDesign, recordModel('owner', { tab: 'sizes' }), 'en')
+    expect(owner).toContain('aria-label="Made to measure"')
   })
 })

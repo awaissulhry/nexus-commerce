@@ -21,14 +21,12 @@ import { HeldCompliance, RevisionsOnly } from './HeldTabs'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
-import { PrepacksSection } from '../prepacks/view/PrepacksSection'
-import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
 // B-W2b-241: the BOM tab's problem mark from THE check.
 import { bomMarkCount } from '../../bom/depth/model'
 // B-W2b-236: Patterns › Pattern files (owb-pd4: Sketches and pictures moved into the Overview's "Variants and markets").
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
-// B-W2b-240: Sizes & measurements › Measurement spec.
-import { SpecSection } from '../spec/view/SpecSection'
+// owb-pd4 (step 4.4): Sizes & measurements in the section kit (the spec, protectors and prepacks inside).
+import { SizesTab } from './SizesTab'
 import { TabBody } from './TabBody'
 // B-W2b-245: Versions & changes, Compare revisions, and the Release modal on B-W2b-231's gate.
 import { VersionsTab } from '../../versions/view/VersionsTab'
@@ -452,13 +450,9 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
               <TabBody tab={tab} style={style} model={model} actions={actions} />
             </div>
           ) : tab === 'sizes' ? (
-            // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
-            <div className="fw-st-stack-lg">
-              {/* B-W2b-240: the Measurement spec, after the size range (Overview) and before the prepacks. */}
-              {model.can.bomView && <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />}
-              <PrepacksSection model={model} actions={actions?.prepacks} />
-              {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
-            </div>
+            // owb-pd4 (step 4.4; design § 5r): Sizes & measurements in the section kit — sizes, size table (B-W2b-240's spec), riders'
+            // sheets, how to measure, protectors (B-W2b-233), prepacks.
+            <SizesTab style={style} model={model} actions={actions} />
           ) : tab === 'versions' && model.versions ? (
             // B-W2b-245: Versions & changes (revisions, Compare revisions, change requests and orders, orders on older revisions).
             <VersionsTab style={style} model={model.versions} record={model} actions={actions?.versions} recordActions={actions} />
