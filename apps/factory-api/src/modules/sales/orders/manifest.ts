@@ -87,4 +87,15 @@ export const manifest = defineManifest({
   // owb- (b3.2): the order's picture (orders.picture.set) — the order's own, the request's through the od- writer.
   'POST /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/picture': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // owb-of1 (order workflow): the office's ONE orders sheet over Draft/Sent requests and orders, and the band of a Draft or Sent
+  // order (orders.view or orders.view.own on it, ids in SQL); Restrict on the floor (orders.manage, settle L6); the customer's
+  // "I paid" notices (read: orders.view, the amount only with the price grain; answer: payments.record over the order); Download
+  // all (the Files tab's walled set as ONE zip); and "Give to the designer" for many orders at once (orders.manage over each).
+  'GET /sales/orders/sheet': ORDER_READ,
+  'GET /sales/orders/requests/:requestId/band': ORDER_READ,
+  'POST /sales/orders/:orderId/restrict': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /sales/orders/:orderId/payment-notices': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/orders/:orderId/payment-notices/:noticeId/answer': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
+  'POST /sales/orders/:orderId/files/zip': ORDER_READ,
+  'POST /sales/orders/designer': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
 })
