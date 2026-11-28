@@ -14,11 +14,12 @@ import { seed as seedPortalAuth } from '../../../../../../packages/factory-db/se
 import { seed as seedProduction, type ProductionSeed } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { callerFor } from '../../../core/command'
+import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { structureHandlers } from './handlers'
+import { keepStructuresInCommand } from './keep'
 
 /**
  * owb-ss6 — order structures and their rules, on the local stack with the app's real routes: a throwaway PostgreSQL 17 database
@@ -340,5 +341,27 @@ describe('at Confirm (6.4 a): the structures give the teams and the people', () 
     expect(await teamRows(orderId)).toEqual([])
     await handler().handle(envelope('sales_order.status_changed', { orderId, number: 'T-SO', from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person', partyId: T.party }), { caller: systemCaller(), attempt: 1 })
     expect(await teamRows(orderId)).toEqual([expect.objectContaining({ team, givenBy: 'RULE', inCharge: true })])
+  })
+})
+
+describe('at the first print (6.4 b): the order keeps each line’s structure', () => {
+  it('one kept row per made line, from its rule, with its teams and people named; a rule change after it changes nothing; a replay adds nothing', async () => {
+    await closeAllRules()
+    const team = await newTeam(`T-${run}-K`)
+    const structure = await newStructure('Made-up kept way', [team], [auth.memberId])
+    const rule = await newRule({ partyId: T.party, category: 'JACKET', structureId: structure.id })
+    const orderId = await anotherOrder()
+    // The print command calls it inside its own command (print-start/start.ts); here a system command of its own.
+    const keep = () => command(systemCaller(), { name: 'test.keepStructures', input: { orderId } }, (tools) => keepStructuresInCommand(tools.tx, { id: orderId, companyId: T.companyA, partyId: T.party }, null, tools.now))
+    const first = (await keep()).result
+    expect(first).toBeGreaterThan(0)
+    const kept = await admin(`SELECT "keptFrom"::text AS "from", "structureId"::text AS structure, "ruleId"::text AS rule, snapshot FROM "OrderLineStructureKept" WHERE "salesOrderId" = $1`, [orderId])
+    expect(kept).toHaveLength(first)
+    expect(kept[0]).toMatchObject({ from: 'RULE', structure: structure.id, rule: rule.id })
+    expect(kept[0]!.snapshot).toMatchObject({ teams: [{ id: team }], people: [{ id: auth.memberId }] })
+    // The rule closes after the print: the order keeps what it took, and keeping again adds nothing.
+    await closeAllRules()
+    expect((await keep()).result).toBe(0)
+    expect(await admin(`SELECT count(*)::int AS n FROM "OrderLineStructureKept" WHERE "salesOrderId" = $1 AND "ruleId" = $2`, [orderId, rule.id])).toEqual([{ n: first }])
   })
 })
