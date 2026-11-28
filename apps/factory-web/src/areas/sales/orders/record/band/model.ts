@@ -3,6 +3,9 @@ import type { ReadPictures } from '../../../../../lib/record-picture/cache'
 import type { SaveOrderPicture } from '../../../../../lib/record-picture/api'
 import type { PictureChoice } from '../../../../../lib/record-picture/order-picture'
 import type { Department } from '../../../../../lib/department/model'
+import type { BasketCard } from '../../../../../lib/production/baskets-board'
+import type { ReadOrderLog } from '../../../../../lib/change-log/api'
+import type { PaymentNotice } from './api'
 
 /**
  * owb-of5 step 1 (design plan § 5i "ONE frame for every record page"; prototype rec.js orderBand, office.js officeNext) — the order
@@ -186,9 +189,32 @@ export interface OrderFlowModel {
   readonly text: TextCard | null
   /** The order's baskets per department (S5's board read; null before it is read or where it is not on the server). */
   readonly departments: readonly { readonly dept: Department; readonly count: number }[] | null
+  // ---- owb-of6 ----
+  /** Every basket of the order (S5's board read, L8); null: not read (the Baskets section keeps today's work-order rows). */
+  readonly baskets: readonly { readonly card: BasketCard; readonly dept: Department | null }[] | null
+  /** The ONE order log's read port (Changes › What changed; the base's `GET /sales/orders/:id/log`). */
+  readonly log: ReadOrderLog | null
+  /** The customer's "I paid" notices (of1): the rows (null before read or before of1), the one being answered, a refusal, who may answer. */
+  readonly notices: { readonly rows: readonly PaymentNotice[] | null; readonly busy: string | null; readonly problem: string | null; readonly may: boolean }
+  /** Download all (of1's zip): running, the files it left out (null: not run yet), a refusal in words. */
+  readonly zip: { readonly busy: boolean; readonly leftOut: number | null; readonly problem: string | null }
+  // ---- end owb-of6
 }
 
 export interface OrderFlowActions {
   onPictureSaved?: () => void
   onRestrict?: (restricted: boolean) => void
+  /** owb-of6: answer a customer's "I paid" notice (Recorded: seen — the payment is then recorded with Record a payment…; Dismissed). */
+  onNotice?: (noticeId: string, state: 'RECORDED' | 'DISMISSED') => void
+  /** owb-of6: Download all — ONE zip of what this reader may open. */
+  onZip?: () => void
+}
+
+/** The open notices (the Waiting entry and the Money row count them). */
+export const openNoticesOf = (rows: readonly { readonly state: string }[] | null | undefined): number => (rows ?? []).filter((row) => row.state === 'OPEN').length
+
+/** "Paid too much" when the order's total went below what is paid (price grain only): the amount over, in minor units; else null. */
+export function paidTooMuchOf(input: { readonly total: number | null | undefined; readonly paid: number | null | undefined }): number | null {
+  if (input.total == null || input.paid == null) return null
+  return input.paid > input.total ? input.paid - input.total : null
 }
