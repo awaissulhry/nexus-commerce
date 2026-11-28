@@ -121,6 +121,7 @@ import { seedOrderFiles } from './testing/order-files' // B-OF-030
 import { seedOrderWorkflow } from './testing/order-workflow' // owb-b1
 import { seedFloorBaskets } from './testing/floor-baskets' // owb-fl0
 import { seedOrderStructures } from './testing/order-structures' // owb-ssw
+import { seedProductRoutes } from './testing/product-routes' // owb-pd2w
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -304,6 +305,25 @@ async function adjustCopy(model: string, copy: Record<string, unknown>): Promise
     return { ...copy, salesOrderId: free!.order, salesOrderLineId: free!.line }
   }
   // ---- end owb-ssw
+  // ---- owb-pd2w (S4 schema wave "routes", …_product_routes_guards): what a partial unique or a unique key of ids keeps once moves.
+  // A ready-made route's name is once among the OPEN ones (RouteTemplate_open_name(_factory)): the copy takes another name.
+  if (model === 'RouteTemplate') return { ...copy, name: `${String(copy.name)} copy ${randomUUID().slice(0, 8)}` }
+  // One route choice per line (its unique key, made of ids only): the copy goes to another line of an order of the same company
+  // and customer that has none, on an order not printed yet (a printed order's line routes never change).
+  if (model === 'SalesOrderLineRoute') {
+    const [free] = await admin(
+      `SELECT l.id::text AS line, o.id::text AS "order" FROM "SalesOrderLine" l
+         JOIN "SalesOrder" o ON o."tenantId" = l."tenantId" AND o.id = l."orderId"
+        WHERE l."tenantId" = $1::uuid AND o."companyId" = $2::uuid AND o."partyId" = $3::uuid
+          AND NOT EXISTS (SELECT 1 FROM "SalesOrderLineRoute" r WHERE r."tenantId" = l."tenantId" AND r."salesOrderLineId" = l.id)
+          AND NOT EXISTS (SELECT 1 FROM "OrderPrint" p WHERE p."tenantId" = o."tenantId" AND p."salesOrderId" = o.id AND p.kind = 'FIRST')
+        ORDER BY l.id LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId],
+    )
+    expect(free, 'a line of the customer with no route choice, on an order not printed (testing/product-routes.ts)').toBeDefined()
+    return { ...copy, salesOrderId: free!.order, salesOrderLineId: free!.line }
+  }
+  // ---- end owb-pd2w
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
@@ -736,6 +756,12 @@ beforeAll(async () => {
   await seedOrderStructures({ db: factory, namespace: 'iso-a' })
   await seedOrderStructures({ db: factory, namespace: 'iso-b' })
   // ---- end owb-ssw
+  // ---- owb-pd2w (order workflow build, S4 schema wave "routes"; the ready-made routes and the knee slider come with seed/product.ts):
+  // SEED-JKT-01's model route "Seed double check" with its four steps, and SEED-SO-0001's line 10 "Only this order", in each
+  // tenant (testing/product-routes.ts; the first rows the plain ones a copy may repeat).
+  await seedProductRoutes({ db: factory, namespace: 'iso-a' })
+  await seedProductRoutes({ db: factory, namespace: 'iso-b' })
+  // ---- end owb-pd2w
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -1230,6 +1256,8 @@ it('covers every classified table and every runtime role', () => {
     'RoleSheet',
     'RoleSheetItem',
     'RosterEntry',
+    'RouteTemplate', // owb-pd2w
+    'RouteTemplateStep', // owb-pd2w
     'RoutingOperation',
     'RoutingOperationSizeTime',
     'SafetyAppointment',
@@ -1241,6 +1269,7 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrderLine',
     'SalesOrderLineDelivery',
     'SalesOrderLineOption',
+    'SalesOrderLineRoute', // owb-pd2w
     'SalesOrderLineSize',
     'SalesOrderMilestone',
     'SalesSettings',
@@ -1308,6 +1337,8 @@ it('covers every classified table and every runtime role', () => {
     'StyleOptionGroup',
     'StyleRevision',
     'StyleRevisionFile',
+    'StyleRoute', // owb-pd2w
+    'StyleRouteStep', // owb-pd2w
     'StyleText',
     'SubcontractAgreement',
     'SubcontractBundle',

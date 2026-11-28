@@ -501,6 +501,8 @@ describe('model ownership', () => {
       'RoleSheet',
       'RoleSheetItem',
       'RosterEntry',
+      'RouteTemplate', // owb-pd2w: a ready-made route (product.json)
+      'RouteTemplateStep', // owb-pd2w: a step of a ready-made route (product.json)
       'RoutingOperation',
       'RoutingOperationSizeTime',
       'SafetyAppointment',
@@ -512,6 +514,7 @@ describe('model ownership', () => {
       'SalesOrderLine',
       'SalesOrderLineDelivery',
       'SalesOrderLineOption',
+      'SalesOrderLineRoute', // owb-pd2w: an order line's route choice (product.json)
       'SalesOrderLineSize',
       'SalesOrderMilestone',
       'SalesSettings',
@@ -579,6 +582,8 @@ describe('model ownership', () => {
       'StyleOptionGroup',
       'StyleRevision',
       'StyleRevisionFile',
+      'StyleRoute', // owb-pd2w: a model or customer route of a revision (product.json)
+      'StyleRouteStep', // owb-pd2w: a step of a style route (product.json)
       'StyleText',
       'SubcontractAgreement',
       'SubcontractBundle',
