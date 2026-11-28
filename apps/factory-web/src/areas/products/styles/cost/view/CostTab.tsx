@@ -10,6 +10,23 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { BomView, CostCell, CostSheetView, StyleView } from '../../api'
 import { costCellOf, costChange, decimalText, defaultCostCell, minutesText, missingWords, moneyText, revisionInView, share } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
+// owb-pd5b (S4, step 5.3): the tab in the design's order reads for itself; today's sheet is its depth under "More".
+import { costTabOpen } from '../now/model'
+import { CostPage } from '../page/CostPage'
+
+/**
+ * owb-pd5b step 5.3 (design plan § 5zh): the product tab "Cost". With the cost grain, in the office, the tab in the design's order
+ * (page/CostPage.tsx: the line on top, cost of one piece now in 4 parts, Keep, price against cost, by size, what if, the kept versions,
+ * the factory's rates) with today's sheet below under "More". Without the cost grain (until the tab's gate holds it back: web A's
+ * `tabsFor`) and outside the office (the design index) the tab draws today's sheet alone, as before.
+ */
+export function CostTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  const t = useT('products')
+  if (!revisionInView(style.revisions, model.revisionId)) return <EmptyState title={t('bom.noRevision.title')} description={t('bom.noRevision.body')} />
+  const sheet = <SheetInDepth style={style} model={model} actions={actions} />
+  if (!costTabOpen(model.can, model.grains)) return sheet
+  return <CostPage style={style} model={model} actions={actions} detail={sheet} fallback={sheet} />
+}
 
 /**
  * SCR-044 Cost of the revision in view, for one colourway and size (the base size of the first colourway to start): the
@@ -19,7 +36,7 @@ import type { StyleRecordActions, StyleRecordViewModel } from '../../record/reco
  * settings). A figure that cannot be known is "—" with what is missing, never 0. Money by grain: without the cost grain
  * (production manager, sales) the sheet keeps its structure — quantities, minutes, what is missing — and no figure.
  */
-export function CostTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+function SheetInDepth({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
   const locale = useLocale()
   const revision = revisionInView(style.revisions, model.revisionId)

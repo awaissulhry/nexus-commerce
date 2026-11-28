@@ -51,6 +51,8 @@ export const BUNDLE_COLUMNS = {
   clientEventId: true,
   // W2a B-W2a-13 (MES-071): the bundle it was split off, or null.
   parentBundleId: true,
+  // owb-fl2 (S5): made at Print and start the work (the base's column): no report yet → WAITING, never stuck.
+  madeAtPrint: true,
   version: true,
   createdAt: true,
 } as const satisfies Prisma.BundleSelect

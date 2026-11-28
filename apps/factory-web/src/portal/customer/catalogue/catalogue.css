@@ -317,3 +317,7 @@ button.fw-pcat-name:focus-visible {
 .fw-pprod-answer { margin: 0; padding: var(--nds-space-10) var(--nds-space-14); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
 .fw-pprod-answer b { color: var(--nds-text-strong); }
 .fw-pprod-text { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); overflow-wrap: anywhere; }
+/* owb-pd5 (step 5.0): the product's main picture and the how-to / protector lists. */
+.fw-pprod-pic { display: block; width: 100%; max-width: 360px; max-height: 300px; object-fit: contain; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm); background: var(--nds-surface); }
+.fw-pprod-howto { margin: 0; padding-left: var(--nds-space-20); display: grid; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-pprod-howto b { color: var(--nds-text-strong); }

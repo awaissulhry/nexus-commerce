@@ -3,6 +3,11 @@ import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { workingMinutesBetween, type WorkingCalendar } from '@nexus/factory-domain/calendars/working-time'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { placeOf, stuckLimitOf, stuckOf, type PlaceAnswer, type StuckAnswer } from '@nexus/factory-domain/production/bundles/where'
+// owb-fl2 (S5): a basket's own route (route edits) and its place from a hand move (factory-domain production/baskets).
+import { basketPlace } from '@nexus/factory-domain/production/baskets/place'
+import { basketRoute } from '@nexus/factory-domain/production/baskets/route'
+import { standingKey } from '@nexus/factory-domain/production/scans/rules'
+import { readEdits, readMoves } from '../baskets/store'
 import { workingCalendarFor } from '../../../platform/calendars/service'
 import { activeHoldsOf } from '../../quality/holds/checks'
 import { readCellLabels, type BundleRow, type CellLabel, type Reader } from './store'
@@ -59,6 +64,13 @@ export interface Tracked {
 
 /** The count kinds: the rows a standing report rests on (timing rows of W2b are not counts). */
 const COUNT_KINDS = ['REPORT', 'UNDO', 'CORRECTION'] as const
+
+/** owb-fl2: the standing reports' times, keyed as the scan rules key them (basketPlace reads them). */
+export function standingTimesOf(scans: readonly TrackScan[], bundleId: string): Map<string, { readonly serverTime: Date }> {
+  const counts = scans.filter((scan) => (COUNT_KINDS as readonly string[]).includes(scan.kind))
+  const voided = new Set(counts.flatMap((scan) => (scan.correctsId ? [scan.correctsId] : [])))
+  return new Map(counts.filter((scan) => scan.kind !== 'UNDO' && !voided.has(scan.id)).map((scan) => [standingKey(bundleId, scan.workOrderOperationId), { serverTime: scan.serverTime }]))
+}
 
 /** REPORT and CORRECTION scans no later UNDO or CORRECTION voids. */
 export function standingOf(scans: readonly TrackScan[]): Set<string> {
@@ -151,6 +163,8 @@ export async function trackBundles(db: Reader, bundles: readonly BundleRow[], no
     : new Set<string>()
   const siteIds = unique(bundles.map((bundle) => bundle.siteId))
   const limits = await stuckLimitsOf(db, siteIds)
+  const movesOf = await readMoves(db, bundleIds)
+  const editsOf = await readEdits(db, bundleIds)
 
   const rows = bundles.flatMap((bundle) => {
     const workOrder = workOrders.get(bundle.workOrderId)
@@ -161,10 +175,15 @@ export async function trackBundles(db: Reader, bundles: readonly BundleRow[], no
     const send = sends.find((row) => row.bundleId === bundle.id && orders.has(row.subcontractOrderId) && !back.has(`${row.subcontractOrderId}|${row.bundleId}`))
     const holdIds = [...bundleHolds.filter((hold) => hold.subjectIds.includes(bundle.id)), ...orderHolds.filter((hold) => hold.subjectIds.includes(workOrder.id))].map((hold) => hold.id)
     const reworkIds = reworks.filter((row) => row.bundleId === bundle.id).map((row) => row.id)
-    const ops = operations.filter((operation) => operation.workOrderId === workOrder.id)
+    // owb-fl2: the basket's own route, and its place from a hand move (with neither: the work order's operations, as before).
+    const ops = basketRoute(operations.filter((operation) => operation.workOrderId === workOrder.id), editsOf.get(bundle.id) ?? [])
+    const handMoves = movesOf.get(bundle.id) ?? []
+    const basket = handMoves.length > 0 ? basketPlace(ops, standingTimesOf(own, bundle.id), bundle.id, handMoves) : null
     const place = placeOf({
       status: bundle.status,
       createdAt: bundle.createdAt,
+      madeAtPrint: bundle.madeAtPrint,
+      moved: basket?.how === 'MOVE' ? { operationId: basket.operationId } : null,
       operations: ops,
       standing,
       lastScan: lastScan ? { at: lastScan.serverTime, operationId: lastScan.workOrderOperationId, stationId: lastScan.stationId } : null,

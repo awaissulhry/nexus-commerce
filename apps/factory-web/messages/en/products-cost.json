@@ -1,0 +1,200 @@
+{
+  "top": {
+    "kept": "Standard cost {amount} for one piece · version {version}.",
+    "rough": "No standard cost is kept yet: the orders count with the rough standard of its kind.",
+    "now": "Cost now {amount}.",
+    "nowSame": "Cost now {amount}: the same.",
+    "nowHigher": "Cost now {amount}: {diff} higher.",
+    "nowLower": "Cost now {amount}: {diff} lower.",
+    "nowUnknown": "The cost now is not known yet: inputs are missing.",
+    "noPrices": "No agreed price to compare.",
+    "under_one": "{count} of {total} agreed prices is under the target of {target} %.",
+    "under_other": "{count} of {total} agreed prices are under the target of {target} %.",
+    "allKeep_one": "The agreed price keeps the target of {target} %.",
+    "allKeep_other": "All {count} agreed prices keep the target of {target} %.",
+    "frozen": "Revision {revision} is released: its material list and its route are frozen. A price, a rate and the other costs can change at any time."
+  },
+  "part": {
+    "materials": "Materials",
+    "work": "Work",
+    "overhead": "Overhead",
+    "other": "Other costs"
+  },
+  "now": {
+    "title": "Cost of one piece, now",
+    "intro": "What ONE piece costs today in size {size}: the material list, the work of the route, the overhead and the other costs. It moves when a price, a minute or a rate moves.",
+    "keep": "Keep {amount} as the standard cost…",
+    "failed": "The cost now could not be worked out",
+    "empty": "Nothing to cost yet: the material list or the route is empty.",
+    "barLabel": "The parts of the cost: {parts}",
+    "col": {
+      "part": "Part",
+      "how": "How it is worked out",
+      "amount": "For one piece",
+      "share": "Share"
+    },
+    "how": {
+      "materials_one": "{count} line of the material list, with the waste",
+      "materials_other": "{count} lines of the material list, with the waste",
+      "work": "{minutes} minutes of the route × the cost of one minute ÷ the efficiency",
+      "overheadPct": "{pct} % on the materials and the work: rent, power, the people who do not sew",
+      "overhead": "A percent on the materials and the work",
+      "other_one": "{count} line: outside work, freight, duty, packaging or commission",
+      "other_other": "{count} lines: outside work, freight, duty, packaging, commission",
+      "otherNone": "No other cost yet"
+    },
+    "line": {
+      "minutes": "{minutes} min"
+    },
+    "moreLines_one": "and {count} more line (under More, line by line)",
+    "moreLines_other": "and {count} more lines (under More, line by line)",
+    "total": "Cost now",
+    "incomplete_one": "{count} input missing",
+    "incomplete_other": "{count} inputs missing",
+    "knownSoFar": "known so far {amount}"
+  },
+  "price": {
+    "title": "Price against cost",
+    "none": "No customer has an agreed price for this product yet.",
+    "lowest": "The lowest price that keeps {target} %: {amount}.",
+    "lowestUnknown": "The lowest price that keeps {target} % is not known yet: the cost misses an input.",
+    "noGrains": "Prices against costs need both the price and the cost right.",
+    "failed": "The agreed prices could not be read",
+    "col": {
+      "customer": "Customer",
+      "material": "Material",
+      "pieces": "Pieces",
+      "price": "Price",
+      "cost": "Cost",
+      "earned": "Earned",
+      "margin": "Margin",
+      "against": "Against the target"
+    },
+    "fromPieces_one": "from {count} piece",
+    "fromPieces_other": "from {count} pieces",
+    "costUnknown": "not known",
+    "barLabel": "Margin {margin}, target {target} %",
+    "share": "The margin is a share of the PRICE, not of the cost. The target is {target} %.",
+    "flag": {
+      "OK": "keeps the target",
+      "UNDER_TARGET": "under the target",
+      "UNDER_COST": "under the cost",
+      "none": "no cost yet"
+    }
+  },
+  "keep": {
+    "title": "Keep the standard cost",
+    "counts": "The factory counts with {amount}.",
+    "countsRough": "The factory counts with the rough standard of its kind.",
+    "body": "The cost now is {amount}. Keep it as the standard cost: the margin of every order and of the products list reads it from now on.",
+    "reason": "Why",
+    "reasonHint": "It stays with the version (only people with the cost right read it).",
+    "reasonPlaceholder": "For example: leather went up",
+    "alone": "You keep it yourself: the company lets one person keep a cost (logged with the reason).",
+    "fourEyes": "It goes to Finance for approval: a second person approves a standard cost.",
+    "actAlone": "Keep {amount}",
+    "actSend": "Send {amount} for approval",
+    "held": {
+      "busy": "Working on it…",
+      "unknown": "The cost now is not known yet: inputs are missing.",
+      "same": "This cost is kept already.",
+      "reason": "Say why the standard cost changes.",
+      "reading": "Reading the cost…",
+      "noPrices": "The cost now could not be read: try again."
+    },
+    "done": {
+      "kept": "Kept: version {version}, {amount}. The orders count with it now.",
+      "sent": "Sent for approval to Finance. The orders count with the old standard cost until it is approved."
+    }
+  },
+  "whatif": {
+    "title": "What if",
+    "intro": "A calculator: a change in % and a price. Nothing is saved, nothing changes.",
+    "clear": "Clear",
+    "materials": "Materials, %",
+    "work": "Work, %",
+    "price": "Price of one piece",
+    "cost": "Cost",
+    "more": "{amount} more",
+    "less": "{amount} less",
+    "margin": "Margin at that price",
+    "noPrice": "Type a price",
+    "forTarget": "Price for {target} %",
+    "verdict": {
+      "KEEPS": "keeps the target",
+      "UNDER_TARGET": "under the target of {target} %",
+      "UNDER_COST": "under the cost"
+    },
+    "nothingSaved": "Nothing is saved. It counts with the cost now, not with the standard cost. The overhead moves with the materials and the work.",
+    "nothingSavedPartial": "Nothing is saved. It counts with the cost known so far (an input is missing), not with the standard cost.",
+    "bad": {
+      "pct": "A percent from {min} to {max}, for example +10 or -5.",
+      "price": "A price above 0, for example 189.50."
+    }
+  },
+  "rates": {
+    "open": "The factory's rates…",
+    "title": "The factory's rates",
+    "subtitle": "For every product · only people with the cost right see them",
+    "moves": "A change moves the cost now of every product. A kept standard cost stays as it is, until a new one is kept.",
+    "readOnly": "Only the people who keep the costing settings change these rates.",
+    "perMinute": "The cost of one minute of work, in each department",
+    "noDepartments": "No open department.",
+    "cpm": "One minute",
+    "cpmOf": "{name}: the cost of one minute",
+    "eff": "Efficiency",
+    "effOf": "{name}: the planned efficiency",
+    "perMinuteIs": "{amount} a minute",
+    "effIs": "{pct} % efficiency",
+    "from": {
+      "department": "Its own rate",
+      "kind": "From its kind: {amount} at {eff} %",
+      "none": "No rate yet: the cost misses it"
+    },
+    "overhead": "Overhead, %",
+    "overheadHint": "On the materials and the work: rent, power, the office. From 0 to 300.",
+    "overheadIs": "Overhead {pct} %",
+    "noOverhead": "No overhead yet.",
+    "leathers": "The leathers against the reference",
+    "noLeathers": "No leather basis yet.",
+    "yield": "yield {pct} %",
+    "leathersWhere": "Kept in Finance › Costing: a leather's yield and grades change there.",
+    "oneKeeper": "One person may keep a cost",
+    "oneKeeperOn": "On: the person who keeps a standard cost approves it too, with a reason (logged).",
+    "oneKeeperOff": "Off: a second person (Finance) approves every standard cost. Four eyes.",
+    "reason": "Why the switch changes",
+    "save": "Save the rates",
+    "failed": "The rates could not be read",
+    "bad": {
+      "cpm": "A cost above 0, up to {max} (€ for one minute), for example 0.08.",
+      "eff": "A number from {min} to {max} (%).",
+      "cpmFirst": "Type the cost of one minute first: this department has no rate yet.",
+      "overhead": "A number from 0 to {max} (%).",
+      "reason": "Say why the switch changes."
+    },
+    "held": {
+      "busy": "Working on it…",
+      "same": "Nothing changed yet."
+    }
+  },
+  "more": {
+    "summary": "More: the other costs step by step, the target price of a version, the size mix, the sheet line by line"
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "refusal": {
+    "SAME_AS_KEPT": "This cost is kept already.",
+    "TOTAL_MOVED": "The cost moved meanwhile: it was read again, check it and keep it once more.",
+    "MISSING_PARTS": "Parts of the cost are missing: the cost now lists what to add first."
+  },
+  "problem": {
+    "forbidden": "Your role may not do this.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again, check it and try once more.",
+    "invalid": "Something typed is not accepted: check the fields.",
+    "signedOut": "You were signed out: sign in again.",
+    "offline": "The factory server is not answering: nothing was changed.",
+    "unavailable": "Something went wrong on the server: nothing was changed."
+  }
+}

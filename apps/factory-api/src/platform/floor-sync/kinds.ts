@@ -28,6 +28,8 @@ import { answerCall } from '../../modules/production/calls/answer'
 import { queuedAnswerBody, sendContract } from '../../modules/production/calls/contract'
 import { closeAtStation, sendCall } from '../../modules/production/calls/station'
 import { applyBasketSignal } from '../../modules/production/baskets/queued'
+// owb-fl2 (S5 floor): a basket moved by hand, and a move undone (lead 88's yes: S5 owns these cases).
+import { applyBasketMove } from '../../modules/production/baskets/moves'
 // B-W2b-33: the signed-in worker's clock kept offline.
 import { ClockRefusedError } from '../../modules/people/clock/access'
 import { clockFromQueue } from '../../modules/people/clock/clock'
@@ -248,7 +250,8 @@ async function applyScan(caller: CommandCaller, event: QueuedEvent, sentAt: stri
   if (!item.ok) return refusedBy(item.refusal)
   const answer = (await sendBatch(caller, { ...(sentAt ? { sentAt } : {}), items: [item.value as BatchItem] })).items[0]!
   if (answer.status === 'refused') return refusedBy(moduleRefusal(answer.refusal!), { type: 'FloorScanRefusal', id: answer.refusal!.refusalId })
-  const result = answer.scan ? { type: 'OperationScan', id: answer.scan.id } : { type: 'ScanCorrectionRequest', id: answer.request!.id }
+  // owb-fl2 (S5): a second Done answers a basket's FORWARD move (no scan, no request).
+  const result = answer.scan ? { type: 'OperationScan', id: answer.scan.id } : answer.movedGroupId ? { type: 'BasketMove', id: answer.movedGroupId } : { type: 'ScanCorrectionRequest', id: answer.request!.id }
   return { status: answer.status, result }
 }
 
@@ -650,6 +653,10 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.baskets.late':
       case 'floor.suggestion':
         return await applyBasketSignal(caller, event, context.key)
+      // owb-fl2 (S5 floor): Move by hand (FORWARD, Take it here, BACK) and its Undo.
+      case 'production.baskets.move':
+      case 'production.baskets.moveUndo':
+        return await applyBasketMove(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

@@ -8,7 +8,14 @@
  *           QUALITY        it, or its work order, is on hold, or it travels in an open rework.
  *           FINISHED       every scanned operation has a standing report (its garments passed them all).
  *           CUTTING        made at the cutting table, no operation reported yet (waiting for the first one).
+ *           WAITING        owb-fl2 (lead 88's pick, S3's words): a basket made at Print and start the work (madeAtPrint), no
+ *                          operation reported and no hand move yet: "Waiting for the first step". Never stuck (it waits
+ *                          for its cut, before the line).
  *           LINE           on the line: the last operation it was reported at (with the station) and the next one.
+ *   owb-fl2 (the basket's route and place; factory-domain production/baskets): the readers pass the basket's own route
+ *           (basketRoute: its skipped steps not scanned, an added one scanned) as `operations`, and the place a hand move
+ *           gives it (basketPlace, how MOVE) as `moved`: then `next` is that step (null: Ready to ship → FINISHED). With no
+ *           edit and no move, every answer is today's.
  *           ("rack": no WIP location is recorded for a bundle, a schema need named in the notes.)
  *   stuck   an ACTIVE bundle at CUTTING or on the LINE with no scan for longer than the site's limit
  *           (ProductionSettings.stuckBundleHours, default 4), counted in WORKING minutes of the site's calendar since
@@ -17,7 +24,7 @@
  *           subcontract order each have their own list and deadline.
  */
 
-export const BUNDLE_PLACES = ['CUTTING', 'LINE', 'SUBCONTRACTOR', 'QUALITY', 'FINISHED', 'VOID'] as const
+export const BUNDLE_PLACES = ['CUTTING', 'WAITING', 'LINE', 'SUBCONTRACTOR', 'QUALITY', 'FINISHED', 'VOID'] as const
 export type BundlePlace = (typeof BUNDLE_PLACES)[number]
 
 /** Why a bundle is at QUALITY. */
@@ -50,6 +57,10 @@ export interface PlaceFacts {
   readonly inRework: boolean
   /** The open subcontract order it went out with (sent, not come back), or null. */
   readonly subcontract: { readonly orderId: string; readonly number: string } | null
+  /** owb-fl2: made at Print and start the work (Bundle.madeAtPrint). Left out: false. */
+  readonly madeAtPrint?: boolean | undefined
+  /** owb-fl2: the basket's place from a hand move (basketPlace how MOVE): its step, or null (Ready to ship). Left out or null: the scans'. */
+  readonly moved?: { readonly operationId: string | null } | null | undefined
 }
 
 export interface PlaceAnswer {
@@ -57,7 +68,7 @@ export interface PlaceAnswer {
   readonly qualityReason: QualityReason | null
   /** LINE: the last operation it was reported at; FINISHED: the last scanned operation. */
   readonly operation: PlaceOperation | null
-  /** LINE and CUTTING: the next scanned operation without a standing report. */
+  /** LINE, CUTTING and WAITING: the next scanned operation without a standing report (owb-fl2: or the step a hand move put it at). */
   readonly next: PlaceOperation | null
   /** Since when it has been where it is: its last scan, else when it was made. */
   readonly since: Date
@@ -69,7 +80,8 @@ const scanned = (operations: readonly PlaceOperation[]) => [...operations].filte
 export function placeOf(facts: PlaceFacts): PlaceAnswer {
   const since = facts.lastScan?.at ?? facts.createdAt
   const route = scanned(facts.operations)
-  const next = route.find((operation) => !facts.standing.has(operation.id)) ?? null
+  const moved = facts.moved ?? null
+  const next = moved ? (moved.operationId === null ? null : (route.find((operation) => operation.id === moved.operationId) ?? null)) : (route.find((operation) => !facts.standing.has(operation.id)) ?? null)
   const reported = route.filter((operation) => facts.standing.has(operation.id))
   const last = facts.lastScan ? (facts.operations.find((operation) => operation.id === facts.lastScan!.operationId) ?? null) : null
   const base = { since, operation: null, next: null, qualityReason: null }
@@ -77,7 +89,7 @@ export function placeOf(facts: PlaceFacts): PlaceAnswer {
   if (facts.subcontract) return { ...base, place: 'SUBCONTRACTOR', next }
   if (facts.held || facts.inRework) return { ...base, place: 'QUALITY', qualityReason: facts.held ? 'HOLD' : 'REWORK', operation: last, next }
   if (route.length > 0 && next === null) return { ...base, place: 'FINISHED', operation: route.at(-1) ?? null }
-  if (reported.length === 0) return { ...base, place: 'CUTTING', next }
+  if (reported.length === 0 && !moved) return { ...base, place: facts.madeAtPrint === true ? 'WAITING' : 'CUTTING', next }
   return { ...base, place: 'LINE', operation: last ?? reported.at(-1) ?? null, next }
 }
 

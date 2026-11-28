@@ -147,6 +147,10 @@ model CostSheet {
   /// APPROVED and after: when and by whom (never its maker; with a task, the person who decided it). Set once.
   approvedAt      DateTime?              @db.Timestamptz(3)
   approvedById    String?                @db.Uuid
+  /// owb-pd2w (order workflow build, S4 "cost Keep"; S4 settle 9): why its maker approved it alone ("Keep" with the company's
+  /// CostingSettings.oneKeeperAllowed ON): 1 to 500 characters, not blank; null: not given. A sheet approved by its maker
+  /// needs it and the setting ON (the cost-sheet guard, redefined in …_product_routes_guards); fixed once approved.
+  keptAloneReason String?
   /// FROZEN: when, by whom (null: the system, at the season's close) and why. Set once.
   frozenAt        DateTime?              @db.Timestamptz(3)
   frozenById      String?                @db.Uuid

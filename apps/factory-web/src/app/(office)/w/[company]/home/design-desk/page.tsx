@@ -1,13 +1,17 @@
 import type { Metadata } from 'next'
-import { NotBuiltYet } from '../../../../../../shell/office/NotBuiltYet'
+import { Suspense } from 'react'
+import { DesignDeskPage } from '../../../../../../areas/home/design-desk/DesignDeskPage'
 
 export const metadata: Metadata = { title: 'Design desk · Nexus Factory' }
 
 /**
- * Home › Design desk (owb- order workflow, base settle 7; areas/home/nav.ts, permission orders.view.own): a DECLARED page — its route, its nav row
- * and its place in the approved tree are placed by the base; S2 (of7) replaces this file with the page. Its address joins
- * OFFICE_PAGES at that land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES), so until then no row shows it.
+ * Home › Design desk (owb-of7 step 1; areas/home/nav.ts, permission orders.view.own). The page replaces the base's stub; its address
+ * stays DECLARED until lead 88's nav flip (shell/nav/office-nav.ts DECLARED_PAGES → OFFICE_PAGES). The client container reads the desk.
  */
 export default function HomeDesignDeskPage() {
-  return <NotBuiltYet />
+  return (
+    <Suspense>
+      <DesignDeskPage />
+    </Suspense>
+  )
 }
