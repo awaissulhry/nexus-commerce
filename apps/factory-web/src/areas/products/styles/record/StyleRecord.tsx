@@ -474,7 +474,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     loadKey: versionKey,
     enabled: can.bomView,
     tabOpen: tab === 'bom',
-    canManage: can.bomManage,
+    // owb-pd5 (step 5.1; S4 settle 6): the designer changes the BOM of a DRAFT too (the server checks the draft).
+    canManage: mayEditDraftParts(can),
     companyId,
     write: run,
     versionOf: revisionVersion,
@@ -610,7 +611,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // ---- owb-pd4 (steps 4.3, 4.4): the open order lines (orders.view, or the designer's own: orders.view.own) while Overview or Sizes
   // shows; the product's own list row (its agreed price range) while Overview shows, with the price grain. Each fails alone.
   const readsOrders = session.permissions.includes('orders.view') || session.permissions.includes('orders.view.own')
-  const ordersWanted = readsOrders && !sheet && (tab === 'overview' || tab === 'sizes')
+  // owb-pd5 (step 5.1): the Materials tab's "Open orders need" reads the same open lines.
+  const ordersWanted = readsOrders && !sheet && (tab === 'overview' || tab === 'sizes' || tab === 'bom')
   const [ordersTick, setOrdersTick] = useState(0)
   useEffect(() => {
     if (!ordersWanted) return
@@ -623,6 +625,24 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       })
     return () => controller.abort()
   }, [api, styleId, ordersWanted, ordersTick])
+  // owb-pd5 (step 5.2): the released revision's BOM while a draft's Materials show — the CE re-check compares the two.
+  const releasedForCheck = value ? releasedOf(value.revisions) : null
+  const releasedCheckId = tab === 'bom' && can.bomView && revision?.status === 'DRAFT' && releasedForCheck ? releasedForCheck.id : null
+  const [releasedBom, setReleasedBom] = useState<Part<BomView>>({ status: 'idle' })
+  useEffect(() => {
+    if (!releasedCheckId) {
+      setReleasedBom({ status: 'idle' })
+      return
+    }
+    let live = true
+    setReleasedBom((current) => (current.status === 'ready' && current.value.revision.id === releasedCheckId ? current : { status: 'loading' }))
+    getBom(api, styleId, releasedCheckId)
+      .then((next) => live && setReleasedBom({ status: 'ready', value: next }))
+      .catch((error: unknown) => live && setReleasedBom({ status: 'error', problem: readProblem(error) }))
+    return () => {
+      live = false
+    }
+  }, [api, styleId, releasedCheckId])
   const agreedWanted = grains.price && !sheet && tab === 'overview' && value !== null
   const valueCode = value?.code ?? null
   useEffect(() => {
@@ -696,6 +716,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     ...(readsOrders ? { orders } : {}),
     ...(grains.price ? { agreed } : {}),
     ordersOpen: readsOrders,
+    // owb-pd5
+    releasedBom,
   }
 
   // B-W2b-237: read while Overview & variants shows (B-TH-261: the GTINs' matrix is on it too); writes through the one queue above.
