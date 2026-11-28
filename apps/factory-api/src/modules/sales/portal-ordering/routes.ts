@@ -39,6 +39,8 @@ import {
   withdrawContract,
   takeBackContract, // owb- po1.2
   copyLineContract, // owb- po1.3
+  bulkDeleteContract, // owb- po2.1
+  bulkSendContract,
   putBackLineContract,
   // B-CP-075: described and made-to-measure lines, and the people of a by-person line.
   addCustomLineContract,
@@ -64,6 +66,8 @@ import { addLines, changeHeader, changeLine, createDraft, getRequest, listReques
 import { takeBackRequest } from './requests' // owb- po1.2
 import { copyLine, putBackLine, removeLine } from './requests' // owb- po1.3
 import { officeCopyLine, officePutBackLine } from './office-drafts' // owb- po1.3
+import { bulkDeleteDrafts, bulkSendDrafts } from './bulk' // owb- po2.1
+import { ordersReader } from '../orders/access' // owb- po2.4
 import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
 // B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
 import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile } from './draft-files'
@@ -89,6 +93,9 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   // Order requests.
   app.get('/portal/order-requests', { schema: listRequestsContract }, async (request) => listRequests(portalWriter(app, request), request.query))
   app.post('/portal/order-requests', { schema: createRequestContract }, async (request, reply) => reply.code(201).send(await createDraft(portalWriter(app, request), request.body, idempotencyKeyFrom(request))))
+  // owb- po2.1 (order workflow): delete many drafts, send many (one command per item, an answer per item).
+  app.post('/portal/order-requests/bulk-delete', { schema: bulkDeleteContract }, async (request) => bulkDeleteDrafts(app, request, request.body.items, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/bulk-send', { schema: bulkSendContract }, async (request) => bulkSendDrafts(app, request, request.body.items, idempotencyKeyFrom(request)))
   app.get('/portal/order-requests/:requestId', { schema: getRequestContract }, async (request) => getRequest(portalWriter(app, request), request.params.requestId))
   app.patch('/portal/order-requests/:requestId', { schema: changeRequestContract }, async (request) => changeHeader(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraftWithFiles(processFiles, portalWriter(app, request), request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
@@ -139,13 +146,14 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/portal/addresses/:addressId/default', { schema: addressMoveContract }, async (request) => defaultAddress(app, request, request.params.addressId, request.body.version, idempotencyKeyFrom(request)))
 
   // The office.
-  app.get('/sales/order-requests', { schema: officeListContract }, async (request) => listOfficeRequests(request, request.query))
-  app.get('/sales/order-requests/:requestId', { schema: officeGetContract }, async (request) => officeRequestView(request, request.params.requestId))
+  // owb- po2.4 (S2's ask; R20): the Draft/Sent reads open to orders.view OR orders.view.own (ordersReader: 403 without either).
+  app.get('/sales/order-requests', { schema: officeListContract }, async (request) => listOfficeRequests(ordersReader(request), request.query))
+  app.get('/sales/order-requests/:requestId', { schema: officeGetContract }, async (request) => officeRequestView(ordersReader(request), request.params.requestId))
   app.post('/sales/order-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
   app.post('/sales/order-requests/:requestId/refuse', { schema: refuseContract }, async (request) => refuseRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
   // od-s s.3 (order start): the office's twins of the draft's routes (13-backend § 4), the same bodies and answers as the portal's.
   app.post('/sales/order-requests', { schema: officeStartContract }, async (request, reply) => reply.code(201).send(await officeStartDraft(app, request, request.body, idempotencyKeyFrom(request))))
-  app.get('/sales/order-requests/:requestId/draft', { schema: officeDraftContract }, async (request) => officeDraftView(app, request, request.params.requestId))
+  app.get('/sales/order-requests/:requestId/draft', { schema: officeDraftContract }, async (request) => officeDraftView(app, ordersReader(request), request.params.requestId)) // owb- po2.4
   app.patch('/sales/order-requests/:requestId', { schema: changeRequestContract }, async (request) => officeChangeHeader(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.delete('/sales/order-requests/:requestId', { schema: discardContract }, async (request) => officeDiscard(processFiles, app, request, request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/sales/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => officeAddCustomLine(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))

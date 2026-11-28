@@ -45,7 +45,8 @@ export function BasketPage({ code }: { readonly code: string }) {
   const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const tb = useT(BASKET_NS)
-  const { me, api, online, locale, queue, sessionEnded } = store
+  // owb-fl7: department names in the floor's own language (Urdu names where the server has them).
+  const { me, api, online, floorLocale: locale, queue, sessionEnded } = store
   const { frame, onFrame } = store.frame('tile.baskets', { showHome: true })
   const [load, setLoad] = useState<Load>({ state: 'loading' })
   const [scanned, setScanned] = useState(false)

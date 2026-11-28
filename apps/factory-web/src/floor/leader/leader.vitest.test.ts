@@ -142,7 +142,7 @@ const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: tru
 describe('the words', () => {
   it('names only keys of floor-basket (literal and built)', () => {
     const keys = new Set<string>()
-    for (const file of [...sources(DIR), ...sources(join(DIR, '../basket'))]) for (const match of readFileSync(file, 'utf8').matchAll(/\btb\(\s*'([A-Za-z0-9_.]+)'/g)) keys.add(match[1]!)
+    for (const file of [...sources(DIR), ...sources(join(DIR, '../basket'))]) for (const match of readFileSync(file, 'utf8').matchAll(/\b(?:tb|fw)\(\s*'([A-Za-z0-9_.]+)'/g)) keys.add(match[1]!)
     const built = [
       ...['working', 'waiting', 'late', 'problem'].flatMap((filter) => [`leader.number.${filter}`, `leader.filter.${filter}`]),
       ...['REDO', 'MISTAKE', 'OTHER'].map((why) => `steps.why.${why}`),

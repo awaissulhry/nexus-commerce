@@ -19,6 +19,7 @@ import type { DraftWriter } from '../portal-ordering/writer'
 import { partnerOrder, portalReader } from '../portal-orders/access'
 import { assertMay, officeContextOf } from './access'
 import type { Reader } from './log'
+import { writeQuietLine, writeQuietLineAfter } from '../../../platform/threads/quiet-lines' // owb- po2.3 (S1, S2's yes 2026-11-28)
 
 /**
  * The order's picture — the command `orders.picture.set` (owb- order workflow, b3.2; PL-schema § 3; design § 5zi E): the picture
@@ -180,6 +181,7 @@ async function writeOrderPicture(tools: Pick<CommandTools, 'tx' | 'now' | 'audit
   const columns = columnsOf(fileId, tools.now, userId)
   const after = await tools.tx.salesOrder.update({ where: { id: orderId }, data: columns, select: { pictureFileId: true, pictureSetAt: true, version: true } })
   tools.audit({ action: PICTURE_SET_ACTION, recordType: 'SalesOrder', recordId: orderId, companyId: before.companyId, before: { pictureFileId: before.pictureFileId }, after: { pictureFileId: fileId } })
+  await writeQuietLine(tools, { record: { type: 'SalesOrder', id: orderId }, actorId: userId, eventKey: 'quiet.pictureSet', eventArgs: { fileId: fileId ?? '' } }) // owb- po2.3 (S1)
   return { pictureFileId: after.pictureFileId, pictureSetAt: after.pictureSetAt ? toUtcIso(after.pictureSetAt) : null, version: tools.record?.version ?? after.version }
 }
 
@@ -233,5 +235,6 @@ export async function setRequestPicture(writer: DraftWriter, requestId: string, 
       return { pictureFileId: after.pictureFileId, pictureSetAt: after.pictureSetAt ? toUtcIso(after.pictureSetAt) : null, version: tools.record?.version ?? after.version }
     }),
   )
+  await writeQuietLineAfter(writer.request, writer.tenantId, { record: { type: 'PortalOrderRequest', id: row.id }, by: portal ? 'CUSTOMER' : 'FACTORY', eventKey: 'quiet.pictureSet', eventArgs: { fileId: body.fileId ?? '' } }) // owb- po2.3 (S1): a Sent order's only (a draft is silent)
   return outcome.result
 }

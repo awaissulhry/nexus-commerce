@@ -6,8 +6,9 @@ import { OFFICE_DRAFT_WORDS } from '@nexus/factory-domain/sales/portal-ordering/
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { Actor, Permission } from '@nexus/factory-domain/core/permissions'
 import { partnerLocaleOf } from '@nexus/factory-domain/threads/partner/rules'
-import { actorOf } from '../../../core/context'
-import { assertMay, officeContextOf, type OrderScope } from '../orders/access'
+import { actorOf, type OfficeContext } from '../../../core/context'
+import { assertMay, assertSees, officeContextOf, type OrderScope } from '../orders/access'
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions' // owb- po2.4
 import { portalReader } from '../portal-orders/access'
 import { readRequest, type RequestRow } from './store'
 
@@ -86,6 +87,11 @@ export function portalWriter(app: FastifyInstance, request: FastifyRequest): Dra
 export function officeWriter(app: FastifyInstance, request: FastifyRequest, scope: OrderScope, permission: Permission): DraftWriter {
   const context = officeContextOf(request)
   assertMay(context, permission, scope, 'Order request')
+  return officeWriterOf(app, request, context, scope)
+}
+
+/** The office writer's own shape over a scope already checked (officeWriter, officeDraftReader). */
+function officeWriterOf(app: FastifyInstance, request: FastifyRequest, context: OfficeContext, scope: OrderScope): DraftWriter {
   const actor = actorOf(context)
   return {
     door: 'office',
@@ -116,6 +122,19 @@ export function refuseOwnPrice(body: unknown, at: string): void {
     const path = own(line) ? `${at}/line/brandUnitPrice` : `${at}/brandUnitPrice`
     throw new ValidationError(OFFICE_DRAFT_WORDS.OWN_PRICE.en, [{ path, message: OFFICE_DRAFT_WORDS.OWN_PRICE.en }])
   }
+}
+
+/**
+ * owb- po2.4 (S2's ask; R20): the office's READER of ONE draft (GET /sales/order-requests/:id/draft): orders.view over it, or
+ * orders.view.own while the reader is on it (S2's ONE rule, `assertSees`) — else not found. It reads only (no command takes it).
+ */
+export async function officeDraftReader(app: FastifyInstance, request: FastifyRequest, requestId: string): Promise<{ readonly writer: DraftWriter; readonly row: RequestRow }> {
+  const context = officeContextOf(request)
+  const row = isUuid(requestId) ? await request.withClient((client) => readRequest(client, requestId)) : null
+  if (!row) throw new NotFoundError('Order request not found.')
+  const scope = { companyId: row.companyId, partyId: row.partyId }
+  await request.withClient((client) => assertSees(client, context, ORDERS_VIEW, scope, { requestId: row.id }, 'Order request'))
+  return { writer: officeWriterOf(app, request, context, scope), row }
 }
 
 /** The office's writer of ONE draft: the request read in the office scope (none: 404), then officeWriter over its company and customer. */

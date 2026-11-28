@@ -9,6 +9,9 @@ import { checklistOf, readBasics, readReleaseFacts } from '../work-orders/facts'
 import { readWorkOrder } from '../work-orders/store'
 import { todayNow } from '../work-orders/work-orders'
 import { basketsAtPrintBySite, basketsOfCell, designFilesOf, draftGroupsOf, goodsLinesOf, printOrder, printsOf, workOrdersOf } from './store'
+// owb-ss2b: the saved places of the scan code.
+import { placedCount } from '@nexus/factory-domain/production/print-start/placement'
+import { placeKey, placementsOf } from '../prints/placements'
 
 /**
  * GET /production/orders/:orderId/print-start (production.print.start; owb- order workflow, S3 ss2 step 2.2; settles L1, L6; the
@@ -57,6 +60,12 @@ export async function printStartPreview(caller: CommandCaller, orderId: string) 
       for (const line of group.lines) basketsByLine.set(line.salesOrderLineId, (basketsByLine.get(line.salesOrderLineId) ?? 0) + line.sizes.reduce((sum, size) => sum + size.quantity, 0))
     }
     const files = await designFilesOf(db, lines)
+    // owb-ss2b: page 1 of each line's design file is placed when a place is saved for it.
+    const places = await placementsOf(db, order.id)
+    const pages = lines.map((line) => {
+      const file = files.get(line.id)
+      return { salesOrderLineId: line.id, label: lineOf.get(line.id)!.label, fileId: file?.fileId ?? null, pageCount: null, placed: file ? places.has(placeKey(line.id, file.fileId, 1)) : false }
+    })
     const basketLines = lines.filter((line) => (basketsByLine.get(line.id) ?? 0) > 0).map((line) => ({ salesOrderLineId: line.id, label: line.label, baskets: basketsByLine.get(line.id)! }))
     return {
       orderId: order.id,
@@ -72,9 +81,9 @@ export async function printStartPreview(caller: CommandCaller, orderId: string) 
       refused: answer.refused,
       needsMaterialReason: answer.needsMaterialReason,
       baskets: { count: basketLines.reduce((sum, line) => sum + line.baskets, 0), lines: basketLines },
-      pages: lines.map((line) => ({ salesOrderLineId: line.id, label: lineOf.get(line.id)!.label, fileId: files.get(line.id)?.fileId ?? null, pageCount: null, placed: false })),
-      // owb-ss2b fills the placements (ScanCodePlacement): until then none is placed.
-      placed: { done: 0, of: lines.filter((line) => files.has(line.id)).length },
+      pages,
+      // owb-ss2b: the design pages that carry a saved place (ScanCodePlacement) — "0 of 3 placed" never stops the print.
+      placed: placedCount(pages.filter((page) => page.fileId !== null)),
     }
   })
 }

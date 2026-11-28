@@ -5,6 +5,7 @@ import { parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain
 import { PEOPLE_VIEW } from '@nexus/factory-domain/people/employees/permissions'
 import { PEOPLE_LOANS_MANAGE } from '@nexus/factory-domain/people/teams/permissions'
 import { endLoanRefusal, loanProblems, loanStateOf, loansOverlap } from '@nexus/factory-domain/people/teams/rules'
+import { UNIT_REFUSALS } from '@nexus/factory-domain/people/units/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorIdOf, assertMay, assertMayWrite, assertVersion, officeOf, problemsError, refuse, scopeOf, todayOf } from '../employees/access'
 import { userNames } from '../employees/employees'
@@ -122,6 +123,8 @@ export async function createLoan(caller: CommandCaller, body: CreateLoanBody, id
       const team = await tx.team.findUnique({ where: { id: body.toTeamId }, select: { siteId: true, lineId: true, status: true, code: true } })
       if (!team || team.siteId !== person.siteId) refuse('TEAM_OTHER_SITE', 'The team is a team of the same site.', 'toTeamId')
       if (team!.status !== 'ACTIVE') refuse('TEAM_ARCHIVED', `Team ${team!.code} is archived.`, 'toTeamId')
+      // owb-ss5 5.3 (_owb-ss-common L9): a loan names its line (LineLoan.toLineId); a team of no line takes no loan in v1.
+      if (team!.lineId === null) refuse('TEAM_NO_LINE', UNIT_REFUSALS.TEAM_NO_LINE, 'toTeamId')
       if (team!.lineId !== null && team!.lineId !== body.toLineId) refuse('TEAM_OTHER_LINE', `Team ${team!.code} works on another line: pick a team of line ${line!.code}.`, 'toTeamId')
     }
     const others = await tx.lineLoan.findMany({ where: { employeeId: person.id, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, select: { startsAt: true, endsAt: true } })

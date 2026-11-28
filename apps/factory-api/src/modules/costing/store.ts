@@ -145,7 +145,7 @@ export async function loadCostFacts(client: FactoryClient | CommandTx, style: Co
       colourwayIds: colourways.map((colourway) => colourway.id),
       lines,
       materials,
-      steps: steps.map((step) => ({ id: step.id, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes })),
+      steps: steps.map((step) => ({ id: step.id, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes, departmentId: step.departmentId ?? null })), // owb-pd2 2.5
       rates,
       overheads,
     },

@@ -70,6 +70,11 @@ export interface LabourRate {
   readonly plannedEfficiencyPct: string
   readonly validFrom: BusinessDate
   readonly status: 'ACTIVE' | 'ARCHIVED'
+  /**
+   * owb-pd2 2.5: the department the rate is for (LabourRate.departmentId); it wins over its kind's rate for a route step in that
+   * department. Null or left out: the kind's rate.
+   */
+  readonly departmentId?: string | null
 }
 
 /** The overhead rule: a percentage on material + labour. */
@@ -85,12 +90,18 @@ export interface OverheadRule {
 /**
  * The rate a sheet for `companyId` uses for a kind of work centre on `on`: among the ACTIVE rates of that kind valid
  * on that day (validFrom ≤ on), the company's own newest one, else the tenant-wide newest one; null when there is none.
+ * owb-pd2 2.5: for a step in `departmentId`, that department's own rate wins when one is valid on the day (the company's newest,
+ * else the tenant-wide newest); the kind's rate (a rate with no department) stays the fallback. A department's rate never stands
+ * in for its kind.
  */
-export function pickRate(rates: readonly LabourRate[], workCentreKind: WorkCentreKind, companyId: string | null, on: BusinessDate): LabourRate | null {
-  const valid = rates.filter((rate) => rate.status === 'ACTIVE' && rate.workCentreKind === workCentreKind && rate.validFrom <= on)
+export function pickRate(rates: readonly LabourRate[], workCentreKind: WorkCentreKind, companyId: string | null, on: BusinessDate, departmentId: string | null = null): LabourRate | null {
   const newest = (list: readonly LabourRate[]): LabourRate | null =>
     list.reduce<LabourRate | null>((best, rate) => (best === null || rate.validFrom > best.validFrom || (rate.validFrom === best.validFrom && rate.id > best.id) ? rate : best), null)
-  return (companyId === null ? null : newest(valid.filter((rate) => rate.companyId === companyId))) ?? newest(valid.filter((rate) => rate.companyId === null))
+  const pick = (valid: readonly LabourRate[]): LabourRate | null =>
+    (companyId === null ? null : newest(valid.filter((rate) => rate.companyId === companyId))) ?? newest(valid.filter((rate) => rate.companyId === null))
+  const live = rates.filter((rate) => rate.status === 'ACTIVE' && rate.validFrom <= on)
+  const own = departmentId === null ? null : pick(live.filter((rate) => rate.departmentId === departmentId))
+  return own ?? pick(live.filter((rate) => rate.workCentreKind === workCentreKind && (rate.departmentId ?? null) === null))
 }
 
 /** The overhead rule a sheet for `companyId` uses: the company's own, else the tenant-wide one; null when neither is set. */

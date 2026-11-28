@@ -1,0 +1,200 @@
+{
+  "top": {
+    "kept": "Costo standard {amount} per un pezzo · versione {version}.",
+    "rough": "Nessun costo standard è ancora fissato: gli ordini contano con lo standard indicativo del suo tipo.",
+    "now": "Costo attuale {amount}.",
+    "nowSame": "Costo attuale {amount}: lo stesso.",
+    "nowHigher": "Costo attuale {amount}: {diff} in più.",
+    "nowLower": "Costo attuale {amount}: {diff} in meno.",
+    "nowUnknown": "Il costo attuale non è ancora noto: mancano dei dati.",
+    "noPrices": "Nessun prezzo concordato da confrontare.",
+    "under_one": "{count} di {total} prezzi concordati è sotto l'obiettivo del {target} %.",
+    "under_other": "{count} di {total} prezzi concordati sono sotto l'obiettivo del {target} %.",
+    "allKeep_one": "Il prezzo concordato rispetta l'obiettivo del {target} %.",
+    "allKeep_other": "Tutti i {count} prezzi concordati rispettano l'obiettivo del {target} %.",
+    "frozen": "La revisione {revision} è rilasciata: la distinta e il percorso sono congelati. Un prezzo, una tariffa e gli altri costi possono cambiare in ogni momento."
+  },
+  "part": {
+    "materials": "Materiali",
+    "work": "Lavoro",
+    "overhead": "Costi generali",
+    "other": "Altri costi"
+  },
+  "now": {
+    "title": "Costo di un pezzo, oggi",
+    "intro": "Quanto costa UN pezzo oggi nella taglia {size}: la distinta, il lavoro del percorso, i costi generali e gli altri costi. Si muove quando si muove un prezzo, un minuto o una tariffa.",
+    "keep": "Fissa {amount} come costo standard…",
+    "failed": "Non è stato possibile calcolare il costo attuale",
+    "empty": "Niente da calcolare: la distinta o il percorso sono vuoti.",
+    "barLabel": "Le parti del costo: {parts}",
+    "col": {
+      "part": "Parte",
+      "how": "Come si calcola",
+      "amount": "Per un pezzo",
+      "share": "Quota"
+    },
+    "how": {
+      "materials_one": "{count} riga della distinta, con lo scarto",
+      "materials_other": "{count} righe della distinta, con lo scarto",
+      "work": "{minutes} minuti del percorso × il costo di un minuto ÷ l'efficienza",
+      "overheadPct": "{pct} % sui materiali e sul lavoro: affitto, energia, chi non cuce",
+      "overhead": "Una percentuale sui materiali e sul lavoro",
+      "other_one": "{count} riga: lavoro esterno, trasporto, dazio, imballo o provvigione",
+      "other_other": "{count} righe: lavoro esterno, trasporto, dazio, imballo, provvigione",
+      "otherNone": "Ancora nessun altro costo"
+    },
+    "line": {
+      "minutes": "{minutes} min"
+    },
+    "moreLines_one": "e {count} altra riga (in Altro, riga per riga)",
+    "moreLines_other": "e altre {count} righe (in Altro, riga per riga)",
+    "total": "Costo attuale",
+    "incomplete_one": "manca {count} dato",
+    "incomplete_other": "mancano {count} dati",
+    "knownSoFar": "noto finora {amount}"
+  },
+  "price": {
+    "title": "Prezzo contro costo",
+    "none": "Nessun cliente ha ancora un prezzo concordato per questo prodotto.",
+    "lowest": "Il prezzo più basso che rispetta il {target} %: {amount}.",
+    "lowestUnknown": "Il prezzo più basso che rispetta il {target} % non è ancora noto: al costo manca un dato.",
+    "noGrains": "I prezzi contro i costi richiedono sia il diritto sui prezzi sia quello sui costi.",
+    "failed": "Non è stato possibile leggere i prezzi concordati",
+    "col": {
+      "customer": "Cliente",
+      "material": "Materiale",
+      "pieces": "Pezzi",
+      "price": "Prezzo",
+      "cost": "Costo",
+      "earned": "Guadagno",
+      "margin": "Margine",
+      "against": "Rispetto all'obiettivo"
+    },
+    "fromPieces_one": "da {count} pezzo",
+    "fromPieces_other": "da {count} pezzi",
+    "costUnknown": "non noto",
+    "barLabel": "Margine {margin}, obiettivo {target} %",
+    "share": "Il margine è una quota del PREZZO, non del costo. L'obiettivo è il {target} %.",
+    "flag": {
+      "OK": "rispetta l'obiettivo",
+      "UNDER_TARGET": "sotto l'obiettivo",
+      "UNDER_COST": "sotto il costo",
+      "none": "ancora nessun costo"
+    }
+  },
+  "keep": {
+    "title": "Fissa il costo standard",
+    "counts": "La fabbrica conta con {amount}.",
+    "countsRough": "La fabbrica conta con lo standard indicativo del suo tipo.",
+    "body": "Il costo attuale è {amount}. Fissalo come costo standard: da ora il margine di ogni ordine e della lista prodotti lo legge.",
+    "reason": "Perché",
+    "reasonHint": "Resta con la versione (lo leggono solo le persone con il diritto sui costi).",
+    "reasonPlaceholder": "Per esempio: la pelle è aumentata",
+    "alone": "Lo fissi tu: l'azienda permette a una persona sola di fissare un costo (registrato con il motivo).",
+    "fourEyes": "Va alla Finanza per l'approvazione: una seconda persona approva un costo standard.",
+    "actAlone": "Fissa {amount}",
+    "actSend": "Invia {amount} per l'approvazione",
+    "held": {
+      "busy": "In corso…",
+      "unknown": "Il costo attuale non è ancora noto: mancano dei dati.",
+      "same": "Questo costo è già fissato.",
+      "reason": "Scrivi perché cambia il costo standard.",
+      "reading": "Lettura del costo…",
+      "noPrices": "Non è stato possibile leggere il costo attuale: riprova."
+    },
+    "done": {
+      "kept": "Fissato: versione {version}, {amount}. Ora gli ordini contano con questo.",
+      "sent": "Inviato alla Finanza per l'approvazione. Gli ordini contano con il vecchio costo standard finché non è approvato."
+    }
+  },
+  "whatif": {
+    "title": "E se",
+    "intro": "Un calcolatore: una variazione in % e un prezzo. Non si salva nulla, non cambia nulla.",
+    "clear": "Azzera",
+    "materials": "Materiali, %",
+    "work": "Lavoro, %",
+    "price": "Prezzo di un pezzo",
+    "cost": "Costo",
+    "more": "{amount} in più",
+    "less": "{amount} in meno",
+    "margin": "Margine a quel prezzo",
+    "noPrice": "Scrivi un prezzo",
+    "forTarget": "Prezzo per il {target} %",
+    "verdict": {
+      "KEEPS": "rispetta l'obiettivo",
+      "UNDER_TARGET": "sotto l'obiettivo del {target} %",
+      "UNDER_COST": "sotto il costo"
+    },
+    "nothingSaved": "Non si salva nulla. Conta con il costo attuale, non con il costo standard. I costi generali si muovono con i materiali e il lavoro.",
+    "nothingSavedPartial": "Non si salva nulla. Conta con il costo noto finora (manca un dato), non con il costo standard.",
+    "bad": {
+      "pct": "Una percentuale da {min} a {max}, per esempio +10 o -5.",
+      "price": "Un prezzo sopra 0, per esempio 189,50."
+    }
+  },
+  "rates": {
+    "open": "Le tariffe della fabbrica…",
+    "title": "Le tariffe della fabbrica",
+    "subtitle": "Per ogni prodotto · le vedono solo le persone con il diritto sui costi",
+    "moves": "Una modifica sposta il costo attuale di ogni prodotto. Un costo standard fissato resta com'è, finché non se ne fissa uno nuovo.",
+    "readOnly": "Solo chi gestisce le impostazioni dei costi cambia queste tariffe.",
+    "perMinute": "Il costo di un minuto di lavoro, in ogni reparto",
+    "noDepartments": "Nessun reparto aperto.",
+    "cpm": "Un minuto",
+    "cpmOf": "{name}: il costo di un minuto",
+    "eff": "Efficienza",
+    "effOf": "{name}: l'efficienza prevista",
+    "perMinuteIs": "{amount} al minuto",
+    "effIs": "efficienza {pct} %",
+    "from": {
+      "department": "La sua tariffa",
+      "kind": "Dal suo tipo: {amount} al {eff} %",
+      "none": "Ancora nessuna tariffa: al costo manca"
+    },
+    "overhead": "Costi generali, %",
+    "overheadHint": "Sui materiali e sul lavoro: affitto, energia, l'ufficio. Da 0 a 300.",
+    "overheadIs": "Costi generali {pct} %",
+    "noOverhead": "Ancora nessun costo generale.",
+    "leathers": "Le pelli rispetto al riferimento",
+    "noLeathers": "Ancora nessuna base pelle.",
+    "yield": "resa {pct} %",
+    "leathersWhere": "Gestite in Finanza › Costi: la resa e le scelte di una pelle si cambiano lì.",
+    "oneKeeper": "Una persona sola può fissare un costo",
+    "oneKeeperOn": "Attivo: chi fissa un costo standard lo approva anche, con un motivo (registrato).",
+    "oneKeeperOff": "Spento: una seconda persona (Finanza) approva ogni costo standard. Quattro occhi.",
+    "reason": "Perché cambia l'interruttore",
+    "save": "Salva le tariffe",
+    "failed": "Non è stato possibile leggere le tariffe",
+    "bad": {
+      "cpm": "Un costo sopra 0, fino a {max} (€ per un minuto), per esempio 0,08.",
+      "eff": "Un numero da {min} a {max} (%).",
+      "cpmFirst": "Scrivi prima il costo di un minuto: questo reparto non ha ancora una tariffa.",
+      "overhead": "Un numero da 0 a {max} (%).",
+      "reason": "Scrivi perché cambia l'interruttore."
+    },
+    "held": {
+      "busy": "In corso…",
+      "same": "Ancora non è cambiato nulla."
+    }
+  },
+  "more": {
+    "summary": "Altro: gli altri costi passo per passo, il prezzo obiettivo di una versione, il mix di taglie, il foglio riga per riga"
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "refusal": {
+    "SAME_AS_KEPT": "Questo costo è già fissato.",
+    "TOTAL_MOVED": "Il costo si è mosso nel frattempo: è stato riletto, controllalo e fissalo di nuovo.",
+    "MISSING_PARTS": "Mancano parti del costo: il costo attuale elenca cosa aggiungere prima."
+  },
+  "problem": {
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controlla e riprova.",
+    "invalid": "Qualcosa di scritto non è accettato: controlla i campi.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "offline": "Il server della fabbrica non risponde: non è cambiato nulla.",
+    "unavailable": "Qualcosa è andato storto sul server: non è cambiato nulla."
+  }
+}
