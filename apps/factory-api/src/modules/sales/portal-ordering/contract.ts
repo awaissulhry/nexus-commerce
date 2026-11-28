@@ -257,7 +257,8 @@ const requestBody = output({
    * B-CP-070 (D11): what the reader may do now beside filling the draft — send it and withdraw it once sent (who may order: the
    * Buyer, the Admin), discard the draft (who may order, or the colleague who started it). False: held, with the page's words.
    */
-  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }),
+  // owb- po1.2: + take it back (a SENT request the factory has not answered or started work on; who may order; the portal only).
+  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean(), takeBack: z.boolean() }),
   /** B-CP-072: its logos, references and measurement sheets (the draft's own and its lines'). */
   files: draftFiles,
   /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
@@ -370,6 +371,8 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+// owb- po1.2 (order workflow, "Take it back"): a SENT request back to its DRAFT, its number kept (409 in words when answered or started).
+export const takeBackContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 
 // ---- B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line -----
 const customLineFields = {

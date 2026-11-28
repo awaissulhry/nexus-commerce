@@ -63,6 +63,9 @@ import { markEdited, PERSON_COLUMNS, readPeople, type PersonRow } from './store'
 import { checkCustomLine, colleagueNameOf, customLineData, customLineFactsOf, customLineView, insertCustomLine, isCustomLine, isDraftSheet, madeToMeasureOf, ownSheetOf, piecesOfLine, problemView, sheetLinesOf, type MadeToMeasure } from './people'
 // B-CP-076 (customer page plan 11 §1.3 D3): "Your price" — the customer's own net unit price per line, the price grain.
 import { ownPriceView, type OwnPriced } from './people'
+// owb- po1.2 (order workflow, "Take it back"): the base's audit action (order-log faces) and the customer's words.
+import { TAKE_BACK_ACTION } from '@nexus/factory-domain/sales/order-log/faces'
+import { SENT_ONCE_WORDS, takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS, type TakeBackRefusal } from '@nexus/factory-domain/sales/portal-ordering/take-back'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
@@ -88,6 +91,9 @@ import { ownPriceView, type OwnPriced } from './people'
  *                                                    PORTAL_REQUEST series in the tenant's office scope as the person
  *                                                    (the partner role has no numbering grant), SENT, Home › Approvals
  *   POST   /portal/order-requests/:id/withdraw       a SENT request back, before the office decided
+ *   POST   /portal/order-requests/:id/take-back      owb- po1.2: a SENT request back to its DRAFT, before the office decided and
+ *                                                    before it started work on it (no style draft made for it); its number
+ *                                                    stays, and the next Send sends it under the same number
  *
  * Every line is checked against the customer's catalogue today before it is written (./catalogue: the tenant's scope as
  * the person); a draft's line that the catalogue no longer holds as it was is named as a problem when the draft is read,
@@ -162,7 +168,7 @@ export async function savedByOf(writer: DraftWriter, partyId: string, userId: st
  * od-s s.3 (L5): whether the factory made a style draft for the request (`styleIds` not empty) — read in the tenant's scope as the
  * person (the partner role has no grant on the column), answered as a yes/no only: no style id reaches the portal.
  */
-async function designStartedOf(writer: DraftWriter, requestId: string): Promise<boolean> {
+export async function designStartedOf(writer: DraftWriter, requestId: string): Promise<boolean> {
   const row = await writer.inTenant((db) => db.portalOrderRequest.findFirst({ where: { id: requestId, partyId: writer.partyId }, select: { styleIds: true } }))
   return (row?.styleIds.length ?? 0) > 0
 }
@@ -329,6 +335,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
   const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), writer.seesPrices)
   const outcome = await outcomeOf(writer, row)
   const may = await mayOn(writer, row) // B-CP-070; od-s s.2: the office's own rule
+  // owb- po1.2: the portal reads whether the factory works on the design once (a yes/no); a SENT request is taken back only before.
+  const designStarted = writer.door === 'portal' ? await designStartedOf(writer, row.id) : false
   return {
     request: {
       id: row.id,
@@ -359,7 +367,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       pricesChanged: views.filter((line) => line.problems.some((problem) => problem.code === 'PRICE_CHANGED')).length,
       notice: REQUEST_NOTICE,
       // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
-      may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard },
+      // owb- po1.2: + take it back (who may order, the portal only: a SENT request the factory has not started work on).
+      may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard, takeBack: writer.door === 'portal' && may.order && takeBackProblem({ status: row.status as RequestStatus, designStarted }) === null },
       // B-CP-072: logos, references and measurement sheets (the draft's own and its lines'); uploads open here, or why not.
       files: { logos: files.logos.map(fileView), references: files.references.map(fileView), sheets: files.sheets.map(fileView) },
       uploads: { open: closed === null, words: closed },
@@ -375,7 +384,7 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       // od-s s.4: what is not decided yet (information only; `confirmHeld`: the office's Confirm window will ask what the order needs).
       stillOpen: draftStillOpen(lines, people, row, shipToInUseOf(row, addresses), day, undefined, sheetLines),
       // od-s s.3 (L5): the portal reads only whether the factory works on the design, never a style id (the office reads its own styles).
-      ...(writer.door === 'portal' ? { designStarted: await designStartedOf(writer, row.id) } : {}),
+      ...(writer.door === 'portal' ? { designStarted } : {}),
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: writer.seesPrices,
@@ -389,12 +398,14 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
  * 1a): the office sends a draft only through its Confirm (`order` false here) and discards only a draft an office person started,
  * with orders.manage over the customer.
  */
-async function mayOn(writer: DraftWriter, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById'>): Promise<{ readonly order: boolean; readonly discard: boolean }> {
+export async function mayOn(writer: DraftWriter, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById' | 'number'>): Promise<{ readonly order: boolean; readonly discard: boolean }> {
   if (writer.preview) return { order: false, discard: false }
   const scope = { companyId: row.companyId, partyId: row.partyId }
-  if (writer.door === 'office') return { order: false, discard: can(writer.actor, ORDERS_MANAGE, scope) && (await startedByOffice(writer, row.createdById)) }
+  // owb- po1.2 (G1 (e)): a draft with a number (taken back) is never discarded.
+  const numbered = row.number !== null
+  if (writer.door === 'office') return { order: false, discard: !numbered && can(writer.actor, ORDERS_MANAGE, scope) && (await startedByOffice(writer, row.createdById)) }
   const order = can(writer.actor, PORTAL_ORDER_REQUESTS_MANAGE, scope)
-  return { order, discard: order || row.createdById === writer.userId }
+  return { order, discard: !numbered && (order || row.createdById === writer.userId) }
 }
 
 /** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
@@ -874,6 +885,8 @@ export async function takeTodaysPrices(writer: DraftWriter, requestId: string, v
 
 export async function discardDraft(writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
   const row = await ownDraft(writer, requestId)
+  // owb- po1.2 (G1 (e)): a draft taken back keeps its number: never discarded (the database refuses it too), in words.
+  if (row.number !== null) throw new InvalidStateError(SENT_ONCE_WORDS[writer.locale])
   // B-CP-070; od-s s.2 (Owner yes 1a): the office discards only a draft an office person started (its own words).
   if (!(await mayOn(writer, row)).discard) throw new ForbiddenError(writer.door === 'office' ? OFFICE_DRAFT_WORDS.DISCARD_HELD.en : DISCARD_HELD)
   await commandOn(writer.app, writer.request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
@@ -939,13 +952,14 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
     const people = await readPeople(tx, [current.id]) // B-CP-075
     const problems = (await sendProblems(tx, current, lines, day, reader.seesPrices, people)).filter((entry) => holdsSend(entry.code)) // od-s s.4
     if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length === 1 ? '1 problem holds' : `${problems.length} problems hold`} the send: fix ${problems.length === 1 ? 'it' : 'them'} first.`, problems.map((entry) => ({ path: entry.lineId ? `lines/${entry.lineId}` : 'request', message: entry.words.en })))
-    const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })
-    await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number: number.formatted, sentAt: now, sentById: session.userId, version: current.version + 1 }, select: { id: true } })
+    // owb- po1.2 (G1 (d)): a draft taken back keeps the number of its first Send — sent again under the same number, never a new one.
+    const number = current.number ?? (await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })).formatted
+    await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number, sentAt: now, sentById: session.userId, version: current.version + 1 }, select: { id: true } })
     // B-CP-075: each line's pieces by its kind; a request whose only people are in an attached sheet counts one (at least one person).
     const pieces = Math.max(1, lines.reduce((sum, line) => sum + piecesOfLine(line, people), 0))
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number: number.formatted, lines: lines.length, pieces, byPartner: true } })
-    tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
-    return { number: number.formatted }
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number, lines: lines.length, pieces, byPartner: true, ...(current.number !== null ? { again: true } : {}) } })
+    tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
+    return { number }
   })
   const sent = await ownRequest(writer, requestId)
   const { number } = outcome.result
@@ -980,6 +994,43 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
   })
   return requestView(writer, await ownRequest(writer, requestId))
 }
+
+// ---- owb- po1.2 (order workflow, "Take it back"; design § 5zi, § 5h; build plan.md § 4 G1) -------------------------------------------
+/** A refusal of Take it back in the customer's words (409: `conflict` when the factory answered or started, else `invalid_state`). */
+function takeBackRefused(refusal: TakeBackRefusal, locale: 'it' | 'en'): DomainError {
+  const words = TAKE_BACK_WORDS[refusal][locale]
+  return new DomainError(takeBackCodeOf(refusal), words, [{ path: `refusal/${refusal}`, message: words }])
+}
+
+/**
+ * POST /portal/order-requests/:requestId/take-back {version} — a SENT request back to its DRAFT (portal.orderRequests.manage: the
+ * Buyer, the Admin). Checked BEFORE the write so the customer reads its own words, not the database's: answered (accepted, refused)
+ * → 409 "The factory has already answered this order."; a style draft made for it (G1 (c2), read in the tenant's scope as a yes/no)
+ * → 409 "The factory has already started work on this order: ask the factory." Then, locked at the version read: status DRAFT,
+ * `sentAt` and `sentById` cleared, the number KEPT (a later Send keeps it: sendRequest), the version moved — nothing else (the guard's
+ * take-back columns; who saved the draft last stays as it was). The audit row is the base's action `portalOrdering.takeBack` (the
+ * order log's TAKEN_BACK, on the customer's allow-list); `portal_order_request.taken_back` (ids only) tells the office's Incoming
+ * (it lists no draft) and the customer's own screens.
+ */
+export async function takeBackRequest(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
+  const writer = portalWriter(app, request)
+  const row = await ownRequest(writer, requestId)
+  const before = takeBackProblem({ status: row.status as RequestStatus, designStarted: row.status === 'SENT' && (await designStartedOf(writer, row.id)) })
+  if (before) throw takeBackRefused(before, writer.locale)
+  await commandOn(app, request, { name: TAKE_BACK_ACTION, idempotencyKey, input: { requestId, version } }, async (tools) => {
+    const current = await lockRequest(tools.tx, requestId, version)
+    if (current.partyId !== writer.partyId || current.companyId !== writer.companyId) throw new NotFoundError('Order request not found.')
+    // The status again under the lock (the partner scope reads no style drafts: the database's G1 (c2) is the last word on those).
+    const again = takeBackProblem({ status: current.status as RequestStatus, designStarted: false })
+    if (again) throw takeBackRefused(again, writer.locale)
+    await tools.tx.portalOrderRequest.update({ where: { id: requestId }, data: { status: 'DRAFT', sentAt: null, sentById: null, version: current.version + 1 }, select: { id: true } })
+    tools.audit({ action: TAKE_BACK_ACTION, recordType: 'PortalOrderRequest', recordId: requestId, companyId: current.companyId, before: { status: 'SENT' }, after: { status: 'DRAFT', number: current.number, byPartner: true } })
+    tools.emit({ type: 'portal_order_request.taken_back', subject: requestId, companyId: current.companyId, payload: { requestId, partyId: current.partyId } })
+    return null
+  })
+  return requestView(writer, await ownRequest(writer, requestId))
+}
+// ---- end owb- po1.2
 
 // ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2): described and made-to-measure lines, and the
 // people of a by-person line. Every write is a draft command at the draft's version (onDraft: one rule for every part), checked

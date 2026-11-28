@@ -37,6 +37,7 @@ import {
   templateContract,
   uploadContract,
   withdrawContract,
+  takeBackContract, // owb- po1.2
   // B-CP-075: described and made-to-measure lines, and the people of a by-person line.
   addCustomLineContract,
   changeCustomLineContract,
@@ -58,6 +59,7 @@ import { styleDraftOfRequest } from './style-draft'
 import { acceptRequest, confirmRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
+import { takeBackRequest } from './requests' // owb- po1.2
 import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
 // B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
 import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, removeLineWithFiles } from './draft-files'
@@ -108,6 +110,8 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   )
   app.post('/portal/order-requests/:requestId/send', { schema: sendContract }, async (request) => sendRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
+  // owb- po1.2 (order workflow): Take it back — a SENT request back to its DRAFT before the factory answered or started work on it.
+  app.post('/portal/order-requests/:requestId/take-back', { schema: takeBackContract }, async (request) => takeBackRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
 
   // Reorder.
   app.get('/portal/reorder/orders', { schema: pastOrdersContract }, async (request) => pastOrders(app, request, request.query))

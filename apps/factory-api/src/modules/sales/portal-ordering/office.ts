@@ -767,11 +767,12 @@ export async function confirmRequest(caller: CommandCaller, requestId: string, b
       // The office prices again: no price check of the customer's (seesPrices false); only what holds a Send.
       const problems = (await sendProblems(tx, current, lines, day, false, people)).filter((entry) => holdsSend(entry.code))
       if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length === 1 ? '1 problem holds' : `${problems.length} problems hold`} the send: fix ${problems.length === 1 ? 'it' : 'them'} first.`, problems.map((entry) => ({ path: entry.lineId ? `lines/${entry.lineId}` : 'request', message: entry.words.en })))
-      const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })
-      await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number: number.formatted, sentAt: now, sentById: context.actorId, version: current.version + 1 }, select: { id: true } })
+      // owb- po1.2 (G1 (d)): a draft the customer took back keeps the number of its first Send (never a new one).
+      const number = current.number ?? (await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })).formatted
+      await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number, sentAt: now, sentById: context.actorId, version: current.version + 1 }, select: { id: true } })
       const pieces = Math.max(1, lines.reduce((sum, line) => sum + piecesOfLine(line, people), 0))
-      tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number: number.formatted, lines: lines.length, pieces, byOffice: true } })
-      tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
+      tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number, lines: lines.length, pieces, byOffice: true } })
+      tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
       current = (await readRequest(tx, current.id))!
     }
     return acceptInCommand(tools, current, body, context.actorId)

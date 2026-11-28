@@ -35,6 +35,8 @@ export const manifest = defineManifest({
   'DELETE /portal/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  // owb- po1.2 (order workflow, "Take it back"): as Send and Withdraw, portal.orderRequests.manage (the Buyer, the Admin).
+  'POST /portal/order-requests/:requestId/take-back': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   // Reorder (SAL-072): a past order is the orders' business — kept with portal.orderRequests.manage (a Designer reads no order).
   'GET /portal/reorder/orders': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'GET /portal/reorder/orders/:orderId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
