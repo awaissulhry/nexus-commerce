@@ -16,6 +16,8 @@ import { partnerOrder, portalReader } from './access'
 import { orderMoneyPartsOf } from '@nexus/factory-domain/sales/orders/later-columns'
 import { orderMoneyFactsOf } from '../orders/later-columns'
 import { progressFor } from './progress'
+// owb- po1.4 (order workflow): the customer's own columns on its order (the ONE reader).
+import { NO_OWN_COLUMNS, ownColumnsOf } from '../own-columns/read'
 import {
   dayOf,
   dayOrNull,
@@ -320,7 +322,9 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     const deposits = await readDeposits(client, order.id)
     const profiles = await readProfiles(client, [...new Set(lines.flatMap((line) => (line.measurementProfileId ? [line.measurementProfileId] : [])))])
     const sent = (await requestSends(client, [order.id])).get(order.id) ?? null
-    return { lines, shipments, shipped, deposits, profiles, sent }
+    // owb- po1.4: its own columns and their values (the partner scope: the party's rows only).
+    const ownColumns = (await ownColumnsOf(client, { orderIds: [order.id] })).get(order.id) ?? NO_OWN_COLUMNS
+    return { lines, shipments, shipped, deposits, profiles, sent, ownColumns }
   })
   const tenant = await reader.inTenant(async (client) => ({
     history: await orderHistory(client, order.id),
@@ -424,6 +428,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     pieces: { ordered: progress.totals.ordered, shipped: progress.totals.shipped, open: progress.totals.toShip, closedShort: progress.totals.closedShort },
     productionLevel: tenant.level,
     shipments: { shown: read.shipments.length, onTheWay: read.shipments.filter((row) => isOnTheWay(row.status)).length },
+    ownColumns: read.ownColumns, // owb- po1.4
     live: LIVE,
   }
 }

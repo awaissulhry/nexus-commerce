@@ -70,6 +70,8 @@ import { SENT_ONCE_WORDS, takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS, type
 import { LINE_MOVE_WORDS, materialOf, removedLineWords } from '@nexus/factory-domain/sales/portal-ordering/line-moves'
 import { nextLineSeq, readAllLines, readRemovedLines } from './store'
 import { choicesData } from './people'
+// owb- po1.4 (order workflow): the customer's own columns on the draft (the ONE reader).
+import { NO_OWN_COLUMNS, ownColumnsOf } from '../own-columns/read'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
@@ -336,6 +338,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
   const fileView = (file: Parameters<typeof draftFileView>[0]) => draftFileView(file, sheetsLocked && file.category === 'MEASUREMENTS')
   // owb- po1.3: a draft's lines taken out, to put back (a sent or decided request lists none: its lines are frozen).
   const removedLines = draft ? await removedLinesOf(writer, row) : []
+  // owb- po1.4: the customer's own columns on it and their values on its live lines (the writer's scope: its party's rows).
+  const ownColumns = (await writer.scoped((client) => ownColumnsOf(client, { requestIds: [row.id] }))).get(row.id) ?? NO_OWN_COLUMNS
   const shipTo = row.shipToAddressId ? addresses.find((address) => address.id === row.shipToAddressId) : undefined
   const problems = draft
     ? [
@@ -385,6 +389,7 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       files: { logos: files.logos.map(fileView), references: files.references.map(fileView), sheets: files.sheets.map(fileView) },
       uploads: { open: closed === null, words: closed },
       removedLines, // owb- po1.3
+      ownColumns, // owb- po1.4
       // ---- B-CP-075
       customLines: customViews,
       laterParts: [...row.laterParts],

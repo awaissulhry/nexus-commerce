@@ -10,6 +10,8 @@ import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } fr
 import { ORDER_GROUPS } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1 S1.2
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { pictureIds } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids)
+// owb- po1.4 (order workflow): the customer's own columns (the shared answer shapes).
+import { recordOwnColumns } from '../own-columns/schemas'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075, SAL-076, SAL-080, SAL-081; design portal.customer.orders). Every
@@ -196,6 +198,8 @@ export const recordContract = defineContract({
        */
       productionLevel: z.enum(PRODUCTION_SHARE_LEVELS),
       shipments: output({ shown: z.number().int(), onTheWay: z.number().int() }),
+      /** owb- po1.4: the customer's own columns ON this order (in order) and their values (lineId → columnId → value). */
+      ownColumns: recordOwnColumns,
       live,
     }),
   },

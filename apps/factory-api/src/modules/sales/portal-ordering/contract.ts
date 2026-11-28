@@ -20,6 +20,8 @@ import { styleDraftBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 // od-s s.4 (order start; addendum R1–R3): a row's sizing and open choices; Still open (information only).
 import { CHOICE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/choices'
 import { DRAFT_SIZINGS, STILL_OPEN_KINDS, STILL_OPEN_STATES } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+// owb- po1.4 (order workflow): the customer's own columns on the draft (the shared answer shapes).
+import { recordOwnColumns } from '../own-columns/schemas'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -272,6 +274,8 @@ const requestBody = output({
   uploads: output({ open: z.boolean(), words: z.string().nullable() }),
   /** owb- po1.3: a DRAFT's lines taken out, the last first (they count nowhere until put back); [] once sent. */
   removedLines: z.array(removedLine),
+  /** owb- po1.4: the customer's own columns ON this draft (in order) and their values on its live lines (lineId → columnId → value). */
+  ownColumns: recordOwnColumns,
   // ---- B-CP-075: the lines in the customer's own words (described, made to measure; with `lines`, one draft by seq), the parts it
   // sends later, who of the customer saved it last (a display name, never an id or an e-mail), and made to measure for it.
   customLines: z.array(customLine),
