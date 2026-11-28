@@ -206,7 +206,7 @@ describe('GET /production/baskets/:bundleId — the walls', () => {
 
   it('a restricted order: `restricted` for a worker not given the basket, no picture, no notes; the team leader reads it', async () => {
     const [order] = await admin<{ id: string }>(
-      `SELECT l."salesOrderId"::text AS id FROM "Bundle" b JOIN "WorkOrderSize" c ON c.id = b."workOrderSizeId" JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE b.id = $1`,
+      `SELECT l."orderId"::text AS id FROM "Bundle" b JOIN "WorkOrderSize" c ON c.id = b."workOrderSizeId" JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE b.id = $1`,
       [A.bundle1],
     )
     expect(order, 'WO-0001\'s cell names its order line (seed/production.ts)').toBeDefined()
