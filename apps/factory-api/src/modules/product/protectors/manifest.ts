@@ -7,7 +7,9 @@ import { defineManifest } from '../../../core/manifest'
  * (`record`).
  */
 const view = { audiences: ['office'], permission: 'product.bom.view', scope: 'record' } as const
-const manage = { audiences: ['office'], permission: 'product.bom.manage', scope: 'record' } as const
+// owb-pd1 1.4 (S4 settle 6): product.bom.manage, OR product.drafts.edit on a DRAFT revision — the route asks the read right (every
+// holder of the manage right holds it) and the handler the write (./placements.ts writer, modules/product/drafts/may-edit.ts).
+const manage = view
 
 export const manifest = defineManifest({
   'GET /product/styles/:styleId/revisions/:revisionId/protectors': view,

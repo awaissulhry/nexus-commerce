@@ -8,8 +8,10 @@ import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/perm
 import { command, StaleVersionError, type CommandTools } from '../../../core/command'
 import { requireEditRule } from '../lifecycle/edit-rule'
 import { lockStyle } from '../styles/store'
+import { assertMayEditDraft, mayDesign, mayManage, newestRevisionStatus } from '../drafts/may-edit' // owb-pd1 1.4
 import {
   assertMayWrite,
+  contextOf,
   findRevision,
   guardWords,
   isUniqueViolation,
@@ -61,10 +63,18 @@ async function onPictures(request: FastifyRequest, name: `product.pictures.${str
   }
 }
 
-/** The style for a picture write: seen, written by this person, then locked in the command. */
+/**
+ * The style for a picture write: seen, written by this person, then locked in the command. owb-pd1 1.4: product.styles.manage, or
+ * the designer (product.drafts.edit) while the style's newest revision is a draft or it has none yet ("gallery pictures and
+ * callouts", ../drafts/may-edit.ts).
+ */
 async function writable(request: FastifyRequest, styleId: string) {
   const style = await readStyleFor(request, styleId, 'product.styles.view')
-  assertMayWrite(request, PRODUCT_STYLES_MANAGE, style.companyId)
+  const context = contextOf(request)
+  if (!mayManage(context, style.companyId)) {
+    if (!mayDesign(context, style.companyId)) assertMayWrite(request, PRODUCT_STYLES_MANAGE, style.companyId)
+    assertMayEditDraft(context, style.companyId, await request.withClient((client) => newestRevisionStatus(client, styleId)))
+  }
   return style
 }
 

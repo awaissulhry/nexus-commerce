@@ -57,6 +57,8 @@ import { citableOnInvoice } from '@nexus/factory-domain/shipping/elsewhere'
  */
 
 const LIVE = ['DRAFT', 'PACKED', 'SHIPPED', 'DELIVERED'] as const
+/** owb- (S3 ss1): straight to the customer (no leg through our warehouse), or its leg sent on. */
+const SENT_ON_OR_STRAIGHT: Prisma.ShipmentWhereInput = { OR: [{ warehouseLeg: { is: null } }, { warehouseLeg: { is: { forwardedAt: { not: null } } } }] }
 const LEFT = ['SHIPPED', 'DELIVERED'] as const
 const day = (value: Date): BusinessDate => value.toISOString().slice(0, 10)
 
@@ -141,7 +143,9 @@ export async function leftWithoutDdt(db: Reader, shipments: readonly ShipmentRow
 
 /** shippedNotInvoiced's shipments without a DDT (queue.ts), per shipment, in the reader's scope (`where`). */
 export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInput, today: BusinessDate) {
-  const shipments = await shipmentsWithoutDdt(db, { AND: [where, { status: { in: [...LEFT] } }] })
+  // owb- (order workflow, S3 ss1; settle L5, S3 lead yes 09:05): a shipment through our warehouse first is listed once the warehouse
+  // sent it on to the customer (until then the goods are ours: nothing is sold).
+  const shipments = await shipmentsWithoutDdt(db, { AND: [where, { status: { in: [...LEFT] } }, SENT_ON_OR_STRAIGHT] })
   const rows = (await leftWithoutDdt(db, shipments)).filter((row) => row.notInvoiced.gt(0))
   if (rows.length === 0) return []
   const prices = await orderPrices(db, rows.map((row) => row.salesOrderLineId))

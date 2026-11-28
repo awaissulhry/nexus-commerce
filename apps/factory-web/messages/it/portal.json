@@ -3,12 +3,16 @@
     "home": "Home",
     "waiting": "Cosa vi aspetta",
     "orders": "Ordini",
-    "ordersRequests": "Ordini e richieste",
+    "prices": "Prezzi",
+    "agreedPrices": "Prezzi concordati",
     "newOrder": "Nuovo ordine",
     "production": "Produzione",
-    "quotesSamples": "Preventivi e campioni",
+    "customers": "Clienti",
+    "yourCustomers": "I vostri clienti",
+    "payments": "Pagamenti",
+    "products": "Prodotti",
+    "people": "Persone",
     "quotes": "Preventivi e richieste",
-    "catalogue": "Catalogo",
     "samples": "Campioni e schede tecniche",
     "documents": "Documenti",
     "returns": "Resi e reclami",
@@ -22,7 +26,6 @@
     "auditRoom": "Sala revisione"
   },
   "rail": {
-    "label": "Aree del portale",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -79,7 +82,6 @@
     "portal": "Portale",
     "ask": "Fate una domanda",
     "more": "Altre azioni",
-    "pages": "Pagine",
     "pagesOf": "Pagine di {area}"
   },
   "live": {
