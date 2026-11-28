@@ -314,7 +314,8 @@ const firstPage = (area: AreaNavArea): AreaNavArea => {
  */
 const counted = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavArea => {
   const items = area.sections?.flatMap((section) => section.items) ?? []
-  const own = area.badge && (!def?.badgePages || items.some((item) => def.badgePages!.includes(item.id))) ? [area.badge] : []
+  const showing = def?.badgePages
+  const own = area.badge && (!showing || items.some((item) => showing.includes(item.id))) ? [area.badge] : []
   const keys = [...new Set([...own, ...items.flatMap((item) => (item.badge ? [item.badge] : []))])]
   const { badge: _badge, ...rest } = area
   return keys.length > 0 ? { ...rest, badge: keys.join(BADGE_JOIN) } : rest
