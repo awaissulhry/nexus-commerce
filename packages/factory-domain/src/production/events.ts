@@ -957,4 +957,16 @@ export const events = [
     live: { permission: 'workorders.view', also: 'product.styles.view', fields: ['departmentId', 'number', 'change'] },
   }),
   // ---- end owb-pd1
+  // ---- owb- (order workflow, S3 ss2 step 2.2; settles L1, L6): "Print and start the work" — the order's FIRST print: its work orders
+  // released (each with today's workorder.released), its baskets made where the site makes them at print (NO bundle_created for
+  // them: the brand keeper reads that as CUTTING; the bench's attach emits it when the cuts go on). Ids and a count only; the
+  // customer's id for the office's live wall, never a live field.
+  defineEvent({
+    type: 'production.order_print_started',
+    context: 'production',
+    description: "An order's work started with its first print (Print and start the work): its work orders released, its baskets made where the site makes them at print.",
+    payload: z.strictObject({ salesOrderId: z.uuid(), printId: z.uuid(), workOrderIds: z.array(z.uuid()), baskets: z.number().int().min(0), partyId: livePartyId() }),
+    live: { permission: 'orders.view', also: 'workorders.view', fields: ['salesOrderId', 'printId', 'workOrderIds', 'baskets'] },
+  }),
+  // ---- end owb- (S3 ss2)
 ] as const
