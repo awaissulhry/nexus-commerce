@@ -15,6 +15,7 @@ import { keepCost, readPriceAgainstCost, type PriceAgainstCost } from '../now/ap
 import { costOfOne, costSizeOf, howOf, keepDoneOf, keepHeldOf, linesOfPart, problemKeyOf, refusalOf, topLineOf, type Words } from '../now/model'
 import { readSettings } from '../rates/api'
 import { settingsInForce } from '../rates/model'
+import { RatesDoor } from '../rates/RatesDoor'
 import { whatIf, whatIfBaseOf, type WhatIfInput } from '../whatif/model'
 import { CostPageView, type CostPageModel } from './view/CostPageView'
 
@@ -186,6 +187,15 @@ function Page({ style, model, actions, detail, api, companyId }: CostPageProps &
         onWhatIfClear: () => setInput(NO_INPUT),
         sheets: sheets.actions,
       }}
+      ratesDoor={
+        <RatesDoor
+          companyId={companyId}
+          onSaved={() => {
+            again()
+            actions?.onReload?.()
+          }}
+        />
+      }
       detail={detail}
     />
   )
