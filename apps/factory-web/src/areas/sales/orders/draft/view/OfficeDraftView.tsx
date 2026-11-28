@@ -38,6 +38,7 @@ import type { SaveOrderPicture } from '../../../../../lib/record-picture/api'
 import type { PictureChoice } from '../../../../../lib/record-picture/order-picture'
 import type { RequestBand } from '../../record/band/api'
 import { BandPicture, useBackWords } from '../../record/band/view/BandParts'
+import { textCardOf } from '../../record/band/model'
 import { useFlowWords } from '../../record/flow-words'
 // ---- end owb-of5
 import './office-draft.css'
@@ -147,6 +148,8 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
     )
   }
 
+  // owb-of5 step 2: an order that came as text (the customer's words, a line in its own words) and a line still without a product.
+  const textOrder = !!record && textCardOf(record.request) !== null && productRowsOf(record.request).some((row) => row.style === null)
   const page = (
     <DraftPage
       kind="office"
@@ -199,6 +202,9 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
               {model.writeHeld ? null : <p className="fw-od-quiet">{start.partyId ? t('start.customerHint') : t('start.customerHeld')}</p>}
             </div>
           </Card>
+        ) : textOrder ? (
+          // owb-of5 step 2 (design § 5g; prototype rec.js notice): ONE notice — an order that came as text: read it, pick each line's product, then confirm.
+          <Banner tone="info" title={f('text.notice')} />
         ) : null,
         continueSlot: start ? (
           <ContinueDrafts

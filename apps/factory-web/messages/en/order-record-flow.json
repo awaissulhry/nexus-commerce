@@ -31,6 +31,45 @@
     "button": "People",
     "count_one": "People · {count}",
     "count_other": "People · {count}",
-    "window": "People on {number}"
+    "window": "People on {number}",
+    "add": "Add people",
+    "designer": "Give the graphics to the designer"
+  },
+  "mockup": {
+    "alt": "The mockup of {number}",
+    "none": "No mockup yet. Its picture shows here."
+  },
+  "next": {
+    "title": "What happens next",
+    "yours": "Your step: {act}",
+    "DRAFT": "The order is still a draft. Confirm it when every line has its product.",
+    "SENT": "The customer sent it. Check it and confirm the order.",
+    "CONFIRMED": "Confirmed: waits for the print. Print and start the work, then the baskets go to the floor.",
+    "IN_PRODUCTION": "The baskets are on the floor. Each department passes them on.",
+    "READY_TO_SHIP": "Everything is made. Ship it.",
+    "SHIPPED": "It left the factory and is on its way.",
+    "AT_OUR_WAREHOUSE": "It waits at our warehouse. Send it on to the customer.",
+    "DELIVERED": "The customer has it.",
+    "WITHDRAWN": "The order was withdrawn. Nothing more happens."
+  },
+  "floor": {
+    "label": "On the floor",
+    "open": "The department sees it",
+    "restricted": "Only named workers",
+    "by": "by {name} · {at}",
+    "restrict": "Restrict on the floor",
+    "lift": "Open it to the department",
+    "busy": "Saving…",
+    "failed": "The floor setting could not be saved. Try again."
+  },
+  "text": {
+    "title": "The order as it was written",
+    "lines": "The lines in the customer’s words",
+    "line": "Line {seq}",
+    "files": "The files sent with it",
+    "notice": "This order came as text. Read it and pick the product of each line. Then you can confirm."
+  },
+  "linked": {
+    "customer": "Customer"
   }
 }
