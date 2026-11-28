@@ -397,3 +397,115 @@ CREATE TRIGGER "PortalOrderRequest_picture_check" AFTER INSERT OR UPDATE OF "pic
   FOR EACH ROW WHEN (NEW."pictureFileId" IS NOT NULL OR NEW."pictureSetAt" IS NOT NULL OR NEW."pictureSetById" IS NOT NULL)
   EXECUTE FUNCTION "factory_order_picture_check"();
 
+-- =====================================================================================================================
+-- Department (product.prisma; owb G3; PL-schema § 2): the factory's numbered departments (1 Pattern … 9 Assembly), each on one
+-- existing WorkCentreKind with one default library operation.
+--   INSERT     ACTIVE, at version 1.
+--   UPDATE     the number, the company and the creation never change (a number is given once, for ever: no DELETE, so no
+--              number is given again — the unique key holds every number ever given); the version goes up by one; a
+--              department ready on the floor stays so, keeps its name and never closes (the floor learnt it by that name).
+--   every row  a number of 1 or more; one of the ten grid tones of the design system (packages/ui tokens.css,
+--              --nds-grid-tone-<tone>-*); an icon id (a lucide name: lower-case words joined by "-", up to 60; the web chip
+--              shows a plain dot for one it does not know); a name and a short name of 1 to 60 trimmed characters.
+--   DELETE     refused (CLOSED instead). TRUNCATE refused.
+CREATE FUNCTION "factory_department_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  tones CONSTANT text[] := ARRAY['slate', 'purple', 'emerald', 'pink', 'orange', 'blue', 'yellow', 'red', 'violet', 'cyan'];
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'product: department % is closed, never deleted (its number is never given again)', OLD."number"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."status"::text <> 'ACTIVE' OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'product: a new department is ACTIVE, at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF (NEW."id", NEW."companyId", NEW."number", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."companyId", OLD."number", OLD."createdAt", OLD."createdById") THEN
+      RAISE EXCEPTION 'product: the number, company and creation of department % never change (a number is given once, for ever)', OLD."number"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'product: the version of department % goes up by one', OLD."number"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD."floorReady" AND (NOT NEW."floorReady" OR NEW."name" IS DISTINCT FROM OLD."name") THEN
+      RAISE EXCEPTION 'product: department % is ready on the floor: it stays so and keeps its name', OLD."number"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW."number" < 1 THEN
+    RAISE EXCEPTION 'product: department % has a number of 1 or more', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."floorReady" AND NEW."status"::text = 'CLOSED' THEN
+    RAISE EXCEPTION 'product: department % is ready on the floor: it never closes', NEW."number"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NOT coalesce(NEW."tone"::text = ANY (tones), false)
+     OR NEW."icon" IS NULL OR NEW."icon" !~ '^[a-z0-9]+(-[a-z0-9]+)*$' OR length(NEW."icon") > 60
+     OR btrim(NEW."name") <> NEW."name" OR NEW."name" = '' OR length(NEW."name") > 60
+     OR btrim(NEW."shortName") <> NEW."shortName" OR NEW."shortName" = '' OR length(NEW."shortName") > 60 THEN
+    RAISE EXCEPTION 'product: department % has one of the ten grid tones (slate, purple, emerald, pink, orange, blue, yellow, red, violet, cyan), an icon id (lower-case words joined by -, up to 60), a name and a short name of 1 to 60 trimmed characters', NEW."number"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "Department_guard" AFTER INSERT OR UPDATE OR DELETE ON "Department"
+  FOR EACH ROW EXECUTE FUNCTION "factory_department_guard"();
+CREATE TRIGGER "Department_no_truncate" BEFORE TRUNCATE ON "Department"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
+-- Operation (product.prisma; owb G3): ONE default library operation per department (a route step stays a RoutingOperation
+-- with an operationId; a department's own step is its default operation).
+CREATE UNIQUE INDEX "Operation_one_department_default" ON "Operation" ("tenantId", "departmentId") WHERE "departmentDefault";
+
+-- Operation and RoutingOperation (product.prisma; owb G3): the department a library operation or a route step names.
+--   Operation         the default operation of a department names that department.
+--   both, a new or another department named
+--                     an open department (not CLOSED) of the tenant (the reference) and of no other company than the
+--                     operation's or the style's (a department of the whole factory fits every company).
+-- A step's department is frozen with its revision once the revision leaves DRAFT (factory_style_revision_part_guard). Old
+-- released routes keep no department (none is back-filled): the domain's departmentOfKind() names one by the step's kind.
+CREATE FUNCTION "factory_operation_department_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  owner_company uuid;
+  department_company uuid;
+  department_status text;
+  department_number integer;
+BEGIN
+  IF TG_TABLE_NAME = 'Operation' THEN
+    IF NEW."departmentDefault" AND NEW."departmentId" IS NULL THEN
+      RAISE EXCEPTION 'product: operation % is the default operation of a department only when it names that department', NEW."code"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    owner_company := NEW."companyId";
+  ELSE
+    SELECT s."companyId" INTO owner_company FROM "Style" s WHERE s."tenantId" = NEW."tenantId" AND s."id" = NEW."styleId";
+  END IF;
+  IF NEW."departmentId" IS NULL OR (TG_OP = 'UPDATE' AND NEW."departmentId" IS NOT DISTINCT FROM OLD."departmentId") THEN
+    RETURN NULL;
+  END IF;
+  SELECT d."companyId", d."status"::text, d."number" INTO department_company, department_status, department_number
+    FROM "Department" d WHERE d."tenantId" = NEW."tenantId" AND d."id" = NEW."departmentId";
+  IF FOUND AND (department_status = 'CLOSED'
+                OR (department_company IS NOT NULL AND owner_company IS NOT NULL AND department_company <> owner_company)) THEN
+    RAISE EXCEPTION 'product: % % names department %, which is closed or of another company; it names an open department of its own company or of the whole factory', CASE TG_TABLE_NAME WHEN 'Operation' THEN 'operation' ELSE 'route step' END, NEW."code", department_number
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "Operation_department_check" AFTER INSERT OR UPDATE OF "departmentId", "departmentDefault" ON "Operation"
+  FOR EACH ROW EXECUTE FUNCTION "factory_operation_department_check"();
+CREATE TRIGGER "RoutingOperation_department_check" AFTER INSERT OR UPDATE OF "departmentId" ON "RoutingOperation"
+  FOR EACH ROW EXECUTE FUNCTION "factory_operation_department_check"();
+
