@@ -1018,3 +1018,119 @@ CREATE TRIGGER "OrderLineOwnValue_check" AFTER INSERT OR UPDATE ON "OrderLineOwn
 CREATE TRIGGER "OrderLineOwnValue_no_truncate" BEFORE TRUNCATE ON "OrderLineOwnValue"
   FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
 
+-- =====================================================================================================================
+-- ShipmentWarehouseLeg (shipping.prisma; owb G9; PL-schema § 5A row 13): a shipment that goes through our own warehouse first
+-- and is sent on from there (a 1:1 table beside Shipment, so no shipment function is redefined).
+--   INSERT     not arrived, not sent on, at version 1; for a shipment not yet delivered, returned or cancelled, of the leg's
+--              customer and site.
+--   UPDATE     the shipment, company, customer, site and creation never change; the version goes up by one; the warehouse never
+--              changes once the goods arrived; arrived (when, who) only while the shipment is SHIPPED, set once; sent on
+--              (when, who) only after it arrived, set once; the customer's label never changes once sent on.
+--   every row  the warehouse a WAREHOUSE site of the shipment's company; arrived and sent on each with when and who
+--              together, sent on not before arrived; the label, when it names one, with when and who, a CUSTOMER_LABEL file of
+--              the shipment, neither deleted nor quarantined; sent on with the customer's label or as sent on without it
+--              (forwardedWithoutLabel), never both; "without it" only once sent on.
+--   DELETE     refused. TRUNCATE refused.
+-- And Shipment: DELIVERED only once its leg sent it on (Shipment_warehouse_leg_delivered, below).
+CREATE FUNCTION "factory_shipment_warehouse_leg_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  shipment_company uuid;
+  shipment_party uuid;
+  shipment_site uuid;
+  shipment_status text;
+  warehouse_kind text;
+  warehouse_company uuid;
+  label record;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'shipping: the warehouse leg of shipment % is kept, never deleted', OLD."shipmentId"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT s."companyId", s."partyId", s."siteId", s."status"::text INTO shipment_company, shipment_party, shipment_site, shipment_status
+    FROM "Shipment" s WHERE s."tenantId" = NEW."tenantId" AND s."id" = NEW."shipmentId";
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."arrivedAt" IS NOT NULL OR NEW."arrivedById" IS NOT NULL OR NEW."forwardedAt" IS NOT NULL OR NEW."forwardedById" IS NOT NULL
+       OR NEW."forwardedWithoutLabel" OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'shipping: a new warehouse leg has not arrived and was not sent on, at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF shipment_status IN ('DELIVERED', 'RETURNED', 'CANCELLED') OR shipment_party <> NEW."partyId" OR shipment_site <> NEW."siteId" THEN
+      RAISE EXCEPTION 'shipping: a warehouse leg is planned for a shipment of its own customer and site that is not delivered, returned or cancelled (shipment %)', NEW."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF (NEW."id", NEW."shipmentId", NEW."companyId", NEW."partyId", NEW."siteId", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."shipmentId", OLD."companyId", OLD."partyId", OLD."siteId", OLD."createdAt", OLD."createdById") THEN
+      RAISE EXCEPTION 'shipping: the shipment, company, customer, site and creation of the warehouse leg of shipment % never change', OLD."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'shipping: the version of the warehouse leg of shipment % goes up by one', OLD."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF (OLD."arrivedAt" IS NOT NULL AND (NEW."arrivedAt", NEW."arrivedById", NEW."warehouseSiteId") IS DISTINCT FROM (OLD."arrivedAt", OLD."arrivedById", OLD."warehouseSiteId"))
+       OR (OLD."forwardedAt" IS NOT NULL AND (NEW."forwardedAt", NEW."forwardedById", NEW."forwardedWithoutLabel", NEW."customerLabelFileId", NEW."customerLabelAt", NEW."customerLabelById")
+                                              IS DISTINCT FROM (OLD."forwardedAt", OLD."forwardedById", OLD."forwardedWithoutLabel", OLD."customerLabelFileId", OLD."customerLabelAt", OLD."customerLabelById")) THEN
+      RAISE EXCEPTION 'shipping: the warehouse leg of shipment % records its arrival (and the warehouse) once and its sending on (and the label) once', OLD."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD."arrivedAt" IS NULL AND NEW."arrivedAt" IS NOT NULL AND shipment_status IS DISTINCT FROM 'SHIPPED' THEN
+      RAISE EXCEPTION 'shipping: the goods of shipment % arrive at our warehouse only once it left (SHIPPED; it is %)', NEW."shipmentId", shipment_status
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF (NEW."arrivedAt" IS NULL) <> (NEW."arrivedById" IS NULL) OR (NEW."forwardedAt" IS NULL) <> (NEW."forwardedById" IS NULL)
+     OR (NEW."forwardedAt" IS NOT NULL AND (NEW."arrivedAt" IS NULL OR NEW."forwardedAt" < NEW."arrivedAt")) THEN
+    RAISE EXCEPTION 'shipping: the warehouse leg of shipment % records its arrival and its sending on each with when and who, sent on only after it arrived', NEW."shipmentId"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."customerLabelFileId" IS NULL) <> (NEW."customerLabelAt" IS NULL) OR (NEW."customerLabelFileId" IS NULL) <> (NEW."customerLabelById" IS NULL)
+     OR (NEW."forwardedWithoutLabel" AND (NEW."forwardedAt" IS NULL OR NEW."customerLabelFileId" IS NOT NULL))
+     OR (NEW."forwardedAt" IS NOT NULL AND NEW."customerLabelFileId" IS NULL AND NOT NEW."forwardedWithoutLabel") THEN
+    RAISE EXCEPTION 'shipping: the warehouse leg of shipment % names the customer''s label with when and who, and is sent on with it or as sent on without it, never both', NEW."shipmentId"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' OR NEW."warehouseSiteId" IS DISTINCT FROM OLD."warehouseSiteId" THEN
+    SELECT w."kind"::text, w."companyId" INTO warehouse_kind, warehouse_company FROM "Site" w WHERE w."tenantId" = NEW."tenantId" AND w."id" = NEW."warehouseSiteId";
+    IF FOUND AND (warehouse_kind <> 'WAREHOUSE' OR warehouse_company IS DISTINCT FROM shipment_company) THEN
+      RAISE EXCEPTION 'shipping: the warehouse leg of shipment % goes through a WAREHOUSE site of the shipment''s company', NEW."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW."customerLabelFileId" IS NOT NULL AND (TG_OP = 'INSERT' OR NEW."customerLabelFileId" IS DISTINCT FROM OLD."customerLabelFileId") THEN
+    SELECT f."recordType" AS record_type, f."recordId" AS record, f."category"::text AS category, f."status"::text AS status INTO label
+      FROM "StoredFile" f WHERE f."tenantId" = NEW."tenantId" AND f."id" = NEW."customerLabelFileId";
+    IF NOT FOUND OR label.record_type <> 'Shipment' OR label.record <> NEW."shipmentId"
+       OR label.category IS DISTINCT FROM 'CUSTOMER_LABEL' OR label.status IN ('DELETED', 'QUARANTINED') THEN
+      RAISE EXCEPTION 'shipping: the customer''s label of shipment % is a CUSTOMER_LABEL file of that shipment, neither deleted nor quarantined', NEW."shipmentId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "ShipmentWarehouseLeg_guard" AFTER INSERT OR UPDATE OR DELETE ON "ShipmentWarehouseLeg"
+  FOR EACH ROW EXECUTE FUNCTION "factory_shipment_warehouse_leg_guard"();
+CREATE TRIGGER "ShipmentWarehouseLeg_no_truncate" BEFORE TRUNCATE ON "ShipmentWarehouseLeg"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
+-- Shipment (shipping.prisma; owb G9): a shipment that goes through our warehouse is DELIVERED only once the warehouse sent it
+-- on (its leg's forwardedAt). Beside factory_shipment_guard (BEFORE, its name sorts first: it speaks first), not instead of it.
+CREATE FUNCTION "factory_shipment_warehouse_leg_delivered_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM "ShipmentWarehouseLeg" l WHERE l."tenantId" = NEW."tenantId" AND l."shipmentId" = NEW."id" AND l."forwardedAt" IS NULL) THEN
+    RAISE EXCEPTION 'shipping: shipment % goes through our warehouse; it is DELIVERED only after the warehouse sent it on', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER "Shipment_warehouse_leg_delivered" BEFORE UPDATE OF "status" ON "Shipment"
+  FOR EACH ROW WHEN (NEW."status" = 'DELIVERED' AND OLD."status" IS DISTINCT FROM NEW."status")
+  EXECUTE FUNCTION "factory_shipment_warehouse_leg_delivered_check"();
+
