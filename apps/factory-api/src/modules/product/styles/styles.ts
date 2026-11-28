@@ -34,6 +34,8 @@ import { orderStyleSearch } from '../../sales/orders/style-search'
 // F-CT-S1: the style search for a customer's requirement reads the customer as the person may see it.
 import { readParty } from '../../parties/store'
 import { rowExtras } from './row-extras'
+// owb-pd1 1.4: the designer's right on a product draft (S4 settle 6).
+import { assertMayEditDraft, draftRefusal, mayManage, newestRevisionStatus } from '../drafts/may-edit'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
   assertMayWrite,
@@ -193,7 +195,10 @@ export interface PreparedStyle {
 export async function prepareStyle(caller: CommandCaller, body: CreateStyleBody): Promise<PreparedStyle> {
   const context = contextOf(caller)
   const companyId = body.companyId ?? null
-  assertMayWrite(context, PRODUCT_STYLES_MANAGE, companyId)
+  // owb-pd1 1.4: product.styles.manage, or the designer (product.drafts.edit) — a new product has no revision yet; its SKUs are
+  // made by the person who keeps the products.
+  assertMayEditDraft(context, companyId, null)
+  if (body.generateSkus && !mayManage(context, companyId)) throw draftRefusal('SKUS_NOT_HERE')
   // B-W2b-221 (PRD-008): a style of a product type takes what the body leaves out from the type's defaults.
   const typeId = body.productTypeProfileId ?? null
   const typed = typeId === null ? body : fillFromType(body, await caller.withClient((client) => typeDefaultsForNewStyle(client, typeId, { productType: body.productType, companyId })))
@@ -260,7 +265,8 @@ export async function makeStyleInCommand(tools: CommandTools, body: CreateStyleB
 export async function updateStyle(caller: CommandCaller, styleId: string, body: UpdateStyleBody, idempotencyKey?: string): Promise<StyleView> {
   const context = contextOf(caller)
   const seen = await readStyle(caller, styleId)
-  assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId)
+  // owb-pd1 1.4: product.styles.manage, or the designer while the style's newest revision is a draft (or it has none yet).
+  assertMayEditDraft(context, seen.companyId, await caller.withClient((client) => newestRevisionStatus(client, styleId)))
   openOnly(seen.status)
   const { version, ...patch } = body
   const preview = changeStyle(fieldsOf(seen), patch as StylePatch, await caller.withClient((client) => readScaleSizes(client, patch.sizeScaleId ?? seen.sizeScaleId)))
