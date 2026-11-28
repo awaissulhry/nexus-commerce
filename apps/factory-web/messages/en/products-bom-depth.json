@@ -425,7 +425,7 @@
       "days_one": "{count} day",
       "days_other": "{count} days",
       "sentTitle_one": "{count} line the customer sends",
-      "sentTitle_other": "{count} lines the customer send",
+      "sentTitle_other": "{count} lines the customer sends",
       "sentBy": "Sent by {customer}"
     },
     "list": {
