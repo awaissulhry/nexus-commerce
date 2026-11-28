@@ -657,6 +657,8 @@ it('covers every classified table and every runtime role', () => {
     'BankLine',
     'BankMatch',
     'BankStatement',
+    'BasketMove', // owb-b1
+    'BasketRouteEdit', // owb-b1
     'BomLine',
     'BomLineAlternate',
     'BomLineColour',
@@ -729,6 +731,7 @@ it('covers every classified table and every runtime role', () => {
     'DefaultLocation',
     'DefectCode',
     'DeliveryTolerance',
+    'Department', // owb-b1
     'DepositCancellationRule',
     'DepositRequest',
     'Device',
@@ -761,6 +764,7 @@ it('covers every classified table and every runtime role', () => {
     'FirstLoadStep',
     'FitnessJudgement',
     'FittingResult',
+    'FloorLateWarning', // owb-b1
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
@@ -918,7 +922,11 @@ it('covers every classified table and every runtime role', () => {
     'OrderCostLine', // B-OM-019
     'OrderFreezeRule',
     'OrderGate',
+    'OrderLineColumnUse', // owb-b1
+    'OrderLineOwnValue', // owb-b1
     'OrderPriceAcceptance', // B-OM-019
+    'OrderPrint', // owb-b1
+    'OrderTeam', // owb-b1
     'OrgArea',
     'OutboxEvent',
     'OverheadRule',
@@ -938,6 +946,8 @@ it('covers every classified table and every runtime role', () => {
     'PartyCompanyTerms',
     'PartyContact',
     'PartyHold',
+    'PartyLineColumn', // owb-b1
+    'PartyOfficePerson', // owb-b1
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
@@ -947,6 +957,7 @@ it('covers every classified table and every runtime role', () => {
     'Payment',
     'PaymentAllocation',
     'PaymentIntent',
+    'PaymentNotice', // owb-b1
     'PaymentProposal',
     'PaymentProposalLine',
     'PaymentReminder',
@@ -1139,6 +1150,7 @@ it('covers every classified table and every runtime role', () => {
     'Shipment',
     'ShipmentHold',
     'ShipmentLine',
+    'ShipmentWarehouseLeg', // owb-b1
     'ShippingMarkTemplate',
     'ShippingSettings',
     'Site',

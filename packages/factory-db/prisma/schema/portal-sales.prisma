@@ -680,7 +680,7 @@ model PaymentNotice {
   version          Int                @default(1)
   createdAt        DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
-  /// The customer's person who told us (or the office person who typed it for the customer).
+  /// The customer's person who told us.
   createdById      String?            @db.Uuid
 
   // The order of the same company and customer; the deposit request and the step of that customer (Restrict, not

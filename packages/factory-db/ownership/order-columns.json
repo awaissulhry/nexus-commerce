@@ -1,0 +1,32 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/order-columns.prisma (rules: src/ownership.ts; roles: src/roles.ts). owb-b1 (order workflow build, schema wave \"order workflow 1/1\"; PL-schema § 5A row 5): a customer's own columns for order lines. The customer's portal people (factory_partner_runtime behind its party's wall) and the office (factory_runtime; the API keeps staff to the companies and customers their grants reach) both make, rename, move and close the customer's columns, use them on its drafts and orders and write their values, through apps/factory-api with command(). Nobody deletes a row: a column is closed; a discarded draft takes its uses and its lines' values with it, an order line removed by an amendment its values (the foreign keys' Cascade). The …_order_workflow_guards triggers hold the shapes (G8). The floor and link sessions read and write nothing here: a basket card shows a value through the API. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PartyLineColumn": {
+      "about": "The customer's portal people and the office make, rename, move and close (closedAt) the customer's own columns and read them; never deleted. The floor reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["party"] }
+      }
+    },
+    "OrderLineColumnUse": {
+      "about": "The customer's portal people and the office use a column of the customer on one of its drafts or orders, move it among the record's columns, and read the uses; never deleted by a role (a discarded draft takes its uses with it). The floor reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["party"] }
+      }
+    },
+    "OrderLineOwnValue": {
+      "about": "The customer's portal people and the office write and change the value of a column of the customer on a line of its drafts and orders, and read them; never deleted by a role (a line takes its values with it). The floor reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["party"] }
+      }
+    }
+  }
+}
