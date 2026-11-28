@@ -125,7 +125,7 @@ export const conformityContract = defineContract({
           /** Per shipment that left, newest first. */
           received: z.array(
             output({
-              shipment: output({ id: id(), number: z.string() }),
+              shipment: output({ id: id() }), // owb-po2c: no `number` — never the office's shipment series (SH-…)
               order: ownOrder.nullable(), // fix-portal-numbers-1
               shippedOn: businessDate(),
               /** The style revision the work orders froze (the declaration's revision). */
