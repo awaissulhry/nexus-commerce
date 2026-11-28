@@ -68,7 +68,6 @@ export interface SheetFacts {
 /** What the draft rows say beside their row (from the portal-ordering read). */
 interface DraftFacts {
   readonly openCount: number
-  readonly numbered: boolean
   readonly startedByReader: boolean
 }
 
@@ -109,7 +108,7 @@ export async function draftRows(app: FastifyInstance, request: FastifyRequest, r
     progressPercent: null,
     needsYou: false,
   }))
-  return { rows, facts: new Map(found.map((row) => [row.id, { openCount: row.draft?.openCount ?? 0, numbered: row.number !== null, startedByReader: row.draft?.startedBy.who === 'YOU' }])) }
+  return { rows, facts: new Map(found.map((row) => [row.id, { openCount: row.draft?.openCount ?? 0, startedByReader: row.draft?.startedBy.who === 'YOU' }])) }
 }
 
 /** The facts of every row of the page and the columns they use (see the file's head). */
@@ -197,7 +196,7 @@ export async function sheetFacts(request: FastifyRequest, reader: PortalReader, 
       answer = orderLifeOf({ request: { status: item.kind === 'DRAFT' ? 'DRAFT' : 'SENT' } })
       may =
         item.kind === 'DRAFT'
-          ? { edit: keepsDrafts, send: orders, delete: !reader.session.preview && !(draft?.numbered ?? false) && (orders || (keepsDrafts && (draft?.startedByReader ?? false))), takeBack: false, picture: keepsDrafts }
+          ? { edit: keepsDrafts, send: orders, delete: !reader.session.preview && (orders || (keepsDrafts && (draft?.startedByReader ?? false))), takeBack: false, picture: keepsDrafts }
           : { edit: false, send: false, delete: false, takeBack: orders && !tenant.started.has(item.id), picture: keepsDrafts }
     }
     const draft = drafts.get(item.id)

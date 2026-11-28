@@ -65,7 +65,7 @@ import { checkCustomLine, colleagueNameOf, customLineData, customLineFactsOf, cu
 import { ownPriceView, type OwnPriced } from './people'
 // owb- po1.2 (order workflow, "Take it back"): the base's audit action (order-log faces) and the customer's words.
 import { TAKE_BACK_ACTION } from '@nexus/factory-domain/sales/order-log/faces'
-import { SENT_ONCE_WORDS, takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS, type TakeBackRefusal } from '@nexus/factory-domain/sales/portal-ordering/take-back'
+import { takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS, type TakeBackRefusal } from '@nexus/factory-domain/sales/portal-ordering/take-back'
 // owb- po1.3 (order workflow): copy a line, take it out (soft), put it back; a line's material (settle 4: its choices or colourway).
 import { LINE_MOVE_WORDS, materialOf, removedLineWords } from '@nexus/factory-domain/sales/portal-ordering/line-moves'
 import { nextLineSeq, readAllLines, readRemovedLines } from './store'
@@ -422,11 +422,10 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
 export async function mayOn(writer: DraftWriter, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById' | 'number'>): Promise<{ readonly order: boolean; readonly discard: boolean }> {
   if (writer.preview) return { order: false, discard: false }
   const scope = { companyId: row.companyId, partyId: row.partyId }
-  // owb- po1.2 (G1 (e)): a draft with a number (taken back) is never discarded.
-  const numbered = row.number !== null
-  if (writer.door === 'office') return { order: false, discard: !numbered && can(writer.actor, ORDERS_MANAGE, scope) && (await startedByOffice(writer, row.createdById)) }
+  // owb- po2.1 (G1 (e)): a draft with a number (taken back) is withdrawn by the same "Delete", never discarded (discardDraftWithFiles).
+  if (writer.door === 'office') return { order: false, discard: can(writer.actor, ORDERS_MANAGE, scope) && (await startedByOffice(writer, row.createdById)) }
   const order = can(writer.actor, PORTAL_ORDER_REQUESTS_MANAGE, scope)
-  return { order, discard: !numbered && (order || row.createdById === writer.userId) }
+  return { order, discard: order || row.createdById === writer.userId }
 }
 
 /** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
@@ -1010,8 +1009,8 @@ export async function takeTodaysPrices(writer: DraftWriter, requestId: string, v
 
 export async function discardDraft(writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
   const row = await ownDraft(writer, requestId)
-  // owb- po1.2 (G1 (e)): a draft taken back keeps its number: never discarded (the database refuses it too), in words.
-  if (row.number !== null) throw new InvalidStateError(SENT_ONCE_WORDS[writer.locale])
+  // owb- po2.1 (G1 (e)): a draft taken back keeps its number: withdrawn, never discarded (the database refuses the delete too).
+  if (row.number !== null) return withdrawNumberedDraft(writer, row, version, idempotencyKey)
   // B-CP-070; od-s s.2 (Owner yes 1a): the office discards only a draft an office person started (its own words).
   if (!(await mayOn(writer, row)).discard) throw new ForbiddenError(writer.door === 'office' ? OFFICE_DRAFT_WORDS.DISCARD_HELD.en : DISCARD_HELD)
   await commandOn(writer.app, writer.request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
@@ -1029,7 +1028,26 @@ export async function discardDraft(writer: DraftWriter, requestId: string, versi
   }).catch(async (error: unknown) => {
     throw error instanceof StaleVersionError ? await staleDraftError(writer, row.id) : error // B-CP-075
   })
-  return { discarded: true as const }
+  return { discarded: true as const, withdrawn: false }
+}
+
+/**
+ * owb- po2.1 (G1 (e)): "Delete" of a draft taken back (it keeps the number of its first Send): DRAFT → WITHDRAWN, its number, lines
+ * and files kept (the sheet shows it no more; the request page reads it withdrawn). The same rights as a discard (who may order, or
+ * the one who started it; the office: a draft an office person started). Audited as the withdraw, `portal_order_request.withdrawn`.
+ */
+async function withdrawNumberedDraft(writer: DraftWriter, row: RequestRow, version: number, idempotencyKey?: string): Promise<{ discarded: true; withdrawn: boolean }> {
+  if (!(await mayOn(writer, row)).discard) throw new ForbiddenError(writer.door === 'office' ? OFFICE_DRAFT_WORDS.DISCARD_HELD.en : DISCARD_HELD)
+  await commandOn(writer.app, writer.request, { name: 'portalOrdering.withdraw', idempotencyKey, input: { requestId: row.id, version, draft: true } }, async (tools) => {
+    const current = await lockRequest(tools.tx, row.id, version)
+    if (current.partyId !== writer.partyId || current.status !== 'DRAFT' || current.number === null) throw new InvalidStateError('This request is no longer a draft.')
+    await tools.tx.portalOrderRequest.update({ where: { id: row.id }, data: { status: 'WITHDRAWN', withdrawnAt: tools.now, version: current.version + 1 }, select: { id: true } })
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'WITHDRAWN', number: current.number, ...(writer.door === 'portal' ? { byPartner: true } : { byOffice: true }) } })
+    tools.emit({ type: 'portal_order_request.withdrawn', subject: row.id, companyId: current.companyId, payload: { requestId: row.id, number: current.number, partyId: current.partyId } })
+    draftChanged(tools, current)
+    return null
+  })
+  return { discarded: true as const, withdrawn: true }
 }
 
 // ---- send and withdraw -------------------------------------------------------------------------------------------------

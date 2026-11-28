@@ -199,14 +199,20 @@ describe('Take it back (owb- po1.2)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(none.body.error.message).toBe(TAKE_BACK_WORDS.NOT_SENT.en)
   })
 
-  it('a draft taken back keeps its number: never discarded (G1 (e)), said in words; the office’s Confirm keeps the number too', async () => {
+  // owb- po2.1 (pin moved from po1.2): "Delete" of a draft taken back withdraws it (G1 (e)) — its number kept; the office's Confirm of
+  // another taken-back draft keeps the number too.
+  it('a draft taken back keeps its number: Delete withdraws it (G1 (e)); the office’s Confirm keeps the number too', async () => {
     const sent = await sentOrder('Made-up keeps its number')
     const back = await ok(browsers.buyer, 'POST', `/portal/order-requests/${sent.id}/take-back`, { version: sent.version })
-    const discard = await call(browsers.buyer, 'DELETE', `/portal/order-requests/${sent.id}?version=${back.request.version}`)
-    expect(discard.status).toBe(409)
-    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).n).toBe(1)
-    const confirmed = await confirmRequest(office(), sent.id, { version: back.request.version, as: 'ORDER' })
-    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', number: sent.number })
+    expect(back.request.may.discard).toBe(true)
+    const deleted = await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${sent.id}?version=${back.request.version}`)
+    expect(deleted).toEqual({ discarded: true, withdrawn: true })
+    expect(await one('SELECT status::text AS status, number, "withdrawnAt" IS NOT NULL AS gone FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).toEqual({ status: 'WITHDRAWN', number: sent.number, gone: true })
+    expect((await admin('SELECT 1 FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [sent.id])).length).toBe(1)
+    const other = await sentOrder('Made-up confirmed after take back')
+    const again = await ok(browsers.buyer, 'POST', `/portal/order-requests/${other.id}/take-back`, { version: other.version })
+    const confirmed = await confirmRequest(office(), other.id, { version: again.request.version, as: 'ORDER' })
+    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', number: other.number })
   })
 })
 
@@ -323,5 +329,36 @@ describe('the accept carries the own columns; the picture on both records (owb- 
     expect(record.ownColumns.values[orderLines[0]!.id][column.id].value).toBe('Made-up kept')
     expect(record.picture).toEqual({ fileId: null, setAt: null, contentType: null })
     expect(JSON.stringify(record)).not.toContain('Made-up gone')
+  })
+})
+
+describe('many drafts at once (owb- po2.1)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a mix of own drafts and another customer’s: theirs is "not found", nothing leaks; each item its own answer', async () => {
+    const mine = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up bulk one' }, 201)
+    const theirs = await ok(browsers.other, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up bulk theirs' }, 201)
+    const answer = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [{ id: mine.request.id, version: mine.request.version }, { id: theirs.request.id, version: theirs.request.version }] })
+    expect(answer.results).toEqual([
+      { id: mine.request.id, ok: true, words: null },
+      { id: theirs.request.id, ok: false, words: { en: 'Order not found.', it: 'Ordine non trovato.' } },
+    ])
+    expect(JSON.stringify(answer)).not.toContain('Made-up bulk theirs')
+    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [theirs.request.id])).n).toBe(1)
+    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [mine.request.id])).n).toBe(0)
+  })
+
+  it('a taken-back draft in a bulk delete is withdrawn (number kept); send many sends each; a Designer may not send', async () => {
+    const sent = await sentOrder('Made-up bulk taken back')
+    const back = await ok(browsers.buyer, 'POST', `/portal/order-requests/${sent.id}/take-back`, { version: sent.version })
+    const deleted = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [{ id: sent.id, version: back.request.version }] })
+    expect(deleted.results).toEqual([{ id: sent.id, ok: true, words: null }])
+    expect(await one('SELECT status::text AS status, number FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).toEqual({ status: 'WITHDRAWN', number: sent.number })
+    const a = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up send many A' }, 201)
+    const b = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up send many B' }, 201)
+    const sentMany = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-send', { items: [{ id: a.request.id, version: a.request.version }, { id: b.request.id, version: b.request.version + 5 }] })
+    expect(sentMany.results[0]).toEqual({ id: a.request.id, ok: true, words: null })
+    expect(sentMany.results[1]).toMatchObject({ id: b.request.id, ok: false })
+    expect((await one('SELECT status::text AS status FROM "PortalOrderRequest" WHERE id = $1', [a.request.id])).status).toBe('SENT')
+    expect((await call(browsers.designer, 'POST', '/portal/order-requests/bulk-send', { items: [{ id: b.request.id, version: b.request.version }] })).status).toBe(403)
+    expect((await call(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [] })).status).toBe(400)
   })
 })

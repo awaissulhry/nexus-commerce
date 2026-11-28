@@ -14,6 +14,9 @@ export const manifest = defineManifest({
   // Withdraw stay portal.orderRequests.manage (the Buyer, the Admin). No price for a role without the price grain (the filter).
   'GET /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // owb- po2.1 (order workflow): many drafts at once — the rights of the single commands (delete: a draft's; send: who may order).
+  'POST /portal/order-requests/bulk-delete': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/bulk-send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'GET /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'PATCH /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'DELETE /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
