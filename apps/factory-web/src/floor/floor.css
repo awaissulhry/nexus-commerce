@@ -495,3 +495,29 @@
 .fw-floor-large .nds-floor-frame-main {
   zoom: 1.2;
 }
+
+/* ── owb-fl7 (pick J): Urdu, right to left — the floor only ──────────────────────────────────────────────────────────────
+   The floor app sets `lang="ur"` and `dir="rtl"` on the page while it speaks Urdu (FloorApp; the office never does), so windows
+   portalled to <body> follow. The Urdu font (Noto Naskh Arabic, the floor layout's next/font) draws Urdu letters; Latin letters, codes
+   and digits fall back to the page's font. A little more line height for Naskh's marks, inside the floor's control sizes. */
+:lang(ur) {
+  font-family: var(--fw-font-urdu, serif), var(--nds-font-sans, system-ui), sans-serif;
+}
+:lang(ur) body,
+:lang(ur) .nds-floor-frame {
+  line-height: 1.6;
+}
+/* A code, a number or a name inside Urdu words keeps its own direction and its own letters. */
+:lang(ur) bdi {
+  unicode-bidi: isolate;
+}
+/* Mirror ONLY what points the reading way: chevrons and arrows (never digits, ticks or photos). The design system's own floor parts are
+   frozen (packages/ui): the reason grid's pager chevrons and the pads' backspace key are turned here, from outside (named in
+   build/notes/owb-fl7.md for the Owner). */
+[dir='rtl'] .nds-floor-reasons-pager .lucide-chevron-left,
+[dir='rtl'] .nds-floor-reasons-pager .lucide-chevron-right,
+[dir='rtl'] :is(.nds-floor-pin, .nds-floor-qty) .lucide-delete,
+[dir='rtl'] .fw-floor-home .lucide-arrow-left,
+[dir='rtl'] .fw-mirror {
+  transform: scaleX(-1);
+}
