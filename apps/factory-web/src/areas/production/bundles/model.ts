@@ -148,7 +148,8 @@ export function viewQuery(view: BundleView, q: string, siteId: string | null, cu
   if (view === 'all') return base
   if (view === 'void') return { ...base, status: 'VOID' }
   if (view === 'stuck') return { ...base, status: 'ACTIVE', stuck: true }
-  if (view === 'active') return { ...base, status: 'ACTIVE', place: ['CUTTING', 'LINE', 'QUALITY', 'SUBCONTRACTOR'] }
+  // owb-fl2: a basket made at print that waits for its first step (WAITING) is active too.
+  if (view === 'active') return { ...base, status: 'ACTIVE', place: ['CUTTING', 'WAITING', 'LINE', 'QUALITY', 'SUBCONTRACTOR'] }
   if (view === 'onHold') return { ...base, status: 'ACTIVE', place: ['QUALITY'] }
   return { ...base, status: 'ACTIVE', place: [PLACE_OF_VIEW[view]!] }
 }
@@ -190,6 +191,9 @@ export function placeWords(row: Placed): Phrase {
       return phrase(row.qualityReason === 'REWORK' ? 'place.rework' : 'place.hold')
     case 'CUTTING':
       return phrase('place.cutting')
+    // owb-fl2: a basket made at Print and start the work, no step reported yet.
+    case 'WAITING':
+      return phrase('place.waiting')
     case 'FINISHED':
       return phrase('place.finished')
     default:
@@ -198,9 +202,9 @@ export function placeWords(row: Placed): Phrase {
 }
 
 /** Where it goes next: only while it moves in the cutting room or on the line (quality and a subcontractor hold it elsewhere). */
-export const nextWords = (row: Placed): Phrase | null => ((row.place === 'CUTTING' || row.place === 'LINE') && row.next ? phrase('place.next', { seq: row.next.seq, code: row.next.code }) : null)
+export const nextWords = (row: Placed): Phrase | null => ((row.place === 'CUTTING' || row.place === 'WAITING' || row.place === 'LINE') && row.next ? phrase('place.next', { seq: row.next.seq, code: row.next.code }) : null)
 
-export const PLACE_TONE: Readonly<Record<BundlePlace, 'neutral' | 'info' | 'warning' | 'success' | 'danger'>> = Object.freeze({ CUTTING: 'neutral', LINE: 'info', SUBCONTRACTOR: 'info', QUALITY: 'warning', FINISHED: 'success', VOID: 'neutral' })
+export const PLACE_TONE: Readonly<Record<BundlePlace, 'neutral' | 'info' | 'warning' | 'success' | 'danger'>> = Object.freeze({ CUTTING: 'neutral', WAITING: 'neutral', LINE: 'info', SUBCONTRACTOR: 'info', QUALITY: 'warning', FINISHED: 'success', VOID: 'neutral' })
 
 /** A stuck wait in whole hours of the site's calendar. */
 export const stuckWords = (row: Pick<TrackedBundle, 'stuck'>): Phrase | null => (row.stuck.stuck ? phrase('stuck.for', { hours: Math.floor(row.stuck.workingHours), limit: row.stuck.limitHours }) : null)
