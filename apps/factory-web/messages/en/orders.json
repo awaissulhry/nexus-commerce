@@ -1884,8 +1884,8 @@
       "all": "All dates ›"
     },
     "requests": {
-      "title": "Requests & changes",
-      "nothing": "No request or change waits",
+      "title": "Asks & changes",
+      "nothing": "No ask or change waits",
       "still": "Still to do · {count}"
     },
     "linked": {

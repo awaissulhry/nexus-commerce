@@ -3,20 +3,20 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Info, PencilLine, Plus, Shirt } from 'lucide-react'
-import { Banner, Card, Field, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, SummaryTable } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
-import { Button, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
-import { Combobox, Modal, useDsWords } from '../../../../../lib/i18n/ds-parts'
+import { Button, Skeleton } from '@nexus/ui/primitives'
+import { Combobox, useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
-import { draftTitleOf, draftViewOf, productRowsOf, rowLabelOf, rowProductOf, type HeaderDraft, type HeaderField, type ProductRow } from '../../../../../lib/order-draft/model'
+import { draftTitleOf, draftViewOf, productRowsOf, rowProductOf, type HeaderDraft, type HeaderField, type ProductRow } from '../../../../../lib/order-draft/model'
 import type { DraftRecord, SavedBy } from '../../../../../lib/order-draft/schema'
 import { useDraftWords } from '../../../../../lib/order-draft/words'
 import { DraftPage } from '../../../../../lib/order-draft/view/DraftPage'
 import { ContinueDrafts, useContinueLine } from '../../../../../lib/order-draft/view/ContinueDrafts'
 import { ACCEPT, type FilesBoxActions, type UploadRow } from '../../../../../lib/order-draft/view/files'
 import type { ProductsTableActions } from '../../../../../lib/order-draft/view/ProductsTable'
-import { OptionsWindow, PiecesWindow, RowFilesWindow, useSizeCopy, type OptionsWindowActions, type PiecesMode, type PiecesWindowActions } from '../../../../../lib/order-draft/view/RowWindows'
+import { OptionsWindow, PiecesWindow, RowFilesWindow, type OptionsWindowActions, type PiecesMode, type PiecesWindowActions } from '../../../../../lib/order-draft/view/RowWindows'
 import { PersonDialog, type PersonDialogActions } from '../../../../../lib/order-draft/view/PeopleRoster'
 import { personProblems, draftFilesOf, customLinesOf, uploadsOpenOf, draftMailName, filesAddHeld, type PersonDraft } from '../../../../../lib/order-draft/model'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -25,9 +25,22 @@ import type { ScaleOption, StyleDetail } from '../../../inquiries/api'
 import type { StyleDraftDraft } from '../../../inquiries/model'
 import type { DraftRow } from '../../../customers/record/drafts/api'
 import type { ConfirmAnswer, OfficeRead } from '../api'
-import { cardAsksOf, cellsOf, confirmAsOf, confirmHeldOf, missingOf, sizesTextOf, type ConfirmEntry } from '../confirm-model'
-import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
-import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
+import { cardAsksOf } from '../confirm-model'
+// ---- owb-of5 step 1 (L3; design § 5i): the order band on the Draft / Sent page — Back that says where it goes, the picture, "number ·
+// subject", ONE state chip (the base's StateChip, L9), ONE main button Confirm the order… ----
+import { orderLifeOf } from '@nexus/factory-domain/sales/order-life'
+import { StateChip } from '../../../../../lib/order-cells/view/StateChip'
+import { useBackPlace } from '../../../../../lib/record-frame/use-back'
+import type { ReadPictures } from '../../../../../lib/record-picture/cache'
+import type { SaveOrderPicture } from '../../../../../lib/record-picture/api'
+import type { PictureChoice } from '../../../../../lib/record-picture/order-picture'
+import type { RequestBand } from '../../record/band/api'
+import { BandPicture, useBackWords } from '../../record/band/view/BandParts'
+import { textCardOf } from '../../record/band/model'
+import type { ConfirmActions, ConfirmState } from '../use-confirm-order'
+import { ConfirmOrderWindowView } from './ConfirmOrderWindowView'
+import { useFlowWords } from '../../record/flow-words'
+// ---- end owb-of5
 import './office-draft.css'
 
 /**
@@ -63,12 +76,16 @@ export interface OfficeDraftModel {
   optionsWin: { row: ProductRow; topic: string; typed: string; addHeld: string | null; busy: boolean; failed: string | null } | null
   filesRow: ProductRow | null
   person: { lineId: string; personId: string | null; draft: PersonDraft; showProblems: boolean; busy: boolean; failed: string | null } | null
-  confirm: { entries: Record<string, ConfirmEntry>; busy: boolean; failed: string | null } | null
+  confirm: ConfirmState | null
   details: Readonly<Record<string, StyleDetail>>
   styleWin: { draft: StyleDraftDraft; scales: { status: 'loading' } | { status: 'ready'; value: readonly ScaleOption[] } | { status: 'error'; problem: string }; busy: boolean; failed: string | null; held: string | null } | null
   done: ConfirmAnswer['made'] | null
   mayStyles: boolean
   mayConfirm: boolean
+  /** owb-of5: the band of a Draft or Sent order (owb-of1's read; null: not read, or before of1 — the band reads the draft itself). */
+  band?: RequestBand | null
+  /** owb-of5: the band's picture — the batch read, the save door (null: this reader may not change it), the draft's files that may be it. */
+  picture?: { read: ReadPictures | null; save: SaveOrderPicture | null; choices: readonly PictureChoice[] } | null
 }
 
 export interface OfficeDraftActions {
@@ -80,6 +97,8 @@ export interface OfficeDraftActions {
   onRetry?: () => void
   onRetrySave?: () => void
   onDismissNotice?: () => void
+  /** owb-of5: the band's picture saved (the band reads it again). */
+  onPictureSaved?: () => void
   files?: FilesBoxActions
   table?: ProductsTableActions
   pieces?: PiecesWindowActions
@@ -87,7 +106,7 @@ export interface OfficeDraftActions {
   rowFiles?: FilesBoxActions & { onClose?: () => void }
   person?: PersonDialogActions
   onStillOpen?: (rowId: string | null) => void
-  confirm?: { onOpen?: () => void; onStyle?: (rowId: string, styleId: string) => void; onEntry?: (rowId: string, patch: Partial<ConfirmEntry>) => void; onSend?: () => void; onClose?: () => void }
+  confirm?: ConfirmActions
   style?: { onOpen?: () => void; onDraft?: (patch: Partial<StyleDraftDraft>) => void; onSubmit?: () => void; onClose?: () => void }
 }
 
@@ -99,13 +118,17 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
   const ds = useDsWords()
   const continueLine = useContinueLine()
   const record = model.record
+  // owb-of5 step 1: Back's place (read before any early return: a hook), its words, the flow's words.
+  const backPlace = useBackPlace({ prefix: model.prefix, here: `${model.prefix}/sales/orders/new`, customer: model.customer ? { id: model.customer.id, name: model.customer.name } : null })
+  const backWords = useBackWords()
+  const f = useFlowWords()
   if (model.load === 'loading') return <Skeleton height={96} />
   if (model.load === 'missing' || model.load === 'error' || (model.load === 'ready' && !record && !model.start)) {
     return (
       <EndState tone="neutral" title={t('refusal.other')} actions={[{ label: to('record.back'), href: `${model.prefix}/sales/orders`, variant: 'primary' as const }]} labels={ds.endState} focusOnMount={false} />
     )
   }
-  const back = <Link href={`${model.prefix}/sales/orders`}>{to('record.back')}</Link>
+  const back = <Link href={backPlace?.href ?? `${model.prefix}/sales/orders`}>{backWords(backPlace, to('record.back'))}</Link>
   const title = record ? draftTitleOf(record.request, t, words.locale, words.day) : null
   const writeHeld = model.writeHeld ?? (record || model.start?.partyId ? null : t('start.customerHeld'))
   const start = model.start
@@ -125,6 +148,8 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
     )
   }
 
+  // owb-of5 step 2: an order that came as text (the customer's words, a line in its own words) and a line still without a product.
+  const textOrder = !!record && textCardOf(record.request) !== null && productRowsOf(record.request).some((row) => row.style === null)
   const page = (
     <DraftPage
       kind="office"
@@ -177,6 +202,9 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
               {model.writeHeld ? null : <p className="fw-od-quiet">{start.partyId ? t('start.customerHint') : t('start.customerHeld')}</p>}
             </div>
           </Card>
+        ) : textOrder ? (
+          // owb-of5 step 2 (design § 5g; prototype rec.js notice): ONE notice — an order that came as text: read it, pick each line's product, then confirm.
+          <Banner tone="info" title={f('text.notice')} />
         ) : null,
         continueSlot: start ? (
           <ContinueDrafts
@@ -206,6 +234,15 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
       }}
     />
   )
+  // ---- owb-of5 step 1: the band's facts — its number (Sent), its life (the band read's, else the draft's own status), its main button
+  const number = model.band?.number ?? record?.request.number ?? null
+  const life = model.band ? { life: model.band.life, note: null } : orderLifeOf({ request: { status: record?.request.status ?? 'DRAFT' } })
+  const rowCount = record ? productRowsOf(record.request).length : 0
+  // A button this reader may not use is not drawn (orders.manage: the band read's may.confirm, else the office read's); held while no row.
+  const mayConfirmRight = model.band ? model.band.may.confirm : (model.office?.may.confirm ?? model.writeHeld === null)
+  const confirmable = !!record && (record.request.status === 'DRAFT' || record.request.status === 'SENT') && mayConfirmRight
+  const confirmHeld = model.writeHeld ?? (rowCount === 0 ? t('cf.noRows') : null)
+  // ---- end owb-of5
   // od-fx8 W-20: the start has its own band, "‹ Orders · New order" (no thread before the first save).
   if (!record)
     return (
@@ -221,9 +258,35 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
       thread={thread}
       band={{
         back,
-        title: t('head.title', { title: title ?? '' }),
+        // owb-of5: "number · subject" once the order has its number (Sent); a draft keeps its title.
+        title: number ? `${number} · ${title ?? ''}` : t('head.title', { title: title ?? '' }),
         meta: model.customer ? <span className="fw-od-quiet">{model.customer.name}</span> : undefined,
-        status: <Pill tone="neutral">{record.request.status === 'DRAFT' ? t('st.draft') : t('send.sent')}</Pill>,
+        // owb-of5 (L9): ONE state chip — the order's life (Draft · Sent …) through the base's orderLifeOf and StateChip.
+        status: <StateChip life={life.life} note={life.note} />,
+        ...(model.picture
+          ? {
+              picture: (
+                <BandPicture
+                  source="portalOrder"
+                  recordId={record.request.id}
+                  number={number ?? title ?? ''}
+                  subject={title}
+                  version={model.band?.version ?? record.request.version}
+                  fileId={model.band?.picture?.fileId ?? null}
+                  read={model.picture.read}
+                  save={model.picture.save}
+                  choices={model.picture.choices}
+                  onSaved={actions?.onPictureSaved}
+                />
+              ),
+            }
+          : {}),
+        // owb-of5: the ONE main button — Confirm the order… (the window below; held in words while it cannot confirm).
+        primary: confirmable ? (
+          <Button size="sm" variant="primary" heldReason={confirmHeld} onClick={() => actions?.confirm?.onOpen?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {f('act.confirm')}
+          </Button>
+        ) : undefined,
       }}
     >
       {page}
@@ -269,7 +332,7 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
           <p className="fw-od-quiet">
             <Info size={14} aria-hidden /> {t('cf.choices')}
           </p>
-          <ConfirmButton model={model} actions={actions} rows={rows.length} className="fw-od-hostgo" />
+          <ConfirmButton model={model} actions={actions} rows={rows.length} className="fw-od-hostgo" variant="secondary" />
         </section>
       </Card>
       <Card padded>
@@ -304,10 +367,11 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
 
 /** The ONE "Confirm order…" button (it opens the window; od-fx8 W-26: the window's final button says "as a quote"): in its card, and
  * (od-w2.6) in the page's sticky bar on a phone. */
-function ConfirmButton({ model, actions, rows, className }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; className?: string }) {
+// owb-of5: the band holds the page's ONE filled button (Confirm the order…); the host card's own door is a plain button now.
+function ConfirmButton({ model, actions, rows, className, variant = 'primary' }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; className?: string; variant?: 'primary' | 'secondary' }) {
   const { t } = useDraftWords()
   return (
-    <Button variant="primary" heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
+    <Button variant={variant} heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
       {t('cf.go')}
     </Button>
   )
@@ -371,7 +435,8 @@ function Windows({ model, actions, record }: { model: OfficeDraftModel; actions?
           actions={actions?.person}
         />
       ) : null}
-      {model.confirm ? <ConfirmWindow model={model} actions={actions} record={record} /> : null}
+      {/* owb-of5 step 4: THE Confirm window (the same one the sheet and Incoming open through ConfirmOrderWindow). */}
+      {model.confirm ? <ConfirmOrderWindowView model={{ record, confirm: model.confirm, details: model.details, styles: model.styles, writeHeld: model.writeHeld, today: model.today }} actions={actions?.confirm} /> : null}
       {model.styleWin ? (
         <StyleDraftDialog
           model={{
@@ -388,119 +453,5 @@ function Windows({ model, actions, record }: { model: OfficeDraftModel; actions?
         />
       ) : null}
     </>
-  )
-}
-
-/** The Confirm window: one section per row — what it already has, and what the order still needs (Missing), typed here. */
-function ConfirmWindow({ model, actions, record }: { model: OfficeDraftModel; actions?: OfficeDraftActions; record: DraftRecord }) {
-  const { t, locale } = useDraftWords()
-  const copy = useSizeCopy()
-  const confirm = model.confirm!
-  const rows = productRowsOf(record.request)
-  const quote = confirmAsOf(rows) === 'QUOTE'
-  const held = confirmHeldOf(rows, confirm.entries)
-  const title = draftTitleOf(record.request, t)
-  const styles = model.styles ?? []
-  const travel = rows.flatMap((row) => row.choices.map((choice) => `${choice.topic}: ${choice.picked ?? t('state.OPEN')}`))
-  const missing = <Tag tone="danger">{t('state.MISSING')}</Tag>
-  return (
-    <Modal
-      open
-      sheet
-      size="lg"
-      onClose={() => actions?.confirm?.onClose?.()}
-      title={t(quote ? 'cf.windowQuote' : 'cf.window', { title })}
-      footer={
-        <>
-          <Button variant="secondary" onClick={() => actions?.confirm?.onClose?.()} disabled={confirm.busy}>
-            {t('pc.cancel')}
-          </Button>
-          <Button variant="primary" heldReason={model.writeHeld ?? (confirm.busy ? t('save.saving') : held ? (held.seq === 0 ? t('cf.noRows') : t('cf.heldRow', { seq: held.seq, list: held.needs.map((key) => t(key)).join(', ') })) : null)} onClick={() => actions?.confirm?.onSend?.()}>
-            {quote ? t('cf.goQuote') : t('cf.title')}
-          </Button>
-        </>
-      }
-    >
-      <div className="fw-od-dialog">
-        {confirm.failed ? <Banner tone="danger" title={confirm.failed} /> : null}
-        {quote ? <Banner tone="info" title={t('cf.quote', { seq: rows.find((row) => row.sizing === 'MADE_TO_MEASURE')!.seq })} /> : null}
-        {rows.map((row) => {
-          const entry = confirm.entries[row.id]
-          if (!entry) return null
-          const needs = missingOf(row, entry)
-          const colours = entry.styleId ? (model.details[entry.styleId]?.colourways ?? []).filter((colourway) => colourway.status === 'ACTIVE') : []
-          const colour = colours.find((colourway) => colourway.id === entry.colourwayId) ?? null
-          const offered = colour?.offeredSizes ?? []
-          return (
-            <section key={row.id} className="fw-od-section fw-od-confirmrow" aria-label={rowLabelOf(row, t)}>
-              <div className="fw-od-parthead">
-                <strong>{rowLabelOf(row, t)}</strong>
-                {row.sizing ? <Tag tone="info">{t(`siz.${row.sizing}`)}</Tag> : null}
-                {needs.length === 0 ? <Tag tone="success">{t('state.DECIDED')}</Tag> : null}
-              </div>
-              {entry.needs ? (
-                <div className="fw-od-fields">
-                  <Field label={<>{t('row.style')} {!entry.styleId ? missing : null}</>}>
-                    <Select value={entry.styleId ?? ''} onChange={(event) => actions?.confirm?.onStyle?.(row.id, event.target.value)}>
-                      <option value="">{t('cf.pickStyle')}</option>
-                      {styles.map((style) => (
-                        <option key={style.id} value={style.id}>
-                          {style.code} · {style.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label={<>{t('col.colour')} {!entry.colourwayId ? missing : null}</>}>
-                    <Select value={entry.colourwayId ?? ''} disabled={!entry.styleId} onChange={(event) => actions?.confirm?.onEntry?.(row.id, { colourwayId: event.target.value || null })}>
-                      <option value="">{t('cf.pickColour')}</option>
-                      {colours.map((colourway) => (
-                        <option key={colourway.id} value={colourway.id}>
-                          {colourway.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label={<>{t('pc.sizesCaption')} {needs.includes('need.pieces') ? missing : null}</>} hint={row.pieces.mode === 'PEOPLE' ? t('cf.fromPeople', { count: row.pieces.people }) : entry.styleId ? undefined : t('cf.sizesAfterStyle')}>
-                    {/* od-w2.5: the style's size grid once a colour with its sizes is picked; typed only when the style has no size chart. */}
-                    {offered.length > 0 && colour ? (
-                      <SizeGridEditor
-                        layout="auto"
-                        colours={[{ key: row.id, label: colour.name, offered: [...offered] }]}
-                        sizes={offered.map((size) => ({ key: size, label: size }))}
-                        value={{ [row.id]: cellsOf(entry.sizesText) }}
-                        onChange={(next) => actions?.confirm?.onEntry?.(row.id, { sizesText: sizesTextOf(next[row.id] ?? {}) })}
-                        issues={[]}
-                        caption={`${t('pc.sizesCaption')} · ${rowLabelOf(row, t)}`}
-                        locale={INTL_LOCALE[locale]}
-                        copy={copy}
-                      />
-                    ) : (
-                      <Input value={entry.sizesText} placeholder="48:2 50:3" disabled={entry.styleId !== null && entry.colourwayId === null} onChange={(event) => actions?.confirm?.onEntry?.(row.id, { sizesText: event.target.value })} />
-                    )}
-                  </Field>
-                  {record.seesPrices ? (
-                    <Field label={t('cf.unit')}>
-                      <Input value={entry.unitPrice} inputMode="decimal" onChange={(event) => actions?.confirm?.onEntry?.(row.id, { unitPrice: event.target.value })} />
-                    </Field>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="fw-od-fields">
-                  <p className="fw-od-quiet">
-                    {t('cf.fromDraft')}: {entry.sizesText.replace(/:/g, ' × ')}
-                  </p>
-                  {record.seesPrices ? (
-                    <Field label={`${t('cf.unit')} · ${t('cf.listPrice')}`}>
-                      <Input value={entry.unitPrice} inputMode="decimal" onChange={(event) => actions?.confirm?.onEntry?.(row.id, { unitPrice: event.target.value })} />
-                    </Field>
-                  ) : null}
-                </div>
-              )}
-            </section>
-          )
-        })}
-        {travel.length > 0 ? <p className="fw-od-quiet">{t(quote ? 'cf.travelQuote' : 'cf.travel', { words: travel.join(' · ') })}</p> : null}
-      </div>
-    </Modal>
   )
 }
