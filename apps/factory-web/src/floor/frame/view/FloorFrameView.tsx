@@ -10,6 +10,7 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import type { CrewView } from '../../api'
 import { useFloorDeviceSettings } from '../../me/settings'
 import { CrewStrip } from '../../sign-in/view/CrewStrip'
+import { UndoBar, type UndoBarModel } from '../../basket/undo/view/UndoBar'
 import '../../floor.css'
 
 /**
@@ -31,6 +32,8 @@ export interface FrameModel {
   titleKey: string
   /** owb-fl5: a title already in words (a basket's number), in place of `titleKey`'s. */
   title?: string
+  /** owb-fl6: the Undo bar of this person's last move or give (null: none); in the foot, above the screen's actions. */
+  undo?: UndoBarModel | null
   online: boolean
   /** The person's actions saved on this tablet and not yet recorded by the office (floor/shell/banner.ts). */
   pending: number
@@ -72,6 +75,9 @@ export type FrameAction =
   | { type: 'crew-add' }
   | { type: 'crew-chip'; workerId: string; name: string }
   | { type: 'crew-end' }
+  /** owb-fl6: the Undo bar's Undo and its cross. */
+  | { type: 'undo' }
+  | { type: 'undo-close' }
 
 export interface FloorFrameViewProps {
   frame: FrameModel
@@ -90,6 +96,15 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
   // owb-fl8: this phone's own settings (Floor › Me): Sound and vibration off → the confirm feedback is muted; Large words.
   const device = useFloorDeviceSettings()
   const title = frame.title ?? t(frame.titleKey)
+  // owb-fl6: ONE Undo bar at the foot of every floor page (design § 5zg), above the screen's own actions.
+  const foot = frame.undo ? (
+    <>
+      <UndoBar model={frame.undo} onUndo={() => send({ type: 'undo' })} onClose={() => send({ type: 'undo-close' })} />
+      {actions}
+    </>
+  ) : (
+    actions
+  )
   const where = frame.station ? (frame.station.name ? t('frame.where', { station: frame.station.name, site: frame.station.site }) : frame.station.site) : null
 
   const start = frame.operator ? (
@@ -163,7 +178,7 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
           />
         ) : undefined
       }
-      actions={actions}
+      actions={foot}
       overlay={
         frame.idle ? (
           <IdleOverlay
