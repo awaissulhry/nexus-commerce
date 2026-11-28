@@ -2,6 +2,12 @@ import { words, type Words } from '../queue/shared/depth'
 import { REASON_LIMITS } from '../queue/move/model'
 import type { Shipment } from '../api'
 import type { CarrierReturn } from './doors-api'
+// owb-ss3 step 3.3: the warehouse leg (to our warehouse first) and the payment warning at the hand-over.
+import type { OrderWarningKind } from '@nexus/factory-domain/sales/warnings/kinds'
+import { TRANSFER_REASON } from '../api'
+import type { DdtForm } from '../model'
+import type { Leg } from '../../../sales/orders/record/shipments/legs/api'
+import { warningsOf } from '../../../sales/orders/record/shipments/legs/model'
 
 /**
  * F-OS-203 (order SHIPMENTS tab, 10-design §7 D7; 18-lead-settles L3, L13; H3-B11) — the two new small windows of a shipment, pure:
@@ -61,3 +67,34 @@ export function receiveHeld(read: Pick<CarrierReturn, 'state' | 'garments' | 'pl
 
 /** The place chosen for the person: the site's one finished-goods place, else the read's default, else none. */
 export const defaultPlaceOf = (read: Pick<CarrierReturn, 'places' | 'defaultLocationId'>): string | null => (read.places.length === 1 ? read.places[0]!.id : read.defaultLocationId)
+
+// ── owb-ss3 step 3.3 (design plan § 7, § 5n R39; settles L2, L5) ──────────────────────────────────────────────────────────────────
+
+/**
+ * The DDT reason of a shipment to our own warehouse first: before it arrived there and while no DDT is live, the first leg travels as a
+ * TRANSFER (preset, read only: "Goods to our own warehouse travel as a transfer"); after it arrived, Send on travels with a SALE DDT to
+ * the customer (the usual choice). Null: no leg — the person chooses as today.
+ */
+export function legDdtReasonOf(leg: Pick<Leg, 'arrivedAt'> | null, liveDdt: boolean): typeof TRANSFER_REASON | null {
+  if (!leg || liveDdt || leg.arrivedAt !== null) return null
+  return TRANSFER_REASON
+}
+
+/** The DDT form with the leg's reason applied (the form is the person's: only the reason changes, and only to the transfer). */
+export function withLegReason(form: DdtForm, leg: Pick<Leg, 'arrivedAt'> | null, liveDdt: boolean): DdtForm {
+  const reason = legDdtReasonOf(leg, liveDdt)
+  if (reason) return form.reason === reason ? form : { ...form, reason }
+  // The leg arrived (or none): a transfer left over from before goes back to the usual reason.
+  return form.reason === TRANSFER_REASON ? { ...form, reason: 'SALE' } : form
+}
+
+/**
+ * Mark handed over refused with the payment warning (the base helper's 409 WARNINGS: a payment due before shipping is still open on an
+ * order of the shipment): the kinds, said in a yellow line with no amount; "Ship it anyway" sends the same hand-over with them as
+ * `overrides`. Null: another refusal (said as today).
+ */
+export const handOverWarningsOf = (error: unknown): OrderWarningKind[] | null => warningsOf(error)
+
+/** The hand-over's act: "Mark handed over", or "Ship it anyway" once the warnings are read. */
+export const handOverGoKey = (warnings: readonly OrderWarningKind[] | null | undefined): { readonly ns: 'shipments' | 'ship-ways'; readonly key: string } =>
+  warnings && warnings.length > 0 ? { ns: 'ship-ways', key: 'handOver.anyway' } : { ns: 'shipments', key: 'step.handOver' }

@@ -17,6 +17,7 @@ import {
   listRevisionsContract,
   listScalesContract,
   listStylesContract,
+  styleOrdersContract,
   reorderSizesContract,
   scaleStatusContract,
   styleStatusContract,
@@ -29,6 +30,7 @@ import {
 import { listColours } from './colours'
 import { duplicateOffer, duplicateStyle } from './duplicate'
 import { manifest } from './manifest'
+import { styleOrders } from './orders'
 import { createRevision, listRevisions } from './revisions'
 import { addSizes, createScale, getScale, listScales, moveScale, reorderSizes, updateScale, updateSize } from './scales'
 import { generateSkus, updateSku } from './skus'
@@ -44,6 +46,9 @@ export default defineRoutes('product.styles', manifest, async (app) => {
   app.get('/product/styles', { schema: listStylesContract }, async (request) => listStyles(request, request.query))
 
   app.get('/product/styles/:styleId', { schema: getStyleContract }, async (request) => ({ style: await getStyle(request, request.params.styleId) }))
+
+  // owb-pd1 1.1: where the product is used.
+  app.get('/product/styles/:styleId/orders', { schema: styleOrdersContract }, async (request) => styleOrders(request, request.params.styleId))
 
   app.post('/product/styles', { schema: createStyleContract }, async (request, reply) =>
     reply.code(201).send({ style: await createStyle(request, request.body, idempotencyKeyFrom(request)) }),

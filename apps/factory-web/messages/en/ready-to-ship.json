@@ -1,0 +1,51 @@
+{
+  "ready": {
+    "title": "Ready to ship",
+    "info": "Every order with garments that are ready and on no shipment yet, by customer. Tick orders of one customer: they go in one shipment. The box beside a customer ticks all its orders. Then pack and send in Warehouse.",
+    "answer": "Tick orders of one customer. They go in one shipment.",
+    "picked_one": "{count} order ticked · {pieces} pieces",
+    "picked_other": "{count} orders ticked · {pieces} pieces",
+    "readOnly": "Your role reads this list; sales and the shipping person plan the shipments.",
+    "empty": "Nothing is ready to ship now.",
+    "together": "These orders can go in one shipment.",
+    "pieces_one": "{count} piece ready",
+    "pieces_other": "{count} pieces ready",
+    "tickCustomer": "Tick every order of {name}",
+    "tickOrder": "Tick {number}"
+  },
+  "act": {
+    "makeShipment": "Make a shipment",
+    "oneShipment_one": "One shipment for the {count} order",
+    "oneShipment_other": "One shipment for the {count} orders",
+    "addTo": "Add to {number}"
+  },
+  "held": {
+    "noRight": "Your role does not plan shipments",
+    "pick": "Tick the orders of one customer",
+    "twoCustomers_one": "Orders of {count} customer only",
+    "twoCustomers_other": "Orders of {count} customers never travel in one shipment: tick the orders of one customer",
+    "tooMany": "At most {max} orders go in one shipment",
+    "busy": "Working on it…"
+  },
+  "ships": {
+    "title": "Shipments",
+    "info": "Every shipment, the newest first: Open (a draft or packed), On the way, Arrived, or All. Open one to pack it, to move garments between parcels and to type the tracking numbers.",
+    "answer_one": "{count} shipment",
+    "answer_other": "{count} shipments",
+    "empty": "No shipment here.",
+    "none": "No shipment here.",
+    "chips": "Which shipments",
+    "chip": {
+      "open": "Open",
+      "onTheWay": "On the way",
+      "arrived": "Arrived",
+      "all": "All"
+    },
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "parcels_one": "{count} parcel",
+    "parcels_other": "{count} parcels"
+  },
+  "failed": "Couldn't load {part}",
+  "retry": "Try again"
+}

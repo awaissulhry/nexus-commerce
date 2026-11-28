@@ -1,0 +1,346 @@
+/*
+ * owb-fl9 — the office's Baskets board, its basket window and "From the floor": layout only. Colours are semantic `--nds-*` roles (a
+ * department's colour comes from its DS group tone, drawn by the base's DeptChip), sizes the console's tokens; logical properties only.
+ * The board follows ITS room (a container), never the screen: one column list when narrow, the columns sharing the width when wide.
+ */
+
+.fw-bb-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  container-type: inline-size;
+  container-name: fw-bb;
+}
+.fw-bb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12);
+}
+.fw-bb-bar > .nds-field {
+  min-width: min(100%, 12rem);
+}
+.fw-bb-count {
+  margin-inline-start: auto;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-bb-muted {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-bb-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+/* ── the board: the columns share the width (no dead space at 1440 / 1920); many columns scroll inside the board ─────── */
+.fw-bb-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(15rem, 1fr);
+  gap: var(--nds-space-12);
+  overflow-x: auto;
+  padding-block-end: var(--nds-space-4);
+  overscroll-behavior-inline: contain;
+}
+.fw-bb-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.fw-bb-colhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-height: 2rem;
+}
+.fw-bb-n {
+  min-width: 1.75rem;
+  padding-inline: var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.fw-bb-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-bb-ready > svg {
+  width: 1em;
+  height: 1em;
+  color: var(--nds-success);
+}
+.fw-bb-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-bb-none {
+  margin: 0;
+  color: var(--nds-text-muted);
+  text-align: center;
+}
+
+/* a narrow room (a phone): ONE column list, no sideways scroll */
+@container fw-bb (max-width: 640px) {
+  .fw-bb-board {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+}
+
+/* ── one basket ────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-bb-card {
+  display: flex;
+  gap: var(--nds-space-10);
+  width: 100%;
+  min-width: 0;
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 3px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.fw-bb-card:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-bb-card:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+.fw-bb-card[data-problem] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-bb-pic {
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  overflow: hidden;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+}
+.fw-bb-pic > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fw-bb-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-bb-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+}
+.fw-bb-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bb-progress {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.fw-bb-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-bb-chips,
+.fw-bb-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.fw-bb-worker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+.fw-bb-worker > svg {
+  width: 1em;
+  height: 1em;
+}
+
+/* ── the basket window ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-bb-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-bb-whead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-bb-wpic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 8rem;
+  height: 8rem;
+  overflow: hidden;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+}
+.fw-bb-wpic > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fw-bb-wtext {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: min(100%, 14rem);
+}
+.fw-bb-wwhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+.fw-bb-wacts,
+.fw-bb-targets,
+.fw-bb-why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-bb-wsec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-bb-wh {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-bb-back {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ── From the floor (the order's Production tab) ───────────────────────────────────────────────────────────────────── */
+.fw-ff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-ff .fw-bb-wh {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-ff-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-ff-h {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-ff-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+.fw-ff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10);
+}
+.fw-ff-row + .fw-ff-row {
+  border-block-start: 1px solid var(--nds-border-subtle);
+}
+.fw-ff-what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-ff-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-ff-photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.fw-ff-img {
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+}
+.fw-ff-img > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

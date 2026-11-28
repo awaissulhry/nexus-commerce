@@ -196,7 +196,7 @@
     "revision": "Rev {revision} ({status})",
     "rateVersion": "v{number} · {status} · from {day}",
     "col": {
-      "style": "Style",
+      "style": "Product",
       "revision": "Revision",
       "step": "Step",
       "smv": "SMV",
@@ -214,7 +214,7 @@
     "pieceRatesNoRight": "your role does not read piece rates",
     "changes": "Changes & versions",
     "changesNotBuilt": "comes with its page; the waiting changes are under the tile on Operations",
-    "changesWhy": "SMV changes are listed there with the style changes.",
+    "changesWhy": "SMV changes are listed there with the product changes.",
     "changesNoRight": "your role does not read the changes",
     "notBuilt": "not open yet"
   },
@@ -346,7 +346,7 @@
     "held": {
       "noManage": "Read only: your role does not change routings.",
       "reading": "The routing is still being read.",
-      "archived": "Read only: the style is archived.",
+      "archived": "Read only: the product is archived.",
       "frozen": "Read only: this revision is released and frozen; change its draft."
     },
     "notice": {
@@ -383,9 +383,9 @@
     "sizesLabel": "Sizes",
     "colourwaysLabel": "Colourways",
     "optionsLabel": "Options",
-    "noColourways": "The style has no colourways yet.",
-    "optionsLoading": "Reading the style's options…",
-    "optionsFailed": "Couldn't read the style's options; the ones already chosen stay.",
+    "noColourways": "The product has no colourways yet.",
+    "optionsLoading": "Reading the product's options…",
+    "optionsFailed": "Couldn't read the product's options; the ones already chosen stay.",
     "result": "It runs for:",
     "sizes": "sizes {list}",
     "colourways": "colourways {list}",
@@ -403,7 +403,7 @@
   "checkpoint": {
     "none": "None",
     "title": "Quality checkpoint · {step}",
-    "intro": "An inspection plan the floor opens at this step's first report of a bundle: a cutting, in-line or end-of-line plan of the style's company.",
+    "intro": "An inspection plan the floor opens at this step's first report of a bundle: a cutting, in-line or end-of-line plan of the product's company.",
     "current": "Now: {code} · {name}",
     "loading": "Reading the inspection plans…",
     "failed": "Couldn't read the inspection plans",

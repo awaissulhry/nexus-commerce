@@ -51,6 +51,7 @@
     "eq": "{sum} = {ordered} ordered",
     "bucket": {
       "shipped": "Shipped",
+      "atWarehouse": "At our warehouse",
       "packed": "On a packed shipment",
       "draft": "On a draft shipment",
       "planned": "On shipments not left",
@@ -67,7 +68,8 @@
       "create": "Create shipment… ↓",
       "warehouseShips": "the warehouse ships them",
       "production": "Production ›",
-      "lines": "Lines ›"
+      "lines": "Lines ›",
+      "legs": "It waits there for the customer’s label: Send on to the customer from its row"
     },
     "card": {
       "lines_one": "Line {seqs}",

@@ -3,7 +3,7 @@ import { DEFAULT_FREQUENCY, defaultFrequencyOf, isTopic } from '@nexus/factory-d
 import { formatDate, formatDateTime, formatTime } from '../../lib/i18n/format'
 import type { Locale } from '../../lib/i18n/locales'
 import type { EmailFrequency, EmailSettings, PortalBadge, PortalMe, PortalTask } from './api'
-import { isPortalKind, PORTAL_KINDS, type PortalKind } from './nav/portal-nav'
+import { BADGE_JOIN, isPortalKind, PORTAL_KINDS, type PortalKind } from './nav/portal-nav'
 
 /**
  * The portal frame's rules without a screen (B-W2b-173): pure, held by model.vitest.test.ts. The address, the kinds a person
@@ -190,6 +190,18 @@ export function badgesOf(badges: readonly PortalBadge[] | null, locale: Locale):
   const out: Record<string, BadgeWords> = {}
   for (const badge of badges) if (badge.count > 0) out[badge.area] = { count: badge.count, words: badge.words[locale] }
   return out
+}
+
+/**
+ * owb-po4.4: the badge of a rail row, a bar slot or a sub-sidebar row: its key names one task-list area or several joined by
+ * BADGE_JOIN (Orders counts its own, Production's and Returns'): their counts summed, their words in one line ("2 to confirm,
+ * 1 to re-confirm"). Null when none is known or above 0 — never a made-up 0.
+ */
+export function badgeOf(badges: Readonly<Record<string, BadgeWords>> | null, key: string | null | undefined): BadgeWords | null {
+  if (!badges || !key) return null
+  const known: Readonly<Record<string, BadgeWords>> = badges
+  const parts = key.split(BADGE_JOIN).flatMap((area): BadgeWords[] => (known[area] ? [known[area]] : []))
+  return parts.length > 0 ? { count: parts.reduce((sum, part) => sum + part.count, 0), words: parts.map((part) => part.words).join(', ') } : null
 }
 
 // ── the bell ─────────────────────────────────────────────────────────────────────────────────────────────────────────

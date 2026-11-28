@@ -1,7 +1,7 @@
 {
   "gallery": {
     "title": "Sketches and pictures",
-    "intro": "Flats, photos per colourway and image pages with numbered callouts. The main picture is the one the styles list, the gallery and the public DoC page show.",
+    "intro": "Flats, photos per colourway and image pages with numbered callouts. The main picture is the one the products list, the gallery and the public DoC page show.",
     "retry": "Try again",
     "failed": "Couldn’t load the pictures",
     "loading": "Loading the pictures…",
@@ -10,33 +10,33 @@
     "add": {
       "button": "Add pictures",
       "title": "Add pictures",
-      "subtitle": "To style {code}: JPEG, PNG or WebP, up to 15 MB each",
+      "subtitle": "To product {code}: JPEG, PNG or WebP, up to 15 MB each",
       "send_one": "Add {count} picture",
       "send_other": "Add {count} pictures",
       "pickFirst": "Pick a picture first",
       "hint": "Drop JPEG, PNG or WebP pictures here, or choose them. A HEIC photo: save it as JPEG first.",
       "sending": "Sending {done} of {of}…",
       "failed": "A picture was not added: the others before it are in the gallery. Try again.",
-      "unused_one": "{count} picture already among the style’s files",
-      "unused_other": "{count} pictures already among the style’s files",
+      "unused_one": "{count} picture already among the product’s files",
+      "unused_other": "{count} pictures already among the product’s files",
       "useFile": "Add to the gallery",
       "wrongType": "Only JPEG, PNG or WebP pictures can be added.",
       "tooBig": "A picture holds up to 15 MB."
     },
     "held": {
       "noRight": "Your role can view the pictures, not change them",
-      "noUpload": "Your role cannot send files: pick one already among the style’s files",
-      "archived": "The style is archived: reactivate it first",
-      "rule": "The style’s edit rule does not allow it in this state",
+      "noUpload": "Your role cannot send files: pick one already among the product’s files",
+      "archived": "The product is archived: reactivate it first",
+      "rule": "The product’s edit rule does not allow it in this state",
       "offline": "Offline: the pictures change once the connection is back",
       "busy": "Wait: a change is being saved",
-      "full": "The style keeps at most {max} pictures: remove one first"
+      "full": "The product keeps at most {max} pictures: remove one first"
     },
     "banner": {
       "noRight": "You can view the pictures, not change them.",
-      "noUpload": "Your role cannot send files: you can arrange the pictures and add the style’s picture files.",
-      "archived": "The style is archived: its pictures are read-only until it is reactivated.",
-      "rule": "The style’s edit rule does not allow changes in its state: move the style or start a revision first."
+      "noUpload": "Your role cannot send files: you can arrange the pictures and add the product’s picture files.",
+      "archived": "The product is archived: its pictures are read-only until it is reactivated.",
+      "rule": "The product’s edit rule does not allow changes in its state: move the product or start a revision first."
     },
     "empty": {
       "title": "No pictures",
@@ -44,7 +44,7 @@
     },
     "count_one": "{count} picture · {printable} go into the tech pack PDF",
     "count_other": "{count} pictures · {printable} go into the tech pack PDF",
-    "listLabel": "Pictures of the style, in order",
+    "listLabel": "Pictures of the product, in order",
     "open": "Open {name} full size",
     "noLook": "The picture cannot be shown now",
     "notAvailable": "The file is not available yet",
@@ -74,7 +74,7 @@
     },
     "kindHint": {
       "SKETCH": "A flat: front, back or a detail.",
-      "PHOTO": "A photo of the garment, for a colourway or the style.",
+      "PHOTO": "A photo of the garment, for a colourway or the product.",
       "PAGE": "A tech pack page with numbered callouts (construction details)."
     },
     "field": {
@@ -83,7 +83,7 @@
       "noColourway": "No colourway in particular",
       "revision": "Revision",
       "revisionHint": "A picture of a draft revision is frozen with it at release.",
-      "noRevision": "The style, whatever the revision",
+      "noRevision": "The product, whatever the revision",
       "draftRevision": "Revision {revision} (draft)",
       "caption": "Caption",
       "captionHint": "What it shows, up to {max} characters."
@@ -125,17 +125,17 @@
     "remove": {
       "title": "Remove this picture?",
       "confirm": "Remove the picture",
-      "body": "{name} leaves the gallery; its file stays among the style’s files.",
+      "body": "{name} leaves the gallery; its file stays among the product’s files.",
       "heir": "{name} becomes the main picture.",
-      "noHeir": "The style will have no main picture."
+      "noHeir": "The product will have no main picture."
     },
     "notice": {
-      "held_one": "{count} picture is waiting for its check: add it from the style’s files once it is ready.",
-      "held_other": "{count} pictures are waiting for their check: add them from the style’s files once they are ready.",
+      "held_one": "{count} picture is waiting for its check: add it from the product’s files once it is ready.",
+      "held_other": "{count} pictures are waiting for their check: add them from the product’s files once they are ready.",
       "added_one": "{count} picture added.",
       "added_other": "{count} pictures added.",
       "main": "The main picture changed: the list, the gallery and the public DoC page show it.",
-      "removed": "Picture removed; its file stays among the style’s files.",
+      "removed": "Picture removed; its file stays among the product’s files.",
       "removedMain": "Picture removed; the next one is the main picture now."
     },
     "problem": {
@@ -146,17 +146,17 @@
       "gone": "The picture is no longer there: the gallery was read again.",
       "offline": "No connection: try again when it is back.",
       "read": "The pictures could not be read. Try again.",
-      "readForbidden": "Your role does not read this style’s pictures."
+      "readForbidden": "Your role does not read this product’s pictures."
     }
   },
   "styles": {
     "view": {
-      "label": "Show the styles as",
+      "label": "Show the products as",
       "list": "List",
       "gallery": "Gallery"
     },
     "gallery": {
-      "label": "Styles as pictures",
+      "label": "Products as pictures",
       "selected_one": "{count} selected",
       "selected_other": "{count} selected",
       "open": "Open {style}",
@@ -164,8 +164,8 @@
       "colourways_one": "{count} colourway",
       "colourways_other": "{count} colourways",
       "pick": "Select {style}",
-      "looksFailed": "The pictures could not be read: the styles show without them. Try again later.",
-      "looksForbidden": "Your role does not read the styles’ pictures."
+      "looksFailed": "The pictures could not be read: the products show without them. Try again later.",
+      "looksForbidden": "Your role does not read the products’ pictures."
     }
   },
   "patterns": {
@@ -243,15 +243,15 @@
     "banner": {
       "noRight": "You can view the pattern files, not change them.",
       "noUpload": "Your role cannot send files: you can change and remove the pattern files.",
-      "archived": "The style is archived: its pattern files are read-only until it is reactivated.",
-      "rule": "The style’s edit rule does not allow changes in its state."
+      "archived": "The product is archived: its pattern files are read-only until it is reactivated.",
+      "rule": "The product’s edit rule does not allow changes in its state."
     },
     "frozenKinds": "Revision {revision} is released: its pattern and CAD files stay as they are; markers and other files can still be added.",
     "held": {
       "noRight": "Your role can view the pattern files, not change them",
       "noUpload": "Your role cannot send files",
-      "archived": "The style is archived: reactivate it first",
-      "rule": "The style’s edit rule does not allow it in this state",
+      "archived": "The product is archived: reactivate it first",
+      "rule": "The product’s edit rule does not allow it in this state",
       "offline": "Offline: the pattern files change once the connection is back",
       "frozen": "Revision {revision} is released: no new pattern or CAD file"
     },

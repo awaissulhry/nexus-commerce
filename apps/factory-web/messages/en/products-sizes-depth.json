@@ -78,7 +78,7 @@
     "alreadyActive": "Some of these are already in use.",
     "alreadyArchived": "Some of these are already archived.",
     "busy": "Wait: the last change is still being saved.",
-    "noManage": "Changing the libraries needs the right to edit styles (a product developer's role).",
+    "noManage": "Changing the libraries needs the right to edit products (a product developer's role).",
     "none": "Pick at least one row.",
     "nothing": "Nothing changed yet."
   },
@@ -106,7 +106,7 @@
     }
   },
   "poms": {
-    "intro": "The points every measurement spec and grade rule is measured at: a code that means the same on every style, how to measure it, its unit and the tolerance a spec takes by default.",
+    "intro": "The points every measurement spec and grade rule is measured at: a code that means the same on every product, how to measure it, its unit and the tolerance a spec takes by default.",
     "new": "New point",
     "search": "Search points",
     "table": "Points of measure",
@@ -187,7 +187,7 @@
     },
     "forbidden": {
       "title": "You don't have access to points of measure",
-      "body": "Reading them needs the right to see the styles (product developers, production and quality have it)."
+      "body": "Reading them needs the right to see the products (product developers, production and quality have it)."
     },
     "dialog": {
       "newTitle": "New point of measure",
@@ -250,7 +250,7 @@
     "held": {
       "archived": "This point is archived: restore it to change it."
     },
-    "readOnly": "You can look at this point; changing it needs the right to edit styles.",
+    "readOnly": "You can look at this point; changing it needs the right to edit products.",
     "csv": {
       "code": "Code",
       "name": "Name",
@@ -338,7 +338,7 @@
     },
     "forbidden": {
       "title": "You don't have access to grade rules",
-      "body": "Reading them needs the right to see the styles (product developers, production and quality have it)."
+      "body": "Reading them needs the right to see the products (product developers, production and quality have it)."
     },
     "newTitle": "New grade rule",
     "newIntro": "A rule belongs to one size scale. Its increments are typed next, in the rule itself.",
@@ -368,7 +368,7 @@
       "title": "Grade rule",
       "subtitle": "{scale} · base {base} · {format}"
     },
-    "readOnly": "You can look at this rule; changing it needs the right to edit styles.",
+    "readOnly": "You can look at this rule; changing it needs the right to edit products.",
     "held": {
       "archived": "This rule is archived: restore it to change it."
     },
@@ -495,13 +495,13 @@
       "obsolete": "Revision {revision} is obsolete and frozen: its spec is read only."
     },
     "held": {
-      "archived": "The style is archived: its spec does not change.",
+      "archived": "The product is archived: its spec does not change.",
       "frozen": "This revision is frozen: its spec changes only in a new revision.",
       "approved": "The spec is approved: reopen it to change it.",
       "archivedSpec": "This spec is archived: it never changes.",
       "noManage": "Changing the spec needs the right to edit a draft bill of materials (a product developer's role).",
-      "rule": "The style's edit rule holds changes in this lifecycle state (Product settings).",
-      "noRange": "The style has no size range yet: set it on Overview & variants first.",
+      "rule": "The product's edit rule holds changes in this lifecycle state (Product settings).",
+      "noRange": "The product has no size range yet: set it on Overview & variants first.",
       "noRelease": "Approving or reopening needs the right to release a revision.",
       "notDraft": "Only a draft spec is approved.",
       "noPoints": "Add points first.",
@@ -509,11 +509,11 @@
       "missing_other": "{count} values are still missing."
     },
     "banner": {
-      "archived": "The style is archived: its measurement spec is read only.",
+      "archived": "The product is archived: its measurement spec is read only.",
       "approved": "The spec is approved: its values are read only. Reopen it to change them.",
       "archivedSpec": "This measurement spec is archived: it is read only.",
       "noManage": "You can read the spec; changing it needs the right to edit a draft bill of materials.",
-      "rule": "The style's edit rule holds changes in its lifecycle state: the spec is read only (Products › Settings)."
+      "rule": "The product's edit rule holds changes in its lifecycle state: the spec is read only (Products › Settings)."
     },
     "offline_one": "Offline: {count} value waits on this page and is sent when the connection is back.",
     "offline_other": "Offline: {count} values wait on this page and are sent when the connection is back.",
@@ -521,7 +521,7 @@
       "title": "No points of measure yet",
       "body": "Start the spec of revision {revision}: its base size and grade rule, or a copy of an earlier spec.",
       "held": "This revision has no measurement spec.",
-      "points": "Add the points this style is measured at, each with its value in the base size.",
+      "points": "Add the points this product is measured at, each with its value in the base size.",
       "frozen": "This spec has no points."
     },
     "notice": {
@@ -564,9 +564,9 @@
     },
     "field": {
       "base": "Base size",
-      "baseHint": "The size the values are typed in (the style's base size).",
+      "baseHint": "The size the values are typed in (the product's base size).",
       "rule": "Grade rule",
-      "ruleHint": "A rule of the style's size scale; none: every size typed by hand."
+      "ruleHint": "A rule of the product's size scale; none: every size typed by hand."
     },
     "settings": {
       "title": "Base size and grade rule",
@@ -591,7 +591,7 @@
     "grade": {
       "title": "Apply grade rule",
       "intro": "The rule's increments from the base size {base}: see what changes before anything is written.",
-      "ruleHint": "The rules of the style's size scale.",
+      "ruleHint": "The rules of the product's size scale.",
       "pick": "Pick a rule",
       "pickFirst": "Pick a rule to see what it changes.",
       "overrides": "Values typed by hand",

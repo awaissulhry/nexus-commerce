@@ -13,10 +13,12 @@ import type {
   LabelTemplateRow,
   MaterialRow,
   MaterialView,
-  OperationRow,
+  ProductRow,
+  RouteSummaryStep,
   RoutingView,
   ScaleRow,
   StyleComplianceView,
+  StyleOrders,
   StyleTypeChanges,
   StepPatch,
   StylePatch,
@@ -75,8 +77,6 @@ export type StyleDialog =
   | { kind: 'generate' }
   | { kind: 'bomLine'; lineId: string | null }
   | { kind: 'removeLine'; lineId: string }
-  | { kind: 'addOperations' }
-  | { kind: 'removeStep'; stepId: string }
   /** W2a: a routing step's subcontract details (design pop:styles.opDrawer "Subcontract details"). */
   | { kind: 'subcontract'; stepId: string }
   | { kind: 'upload'; documentKind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string }
@@ -121,7 +121,6 @@ export interface StyleRecordViewModel {
   /** The materials of the BOM's colour-dependent lines (their colours fill the colour grid's choices). */
   materials: Record<string, MaterialView | null>
   materialSearch: SearchState<MaterialRow>
-  operationSearch: SearchState<OperationRow> & { kind: string | null }
   bomView: BomViewMode
   /** The Cost tab's cell (a colourway and a size). */
   costCell: { colourwayId: string; size: string } | null
@@ -178,6 +177,16 @@ export interface StyleRecordViewModel {
   rangeDraft?: { sizeScaleId: string; sizes: string[]; baseSize: string | null }
   /** Design cases: a BOM line already chosen in the add dialog. */
   lineDraft?: { material: MaterialView }
+  // ---- owb-pd4 (steps 4.2–4.4; owb-pd-server § Shape pd1) ----
+  /** "How it is made": the route of the revision as departments, no minutes (GET style's routeSummary); null: none yet, or an API before pd1. */
+  routeSummary?: RouteSummaryStep[] | null
+  /** The open order lines of the product (Where it is used, the riders' sheets); absent: no orders read in the person's role. */
+  orders?: Part<StyleOrders>
+  /** The product's own list row (its agreed price range: price grain); absent: not read (no price grain). */
+  agreed?: Part<ProductRow | null>
+  /** The person may open the orders (orders.view, or the designer's own orders): the order links are drawn. */
+  ordersOpen?: boolean
+  // ---- end owb-pd4
 }
 
 export interface StyleRecordActions {
@@ -211,14 +220,10 @@ export interface StyleRecordActions {
   onLineColours?: (lineId: string, colours: Array<{ colourwayId: string; itemColourId: string | null }>) => void
   onHideYield?: (pct: string | null) => Promise<boolean>
   // routing
-  onOperationQuery?: (query: string, kind: string | null) => void
-  onAddSteps?: (operationIds: string[]) => Promise<boolean>
   onStep?: (stepId: string, patch: StepPatch) => Promise<boolean>
   /** W2a: a step's subcontract details; null takes it back in-house. */
   onSubcontract?: (stepId: string, subcontract: SubcontractPatch | null) => Promise<boolean>
   onLoadWorkshops?: () => void
-  onRemoveStep?: (stepId: string) => Promise<boolean>
-  onMoveStep?: (stepId: string, delta: -1 | 1) => void
   // cost
   onCostCell?: (cell: { colourwayId: string; size: string }) => void
   // compliance
@@ -255,4 +260,6 @@ export interface StyleRecordActions {
   /** B-W2b-245: the Versions & changes tab and the Release modal on the gate. */
   versions?: VersionsActions
   release?: ReleaseActions
+  /** owb-pd4: read the open orders (Where it is used, the riders' sheets) again after a failed read. */
+  onRetryOrders?: () => void
 }

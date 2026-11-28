@@ -1,0 +1,146 @@
+{
+  "title": "Righe",
+  "empty": "Ancora nessuna riga. Va bene così: la fabbrica legge il vostro messaggio e compila le righe.",
+  "mode": {
+    "sent": "Inviato alla fabbrica: ritiratelo per cambiare le righe.",
+    "confirmed": "La fabbrica ha confermato questo ordine: una modifica è una richiesta (Chiedete una modifica…).",
+    "shipped": "È uscito dalla fabbrica. Una modifica ora è un reso."
+  },
+  "pending": "Scegliete prima il modello della nuova riga.",
+  "add": "Aggiungete una riga",
+  "columns": {
+    "some": "Colonne · {n}…",
+    "none": "Aggiungete una colonna…"
+  },
+  "total": "{pieces} pezzi in tutto",
+  "removed": {
+    "title": "Righe tolte",
+    "line": "La riga {seq} è stata tolta: {words}.",
+    "noWords": "ancora nessun modello"
+  },
+  "putBack": "Rimettetela",
+  "line": "Riga {seq}",
+  "col": {
+    "model": "Modello",
+    "material": "Materiale",
+    "sizes": "Taglie",
+    "pieces": "Pezzi",
+    "price": "Il vostro prezzo"
+  },
+  "later": "Può arrivare dopo",
+  "copy": "Copiate la riga {seq}",
+  "takeOut": "Togliete la riga {seq}",
+  "dropPending": "Togliete la nuova riga",
+  "sizes": {
+    "mtm": "Su misura",
+    "mtmPeople_one": "Su misura · {count} persona",
+    "mtmPeople_other": "Su misura · {count} persone",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "file": "Nel file delle taglie"
+  },
+  "model": {
+    "aria": "Il modello della riga {seq}",
+    "choose": "Scegliete il modello…",
+    "group": {
+      "own": "I vostri modelli",
+      "range": "La gamma della fabbrica",
+      "new": "Un nuovo modello",
+      "text": "Come nel mio messaggio"
+    },
+    "new": "Nuovo: {kind}",
+    "text": "Come nel mio messaggio"
+  },
+  "material": {
+    "add": "Aggiungete il materiale…",
+    "aria": "Il materiale della riga {seq}",
+    "open": "Non ancora deciso"
+  },
+  "pieces": {
+    "aria": "I pezzi della riga {seq}",
+    "refused": "Pezzi: scrivete un numero intero da 1 a 100.000, oppure lasciate vuoto."
+  },
+  "own": {
+    "aria": "{name} della riga {seq}",
+    "yes": "Sì",
+    "no": "No",
+    "title": "Colonne vostre",
+    "titleOffice": "Le colonne del cliente",
+    "sub": "Altro da dire su ogni riga. La fabbrica legge ogni colonna.",
+    "subOffice": "Altro da dire su ogni riga. Sono del cliente: puoi impostarle per il cliente.",
+    "busy": "Salvataggio…",
+    "reading": "Lettura delle vostre colonne…",
+    "mine": "Le vostre colonne — attivatene una per questo ordine",
+    "mineOffice": "Le colonne del cliente — attivane una per questo ordine",
+    "full": "Questo ordine ha {max} colonne: il massimo. Disattivatene una per aggiungerne un’altra.",
+    "closeAria": "Togliete la colonna {name} dal vostro elenco",
+    "onThis": "su questo ordine",
+    "ask": "Alcune righe di questo ordine hanno un valore in «{name}». La disattivate e cancellate quei valori?",
+    "askKeep": "Lasciatela attiva",
+    "askDrop": "Disattivatela e cancellate i valori",
+    "quickTitle": "Le più usate — basta un clic",
+    "quick": {
+      "remake": "Rifacimento",
+      "sizing": "Taglia",
+      "nameOn": "Nome sul capo",
+      "comment": "Commento",
+      "neededBy": "Serve entro"
+    },
+    "quickChoice": {
+      "standard": "Taglia standard",
+      "mtm": "Su misura"
+    },
+    "newTitle": "Una nuova colonna",
+    "name": "Il suo nome",
+    "namePh": "Per esempio: Squadra",
+    "kindAria": "Il tipo della colonna",
+    "kind": {
+      "TEXT": "Testo",
+      "YES_NO": "Sì / No",
+      "CHOICE": "Scelta",
+      "NUMBER": "Numero",
+      "DATE": "Data"
+    },
+    "choices": "Le scelte",
+    "choicesPh": "Separate da una virgola: Casa, Trasferta, Terza",
+    "add": "Aggiungete la colonna",
+    "note": "Una colonna è vostra: il vostro prossimo ordine può usarla di nuovo. La fabbrica la vede sull’ordine, nel suo elenco e sul telefono dell’operaio.",
+    "noteOffice": "Una colonna è del cliente: il suo prossimo ordine può usarla di nuovo. Compare sull’ordine, nell’elenco degli ordini e sul telefono dell’operaio.",
+    "refused": {
+      "name": "Date un nome alla colonna.",
+      "long": "Un nome ha al massimo 40 caratteri.",
+      "fixed": "È il nome di una colonna fissa: sceglietene un altro.",
+      "twice": "Avete già una colonna con questo nome.",
+      "choices": "Una scelta ha almeno due opzioni, separate da una virgola.",
+      "text": "Al massimo 200 caratteri.",
+      "number": "Scrivete un numero.",
+      "date": "Scegliete un giorno.",
+      "yesNo": "Scegliete Sì o No.",
+      "choice": "Scegliete una delle opzioni."
+    }
+  },
+  "price": {
+    "aria": "Il vostro prezzo per un pezzo della riga {seq}",
+    "agreed": "concordato {amount}",
+    "material": "scegliete il materiale",
+    "factory": "risponde la fabbrica",
+    "frozen": "Inviato: il vostro prezzo resta così."
+  },
+  "chips": {
+    "more_one": "Ancora {count}: {rest}",
+    "more_other": "Ancora {count}: {rest}"
+  },
+  "office": {
+    "col": {
+      "price": "Prezzo"
+    },
+    "mode": {
+      "sent": "Inviato dal cliente: resta in lettura finché non lo confermi o il cliente lo ritira.",
+      "confirmed": "Confermato: cambialo con Modifica."
+    },
+    "price": {
+      "factory": "ancora nessun prezzo di listino",
+      "aria": "Il prezzo per un pezzo della riga {seq}"
+    }
+  }
+}

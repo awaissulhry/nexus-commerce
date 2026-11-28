@@ -1,0 +1,243 @@
+{
+  "routes": {
+    "title": "Routes",
+    "which": "Which route",
+    "product": "Product route",
+    "answerSteps_one": "The product's route has {count} step.",
+    "answerSteps_other": "The product's route has {count} steps.",
+    "answerOthers_one": "{count} other route for a model or a customer.",
+    "answerOthers_other": "{count} other routes for a model or a customer.",
+    "forProduct": "Every order uses it when no other route is chosen.",
+    "forModel": "A model: sales picks it on the order line.",
+    "forModelOnly": "A model only for {customer}: sales picks it on that customer's order lines.",
+    "forCustomer": "Only for {customer}: it is used by itself on that customer's orders.",
+    "tableOf": "The steps of {name}",
+    "empty": "This route has no steps yet. \"Edit this route…\" builds it.",
+    "noDepartment": "No department",
+    "total": "{minutes} minutes for one piece.",
+    "noMinutes": "No minutes typed yet.",
+    "rulesTitle_one": "{count} thing to fix in this route",
+    "rulesTitle_other": "{count} things to fix in this route",
+    "outside": "The routes are read from the factory server.",
+    "failed": "The route could not be read"
+  },
+  "col": {
+    "step": "Step",
+    "department": "Department",
+    "minutes": "Minutes"
+  },
+  "rule": {
+    "TOO_FEW": "A route has two steps or more.",
+    "LAST_NOT_PACKING": "A route ends with Packing.",
+    "DEPARTMENT_CLOSED": "A closed department was added: take it out, or open it again under Manage.",
+    "other": "The factory server does not accept this route as it is.",
+    "NO_QUALITY": "No quality check in this route.",
+    "otherWarning": "The factory server has a note on this route."
+  },
+  "action": {
+    "edit": "Edit this route…",
+    "new": "New route…",
+    "takeOut": "Take out",
+    "takeOutOf": "Take out the route {name}",
+    "startRevision": "Start revision {revision}…"
+  },
+  "held": {
+    "noRight": "Only the production manager changes a route.",
+    "archived": "This product is archived: its route stays as it is.",
+    "noRevision": "This product has no revision yet.",
+    "draftOpen": "Revision {revision} is released and revision {draft} is the draft: open revision {draft} to change the route.",
+    "released": "Revision {revision} is released. Start revision {next} to change the route.",
+    "busy": "Working on it…",
+    "departmentsReading": "Reading the departments…",
+    "departmentsFailed": "The departments could not be read: try again."
+  },
+  "who": {
+    "title": "Who decides the route",
+    "answer": "The most exact level wins. One product is never made in two ways by mistake.",
+    "product": {
+      "label": "1 · The product",
+      "value": "Its normal route. The production manager builds it, on a draft."
+    },
+    "model": {
+      "label": "2 · A model or a customer",
+      "value": "Its own route for the same product. The production manager builds it; sales picks the model on the order line; a customer's route is used by itself."
+    },
+    "line": {
+      "label": "3 · One order line",
+      "value": "An exception, with a reason. Only the production manager makes it, until the basket cards are printed."
+    }
+  },
+  "more": {
+    "summary_one": "More: the depth of {count} step (scan points, side by side, outside workshops, times, checkpoints, machine settings)",
+    "summary_other": "More: the depth of {count} steps (scan points, side by side, outside workshops, times, checkpoints, machine settings)",
+    "stepsTitle_one": "{count} step in depth",
+    "stepsTitle_other": "{count} steps in depth",
+    "stepsIntro": "Revision {revision}: what each step needs on the floor.",
+    "minutesInBuilder": "The steps, their order, their departments and their minutes change in the route builder (\"Edit this route…\")."
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "problem": {
+    "forbidden": "Your role may not do this.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again, check it and try once more.",
+    "invalid": "Something typed is not accepted: check the fields.",
+    "signedOut": "You were signed out: sign in again.",
+    "rateLimited": "Too many requests: wait a moment.",
+    "offline": "The factory server is not answering: nothing was changed.",
+    "unavailable": "Something went wrong on the server: nothing was changed."
+  },
+  "builder": {
+    "title": {
+      "product": "Route builder · Edit the route",
+      "route": "Route builder · Edit the route",
+      "new": "Route builder · A new route for a model or a customer",
+      "line": "Route builder · Another route for this order"
+    },
+    "save": {
+      "product": "Save the route",
+      "route": "Save the route",
+      "new": "Save the new route",
+      "line": "Use this route for the order"
+    },
+    "subtitle": {
+      "product": "{product} · the product's route",
+      "route": "{product} · {route}",
+      "new": "{product} · a new route",
+      "line": "Line {line} · {product} · only this line, only this order"
+    },
+    "departments": "Departments",
+    "departmentsHint": "Drag one into the route, or press +.",
+    "noDepartments": "No open department. Open one under Manage, or add one.",
+    "new": "new",
+    "times_one": "{count} ×",
+    "times_other": "{count} ×",
+    "addOf": "Add {name} to the route",
+    "route": "The route",
+    "routeHint": "Drag a step to another place, or use the arrows. A department can be there twice.",
+    "keysLabel": "Keys of the route builder",
+    "keys": {
+      "add": "A department: drag it into the route, or press its +.",
+      "move": "A step: drag it, press its ↑ ↓, or Alt + ↑ / Alt + ↓ anywhere on its row.",
+      "save": "⌘ Enter (Ctrl Enter) saves; Esc leaves without saving."
+    },
+    "stepOf": "Step {no}, {name}",
+    "minutesOf": "Minutes for step {no}, {name}",
+    "min": "min",
+    "removeOf": "Take step {no}, {name}, out",
+    "dropEnd": "Drop a department here: it goes to the end.",
+    "empty": "The route is empty. Drag a department here, or press its +.",
+    "errorsTitle_one": "{count} thing holds Save",
+    "errorsTitle_other": "{count} things hold Save",
+    "error": {
+      "NO_DEPARTMENT": "Step {no} has no department: take it out.",
+      "MINUTES_BAD": "Step {no}: the minutes are a number, like 12 or 12.5.",
+      "NAME_NEEDED": "Give the route a name.",
+      "CUSTOMER_NEEDED": "Choose the customer this route is for.",
+      "REASON_NEEDED": "Say why this order is different."
+    },
+    "note": {
+      "NO_QUALITY": "This route has no quality check. You can save it.",
+      "twice": "{name} is there two times in a row. You can save it."
+    },
+    "copy": {
+      "label": "Start from a copy, then change it",
+      "choose": "Choose a route to copy…",
+      "templates": "Ready-made routes",
+      "products": "Routes of products",
+      "option_one": "{name} · {count} step",
+      "option_other": "{name} · {count} steps",
+      "steps_one": "{count} step",
+      "steps_other": "{count} steps",
+      "find": "Find a product to copy from",
+      "reading": "Reading the routes to copy…",
+      "failed": "The routes to copy could not be read."
+    },
+    "name": "The name of this route",
+    "namePlaceholder": "For example: with molded sliders",
+    "forWhom": "Who it is for",
+    "forModel": "A model: for any customer",
+    "forCustomer": "Only for one customer",
+    "forOnly": "Only for {customer}",
+    "customer": "The customer",
+    "customerPick": "Choose the customer…",
+    "customersReading": "Reading the customers…",
+    "customersFailed": "The customers could not be read: this route can be a model.",
+    "reason": "Why is this order different?",
+    "reasonHint": "The order's history keeps it (inside the factory only).",
+    "reasonPlaceholder": "For example: the customer sends the finished shells",
+    "template": {
+      "label": "Save it also as a ready-made route (every product can copy it)",
+      "placeholder": "For example: Molded, checked twice",
+      "save": "Save as ready-made",
+      "done": "“{name}” is a ready-made route now: every product can copy it.",
+      "list_one": "Ready-made routes ({count})",
+      "list_other": "Ready-made routes ({count})",
+      "takeOut": "Take the ready-made route {name} out of the list (it is kept)",
+      "closed": "Closed routes",
+      "openAgain": "Open again",
+      "nameNeeded": "Type a name for the ready-made route first.",
+      "nameTaken": "A ready-made route with this name is there already. Type another name.",
+      "nameClosed": "A closed ready-made route has this name. Open it again under “Closed routes”, or type another name."
+    }
+  },
+  "refusal": {
+    "NAME_EMPTY": "A department needs a name.",
+    "NAME_TAKEN": "This name is used by another department.",
+    "FLOOR_FIXED": "This department has screens on the floor: its name stays and it cannot be closed.",
+    "FROZEN": "The basket cards of this order are printed: the route of a line is fixed now.",
+    "PRINTED": "The basket cards of this order are printed: the route of a line is fixed now.",
+    "NOT_DRAFT": "This revision is not a draft any more: its routes are frozen.",
+    "CLOSED": "This department is closed: open it again before you change its name.",
+    "CODE_TAKEN": "The operation code of this department is used by another operation of the library: give that one another code first."
+  },
+  "manage": {
+    "switch": "Manage",
+    "hint": "Add a department, change its name, or close it. The departments on the floor keep their name and stay open. Press Manage again when you are done.",
+    "listLabel": "The departments of the factory",
+    "nameOf": "The name of the department {name}",
+    "onFloor": "on the floor",
+    "closed": "closed",
+    "closeOf": "Close the department {name}",
+    "closeHint": "It leaves the list. The routes that use it keep it. Nothing is deleted.",
+    "openOf": "Open the department {name} again",
+    "openHint": "It comes back in the list.",
+    "newLabel": "The name of a new department",
+    "newPlaceholder": "A new department",
+    "add": "Add",
+    "nameFirst": "Type the name of the new department first.",
+    "done": {
+      "added": "{name} is a new department: drag it into the route, or press its +.",
+      "renamed": "The department is called {name} now: every route shows it.",
+      "closed": "{name} is closed. It leaves the list; the routes that use it keep it.",
+      "opened": "{name} is open again."
+    }
+  },
+  "line": {
+    "section": "Route of each line",
+    "info": "Which departments each line goes through, and where that route comes from: the product, a model, the customer, the order structure, or only this order. Only people of the factory see it; the customer never sees a route.",
+    "answer": {
+      "open": "Sales picks the model of a line; the route comes with it. Another route is an exception of the production manager.",
+      "frozen": "Fixed at the print of the basket cards: the route of each line does not change here any more."
+    },
+    "source": {
+      "REVISION": "From the product",
+      "MODEL": "Model",
+      "CUSTOMER": "For this customer",
+      "STRUCTURE": "Order structure",
+      "EXCEPTION": "Only this order",
+      "other": "Its route"
+    },
+    "title": "{seq} · {product}",
+    "titleNoProduct": "{seq} · No product yet",
+    "why": "Why: {reason}",
+    "whenBy": "{by}, {date}",
+    "when": "{date}",
+    "pickOf": "The model of {line}",
+    "normal": "Normal (the product's route)",
+    "another": "Another route for this order…",
+    "back": "Back to the normal route",
+    "none": "No line with a product yet."
+  }
+}

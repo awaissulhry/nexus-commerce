@@ -14,6 +14,7 @@ import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { contextOf, mayWrite } from '../materials/store'
+import { routeSummaryOf } from './route-summary' // owb-pd1 1.2: "How it is made"
 
 /**
  * The style library's rows (factory-db `Style`, `Colourway`, `Variant`, `StyleRevision`, and the `SizeScale` and `Size`
@@ -298,7 +299,7 @@ export function styleSummaryView(row: StyleRowData, facts: RowFacts) {
   } satisfies Omit<StyleView, StyleOnly>
 }
 /** The fields the record has and a list row has not. */
-type StyleOnly = 'copiedFrom' | 'description' | 'measurementTemplate' | 'tracking' | 'garmentTracking' | 'range' | 'colourways' | 'matrix' | 'skus' | 'revisions' | 'warnings' | 'createdAt' | 'createdById'
+type StyleOnly = 'copiedFrom' | 'description' | 'measurementTemplate' | 'tracking' | 'garmentTracking' | 'range' | 'colourways' | 'matrix' | 'skus' | 'revisions' | 'warnings' | 'createdAt' | 'createdById' | 'routeSummary'
 
 /** Everything the style record shows besides the style row. */
 export interface StyleParts {
@@ -308,6 +309,8 @@ export interface StyleParts {
   readonly revisions: readonly RevisionRowData[]
   /** Colourways something names (SKUs, BOM colours, order lines, coverage). */
   readonly colourwaysInUse: ReadonlySet<string>
+  /** owb-pd1 1.2: "How it is made" — the departments of the current revision's route (./route-summary). */
+  readonly routeSummary: StyleView['routeSummary']
 }
 
 export const offerOf = (sizes: readonly string[], colourways: readonly Pick<ColourwayRowData, 'id' | 'code' | 'status'>[]): MatrixOffer => ({
@@ -413,6 +416,7 @@ export function styleViewOf(row: StyleRowData, parts: StyleParts): StyleView {
     warnings: styleWarnings(fields, { activeColourways: parts.colourways.filter((colourway) => colourway.status === 'ACTIVE').length, missingCells: matrix.missing }),
     createdAt: toUtcIso(row.createdAt),
     createdById: row.createdById,
+    routeSummary: parts.routeSummary.map((step) => ({ ...step })), // owb-pd1 1.2
   }
 }
 
@@ -439,7 +443,8 @@ export async function readParts(client: FactoryClient | CommandTx, row: Pick<Sty
   const colourways = await client.colourway.findMany({ where: { styleId: row.id }, select: COLOURWAY_COLUMNS, orderBy: [{ createdAt: 'asc' }, { code: 'asc' }] })
   const variants = await client.variant.findMany({ where: { styleId: row.id }, select: VARIANT_COLUMNS })
   const revisions = await client.styleRevision.findMany({ where: { styleId: row.id }, select: REVISION_COLUMNS, orderBy: { revision: 'desc' } })
-  return { scaleSizes, colourways, variants, revisions, colourwaysInUse: await colourwaysInUse(client, row.id) }
+  const inUse = await colourwaysInUse(client, row.id)
+  return { scaleSizes, colourways, variants, revisions, colourwaysInUse: inUse, routeSummary: await routeSummaryOf(client, row.id) }
 }
 
 /** The style as the caller may see it; another company's (outside the caller's grants) or another tenant's is not found. */

@@ -28,6 +28,8 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { floorToldAt } from '../../told'
 import { LineMenuButton } from '../LineMenu'
 import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
+import { BasketRows, PrintAgainButton } from './FlowProduction' // owb-of6 step 1: the Baskets rows (S5's read), Print again…
+import { PrintAgainWindow } from '../../print/PrintAgainWindow' // owb-of6 step 1: S3's window, through the base's stub (L10)
 import { PriorityRushDialog, WorkOrderDetail, type DetailEntry } from './WorkOrderDetail'
 
 const WORK_ORDERS_NS = 'production-work-orders'
@@ -44,6 +46,7 @@ const WORK_ORDERS_NS = 'production-work-orders'
  */
 export function WorkOrdersSection({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const [again, setAgain] = useState(false) // owb-of6: Print again… open
   const locale = useLocale()
   const state = model.production ?? null
   const read = readOf(state)
@@ -61,6 +64,8 @@ export function WorkOrdersSection({ order, model, actions }: { order: Order; mod
       <Factory size={14} aria-hidden /> {makeLabel}
     </Button>
   ) : null
+  // owb-of6 step 1 (design § 5zj B): Print again… — after the first print (the order in production or later), for production.print.start.
+  const printAgain = model.can.printStart && (order.status === 'IN_PRODUCTION' || order.status === 'READY' || order.status === 'PARTLY_SHIPPED') ? <PrintAgainButton key="printAgain" onOpen={() => setAgain(true)} /> : null
   const summary = work ? workSummaryOf(work) : null
   const answer = summary
     ? [t('productionTab.wo.summary', { count: summary.count }), t('productionTab.wo.pieces', { count: summary.pieces }), summary.onHold > 0 ? t('productionTab.wo.onHoldCount', { count: summary.onHold }) : null, summary.afterDue > 0 ? t('productionTab.wo.afterDueCount', { count: summary.afterDue }) : null].filter(Boolean).join(' · ')
@@ -70,12 +75,16 @@ export function WorkOrdersSection({ order, model, actions }: { order: Order; mod
   let body
   if (!state || state.status === 'loading') body = <PartReading rows={3} height={40} />
   else if (state.status === 'failed') body = <PartFailed part={t('productionTab.wo.title')} problem={state.problem} onRetry={() => actions?.onRetryProduction?.()} />
+  // owb-of6 step 1 (L8): S5's basket read, once it answers, is the section's rows ("Step k of n", late); until then today's work orders.
+  else if (model.flow?.baskets && model.flow.baskets.length > 0) body = <BasketRows baskets={model.flow.baskets} />
   else if (work && (work.workOrders.length > 0 || work.mtm.length > 0)) body = <Rows order={order} model={model} actions={actions} href={workOrderHref} />
   else if (work) body = <EmptyWork model={model} uncovered={uncovered} />
   else body = <ChainOnly order={order} href={workOrderHref} />
   return (
-    <Section id="work-orders" title={t('productionTab.wo.title')} answer={answer} asOf={work ? read!.asOf : null} buttons={makeButton ? [makeButton] : []} info={<p>{t('productionTab.wo.infoBody')}</p>}>
+    <Section id="work-orders" title={t('productionTab.wo.title')} answer={answer} asOf={work ? read!.asOf : null} buttons={[...(makeButton ? [makeButton] : []), ...(printAgain ? [printAgain] : [])]} info={<p>{t('productionTab.wo.infoBody')}</p>}>
       {body}
+      {/* owb-of6 step 1: S3's Print again window (the SAME codes, a reason), mounted once for the tab. */}
+      <PrintAgainWindow open={again} onClose={() => setAgain(false)} companyId={order.companyId} orderId={order.id} />
       <div className="fw-pt-wo-foot">
         {uncovered > 0 && mayMake && work && (work.workOrders.length > 0 || work.mtm.length > 0) ? <p className="fw-pt-hint">{t('production.uncovered', { count: uncovered })}</p> : null}
         {work && work.workOrdersLeftOut > 0 ? <p className="fw-pt-hint">{t('overview.linked.leftOut', { count: work.workOrdersLeftOut })}</p> : null}

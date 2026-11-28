@@ -17,7 +17,12 @@ import { TASK_ROUTES } from './tasks/routes'
 /** The pages a worker moves between: Home, every tile, and what the frame and the menu open. Enrol and the line TV are no moves. */
 export const FLOOR_PAGES: readonly string[] = ['/floor', '/floor/scan', '/floor/sync', '/floor/notice', '/floor/sign-in', ...Object.values(TASK_ROUTES),
   // B-W2b-143: the safety data sheets at a cabinet (the cabinet QR, through Scan anything): no tile, held all the same.
-  '/floor/sds']
+  '/floor/sds',
+  // owb-fl8: Floor › Me (the phone's Me page; its tree entry is added at the land).
+  '/floor/me',
+  // owb-fl9: the team leader's Board and a chain on the floor (their tree entries are added at the land).
+  '/floor/board',
+  '/floor/chains']
 
 /** While online the pages are asked for again this often: Next keeps what it holds, and fetches what went stale or failed. */
 export const PREFETCH_EVERY_MS = 10 * 60_000

@@ -462,5 +462,54 @@
     "line": {
       "removed": "Riga {seq} tolta."
     }
+  },
+  "ordersSheet": {
+    "noSubject": "Senza oggetto",
+    "deleteOne": "Eliminate la bozza «{title}»? Non è stata inviata. La fabbrica non l’ha mai vista.",
+    "deleteAll_one": "Eliminate {count} bozza? Non è stata inviata. La fabbrica non l’ha mai vista.",
+    "deleteAll_other": "Eliminate {count} bozze? Non sono state inviate. La fabbrica non le ha mai viste.",
+    "cancel": "Annulla",
+    "delete": "Eliminate",
+    "drafts_one": "{count} bozza di un nuovo ordine",
+    "drafts_other": "{count} bozze di un nuovo ordine",
+    "openDraft": "Aprite questa bozza",
+    "deleteThis": "Eliminate la bozza «{title}»",
+    "more": "e altre {count} nella finestra Nuovo ordine",
+    "notSent": "Non inviate. La fabbrica non vede una bozza.",
+    "deleteDrafts": "Eliminate le bozze",
+    "busy": "Ci stiamo lavorando…",
+    "send": "Inviate…",
+    "sentOne": "Inviato: il vostro ordine · {title}.",
+    "sentMany_one": "Inviato: {count} ordine.",
+    "sentMany_other": "Inviati: {count} ordini.",
+    "sentBody": "La fabbrica lo ha. Potete ritirarlo finché la fabbrica non lo conferma.",
+    "takeBack": "Ritiratelo",
+    "takeBackAll": "Ritirateli",
+    "ok": "OK",
+    "withdrawn": "Ritirati {count}",
+    "withdrawnHint": "Gli ordini ritirati restano, ma nascosti",
+    "picture": "L’immagine dell’ordine: cambiatela",
+    "takenBack_one": "{count} ordine è di nuovo una bozza. La fabbrica non lo ha più.",
+    "takenBack_other": "{count} ordini sono di nuovo bozze. La fabbrica non li ha più.",
+    "col": {
+      "waits": "In attesa · novità",
+      "details": "Dettagli"
+    },
+    "waits": {
+      "NEW_MESSAGES_one": "{count} nuovo",
+      "NEW_MESSAGES_other": "{count} nuovi",
+      "DESIGN_APPROVAL": "Design: il vostro sì?",
+      "SEND_LABEL": "Inviate l’etichetta di spedizione",
+      "ASKED_one": "{count} chiesta",
+      "ASKED_other": "{count} chieste",
+      "OPEN_DETAILS_one": "{count} aperto",
+      "OPEN_DETAILS_other": "{count} aperti",
+      "LATE": "In ritardo"
+    },
+    "yourOrder": "Il vostro ordine",
+    "sendNotYours": "Lo invia un collega che può ordinare: la bozza resta com’è.",
+    "failed": "Non ha funzionato. Riprovate.",
+    "refusedConflict": "La fabbrica ha già risposto a questo ordine, oppure qualcuno lo ha cambiato nel frattempo.",
+    "refusedAccess": "Il vostro accesso non lo permette: chiedete al vostro amministratore."
   }
 }

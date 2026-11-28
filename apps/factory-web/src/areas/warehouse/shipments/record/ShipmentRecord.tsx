@@ -86,6 +86,13 @@ import { DOOR_NS } from '../queue/shared/door-words' // F-OS-203
 // ---- B-TH-264: the docked thread on the shipment (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
+// ---- owb-ss3 step 3.3: to our warehouse first (the SAME marks and window as the order's Shipments tab) and the payment warning ----
+import type { OrderWarningKind } from '@nexus/factory-domain/sales/warnings/kinds'
+import { LegActWindow } from '../../../sales/orders/record/shipments/legs/LegActWindow'
+import { legActsOf, legByShipment, shipRightsOf, type LegAct } from '../../../sales/orders/record/shipments/legs/model'
+import { useOrderLegs } from '../../../sales/orders/record/shipments/legs/use-legs'
+import { LegBanner } from '../../../sales/orders/record/shipments/legs/view/LegBanner'
+import { handOverWarningsOf, withLegReason } from './doors'
 
 /**
  * `/w/<company>/warehouse/shipments/<id>` (SCR-067): loads the shipment (shipping.view; the API checks its company,
@@ -101,7 +108,7 @@ import { printHref } from '../../../../shell/print/print-model'
  */
 export function ShipmentRecord({ shipmentId }: { shipmentId: string }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', 'records', DEPTH_NS, DOOR_NS /* F-OS-203: the dialogs it shares with the order's Shipments tab */]}>
+    <WithMessages namespaces={['shipments', 'lists', 'records', DEPTH_NS, DOOR_NS /* F-OS-203: the dialogs it shares with the order's Shipments tab */, 'ship-ways' /* owb-ss3 */, 'order-life' /* owb-ss3: the At our warehouse chip */]}>
       <RecordContainer shipmentId={shipmentId} />
     </WithMessages>
   )
@@ -146,6 +153,11 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const [ddtForm, setDdtForm] = useState<DdtForm | null>(null)
   const [bought, setBought] = useState<Bought | null>(null)
   const [sent, setSent] = useState<SentLinks | null>(null)
+  // owb-ss3: the leg's window (It arrived at the warehouse · Send on to the customer) and the hand-over's warnings once refused.
+  const [legAct, setLegAct] = useState<LegAct | null>(null)
+  const [handOverWarnings, setHandOverWarnings] = useState<OrderWarningKind[] | null>(null)
+  const handOverWarningsRef = useRef<OrderWarningKind[] | null>(null)
+  handOverWarningsRef.current = handOverWarnings
   const keys = useRef<Record<string, string>>({})
   const keyOf = (name: string) => (keys.current[name] ??= newIdempotencyKey())
   const dropKey = (name: string) => delete keys.current[name]
@@ -399,9 +411,12 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     () => void load(),
   )
 
-  /** One write; then the shipment and its parts are read again (a write answers the packing view or a part, not the record). */
+  /**
+   * One write; then the shipment and its parts are read again (a write answers the packing view or a part, not the record). owb-ss3:
+   * `onRefused` may take a refusal of its own (the hand-over's 409 WARNINGS) — true: handled, the dialog stays without a problem line.
+   */
   const write = useCallback(
-    async (run: () => Promise<void | Shipment>, success: string | null, options: { keepDialog?: boolean; key?: string } = {}) => {
+    async (run: () => Promise<void | Shipment>, success: string | null, options: { keepDialog?: boolean; key?: string; onRefused?: (error: unknown) => boolean } = {}) => {
       if (busy) return
       setBusy(true)
       setNotice(null)
@@ -416,6 +431,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
         if (!options.keepDialog) setDialog(null)
         if (success) setNotice({ tone: 'success', words: { key: success } })
       } catch (error) {
+        if (options.onRefused?.(error)) return
         const problem = writeProblem(error)
         if (dialogRef.current) setDialogProblem({ words: { key: problem.key }, detail: problem.detail ?? null })
         else setNotice({ tone: 'danger', words: { key: problem.key }, detail: problem.detail ?? null })
@@ -430,6 +446,21 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const version = () => current.current?.version ?? 1
   const value = shipment.status === 'ready' ? shipment.value : null
   const liveDdt = ddts.value?.find((row) => row.status === 'LIVE') ?? null
+
+  // ---- owb-ss3 step 3.3: the shipment's leg (GET /shipping/warehouse-legs of its order, read again with each version) ----
+  const rights = useMemo(() => shipRightsOf(session.permissions), [session.permissions])
+  const legs = useOrderLegs(api, value?.salesOrderId ?? null, value ? `${value.status}:${value.version}` : null)
+  const leg = value ? (legByShipment(legs.legs).get(value.id) ?? null) : null
+  // The first leg travels as a TRANSFER (preset, read only); after it arrived, the usual SALE. The draft is read again with it.
+  const liveId = liveDdt?.id ?? null
+  useEffect(() => {
+    if (!value || !ddtForm) return
+    const next = withLegReason(ddtForm, leg, liveId !== null)
+    if (next === ddtForm) return
+    setDdtForm(next)
+    void loadPreview(value, next)
+    // Only the leg's arrival, the live DDT and the form's reason change the reason (the form's other fields are the person's).
+  }, [leg?.shipmentId, leg?.arrivedAt, liveId, ddtForm?.reason])
 
   const model: ShipmentRecordModel = {
     prefix,
@@ -459,6 +490,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     voided,
     candidates, // F-OP-130
     picked, // F-OP-130
+    handOverWarnings, // owb-ss3
   }
 
   // B-W2b-410: the parts in depth, each its own container; the cartons card lends W1's carton dialogs and writes.
@@ -507,6 +539,16 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
       printThread={value ? <ThreadPrint record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName }} /> : null}
       // B-W2b-170: the customer's tracking page (links.tracking) on Carrier & tracking.
       trackingLink={value ? <TrackingLinkCard shipmentId={value.id} /> : null}
+      // owb-ss3 step 3.3: to our warehouse first — where it is, and It arrived at the warehouse / Send on to the customer (the
+      // server's `may` and pack and send), in the SAME window as the order's Shipments tab.
+      leg={
+        value && leg ? (
+          <>
+            <LegBanner leg={leg} status={value.status} acts={legActsOf(leg, rights)} onAct={setLegAct} />
+            {legAct ? <LegActWindow open act={legAct} salesOrderId={value.salesOrderId} shipmentId={value.id} onClose={() => setLegAct(null)} onDone={() => void load()} /> : null}
+          </>
+        ) : null
+      }
       actions={{
         onRetry: () => void load(),
         onRetryPart: (which) => {
@@ -530,7 +572,8 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           setBought(null)
           setSent(null)
           setVoided(null)
-          if (next?.kind === 'issueDdt' && value && !ddtForm) setDdtForm(ddtFormFor(value, preview?.value ?? null))
+          setHandOverWarnings(null) // owb-ss3: a new dialog starts without the warnings
+          if (next?.kind === 'issueDdt' && value && !ddtForm) setDdtForm(withLegReason(ddtFormFor(value, preview?.value ?? null), leg, liveDdt !== null))
           // F-OP-130 (N6): "Add an order's garments…" opens on the list of the customer's orders that may join.
           if (next?.kind === 'addOrder' && value) {
             pickOrder(null)
@@ -620,7 +663,19 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           )
         },
         onPrintLabels: () => void write(async () => void (await printLabels(api, shipmentId)), 'notice.labelsPrinted'),
-        onHandOver: (at) => void write(() => shipShipment(api, shipmentId, version(), handOverBody(at)), 'notice.shipped'), // F-OS-203 (B-OS-014)
+        // F-OS-203 (B-OS-014) + owb-ss3 (settle L2): a payment due before shipping answers 409 WARNINGS — the dialog stays and says it
+        // in words; the same press again ("Ship it anyway") sends the warnings read as `overrides`.
+        onHandOver: (at) => {
+          const overrides = handOverWarningsRef.current
+          void write(() => shipShipment(api, shipmentId, version(), { ...handOverBody(at), ...(overrides && overrides.length > 0 ? { overrides } : {}) }), 'notice.shipped', {
+            onRefused: (error) => {
+              const found = handOverWarningsOf(error)
+              if (!found) return false
+              setHandOverWarnings(found)
+              return true
+            },
+          })
+        },
         onCancel: (reason) => void write(() => cancelShipment(api, shipmentId, version(), reason), 'notice.cancelled'),
         // B-W2a-71 (every day)
         onVoidLabels: (reason) => {
