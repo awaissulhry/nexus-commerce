@@ -31,7 +31,7 @@ export const RULES: readonly RuleRow[] = [
   rule('r-closed', 50, null, 'VEST', 's-race', { closed: true }),
 ]
 
-export const RULES_READ: RulesRead = { rules: RULES, neverUsed: 1, may: { write: true } }
+export const RULES_READ: RulesRead = { rules: [...RULES], neverUsed: 1, may: { write: true } }
 
 export const ORDER_ONE: OrderStructure = {
   orderId: 'order-100',

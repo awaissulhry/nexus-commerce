@@ -21,10 +21,10 @@ function elementsOf(node: ReactNode): ReactElement[] {
 
 describe('owb-of7 step 4: the part renders the words and calls Go on', () => {
   it('the words and "Go on" in the page\'s language', () => {
-    const drawn = textOf(render(createElement(YellowLine, { onGoOn: () => undefined }, 'A payment is still due.')))
+    const drawn = textOf(render(createElement(YellowLine, { onGoOn: () => undefined, children: 'A payment is still due.' })))
     expect(drawn).toContain('A payment is still due.')
     expect(drawn).toContain('Go on')
-    expect(textOf(render(createElement(YellowLine, { onGoOn: () => undefined }, 'Un pagamento è ancora dovuto.'), 'it'))).toContain('Procedi')
+    expect(textOf(render(createElement(YellowLine, { onGoOn: () => undefined, children: 'Un pagamento è ancora dovuto.' }), 'it'))).toContain('Procedi')
   })
   it('Go on calls the host\'s act; no act → the words only', () => {
     const onGoOn = vi.fn()

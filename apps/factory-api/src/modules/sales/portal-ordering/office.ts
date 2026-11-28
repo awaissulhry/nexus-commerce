@@ -52,6 +52,7 @@ import { ownPriceView } from './people'
 import type { ConfirmTyped, StillOpen } from '@nexus/factory-domain/sales/portal-ordering/still-open'
 import { confirmHeldWords } from '@nexus/factory-domain/sales/portal-ordering/still-open'
 import { choicesOf } from '@nexus/factory-domain/sales/portal-ordering/choices'
+import { materialOf } from '@nexus/factory-domain/sales/portal-ordering/line-moves'
 import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { draftStillOpen, peopleSizesOf, shipToInUseOf } from './people'
 import { sendProblems } from './requests'
@@ -442,7 +443,8 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   const sheetNames = new Map(stored.map((file) => [file.id, file.originalName]))
   const sheetOf: SheetOf = (fileId) => (sheetNames.has(fileId) ? { id: fileId, originalName: sheetsLocked ? null : sheetNames.get(fileId)!, locked: sheetsLocked } : null)
   const sheetLines = sheetLinesOf(stored)
-  const customViews = custom.map((line) => customLineView(line, people, sheetLines, customCatalogue, mtm, sheetOf))
+  // owb- po1.3 (settle 4), the office twin of the portal's view: + each custom line's material (its "Material" choice, else its colourway).
+  const customViews = custom.map((line) => ({ ...customLineView(line, people, sheetLines, customCatalogue, mtm, sheetOf), material: materialOf({ choices: choicesOf(line.choices), colourwayName: line.colourwayId ? (customCatalogue.colourways.get(line.colourwayId)?.name ?? null) : null }) }))
   // ---- end B-CP-075
   const totals = draftTotals(lines.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), true)
   const open = row.status === 'SENT'
