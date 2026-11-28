@@ -11,7 +11,7 @@ import { TeamChip } from '../../../../lib/people-picture/view/TeamChip'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import { HidePhoto } from '../../../tasks/cutting/view/HidePhoto'
-import type { BasketRead } from '../../api'
+import { teamPictureOf, type BasketRead } from '../../api'
 import { BasketDock, dockDraws, type BasketDockModel, type DockAction } from '../../dock/BasketDock'
 import { QcCard, type QcAction, type QcCardModel } from '../../dock/QcCard'
 import { AskCard, AskTile, AskWindow, NotesTile, PhotoTile, ProblemCard, ProblemTile } from '../../help'
@@ -244,7 +244,7 @@ function Facts({ view, timeZone }: { readonly view: BasketView; readonly timeZon
       </li>
       {basket.team ? (
         <li className="fw-bk-fact">
-          <TeamChip team={{ name: basket.team.name, kind: basket.team.picture?.kind ?? null, icon: basket.team.picture?.icon ?? null, colour: basket.team.picture?.colour ?? null }} />
+          <TeamChip team={{ name: basket.team.name, ...teamPictureOf(basket.team) }} />
         </li>
       ) : null}
       {words.label ? (

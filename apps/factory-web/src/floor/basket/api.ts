@@ -38,6 +38,17 @@ const teamSchema = z.object({
   id: z.string(),
   name: z.string(),
   picture: z.object({ kind: z.string().nullable().optional(), icon: z.string().nullable().optional(), colour: z.string().nullable().optional() }).nullable().optional(),
+  /** The team read (fl4) names the picture's columns flat. */
+  pictureKind: z.string().nullable().optional(),
+  pictureIcon: z.string().nullable().optional(),
+  pictureColour: z.string().nullable().optional(),
+})
+
+/** A team's picture columns, whichever way the read names them. */
+export const teamPictureOf = (team: z.infer<typeof teamSchema>): { readonly kind: string | null; readonly icon: string | null; readonly colour: string | null } => ({
+  kind: team.picture?.kind ?? team.pictureKind ?? null,
+  icon: team.picture?.icon ?? team.pictureIcon ?? null,
+  colour: team.picture?.colour ?? team.pictureColour ?? null,
 })
 
 export const STEP_STATES = ['DONE', 'HERE', 'NEXT', 'TODO', 'SKIPPED'] as const
@@ -140,11 +151,15 @@ export type ForYouItem = z.infer<typeof forYouSchema>
 /** A row flag: a yes/no, or the call / warning object the server may send in its place (present = yes). */
 const rowFlag = z.preprocess((value) => value === true || (typeof value === 'object' && value !== null), z.boolean())
 
+/** A row's picture: the team read (fl4) may name a file with no address yet (`src` null): drawn as no picture. */
+const rowPictureSchema = z.preprocess((value) => (value && typeof value === 'object' && (value as { src?: unknown }).src == null ? null : value), basketPictureSchema.nullable())
+
 const rowSchema = z.object({
   bundleId: z.string(),
   code: z.string(),
-  picture: basketPictureSchema.nullable(),
-  customerCode: z.string(),
+  picture: rowPictureSchema,
+  /** The customer's CODE ('' for none: the team read may send null). */
+  customerCode: z.string().nullable().transform((code) => code ?? ''),
   step: z.object({ operationId: z.string().nullable(), department: departmentLookSchema.nullable() }),
   state: z.enum(WORK_STATES),
   flags: z.object({ first: rowFlag, late: rowFlag, problem: rowFlag }),
@@ -244,7 +259,7 @@ export function normalRoute(api: ApiClient, target: RouteTarget): Promise<TaskOu
 const teamPersonSchema = z.object({ key: z.string(), name: z.string().nullable(), holds: z.object({ bundleId: z.string(), code: z.string() }).nullable() })
 export type TeamPerson = z.infer<typeof teamPersonSchema>
 
-const teamOrderSchema = z.object({ salesOrderId: z.string().nullable(), customerCode: z.string(), picture: basketPictureSchema.nullable(), baskets: z.array(rowSchema) })
+const teamOrderSchema = z.object({ salesOrderId: z.string().nullable(), customerCode: z.string().nullable().transform((code) => code ?? ''), picture: rowPictureSchema, baskets: z.array(rowSchema) })
 export type TeamOrder = z.infer<typeof teamOrderSchema>
 
 /** `GET /production/baskets/team` (floor.lead; server B's fl4): the leader's home. Numbers of the TEAM, never of one person. */
@@ -306,18 +321,20 @@ const announced = z.object({ file: z.object({ id: z.string() }), upload: presign
  * size and SHA-256, the bytes PUT to the store, then completed — the server sets the step's `OperationChecklistResult.fileId`.
  * Online only (a photo never queues).
  */
-export async function uploadQualityPhoto(api: ApiClient, bundleId: string, stepCode: string, photo: Blob): Promise<TaskOutcome<{ readonly fileId: string }>> {
+export async function uploadQualityPhoto(api: ApiClient, bundleId: string, stepCode: string, workOrderOperationId: string, photo: Blob): Promise<TaskOutcome<{ readonly fileId: string }>> {
   const base = `/production/baskets/${seg(bundleId)}/checklist/${seg(stepCode)}/photo`
   const bytes = await photo.arrayBuffer()
   const sha256 = await sha256Hex(bytes)
   const contentType = (photo.type || 'image/jpeg').split(';')[0]!.trim()
-  const first = await floorWrite(api, 'POST', base, { body: { originalName: `${stepCode}.jpg`, contentType, sizeBytes: bytes.byteLength, sha256 }, schema: announced })
+  const first = await floorWrite(api, 'POST', base, { body: { workOrderOperationId, originalName: `${stepCode}.jpg`, contentType, sizeBytes: bytes.byteLength, sha256 }, schema: announced })
   if (!first.ok) return first
   try {
     await putToStore(first.value.upload, bytes)
   } catch {
     return { ok: false, problem: { kind: 'unavailable' } }
   }
-  const done = await floorWrite(api, 'POST', `${base}/${seg(first.value.file.id)}/complete`, { schema: z.object({ file: z.object({ id: z.string() }) }) })
+  // The tick the photo proves: one, once (fl1's contract: the step's operation and the device's id for the tick).
+  const clientEventId = newIdempotencyKey()
+  const done = await floorWrite(api, 'POST', `${base}/${seg(first.value.file.id)}/complete`, { body: { workOrderOperationId, clientEventId }, schema: z.object({ file: z.object({ id: z.string() }) }), idempotencyKey: clientEventId })
   return done.ok ? { ok: true, value: { fileId: done.value.file.id } } : done
 }

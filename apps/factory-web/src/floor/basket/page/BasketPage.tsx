@@ -264,7 +264,9 @@ export function BasketPage({ code }: { readonly code: string }) {
         const shot = photo
         if (!view || !shot) return
         return void act(async () => {
-          const sent = await uploadQualityPhoto(api, view.basket.id, shot.code, action.photo)
+          const operationId = hereOperationOf(view)
+          if (!operationId) return { kind: 'unavailable' }
+          const sent = await uploadQualityPhoto(api, view.basket.id, shot.code, operationId, action.photo)
           if (!sent.ok) return sent.problem.kind === 'offline' ? { kind: 'refused', code: 'PHOTO', message: tb('qc.photoOffline'), fix: null } : { kind: 'refused', code: 'PHOTO', message: tb('qc.photoFailed'), fix: null }
           setSteps((now) => stepDone(now, shot.code))
           setPhoto(null)

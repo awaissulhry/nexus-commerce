@@ -5,7 +5,7 @@ import { FloorButton, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { DeptChip } from '../../../lib/department/view/DeptChip'
 import { useT } from '../../../lib/i18n/provider'
 import { TeamChip } from '../../../lib/people-picture/view/TeamChip'
-import type { BasketRow, BasketTeam, ForYouItem } from '../../basket/api'
+import { teamPictureOf, type BasketRow, type BasketTeam, type ForYouItem } from '../../basket/api'
 import { DepartmentButton, DepartmentPickWindow, type DepartmentPickAction, type DepartmentPickModel } from '../../basket/home/view/DepartmentPick'
 import { ForYouList } from '../../basket/home/view/ForYouList'
 import { deptOf } from '../../basket/model'
@@ -210,7 +210,7 @@ function TeamPart({ model, team, onAction }: { readonly model: LeaderHomeViewMod
   return (
     <>
       <div className="fw-ld-team">
-        {team.team ? <TeamChip team={{ name: team.team.name, kind: team.team.picture?.kind ?? null, icon: team.team.picture?.icon ?? null, colour: team.team.picture?.colour ?? null }} /> : <span className="fw-bk-muted">{tb('leader.noTeam')}</span>}
+        {team.team ? <TeamChip team={{ name: team.team.name, ...teamPictureOf(team.team) }} /> : <span className="fw-bk-muted">{tb('leader.noTeam')}</span>}
         <Flag tone={team.missing > 0 ? 'warning' : 'neutral'} icon={<UserRound />}>
           {tb('leader.missing', { count: team.missing })}
         </Flag>
