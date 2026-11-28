@@ -144,7 +144,26 @@ export const portalDraftPort = (api: ApiClient): OrderDraftPort => ({
   completeFile: (id, fileId, idempotencyKey) => completeDraftFile(api, id, fileId, idempotencyKey),
   removeFile: (id, fileId, version, idempotencyKey) => removeDraftFile(api, id, fileId, version, idempotencyKey),
   markFile: (id, fileId, body, idempotencyKey) => markDraftFile(api, id, fileId, body, idempotencyKey),
+  // owb-po3 (the server's owb-po1): Copy a line · Put it back.
+  copyLine: (id, lineId, version, idempotencyKey) => copyLine(api, id, lineId, version, idempotencyKey),
+  putBackLine: (id, lineId, version, idempotencyKey) => putBackLine(api, id, lineId, version, idempotencyKey),
 })
+
+// ---- owb-po3 (owb-po-server § Shape "COMMANDS", built by the server's owb-po1 / owb-po2): copy a line, put a line taken out back, take a
+// sent order back (until the factory confirms), and the bulk delete / send of drafts (one answer per draft, the refused ones in words).
+export const copyLine = (api: ApiClient, id: string, lineId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.post(`${path(id)}/lines/${encodeURIComponent(lineId)}/copy`, { body: { version }, schema: recordSchema, idempotencyKey })
+export const putBackLine = (api: ApiClient, id: string, lineId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.post(`${path(id)}/lines/${encodeURIComponent(lineId)}/put-back`, { body: { version }, schema: recordSchema, idempotencyKey })
+export const takeBack = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.post(`${path(id)}/take-back`, { body: { version }, schema: recordSchema, idempotencyKey })
+export const bulkAnswerSchema = z.object({ results: z.array(z.object({ id: z.string(), ok: z.boolean(), words: pair.nullable().default(null) })) })
+export type BulkAnswer = z.infer<typeof bulkAnswerSchema>
+export const bulkDelete = (api: ApiClient, items: readonly { id: string; version: number }[], idempotencyKey: string = newIdempotencyKey()): Promise<BulkAnswer> =>
+  api.post('/portal/order-requests/bulk-delete', { body: { items }, schema: bulkAnswerSchema, idempotencyKey })
+export const bulkSend = (api: ApiClient, items: readonly { id: string; version: number }[], idempotencyKey: string = newIdempotencyKey()): Promise<BulkAnswer> =>
+  api.post('/portal/order-requests/bulk-send', { body: { items }, schema: bulkAnswerSchema, idempotencyKey })
+// ---- end owb-po3
 // ---- end od-w1.1
 
 // ── reorder ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

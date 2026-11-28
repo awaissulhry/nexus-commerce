@@ -8,6 +8,7 @@ import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import type { CrewView } from '../../api'
+import { useFloorDeviceSettings } from '../../me/settings'
 import { CrewStrip } from '../../sign-in/view/CrewStrip'
 import '../../floor.css'
 
@@ -28,6 +29,8 @@ export interface FrameModel {
   station: { name: string | null; site: string } | null
   /** The screen's title, a `floor` message key. */
   titleKey: string
+  /** owb-fl5: a title already in words (a basket's number), in place of `titleKey`'s. */
+  title?: string
   online: boolean
   /** The person's actions saved on this tablet and not yet recorded by the office (floor/shell/banner.ts). */
   pending: number
@@ -75,14 +78,18 @@ export interface FloorFrameViewProps {
   onFrame?: (action: FrameAction) => void
   /** The bottom bar: a `FloorActionBar`. */
   actions?: ReactNode
+  /** owb-fl5: a part after the operator chip (the phone's department pick: where am I). */
+  lead?: ReactNode
   children?: ReactNode
 }
 
-export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrameViewProps) {
+export function FloorFrameView({ frame, onFrame, actions, lead, children }: FloorFrameViewProps) {
   const t = useT('floor')
   const locale = useLocale()
   const send = (action: FrameAction) => onFrame?.(action)
-  const title = t(frame.titleKey)
+  // owb-fl8: this phone's own settings (Floor › Me): Sound and vibration off → the confirm feedback is muted; Large words.
+  const device = useFloorDeviceSettings()
+  const title = frame.title ?? t(frame.titleKey)
   const where = frame.station ? (frame.station.name ? t('frame.where', { station: frame.station.name, site: frame.station.site }) : frame.station.site) : null
 
   const start = frame.operator ? (
@@ -99,6 +106,7 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
         expanded={Boolean(frame.menuOpen)}
         onPress={() => send({ type: 'menu', open: !frame.menuOpen })}
       />
+      {lead}
     </>
   ) : (
     <span className="fw-floor-brand">
@@ -123,6 +131,8 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
   return (
     <FloorFrame
       label={title}
+      muted={!device.sound}
+      className={device.large ? 'fw-floor-large' : undefined}
       header={
         <FloorHeader
           start={start}

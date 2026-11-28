@@ -13,7 +13,7 @@ import { homeBandOf } from './band'
 import { previewRowOf, versionLines } from '../documents/preview/model'
 import type { DocumentPreviewModel } from '../documents/preview/view/DocumentPreview'
 import { documentRows, nextOrderRows, NS, orderCounts, tilesFor, tilesOf, type BuiltPages } from './model'
-import { firstWaiting } from './model' // F-PR-15
+import { firstWaiting, waitingLinkOf } from './model' // F-PR-15; owb-po4.1
 // B-TH-238: the Messages card, and Brand Beta's Home (brand B reads its own requests and conversations only).
 import { messagesCardOf } from './model'
 import { BRAND_BETA } from '../../../lib/testing/two-brands'
@@ -496,7 +496,7 @@ function homeCase(build: (locale: Locale) => CaseInput = () => ({})): HomeCaseBu
       shell: shell(locale, { band: homeBandOf({ t, asOf: formatTime(HOME.asOf, { locale }), statement: input.statement ? '/api/portal/payments/statement/pdf?language=it' : null, emailSettings: !(input.shell?.preview ?? false), ordersKey: built.orders }), ...input.shell }, can),
       home: homeModel(locale, can, built, input.home),
       tasks: five ? { ...tasks, groups: five.groups } : tasks,
-      more: five?.more ? { href: `${PREFIX}/waiting`, label: t('waiting.all', { count: five.open }) } : null,
+      more: waitingLinkOf(PREFIX, five, (count) => t('waiting.all', { count })),
       verbs: { APPROVE: t('verb.APPROVE'), RECONFIRM_ORDER: t('verb.RECONFIRM_ORDER') },
     }
   }

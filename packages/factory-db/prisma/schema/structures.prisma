@@ -1,0 +1,189 @@
+// The order structures (order workflow build, S3 schema wave "structures + units", owb-ssw; _owb-ss-common L9, L10; design
+// order-workflow-2026-11-25 § 5zj C "Order structures and their rules"): who makes an order of a kind — the team or teams that
+// own its work and the office people put on it — with the steps "as the product says" (v1: the line's route, routeOfLine). A
+// list of rules picks the structure of each order line (the first open, active rule that fits wins; the last line, "Everything
+// else → the normal way", is the API's, not a row); one order may take a structure by hand; the first Print and start the work
+// keeps what each line took, so a later change of a rule changes nothing on it.
+//
+//   OrderStructure          one structure of a company: its name, its teams, its office people, a note. Closed and reopened,
+//                           never deleted (closedAt).
+//   OrderStructureRule      one rule on the company's list, in its place (sortOrder): the customer it fits (null: any), the
+//                           kind of product (Style.productType; null: any), the structure it gives. Two OPEN rules never fit
+//                           exactly the same orders (…_order_structures_guards). Closed and reopened, never deleted.
+//   OrderStructureOverride  one order's structure by hand (a structure, or the normal way), with why; one open row per order;
+//                           ended (back to the rules, or another by hand), never changed after, never deleted.
+//   OrderLineStructureKept  what one order line took at the order's first print: the structure, the rule, where it came from
+//                           and a snapshot of its steps, teams and people. Append-only.
+//
+// No column on SalesOrder or SalesOrderLine (L9: own tables keep clear of their guards and their partner columns). Every row
+// carries its company; the rows of one order carry the order's company and customer in their references, so a structure, a
+// rule, an order and a line always belong together. Who writes what (ownership/structures.json): the office only
+// (factory_runtime; production.structures.manage for structures, production.structures.rules for rules and one order by hand,
+// apps/factory-api production/structures); nobody deletes a row. The floor and the partner role read none of it: the customer
+// never reads a structure (the walls of _owb-ss-common).
+
+/// One order structure of a company (owb-ssw, _owb-ss-common L10): the teams that own the work of the orders it is given to,
+/// the office people put on them, and a note; its steps are "as the product says" (v1). Made, changed, closed and reopened by
+/// the office (production.structures.manage); never deleted (closed instead: a rule that names it is then flagged, a kept
+/// line keeps its snapshot). Checked by OrderStructure_guard.
+model OrderStructure {
+  id            String    @id @db.Uuid
+  tenantId      String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String    @db.Uuid
+  /// 1 to 80 trimmed characters ("Molded parts", "Brand Alpha jackets").
+  name          String
+  /// The teams that own the work, in order (the API gives the first the charge): teams of the company, each once, open when
+  /// they are named (OrderStructure_guard). The default is the DATABASE's only (dbgenerated, as OrderTeam.bundleIds): with
+  /// `@default([])` Prisma would name the column in every insert.
+  teamIds       String[]  @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
+  /// The office people put on the order (Users of the OFFICE audience, each once, active when they are named:
+  /// OrderStructure_guard). The default is the database's, as teamIds'.
+  peopleUserIds String[]  @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
+  /// The office's words, 1 to 500 characters, not blank; null: none.
+  note          String?
+  /// Closed (no new rule and no order by hand names it): when and by whom, both or neither; reopened by clearing both.
+  closedAt      DateTime? @db.Timestamptz(3)
+  closedById    String?   @db.Uuid
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?   @db.Uuid
+
+  company   Company                  @relation("OrderStructureCompany", fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The rules that give it, the orders that took it by hand, the lines that kept it.
+  rules     OrderStructureRule[]
+  overrides OrderStructureOverride[]
+  kept      OrderLineStructureKept[]
+
+  // The target of the rules', overrides' and kept lines' company-safe references.
+  @@unique([tenantId, companyId, id])
+  // A company's structures (the page).
+  @@index([tenantId, companyId])
+}
+
+/// One rule of a company's list (owb-ssw, _owb-ss-common L10; the form of InspectionTrigger and ApprovalRule: the first that
+/// fits wins): the orders it fits — a customer (null: any) and a kind of product (null: any) — and the structure it gives
+/// them. Placed, changed, moved, closed and reopened by the office (production.structures.rules); never deleted. Two OPEN
+/// rules never fit exactly the same orders (OrderStructureRule_guard and its partial uniques).
+model OrderStructureRule {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  /// Its place on the list, 1 first (not unique: a move renumbers the list, the API).
+  sortOrder   Int
+  /// The customer it fits: a party of the tenant of no other company (OrderStructureRule_guard); null: any customer.
+  partyId     String?      @db.Uuid
+  /// The kind of product it fits: the line's Style.productType; null: any kind. // S4 ProductType: S4's product type profiles
+  /// (Style.productTypeProfileId) may take this place later.
+  category    ProductType?
+  /// The structure it gives: one of the company (the foreign key), open while the rule is open (OrderStructureRule_guard).
+  structureId String       @db.Uuid
+  /// It is used (false: kept in its place on the list but skipped). The default is the database's (dbgenerated, as
+  /// ShipmentWarehouseLeg.forwardedWithoutLabel's), so a Prisma insert leaves the column out.
+  active      Boolean      @default(dbgenerated("('true'::text)::boolean"))
+  /// The office's words, 1 to 500 characters, not blank; null: none.
+  note        String?
+  /// Closed (off the list; its orders fall to the next rule): when and by whom, both or neither; reopened by clearing both.
+  closedAt    DateTime?    @db.Timestamptz(3)
+  closedById  String?      @db.Uuid
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  structure OrderStructure           @relation(fields: [tenantId, companyId, structureId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  party     Party?                   @relation("OrderStructureRuleParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The lines that kept the structure it gave.
+  kept      OrderLineStructureKept[]
+
+  // The target of the kept lines' company-safe reference.
+  @@unique([tenantId, companyId, id])
+  // A company's list in order; a customer's rules (the customer page).
+  @@index([tenantId, companyId, sortOrder])
+  @@index([tenantId, partyId])
+  @@index([tenantId, structureId])
+}
+
+/// One order's structure by hand (owb-ssw, _owb-ss-common L10; design § 5zj C "One order by hand"): a structure of the company,
+/// or the normal way (no structure), with why. Given and ended by the office (production.structures.rules) only before the
+/// order's first print (the API); one open row per order; an ended row never changes; never deleted
+/// (OrderStructureOverride_guard).
+model OrderStructureOverride {
+  id           String    @id @db.Uuid
+  tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the order's foreign key).
+  companyId    String    @db.Uuid
+  partyId      String    @db.Uuid
+  salesOrderId String    @db.Uuid
+  /// The structure the order takes by hand: one of the company (the foreign key), open when it is given; null exactly when
+  /// normalWay.
+  structureId  String?   @db.Uuid
+  /// By hand the normal way (no structure): exactly when structureId is null (OrderStructureOverride_guard). The default is
+  /// the database's (dbgenerated, as ShipmentWarehouseLeg.forwardedWithoutLabel's), so a Prisma insert leaves it out.
+  normalWay    Boolean   @default(dbgenerated("('false'::text)::boolean"))
+  /// Why, in the office's words: 3 to 500 characters, trimmed.
+  why          String
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  /// The office person who gave it.
+  createdById  String?   @db.Uuid
+  /// Ended (back to the rules, or another by hand): when and by whom, both together, once; then it never changes.
+  endedAt      DateTime? @db.Timestamptz(3)
+  endedById    String?   @db.Uuid
+
+  salesOrder SalesOrder      @relation("OrderStructureOverrideOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  structure  OrderStructure? @relation(fields: [tenantId, companyId, structureId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's rows (its open one: the partial unique OrderStructureOverride_one_open).
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, structureId])
+}
+
+/// What one order line took at its order's FIRST print (owb-ssw, _owb-ss-common L10; ss6 step 4): the structure (null: the
+/// normal way), the rule that gave it (null: by hand or the normal way), where it came from, and a snapshot of what it was
+/// then — { steps, teams: [{ id, name }], people: [{ id, name }] } — so a later change of a rule or a structure changes
+/// nothing on the order. Written by the office inside the print command (production.print.start); never changed or removed
+/// (the triggers, for every login).
+/// @append-only
+model OrderLineStructureKept {
+  id               String             @id @db.Uuid
+  tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the order's and the line's foreign keys).
+  companyId        String             @db.Uuid
+  partyId          String             @db.Uuid
+  salesOrderId     String             @db.Uuid
+  /// A line of that order (OrderLineStructureKept_check), kept once.
+  salesOrderLineId String             @db.Uuid
+  /// The structure it took (one of the company); null: the normal way.
+  structureId      String?            @db.Uuid
+  /// The rule that gave it (one of the company, giving that structure); null: by hand or the normal way.
+  ruleId           String?            @db.Uuid
+  /// RULE (a rule gave it: structure and rule named), ORDER (by hand on the order: no rule) or NORMAL (the normal way: neither).
+  keptFrom         OrderStructureFrom
+  /// What it was at the print: { steps, teams: [{ id, name }], people: [{ id, name }] } (an object).
+  snapshot         Json
+  keptAt           DateTime           @default(now()) @db.Timestamptz(3)
+  /// The office person who printed.
+  keptById         String?            @db.Uuid
+
+  salesOrder SalesOrder          @relation("OrderLineStructureKeptOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line       SalesOrderLine      @relation("OrderLineStructureKeptLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  structure  OrderStructure?     @relation(fields: [tenantId, companyId, structureId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  rule       OrderStructureRule? @relation(fields: [tenantId, companyId, ruleId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One kept row per line.
+  @@unique([tenantId, salesOrderLineId])
+  // An order's kept lines (the order's structure read).
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, structureId])
+  @@index([tenantId, ruleId])
+}
+
+/// Where an order line's structure came from (owb-ssw; structureOf's `from`): a rule, the order by hand, or the normal way.
+enum OrderStructureFrom {
+  RULE
+  ORDER
+  NORMAL
+}

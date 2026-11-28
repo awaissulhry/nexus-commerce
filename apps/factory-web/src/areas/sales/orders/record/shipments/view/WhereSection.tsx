@@ -32,7 +32,7 @@ import { useShipSay } from './say'
  * lines… / Reopen lines… (in place, one path). Draws its model (shipments/where.ts); reads nothing.
  */
 
-export function WhereSection({ order, model, actions, where }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; where: WhereModel }) {
+export function WhereSection({ order, model, actions, where, plan }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; where: WhereModel; /* owb-ss3: shipping.plan OR shipping.manage */ plan?: boolean }) {
   const t = useT('order-shipments')
   const say = useShipSay()
   const search = useSearchParams()?.toString() ?? ''
@@ -88,7 +88,7 @@ export function WhereSection({ order, model, actions, where }: { order: Order; m
   return (
     <Section id={kitId('left')} title={title} answer={answer} info={info} more={more}>
       <div className="fw-os-wg">
-        {where.mode === 'counted' ? <Summary order={order} model={model} where={where} /> : null}
+        {where.mode === 'counted' ? <Summary order={order} model={model} where={where} plan={plan} /> : null}
         <div className="fw-os-wcl">
           <div className="fw-os-wcs">
             {where.cards.map((card) => (
@@ -102,7 +102,7 @@ export function WhereSection({ order, model, actions, where }: { order: Order; m
 }
 
 /** The summary that adds up: "114 ordered · 34 still to ship", the bar, the legend with each bucket's door, the sum. */
-function Summary({ order, model, where }: { order: Order; model: OrderRecordModel; where: WhereModel }) {
+function Summary({ order, model, where, plan }: { order: Order; model: OrderRecordModel; where: WhereModel; plan?: boolean }) {
   const t = useT('order-shipments')
   const say = useShipSay()
   const search = useSearchParams()?.toString() ?? ''
@@ -119,6 +119,14 @@ function Summary({ order, model, where }: { order: Order; model: OrderRecordMode
     switch (bucket) {
       case 'shipped':
         return where.doors.shipped.length > 0 ? refLinks(where.doors.shipped) : <span>{t('where.door.none')}</span>
+      case 'atWarehouse':
+        // owb-ss3: the shipments that sit at our warehouse now; each waits for the customer's label, then Send on from its row.
+        return (
+          <>
+            {refLinks(where.doors.atWarehouse)}
+            <span>{t('where.door.legs')}</span>
+          </>
+        )
       case 'packed':
       case 'draft':
       case 'planned':
@@ -137,7 +145,7 @@ function Summary({ order, model, where }: { order: Order; model: OrderRecordMode
         )
       }
       case 'ready':
-        return model.can.createShipment ? (
+        return model.can.createShipment || plan ? (
           <a className="fw-pt-link" href="#shipments">
             {t('where.door.create')}
           </a>

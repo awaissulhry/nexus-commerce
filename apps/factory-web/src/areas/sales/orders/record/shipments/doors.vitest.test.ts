@@ -5,6 +5,8 @@ import { createDoorOf, createHeldWords, elsewhereDoorOf } from './doors'
 import { rowActsOf } from './doors' // F-OS-202
 import { afterSalesDoorsOf, afterSalesRowActs } from './doors' // F-OS-303
 import { headOf } from './head'
+import { planOf } from './doors' // owb-ss3
+import { legActsOf, shipRightsOf } from './legs/model' // owb-ss3
 import { whereOf, type ShipmentRow, type WhereModel } from './where'
 
 /**
@@ -14,7 +16,7 @@ import { whereOf, type ShipmentRow, type WhereModel } from './where'
  */
 
 const ready = order('READY', { progress: { ...order('READY').progress, released: 6, shipped: 2 } })
-const where = (over: Partial<WhereModel['totals']> = {}, more: Partial<WhereModel> = {}): WhereModel => ({ ...whereOf(ready, null), mode: 'counted', totals: { shipped: 0, packed: 0, draft: 0, planned: 0, back: 0, ready: 0, making: 0, closed: 0, ...over }, ...more })
+const where = (over: Partial<WhereModel['totals']> = {}, more: Partial<WhereModel> = {}): WhereModel => ({ ...whereOf(ready, null), mode: 'counted', totals: { shipped: 0, atWarehouse: 0, packed: 0, draft: 0, planned: 0, back: 0, ready: 0, making: 0, closed: 0, ...over }, ...more })
 
 describe('Create shipment…: hidden without shipping.manage; open when something is ready now; else held with true words', () => {
   it('Sales, the Production manager: hidden (D2) — never a held button for a right', () => {
@@ -232,3 +234,41 @@ describe('os-fx7: the walk\'s gaps on the head, the cards and the dialogs', () =
   })
 })
 // ── end os-fx7 ──
+
+// ── owb-ss3 step 3.2 (settle L3; design plan § 5n R38 "TWO rights") ───────────────────────────────────────────────────────────────
+describe('owb-ss3: the two rights — plan (shipping.plan OR shipping.manage) · pack and send (shipping.manage)', () => {
+  const SALES_PLAN = ['orders.view', 'shipping.view', 'shipping.plan']
+  const WAREHOUSE = ['shipping.view', 'shipping.manage', 'shipping.pack']
+  const leg = (state: 'ON_THE_WAY' | 'AT_OUR_WAREHOUSE' | 'SENT_ON') => ({ state, may: { arrived: state === 'ON_THE_WAY', sendOn: state === 'AT_OUR_WAREHOUSE', label: true } })
+
+  it('sales with the plan right plans (Create shipment… opens) but never sends on; the warehouse does both; neither: nothing', () => {
+    expect(shipRightsOf(SALES_PLAN)).toEqual({ plan: true, send: false })
+    expect(shipRightsOf(WAREHOUSE)).toEqual({ plan: true, send: true })
+    expect(shipRightsOf(['orders.view'])).toEqual({ plan: false, send: false })
+    expect(planOf(canOf('sales'), shipRightsOf(SALES_PLAN))).toBe(true)
+    expect(createDoorOf(ready, { createShipment: planOf(canOf('sales'), shipRightsOf(SALES_PLAN)) }, where(), '/f', true).kind).toBe('open')
+    // Not read (the design index): today's rule, the order page's own ability.
+    expect(planOf(canOf('sales'), null)).toBe(false)
+    expect(planOf(canOf('owner'), null)).toBe(true)
+  })
+
+  it('sales plan only: no "It arrived at the warehouse", no "Send on to the customer", even where the server would let the row', () => {
+    expect(legActsOf(leg('ON_THE_WAY'), shipRightsOf(SALES_PLAN))).toEqual([])
+    expect(legActsOf(leg('AT_OUR_WAREHOUSE'), shipRightsOf(SALES_PLAN))).toEqual([])
+    expect(legActsOf(leg('ON_THE_WAY'), shipRightsOf(WAREHOUSE))).toEqual(['ARRIVED'])
+    expect(legActsOf(leg('AT_OUR_WAREHOUSE'), shipRightsOf(WAREHOUSE))).toEqual(['SEND_ON'])
+    expect(legActsOf(leg('SENT_ON'), shipRightsOf(WAREHOUSE))).toEqual([])
+    // The server's `may` wins: a row it does not let is offered nothing.
+    expect(legActsOf({ state: 'AT_OUR_WAREHOUSE', may: { arrived: false, sendOn: false, label: false } }, shipRightsOf(WAREHOUSE))).toEqual([])
+  })
+
+  it('G9: Mark delivered… on a shipment to our warehouse first is held until it is sent on', () => {
+    const ALL = { manage: true, pack: true, ddt: true, holdsManage: true, holdsRelease: true }
+    const shipped: ShipmentRow = { id: 'sh-9', number: 'SEED-SH-0019', status: 'SHIPPED', shippedAt: null, deliveredAt: null, transportBy: 'CARRIER', origin: 'NEXUS', ddt: null, ddtRequired: true, may: ALL }
+    const held = (state: 'ON_THE_WAY' | 'AT_OUR_WAREHOUSE' | 'SENT_ON' | null) => rowActsOf(shipped, 'so-9', null, {}, state ? { state } : null).find((entry) => entry.id === 'delivered')?.held ?? null
+    expect(held('ON_THE_WAY')).toEqual({ ns: 'ways', key: 'leg.held.deliveredFirst' })
+    expect(held('AT_OUR_WAREHOUSE')).toEqual({ ns: 'ways', key: 'leg.held.deliveredFirst' })
+    expect(held('SENT_ON')).toBeNull()
+    expect(held(null)).toBeNull()
+  })
+})

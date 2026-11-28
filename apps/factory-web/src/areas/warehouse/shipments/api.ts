@@ -4,6 +4,7 @@ import { presignedSchema } from '../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../record-panels/store'
 // F-OP-121: the join verdict's codes.
 import { JOIN_PROBLEM_CODES } from '@nexus/factory-domain/shipping/shipments'
+import type { OrderWarningKind } from '@nexus/factory-domain/sales/warnings/kinds' // owb-ss3
 
 /**
  * Every call of the shipping office screens (SCR-066 the shipments list, SCR-067 a shipment), with the answer's shape
@@ -25,6 +26,12 @@ export type TransportBy = (typeof TRANSPORT_BY)[number]
 /** The DDT reasons a shipment to a customer may carry (factory-domain shipping/ddt SHIPMENT_DDT_REASONS). */
 export const DDT_REASONS = ['SALE', 'RETURN_FROM_WORK', 'ON_APPROVAL', 'REPAIR', 'SAMPLE', 'OTHER'] as const
 export type DdtReason = (typeof DDT_REASONS)[number]
+/**
+ * owb-ss3 (settle L5; server owb-ss1 step 1.3): the first leg of a shipment to our own warehouse travels with a DDT of reason TRANSFER
+ * (the goods stay ours; the server allows it ONLY on a shipment with a leg). Never offered in the reason choice: preset, read only.
+ */
+export const TRANSFER_REASON = 'TRANSFER' as const
+export type ShipmentDdtReason = DdtReason | typeof TRANSFER_REASON
 export const DDT_FREIGHT = ['FREE', 'FORWARD'] as const
 export const TRACKING_STATUSES = ['LABEL_CREATED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'EXCEPTION', 'RETURNED'] as const
 export type TrackingStatus = (typeof TRACKING_STATUSES)[number]
@@ -320,10 +327,18 @@ export function getShipment(api: ApiClient, id: string, signal?: AbortSignal): P
   return api.get(`/shipping/shipments/${enc(id)}`, { schema: oneShipment, signal }).then((answer) => answer.shipment)
 }
 
+/**
+ * owb-ss3 (server Shape owb-ss1, settles L4 + L5): where a new shipment goes — the customer (as today), or one of the company's own
+ * warehouses first (a site of kind WAREHOUSE: its address is the shipment's ship-to, and the leg row is made with the DRAFT).
+ */
+export type ShipmentDestination = { kind: 'CUSTOMER' } | { kind: 'OUR_WAREHOUSE'; siteId: string }
+
 export interface NewShipmentBody {
   salesOrderId: string
   /** F-OP-132 (B-OP-040): every order of the new shipment, the first = salesOrderId (each checked against it; B-OP-047: N6 on). */
   salesOrderIds?: string[]
+  /** owb-ss3: where it goes; absent: the customer (today's create). */
+  destination?: ShipmentDestination
   transportBy?: TransportBy
   carrierCode?: string | null
   serviceCode?: string | null
@@ -494,7 +509,7 @@ export type Ddt = z.infer<typeof ddtSchema>
 /** What the office says on a DDT; everything else comes from the shipment, its order, its parcels and the company. */
 export interface DdtRequest {
   version?: number
-  reason?: DdtReason
+  reason?: ShipmentDdtReason
   reasonText?: string | null
   carrier?: { name: string; vatNumber?: string | null } | null
   startAt?: string | null
@@ -536,7 +551,9 @@ export function issueDdt(api: ApiClient, shipmentId: string, body: DdtRequest, i
 }
 
 // F-OS-203 (B-OS-014): + the time the goods really left and why, when it is not now (record/hand-over.ts handOverBody).
-export function shipShipment(api: ApiClient, shipmentId: string, version: number, at: { readonly shippedAt?: string; readonly reason?: string } = {}): Promise<Shipment> {
+// owb-ss3 (settle L2): + the warnings the person read and goes on with (`overrides`: a payment due before shipping is still open);
+// without them such a hand-over answers 409 WARNINGS (record/doors.ts handOverWarningsOf).
+export function shipShipment(api: ApiClient, shipmentId: string, version: number, at: { readonly shippedAt?: string; readonly reason?: string; readonly overrides?: readonly OrderWarningKind[] } = {}): Promise<Shipment> {
   return api.post(`/shipping/shipments/${enc(shipmentId)}/ship`, { body: { version, ...at }, schema: oneShipment }).then((answer) => answer.shipment)
 }
 
