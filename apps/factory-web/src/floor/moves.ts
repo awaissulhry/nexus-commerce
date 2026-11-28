@@ -18,6 +18,8 @@ import { TASK_ROUTES } from './tasks/routes'
 export const FLOOR_PAGES: readonly string[] = ['/floor', '/floor/scan', '/floor/sync', '/floor/notice', '/floor/sign-in', ...Object.values(TASK_ROUTES),
   // B-W2b-143: the safety data sheets at a cabinet (the cabinet QR, through Scan anything): no tile, held all the same.
   '/floor/sds',
+  // owb-fl8: Floor › Me (the phone's Me page; its tree entry is added at the land).
+  '/floor/me',
   // owb-fl9: the team leader's Board and a chain on the floor (their tree entries are added at the land).
   '/floor/board',
   '/floor/chains']

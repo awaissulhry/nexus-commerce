@@ -1,0 +1,453 @@
+/*
+ * owb-ss7 — Production › Teams (fw-tm-), "Give to a team…", "Lend {name}", "Ask for another team" and the order's Team part (fw-otm-).
+ * Layout and DS tokens only (no raw colour: light and dark come from the tokens). The board's columns fill the width (no dead space at
+ * 1440 / 1920) and wrap; in a narrow room (useRoomWidth: the page's own width) they are one list (`.is-list`), and nothing is wider than
+ * a 375 px screen. Inside a window the body is a room (`fwroom`, lib/window-shell): its rows follow the window's width.
+ */
+.fw-tm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-tm-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The head: one line of counts, and at its end New team…, "You read this page", the ⓘ. */
+.fw-tm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+.fw-tm-sum-line {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-head-r {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-tm-info {
+  margin: 0;
+  max-width: 320px;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-tm-sites {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-tm-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The board: columns that fill the width and wrap; one list in a narrow room. */
+.fw-tm-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+.fw-tm-board.is-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fw-tm-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.fw-tm-col.is-none {
+  background: var(--nds-surface-sunken);
+}
+.fw-tm-col-h {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-tm-none-pic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--nds-space-48);
+  height: var(--nds-space-48);
+  border-radius: var(--nds-radius-xl);
+  border: 1px dashed var(--nds-border);
+  color: var(--nds-text-2);
+}
+.fw-tm-col-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-tm-col-name {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-tm-col-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-col-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.fw-tm-load {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* A column's people: the face and the first name; a person opens "Lend". */
+.fw-tm-ppl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-tm-ppl-b {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: var(--nds-space-32);
+  padding: var(--nds-space-2) var(--nds-space-8) var(--nds-space-2) var(--nds-space-2);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+.fw-tm-ppl-b:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-tm-ppl-b:focus-visible {
+  outline: 2px solid var(--nds-text-link);
+  outline-offset: 2px;
+}
+.fw-tm-ppl-b.is-plain {
+  cursor: default;
+}
+.fw-tm-ppl-b.is-plain:hover {
+  background: var(--nds-surface);
+}
+.fw-tm-ppl-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-tm-ppl-tag {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+/* The order cards of a column. */
+.fw-tm-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-tm-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  min-width: 0;
+}
+.fw-tm-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  color: var(--nds-text);
+  text-decoration: none;
+  min-width: 0;
+}
+.fw-tm-card-main:hover .fw-tm-card-no,
+.fw-tm-card-main:focus-visible .fw-tm-card-no {
+  text-decoration: underline;
+}
+.fw-tm-card-no {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-tm-card-code {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-tm-card-facts {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-quiet,
+.fw-tm-privacy {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* ── "Give to a team…" ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-tm-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-tm-give {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-tm-give-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+.fw-tm-give-count {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-tm-modes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-tm-rows,
+.fw-tm-cands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-tm-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.fw-tm-row.is-boss {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-raised);
+}
+.fw-tm-row-t {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.fw-tm-row-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-tm-row-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+}
+.fw-tm-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-tm-share-n {
+  font-weight: var(--nds-font-weight-semibold);
+}
+@container fwroom (max-width: 719px) {
+  .fw-tm-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .fw-tm-row-acts {
+    grid-column: 1 / -1;
+  }
+}
+.fw-tm-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-tm-facts-l {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-marks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+.fw-tm-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-tm-sum.is-ok {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-tm-sum.is-short,
+.fw-tm-sum.is-over {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-tm-note {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-tm-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-tm-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-tm-cand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10);
+  width: 100%;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.fw-tm-cand:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-tm-cand:focus-visible {
+  outline: 2px solid var(--nds-text-link);
+  outline-offset: 2px;
+}
+.fw-tm-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* ── "Lend {name}" ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-tm-lend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.fw-tm-lend-who {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+.fw-tm-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.fw-tm-lend-teams {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.fw-tm-lend-team {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* ── the order's Team part ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-otm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-otm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-otm-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-otm-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-otm-asked {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}

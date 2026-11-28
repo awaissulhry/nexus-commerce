@@ -53,7 +53,7 @@
       }
     },
     "Team": {
-      "about": "Office keeps the teams of a site (a line's crew, a group to assign and mention); the floor reads its site's teams.",
+      "about": "Office keeps the teams of a site (a line's crew, a group to assign and mention) and, owb-ssw, their place in the factory's structure (the unit above, the owner's word for it, the profile: what it does, the most baskets, takes orders and new orders, the leader's stand-in, the customers it likes to work for, the unit it was merged into); the floor reads its site's teams (the team chip; nothing in a profile describes one person).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

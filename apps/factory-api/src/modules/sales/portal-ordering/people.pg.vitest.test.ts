@@ -375,7 +375,9 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     expect(after.request.customLines[0]!.people.map((person) => person.name)).toEqual(['Made-up Bea Esempio', 'Made-up Carlo Esempio'])
   })
 
-  it('a line taken out takes its roster; a discarded draft takes all of its people (personal data)', async () => {
+  // owb- po1.3 (pin moved): "Take out" is a soft remove — the line keeps its roster for "Put it back"; a discarded draft still takes
+  // every person, a taken-out line's too (personal data).
+  it('a line taken out keeps its roster; a discarded draft takes all of its people (personal data)', async () => {
     const draft = await mtmDraft()
     const read = await ok('aBuyer', 'GET', base(draft.id))
     const added = await ok('aBuyer', 'POST', `${base(draft.id)}/lines/${draft.lineId}/people`, { version: read.request.version, people: [{ name: 'Made-up One', measureBy: 'LATER' }, { name: 'Made-up Two', measureBy: 'SIZE', size: '50' }] })
@@ -385,7 +387,8 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     const count = async () => (await admin<{ n: number }>('SELECT count(*)::int AS n FROM "PortalOrderRequestPerson" WHERE "requestId" = $1', [draft.id]))[0]!.n
     expect(await count()).toBe(3)
     const out = await ok('aBuyer', 'DELETE', `${base(draft.id)}/lines/${draft.lineId}?version=${both.request.version}`)
-    expect(await count()).toBe(1)
+    expect(await count()).toBe(3)
+    expect(out.request.customLines.map((line: Json) => line.id)).toEqual([secondLine])
     expect(await ok('aBuyer', 'DELETE', `${base(draft.id)}?version=${out.request.version}`)).toEqual({ discarded: true })
     expect(await count()).toBe(0)
   })

@@ -1,0 +1,108 @@
+{
+  "ways": {
+    "title": "Spedisci tutto l’ordine",
+    "subtitle_one": "{number} · {customer} · {count} capo pronto",
+    "subtitle_other": "{number} · {customer} · {count} capi pronti",
+    "question": "Come parte?",
+    "make": "Crea la spedizione",
+    "readFailed": "Non è stato possibile leggere cosa è pronto",
+    "draftOnly": "Crea una spedizione in bozza. La imballi e la spedisci in Magazzino: i pesi, il documento di trasporto (DDT) e i blocchi restano lì.",
+    "alone": {
+      "name": "Da solo, nella sua scatola",
+      "sub": "Direttamente al cliente."
+    },
+    "together": {
+      "name": "Insieme agli altri ordini pronti del cliente",
+      "sub_one": "{count} ordine pronto di questo cliente può partire con lui.",
+      "sub_other": "{count} ordini pronti di questo cliente possono partire con lui.",
+      "none": "Nessun altro ordine è pronto",
+      "list_one": "{count} ordine pronto di questo cliente",
+      "list_other": "{count} ordini pronti di questo cliente",
+      "pieces_one": "{count} capo pronto",
+      "pieces_other": "{count} capi pronti"
+    },
+    "warehouse": {
+      "name": "Prima al nostro magazzino",
+      "sub": "Lo inoltriamo quando il cliente manda l’etichetta di spedizione.",
+      "none": "L’azienda non ha un magazzino proprio",
+      "pick": "Quale magazzino",
+      "customerReads": "Il cliente legge “Nel magazzino della fabbrica”.",
+      "choose": "Scegli un magazzino"
+    },
+    "held": {
+      "noRight": "Il tuo ruolo non pianifica spedizioni",
+      "nothing": "Niente di questo ordine è pronto da spedire ora",
+      "pick": "Scegli come parte",
+      "tick": "Spunta almeno un altro ordine",
+      "tooMany": "Al massimo {max} ordini in una spedizione",
+      "warehouse": "Scegli il magazzino",
+      "busy": "Ci sto lavorando…"
+    },
+    "made": {
+      "title": "{number} è creata: una spedizione in bozza",
+      "next": "Imballala e spediscila in Magazzino.",
+      "warehouse": "Imballala e spediscila in Magazzino. Quando arriva lì, premi “È arrivata al magazzino”.",
+      "open": "Aprila in Magazzino per imballare e spedire"
+    }
+  },
+  "leg": {
+    "held": {
+      "nothing": "Niente da fare qui ora",
+      "busy": "Ci sto lavorando…",
+      "long": "Al massimo {max} caratteri",
+      "deliveredFirst": "Va prima al nostro magazzino: inoltrala al cliente prima che possa essere consegnata"
+    },
+    "arrived": {
+      "title": "È arrivata al magazzino",
+      "act": "Conferma",
+      "line": "I capi ora sono a {place}. Il cliente legge “Nel magazzino della fabbrica”."
+    },
+    "sendOn": {
+      "title": "Inoltra al cliente",
+      "act": "Inoltra",
+      "anyway": "Inoltra comunque",
+      "line": "I capi lasciano {place} per l’indirizzo del cliente.",
+      "carrier": "Vettore",
+      "tracking": "Numero di tracciamento",
+      "optional": "Puoi lasciarlo vuoto.",
+      "ddt": "Con la merce viaggia un documento di trasporto (DDT) di vendita all’indirizzo del cliente: emettilo prima in Magazzino, a meno che questa spedizione viaggi senza."
+    },
+    "readFailed": "Non è stato possibile leggere la spedizione",
+    "none": {
+      "arrived": "Nessuna spedizione di questo ordine è in viaggio verso il nostro magazzino ora.",
+      "sendOn": "Nessuna spedizione di questo ordine aspetta nel nostro magazzino ora."
+    },
+    "pick": "Quale spedizione",
+    "aShipment": "Una spedizione",
+    "pieces_one": "{count} capo",
+    "pieces_other": "{count} capi",
+    "noLabel": "Nessuna etichetta dal cliente per ora",
+    "noLabelWhy": "Puoi inoltrarla anche senza. Lo storico tiene che è partita senza l’etichetta del cliente.",
+    "warningWhy": "Puoi andare avanti. Lo storico tiene “Partita con un pagamento aperto”.",
+    "openInWarehouse": "Apri {number} in Magazzino",
+    "chip": {
+      "planned": "Prima al nostro magazzino: {place}",
+      "onTheWay": "In viaggio verso {place}",
+      "labelYes": "L’etichetta del cliente è qui",
+      "labelNo": "Aspetta l’etichetta del cliente",
+      "sentOn": "Inoltrata al cliente",
+      "sentOnNoLabel": "Inoltrata senza l’etichetta del cliente"
+    },
+    "act": {
+      "arrived": "È arrivata al magazzino",
+      "sendOn": "Inoltra al cliente"
+    },
+    "record": {
+      "title": "Questa spedizione va prima al nostro magazzino: {place}",
+      "transfer": "La merce verso il nostro magazzino viaggia come trasferimento."
+    },
+    "transferWhy": "La merce verso il nostro magazzino viaggia come trasferimento."
+  },
+  "warning": {
+    "paymentDueAtShip": "Un pagamento dovuto prima della spedizione è ancora aperto"
+  },
+  "handOver": {
+    "anyway": "Spedisci comunque",
+    "warningWhy": "Puoi andare avanti. Lo storico tiene “Partita con un pagamento aperto”."
+  }
+}

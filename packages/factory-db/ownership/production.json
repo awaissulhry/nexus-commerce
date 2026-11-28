@@ -161,6 +161,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] }
       }
+    },
+    "ScanCodePlacement": {
+      "about": "owb-ssw: the office places the scan code (the line's work order number) on a page of an order line's design file before Print and start the work, moves it, and reads the places; nobody deletes one (the line or the file going takes it with it). The floor reads none (it reads the printed page); the customer reads none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }

@@ -49,15 +49,16 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
 // B-W2b-410: `depth`, the parts in depth (each its own container) slotted into the tabs, the band and ⋯.
 // B-TH-264: `thread` the docked thread (the office's OfficeRecordThread docked, or a design case's), `printThread` what the print
 // view shows of it.
-export function ShipmentRecordView({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+// owb-ss3 step 3.3: `leg`, the container's "to our warehouse first" notice (where it is, its act, the leg's window) in the notices.
+export function ShipmentRecordView({ model, actions, thread, printThread, trackingLink, depth, leg }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots; leg?: ReactNode }) {
   return (
     <WithMessages namespaces={['shipments', 'lists', 'records', /* F-OP-130 */ DEPTH_NS, DOOR_NS /* F-OS-203 */]}>
-      <ShipmentRecord model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
+      <ShipmentRecord model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} leg={leg} />
     </WithMessages>
   )
 }
 
-function ShipmentRecord({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+function ShipmentRecord({ model, actions, thread, printThread, trackingLink, depth, leg }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots; leg?: ReactNode }) {
   const t = useT('shipments')
   const listHref = `${model.prefix}/warehouse/shipments`
   const loaded = model.shipment
@@ -105,12 +106,12 @@ function ShipmentRecord({ model, actions, thread, printThread, trackingLink, dep
       </RecordFrame>
     )
   }
-  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
+  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} leg={leg} />
 }
 
 const STEP_DIALOG: Record<Exclude<StepKind, 'pack'>, 'issueDdt' | 'buyLabels' | 'handOver'> = { issueDdt: 'issueDdt', buyLabels: 'buyLabels', handOver: 'handOver' }
 
-function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLink, depth, leg }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots; leg?: ReactNode }) {
   const t = useT('shipments')
   const d = useT(DEPTH_NS) // F-OP-130
   const locale = useLocale()
@@ -312,6 +313,7 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
               shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />
             )}
             {depth?.banner}
+            {leg /* owb-ss3 */}
             {trackingProblem && <Banner tone="warning" title={t('record.trackingProblem')}>{trackingProblem}</Banner>}
             {model.changed && (
               <Banner

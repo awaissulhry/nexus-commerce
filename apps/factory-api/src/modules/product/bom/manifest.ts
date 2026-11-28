@@ -9,16 +9,19 @@ import { defineManifest } from '../../../core/manifest'
 const view = { audiences: ['office'], permission: 'product.bom.view', scope: 'record' } as const
 const manage = { audiences: ['office'], permission: 'product.bom.manage', scope: 'record' } as const
 const release = { audiences: ['office'], permission: 'product.bom.release', scope: 'record' } as const
+// owb-pd1 1.4 (S4 settle 6): product.bom.manage, OR product.drafts.edit on a DRAFT revision — the route asks the read right (every
+// holder of the manage right holds it) and the handler the write (modules/product/drafts/may-edit.ts).
+const draft = view
 
 export const manifest = defineManifest({
   'GET /product/styles/:styleId/revisions/:revisionId/bom': view,
   'PATCH /product/styles/:styleId/revisions/:revisionId': manage,
-  'POST /product/styles/:styleId/revisions/:revisionId/bom/lines': manage,
-  'PATCH /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId': manage,
-  'DELETE /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId': manage,
-  'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/sizes': manage,
-  'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/colours': manage,
-  'POST /product/styles/:styleId/revisions/:revisionId/copy': manage,
+  'POST /product/styles/:styleId/revisions/:revisionId/bom/lines': draft,
+  'PATCH /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId': draft,
+  'DELETE /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId': draft,
+  'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/sizes': draft,
+  'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/colours': draft,
+  'POST /product/styles/:styleId/revisions/:revisionId/copy': draft,
   'GET /product/styles/:styleId/bom/compare': view,
   // W2a (PRD-090): one revision's BOM as CSV / XLSX (the import's columns) or PDF; the import is the imports routes'.
   'GET /product/styles/:styleId/revisions/:revisionId/bom/export': view,

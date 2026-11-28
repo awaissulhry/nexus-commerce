@@ -10,7 +10,9 @@ import { defineManifest } from '../../../core/manifest'
  * (the upload itself is the files platform's, files.upload).
  */
 const view = { audiences: ['office'], permission: 'product.styles.view', scope: 'record' } as const
-const manage = { audiences: ['office'], permission: 'product.styles.manage', scope: 'record' } as const
+// owb-pd1 1.4 (S4 settle 6): the pictures (and their callouts) are product.styles.manage's, OR product.drafts.edit's while the style's
+// newest revision is a draft — the route asks the read right and the handler the write (./pictures.ts writable).
+const manage = view
 const specView = { audiences: ['office'], permission: 'product.bom.view', scope: 'record' } as const
 const specManage = { audiences: ['office'], permission: 'product.bom.manage', scope: 'record' } as const
 
