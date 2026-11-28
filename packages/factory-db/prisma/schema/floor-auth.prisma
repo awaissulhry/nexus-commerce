@@ -131,6 +131,10 @@ model Device {
   basketMoves          BasketMove[]       @relation("BasketMoveDevice")
   basketRouteEdits     BasketRouteEdit[]  @relation("BasketRouteEditDevice")
   floorLateWarnings    FloorLateWarning[] @relation("FloorLateWarningDevice")
+  // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): the "Do this first" marks set on it, the suggestions sent from it
+  // with a name.
+  basketFlags          BasketFlag[]       @relation("BasketFlagDevice")
+  floorSuggestions     FloorSuggestion[]  @relation("FloorSuggestionDevice")
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -320,6 +324,11 @@ model Worker {
   basketMoves       BasketMove[]       @relation("BasketMoveWorker")
   basketRouteEdits  BasketRouteEdit[]  @relation("BasketRouteEditWorker")
   floorLateWarnings FloorLateWarning[] @relation("FloorLateWarningWorker")
+  // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): the "Do this first" marks they set and cleared, the suggestions
+  // they sent with their name (only where the site names workers).
+  basketFlagsSet     BasketFlag[]      @relation("BasketFlagSetBy")
+  basketFlagsCleared BasketFlag[]      @relation("BasketFlagClearedBy")
+  floorSuggestions   FloorSuggestion[] @relation("FloorSuggestionWorker")
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.
@@ -411,11 +420,21 @@ model FloorSession {
   /// When the worker last proved their PIN in this session: at a sign-in with a PIN, or a later PIN step-up
   /// (POST /floor/step-up). Null: started by a badge alone and not proved since. Signing acts and My day need a recent one.
   pinVerifiedAt DateTime?              @db.Timestamptz(3)
+  /// owb-fl0 (order workflow build, schema wave "floor baskets 2"; LF _owb-fl-common.md § 2 settle 2): a phone's "where am
+  /// I", the department pick: the department the worker picked, and the station it took — an ACTIVE station of the
+  /// session's site whose work centre has the department's kind (one: taken; several: the worker picks one of them; none:
+  /// null). Both null on a tablet and before the pick; a new session starts with none. Help calls read this station
+  /// (else the device's); scans never read it (they keep the device's station). Set by the floor on its own session.
+  departmentId  String?                @db.Uuid
+  stationId     String?                @db.Uuid
 
   device          Device   @relation("DeviceSessions", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker          Worker   @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   badge           Badge?   @relation(fields: [tenantId, siteId, badgeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // owb-fl0: the department and the station picked on a phone (Restrict, as above).
+  department      Department? @relation("FloorSessionDepartment", fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  station         Station?    @relation("FloorSessionStation", fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   currentOnDevice Device[] @relation("DeviceCurrentSession")
   // W2b labour.prisma (wave 7/7): the crew member it is the session of (crew mode, PLT-059).
   crewMemberships CrewMember[]

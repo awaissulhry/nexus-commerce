@@ -11,6 +11,10 @@
 //                     extra step of its work order), NORMAL (back to the work order's route), with a reason. Append-only.
 //   FloorLateWarning  "Will be late": a team leader tells the office a work order (or one basket) will be late by 1, 2, 3 or
 //                     5 days and why; the office answers once (KEPT: the date holds; CHANGED: the promise moves).
+//   BasketFlag        (owb-fl0, schema wave "floor baskets 2") "Do this first": a team leader marks a basket FIRST; one
+//                     open mark per basket and kind; an open mark is cleared once, then never changes.
+//   FloorSuggestion   (owb-fl0) "Tell the office": a worker's idea, "something is wrong" or thank-you, in words or a voice
+//                     note, with or without their name (without it: no worker, no employee, no device). Append-only.
 //
 // Who writes what (ownership/baskets.json): the floor (factory_floor_runtime, its own site; production.baskets.move: a worker
 // moves forward only; production.baskets.route: back, undo another's move and route edits, the team leader) and the office
@@ -220,3 +224,107 @@ enum FloorLateState {
   KEPT
   CHANGED
 }
+
+// ── owb-fl0 (order workflow build, schema wave "floor baskets 2"; LF _owb-fl-common.md § 1-4, build/briefs/owb-fl0.md rows 3-4)
+
+/// "Do this first" (owb-fl0, schema wave "floor baskets 2"; design order-workflow-2026-11-25 "the basket on a phone", the
+/// leader's Do this first): a team leader marks a basket to be worked first (kind FIRST) and clears the mark when it is no
+/// longer needed. One open mark per basket and kind (the partial unique BasketFlag_one_open). Set and cleared on the floor
+/// (floor.lead; the offline kind production.baskets.flag); an open mark is only cleared, once, with when and by whom; a
+/// cleared mark never changes; never deleted (the …_production_floor_baskets_2_guards trigger, for every login). A new mark
+/// after a clear is a new row: the rows are the basket's history of marks.
+model BasketFlag {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The basket's company and site (the floor role's policy key), work order and basket.
+  companyId         String         @db.Uuid
+  siteId            String         @db.Uuid
+  workOrderId       String         @db.Uuid
+  bundleId          String         @db.Uuid
+  kind              BasketFlagKind
+  /// When it was set, and by whom: the team leader (only where the site names workers) and their employee, or the office
+  /// person (setByUserId); the floor device it was set on (null: the office).
+  setAt             DateTime       @default(now()) @db.Timestamptz(3)
+  setByUserId       String?        @db.Uuid
+  setByWorkerId     String?        @db.Uuid
+  employeeId        String?        @db.Uuid
+  deviceId          String?        @db.Uuid
+  /// The device's id for the event (A1 §3.8; the offline floor queue): a resent event marks each basket once (one event may
+  /// mark several baskets, so the key names the basket too).
+  clientEventId     String?
+  /// When it was cleared and by whom (the worker only where the site names workers, or the office person), set once
+  /// (the guard); null: open.
+  clearedAt         DateTime?      @db.Timestamptz(3)
+  clearedByUserId   String?        @db.Uuid
+  clearedByWorkerId String?        @db.Uuid
+  version           Int            @default(1)
+
+  site            Site      @relation("BasketFlagSite", fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder       WorkOrder @relation("BasketFlagWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle          Bundle    @relation("BasketFlagBundle", fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  setByWorker     Worker?   @relation("BasketFlagSetBy", fields: [tenantId, siteId, setByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  clearedByWorker Worker?   @relation("BasketFlagClearedBy", fields: [tenantId, siteId, clearedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee        Employee? @relation("BasketFlagEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device          Device?   @relation("BasketFlagDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId, bundleId])
+  // A basket's marks (the basket page, the board); a work order's; a person's (the privacy export).
+  @@index([tenantId, bundleId, setAt])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, employeeId])
+}
+
+/// What a basket is marked for (owb-fl0): FIRST, "Do this first". Additive.
+enum BasketFlagKind {
+  FIRST
+}
+
+/// "Tell the office" (owb-fl0, schema wave "floor baskets 2"; design order-workflow-2026-11-25 § 5 "Floor", Me): a worker
+/// tells the office an idea (IDEA), that something is wrong (WRONG) or a thank-you (THANKS), in words, a voice note or the
+/// kind alone, with their name or without it. Without the name it names no worker, no employee and no device (a PHONE device
+/// is one person's own: Device.personalWorkerId), so a word sent without a name stays without one (Statuto art. 4; LF
+/// _owb-fl-common.md § 4). The floor writes it (insert only: it never reads one back); the office reads them. Never changed
+/// or removed (the …_production_floor_baskets_2_guards triggers, for every login).
+/// @append-only
+model FloorSuggestion {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site it was told at (the floor role's policy key) and its company.
+  companyId     String              @db.Uuid
+  siteId        String              @db.Uuid
+  kind          FloorSuggestionKind
+  /// The words, 1 to 1000 characters, not blank (the guard); null: none.
+  words         String?
+  /// The voice note: an AUDIO file this session can open (the guard); null: none.
+  voiceFileId   String?             @db.Uuid
+  /// Only when the worker chose "Send with my name": the worker, their employee and the device it was sent from. All
+  /// null on a suggestion sent without a name (the guard: an employee or a device only beside the worker).
+  workerId      String?             @db.Uuid
+  employeeId    String?             @db.Uuid
+  deviceId      String?             @db.Uuid
+  /// The device's id for the event (A1 §3.8; the offline floor queue), unique in the tenant (not per device: a suggestion
+  /// without a name names no device): a resent suggestion is made once.
+  clientEventId String
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+
+  site      Site        @relation("FloorSuggestionSite", fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  voiceFile StoredFile? @relation("FloorSuggestionVoice", fields: [tenantId, voiceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker    Worker?     @relation("FloorSuggestionWorker", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?   @relation("FloorSuggestionEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?     @relation("FloorSuggestionDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, clientEventId])
+  // A site's suggestions in time (the office's list); a person's (the privacy export).
+  @@index([tenantId, siteId, createdAt])
+  @@index([tenantId, employeeId])
+}
+
+/// What a worker tells the office (owb-fl0): an idea, something is wrong, a thank-you.
+enum FloorSuggestionKind {
+  IDEA
+  WRONG
+  THANKS
+}
+// ── end owb-fl0
