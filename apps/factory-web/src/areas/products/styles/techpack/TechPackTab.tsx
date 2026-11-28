@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import type { StyleView } from '../api'
-import { abilitiesOf, revisionInView, tabsFor } from '../model'
+import { abilitiesOf, grainsOf, revisionInView, tabsFor } from '../model'
 import { getTechPack, listTechPackVersions, type TechPackVersion, type TechPackView } from './api'
 import { allowedSections, failed, madeWords, readProblem, ready, reading, techPackCan, valueOf, windowAddress, withSection, type Read, type TechPackAudience, type TechPackLanguage, type TechPackSection } from './model'
 import { useMakePdf } from './use-make'
@@ -25,7 +25,7 @@ export function TechPackTab({ style, revisionId, prefix }: { style: StyleView; r
   const pathname = usePathname()
   const params = useSearchParams()
   const can = useMemo(() => techPackCan(session.permissions), [session.permissions])
-  const tabs = useMemo(() => tabsFor(abilitiesOf(session.permissions)), [session.permissions])
+  const tabs = useMemo(() => tabsFor(abilitiesOf(session.permissions), grainsOf(session.permissions)), [session.permissions]) // owb-pd4: Cost needs its grain
   const allowed = useMemo(() => allowedSections(can), [can])
   const revision = revisionInView(style.revisions, revisionId)
   // A tenant-wide style's copy is the page's company's (its instructions, the brand's packing rules, its tests).

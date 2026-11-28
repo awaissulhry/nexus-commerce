@@ -7,6 +7,11 @@ import type { CommandCaller, CommandTools } from '../../../core/command'
 import { officeShipment } from '../shipments/shipments'
 import { readShipment } from '../store'
 import { latestStatuses, readTracking, statusMap, type TrackingRow } from './store'
+// owb- (order workflow, S3 ss1): a shipment through our warehouse first.
+import { legOf } from '../warehouse-leg/store'
+
+/** owb- (S3 ss1): why a leg shipment's carrier tracking does not deliver it (the move's problem words). */
+const LEG_TRACKING_WORDS = 'This shipment goes through our warehouse: the carrier’s tracking ends there (say it arrived), and it is delivered once the warehouse sent it on.'
 
 /**
  * Recording tracking (B-W1-48; LOG-025, LOG-059), inside a command: Sendcloud's webhook (the inbound ledger's
@@ -95,7 +100,11 @@ export async function recordTracking(tools: CommandTools, shipmentId: string, in
   const parcels = await tx.parcel.findMany({ where: { shipmentId }, select: { id: true, seq: true, trackingNumber: true }, orderBy: { seq: 'asc' } })
   const labelled = parcels.filter((parcel) => parcel.trackingNumber !== null)
   const latest = latestByParcel(facts)
-  const move = trackingMoveOf(shipment.status, labelled, new Map([...latest].map(([parcelId, fact]) => [parcelId, fact.status])))
+  const carrierMove = trackingMoveOf(shipment.status, labelled, new Map([...latest].map(([parcelId, fact]) => [parcelId, fact.status])))
+  // owb- (order workflow, S3 ss1; G9): a shipment through our warehouse first — its labels' tracking ends AT our warehouse, so it
+  // never moves the shipment (the database refuses DELIVERED before Send on): the office says it arrived, and it is delivered by
+  // hand (or with its proof) once sent on.
+  const move: TrackingMove = carrierMove.kind === 'move' && (await legOf(tx, shipmentId)) ? { kind: 'waits', problem: LEG_TRACKING_WORDS } : carrierMove
   if (move.kind === 'move') {
     // The carrier's time of the last parcel's arrival (never before the goods left).
     const at = new Date(Math.max(shipment.shippedAt?.getTime() ?? 0, ...labelled.map((parcel) => latest.get(parcel.id)?.occurredAt.getTime() ?? 0)))

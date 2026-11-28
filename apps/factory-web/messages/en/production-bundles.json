@@ -51,6 +51,7 @@
     "rework": "Quality · rework",
     "hold": "Quality · on hold",
     "cutting": "Cutting",
+    "waiting": "Waiting for the first step",
     "finished": "Finished",
     "void": "Void",
     "next": "Next: {seq} {code}"

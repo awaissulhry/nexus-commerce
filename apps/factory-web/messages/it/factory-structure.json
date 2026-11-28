@@ -1,0 +1,360 @@
+{
+  "head": {
+    "units_one": "{count} unità",
+    "units_other": "{count} unità",
+    "teams_one": "{count} squadra",
+    "teams_other": "{count} squadre",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "loose_one": "{count} persona ancora in nessuna unità",
+    "loose_other": "{count} persone ancora in nessuna unità",
+    "newUnit": "Nuova unità…",
+    "addPerson": "Aggiungi una persona…",
+    "readyMade": "Pronte…",
+    "readOnly": "Puoi solo leggere questa pagina",
+    "infoLabel": "Su questa pagina",
+    "info": "Un'unità sta sotto un'unità; una persona sta in un'unità; nient'altro è fisso. Una squadra è un'unità che prende ordini. Apri una scheda per il suo profilo. Qui non si tiene nessun numero sul lavoro di una persona.",
+    "infoManage": "Un'unità sta sotto un'unità; una persona sta in un'unità; nient'altro è fisso. Trascina un'unità su un'altra unità, o una persona su un'unità: una finestra chiede prima e dice cosa si sposta. Su un telefono o con la tastiera, premi Sposta…. Una squadra ha persone sotto di sé, non unità."
+  },
+  "notice": {
+    "dismiss": "Chiudi",
+    "saved": "Il profilo è salvato.",
+    "made": "{name} è creata. Ora aggiungi le sue persone.",
+    "movedUnit": "{name} ora è sotto {to}.",
+    "movedTop": "{name} ora è in cima.",
+    "movedPerson": "{name} ora è in {to}.",
+    "merged": "Le unità ora sono una: {name}.",
+    "closed": "{name} è chiusa. La sua cronologia resta.",
+    "added": "{name} è aggiunta a {unit}.",
+    "leader": "{name} ora guida {unit}.",
+    "ready": {
+      "OWNER_TEAMS": "Il titolare e le squadre: i livelli sono impostati di nuovo.",
+      "SUPERVISORS": "Con supervisori: i livelli sono impostati di nuovo.",
+      "GENERAL_MANAGER": "Con un direttore generale: i livelli sono impostati di nuovo."
+    }
+  },
+  "tools": {
+    "view": "Vista",
+    "chart": "Organigramma",
+    "list": "Elenco",
+    "find": "Trova una persona, un ruolo o un'unità",
+    "marked_one": "{count} unità segnata",
+    "marked_other": "{count} unità segnate",
+    "nothing": "Niente trovato per «{query}»",
+    "showAll": "Mostra tutto",
+    "openAll": "Apri tutto",
+    "closeAll": "Chiudi tutto",
+    "chartLabel": "La struttura della fabbrica come organigramma"
+  },
+  "failed": "Non è stato possibile leggere la struttura della fabbrica.",
+  "empty": "Ancora nessuna unità. Inizia con Nuova unità… o Pronte….",
+  "privacy": "Un profilo tiene chi è una persona e dove lavora. Non tiene nessun numero sul lavoro di una persona.",
+  "loose": {
+    "title": "Ancora in nessuna unità",
+    "hint": "Trascina una persona su un'unità, o apri il profilo e premi Sposta…."
+  },
+  "tab": {
+    "overview": "Panoramica",
+    "people": "Persone",
+    "work": "Lavoro",
+    "history": "Cronologia"
+  },
+  "profile": {
+    "backToStructure": "Struttura della fabbrica",
+    "edit": "Modifica il profilo…",
+    "move": "Sposta…",
+    "merge": "Unisci…",
+    "close": "Chiudi…",
+    "closedNote": "Questa unità è chiusa. La sua cronologia resta.",
+    "tabs": "Le schede del profilo",
+    "failed": "Non è stato possibile leggere il profilo.",
+    "open": "Apri il profilo"
+  },
+  "unit": {
+    "team": "Squadra",
+    "unit": "Unità",
+    "leads": "La guida {name}",
+    "noLeader": "Ancora nessun capo",
+    "peopleOf": "Persone di {unit}",
+    "more_one": "+{count}",
+    "more_other": "+{count}",
+    "under_one": "{count} unità sotto",
+    "under_other": "{count} unità sotto",
+    "newUnder": "Aggiungi un'unità sotto {unit}",
+    "addPersonTo": "Aggiungi una persona a {unit}",
+    "moveOne": "Sposta {unit}",
+    "show": "Mostra le unità sotto {unit}",
+    "hide": "Nascondi le unità sotto {unit}",
+    "takesOrders": "prende ordini",
+    "closed": "chiusa",
+    "leader": "capo",
+    "leadsThis": "guida questa unità",
+    "newName": "Nuova unità",
+    "picture": "La sua immagine",
+    "pictureLetters": "Lettere",
+    "colour": "Il suo colore",
+    "newTitle": "Una nuova unità",
+    "editTitle": "Modifica il profilo",
+    "underName": "Sotto {unit}",
+    "make": "Crea",
+    "save": "Salva",
+    "whatItIs": "Cos'è",
+    "isTeam": "Una squadra: prende ordini",
+    "isUnit": "Un'altra unità: un livello o un servizio",
+    "whoItIs": "Chi è",
+    "name": "Il suo nome",
+    "nameTeamHint": "Per esempio: Squadra Noor",
+    "nameUnitHint": "Per esempio: Reparto C",
+    "kind": "Che tipo di unità",
+    "kindHint": "Va bene una parola tua.",
+    "about": "Descrizione (facoltativa)",
+    "aboutHint": "Cosa fa questa unità",
+    "howItWorks": "Come lavora",
+    "leaderLater": "Il capo e chi lo sostituisce: dopo aver aggiunto le sue persone.",
+    "leaderLabel": "Il suo capo",
+    "nobody": "Ancora nessuno",
+    "addPeopleFirst": "Aggiungi prima le persone. Poi scegli il capo.",
+    "standIn": "Chi sostituisce il capo quando è assente",
+    "standInUntil": "Sostituisce fino al (facoltativo)",
+    "worksFor": "Lavora per",
+    "worksForHint": "Un desiderio, non un muro: un ordine di qualsiasi cliente può ancora andare a questa squadra.",
+    "max": "Cesti alla volta, al massimo",
+    "maxHint": "Vuoto = nessun limite. Oltre il limite è un segno, mai uno stop.",
+    "noLimit": "Nessun limite",
+    "takesNew": "Prende nuovi ordini",
+    "takesNoNew": "Ora non prende nuovi ordini",
+    "ownFacts": "I tuoi dati",
+    "ownFactsNote": "I tuoi dati si leggono qui. Per cambiarli servono i campi delle squadre (Amministrazione › Campi).",
+    "held": {
+      "name": "Scrivi prima un nome.",
+      "taken": "C'è già un'unità con questo nome. Scrivi un altro nome.",
+      "max": "Cesti alla volta: un numero intero da 1 a 999, o vuoto per nessun limite.",
+      "until": "L'ultimo giorno della sostituzione è una data."
+    }
+  },
+  "icon": {
+    "factory": "Una fabbrica",
+    "shirt": "Una maglia",
+    "scissors": "Forbici",
+    "layers": "Strati",
+    "shield": "Uno scudo",
+    "ruler": "Un righello",
+    "flag": "Una bandiera",
+    "package": "Un pacco",
+    "briefcase": "Una valigetta",
+    "image": "Un'immagine",
+    "users": "Persone",
+    "truck": "Un camion"
+  },
+  "tone": {
+    "slate": "Ardesia",
+    "purple": "Porpora",
+    "emerald": "Smeraldo",
+    "pink": "Rosa",
+    "orange": "Arancione",
+    "blue": "Blu",
+    "yellow": "Giallo",
+    "red": "Rosso",
+    "violet": "Viola",
+    "cyan": "Ciano"
+  },
+  "kind": {
+    "COMPANY": "Azienda",
+    "MANAGEMENT": "Direzione",
+    "DEPARTMENT": "Reparto",
+    "GROUP": "Gruppo",
+    "SERVICE": "Servizio"
+  },
+  "glance": {
+    "kind": "Tipo",
+    "under": "Sotto",
+    "top": "la cima",
+    "people": "Persone",
+    "peopleUnder_one": "{count} ({own} in essa, {under} sotto)",
+    "peopleUnder_other": "{count} ({own} in essa, {under} sotto)",
+    "units": "Unità sotto",
+    "worksFor": "Lavora per",
+    "allCustomers": "Tutti i clienti",
+    "standIn": "Sostituisce il capo",
+    "standInUntil": "{name} fino al {date}",
+    "newOrders": "Nuovi ordini",
+    "takesNew": "Prende nuovi ordini",
+    "takesNoNew": "Ora non prende nuovi ordini",
+    "max": "Cesti alla volta",
+    "maxN_one": "al massimo {count}",
+    "maxN_other": "al massimo {count}",
+    "about": "Descrizione"
+  },
+  "overview": {
+    "leads": "Chi la guida",
+    "leadsName": "La guida {name}.",
+    "noLeader": "Ancora nessuno la guida. Le sue persone rispondono al capo dell'unità sopra.",
+    "changeLeader": "Cambia il capo…",
+    "chooseLeader": "Scegli un capo…",
+    "glance": "In breve",
+    "people": "Persone",
+    "nobody": "Ancora nessuno.",
+    "under": "Unità sotto",
+    "noneUnder": "Nessuna unità sotto."
+  },
+  "work": {
+    "now": "Ordini ora",
+    "before": "Ordini prima",
+    "noneTeam": "Nessun ordine ora. Assegnane uno nella pagina Squadre.",
+    "noneUnit": "Nessun ordine nelle squadre sotto ora.",
+    "openTeams": "Apri Squadre"
+  },
+  "history": {
+    "title": "Cosa è cambiato",
+    "none": "Ancora nessun cambiamento."
+  },
+  "facts": {
+    "phone": "Telefono",
+    "speaks": "Legge e parla",
+    "since": "Con noi dal"
+  },
+  "speaks": {
+    "en": "Inglese",
+    "ur": "Urdu",
+    "it": "Italiano"
+  },
+  "person": {
+    "moveOne": "Sposta {name}",
+    "makeLeader": "Rendi capo",
+    "noRole": "Ancora nessun ruolo",
+    "loose": "Ancora in nessuna unità.",
+    "putIn": "Metti in un'unità…",
+    "where": "Dove lavora questa persona",
+    "inUnit": "{role} in {unit}.",
+    "inUnitLeads": "{role} in {unit} (la guida).",
+    "answersTo": "Risponde a {name}.",
+    "answersToNobody": "Non risponde a nessuno: la cima.",
+    "facts": "Dati",
+    "privacy": "Qui non si tiene nessun numero sul lavoro di una persona: né velocità, né conteggi, né classifiche.",
+    "editTitle": "Modifica la persona",
+    "role": "Il ruolo",
+    "roleHint": "Va bene una parola tua (per esempio: Tecnico macchine).",
+    "phoneHint": "Per una chiamata dall'ufficio. Personale: lo vede solo chi ha il diritto sui dati personali.",
+    "howWorks": "Come lavora questa persona",
+    "speaksHint": "Le schermate del reparto lo seguono: parole in urdu e una voce per chi legge l'urdu.",
+    "held": {
+      "since": "Con noi dal: scegli una data.",
+      "speaks": "Scegli la lingua che la persona legge e parla."
+    }
+  },
+  "move": {
+    "refused": {
+      "gone": "Non è più nella struttura della fabbrica.",
+      "self": "Un'unità non può andare sotto sé stessa o sotto un'unità che ha sotto.",
+      "team": "Una squadra ha persone sotto di sé, non unità.",
+      "same": "È già lì."
+    },
+    "title": "Sposta {name}",
+    "askTitle": "Spostare {name}?",
+    "pickUnit": "Scegli l'unità sotto cui va. Le sue persone e i suoi ordini vanno con lei.",
+    "pickPerson": "Scegli la nuova unità di casa.",
+    "act": "Sposta",
+    "otherPlace": "Un altro posto",
+    "find": "Trova un'unità",
+    "askUnit_one": "{name} va sotto {to}. La sua {count} persona va con lei.",
+    "askUnit_other": "{name} va sotto {to}. Le sue persone ({count}) e i suoi ordini vanno con lei.",
+    "askPersonFrom": "{name} va da {from} a {to}. Da oggi è la nuova unità di casa.",
+    "askPerson": "{name} va in {to}. Da oggi è l'unità di casa.",
+    "leavesLeader": "{unit} allora non ha un capo.",
+    "top": "La cima (sotto niente)",
+    "none": "Nessuna unità corrisponde."
+  },
+  "merge": {
+    "title": "Unisci {name} con…",
+    "pickTeams": "Spunta una o più squadre. Tutte diventano UNA squadra.",
+    "pickUnits": "Spunta una o più unità. Tutte diventano UNA unità.",
+    "next": "Avanti",
+    "ticked_one": "{count} spuntata",
+    "ticked_other": "{count} spuntate",
+    "nothingTicked": "Ancora niente è spuntato",
+    "none": "Nessuna unità di questo tipo con cui unire.",
+    "confirmTitle_one": "{count} unità diventa una",
+    "confirmTitle_other": "{count} unità diventano una",
+    "act": "Unisci",
+    "back": "Indietro",
+    "keep": "Quale profilo resta (la sua immagine, il suo posto nella struttura della fabbrica)?",
+    "nameTeam": "Il nome dell'unica squadra",
+    "nameUnit": "Il nome dell'unica unità",
+    "leader": "Chi la guida",
+    "movesTeam_one": "{count} persona e gli ordini aperti si spostano in essa.",
+    "movesTeam_other": "{count} persone e gli ordini aperti si spostano in essa.",
+    "movesUnit_one": "{count} persona si sposta in essa.",
+    "movesUnit_other": "{count} persone si spostano in essa.",
+    "closedNote_one": "L'altra è chiusa, non cancellata: la sua cronologia resta. Un capo che non guida più diventa un membro.",
+    "closedNote_other": "Le altre {count} sono chiuse, non cancellate: la loro cronologia resta. Un capo che non guida più diventa un membro.",
+    "held": {
+      "pick": "Spunta prima una o più.",
+      "name": "Scrivi il nome dell'unica unità."
+    }
+  },
+  "close": {
+    "top": "L'unità in cima non si può chiudere.",
+    "units_one": "Sposta l'{count} unità che ha sotto in un'altra unità.",
+    "units_other": "Sposta le {count} unità che ha sotto in un'altra unità.",
+    "people_one": "Sposta la sua {count} persona in un'altra unità.",
+    "people_other": "Sposta le sue {count} persone in un'altra unità.",
+    "orders_one": "Assegna il suo {count} ordine aperto a un'altra squadra.",
+    "orders_other": "Assegna i suoi {count} ordini aperti a un'altra squadra.",
+    "blockedTitle": "{name} non si può ancora chiudere",
+    "title": "Chiudere {name}?",
+    "act": "Chiudila",
+    "first": "Fai prima questo:",
+    "orMerge": "Oppure uniscila a un'altra unità: allora le sue persone e i suoi ordini si spostano in un passo.",
+    "kept": "Viene chiusa e tenuta: niente è cancellato, la sua cronologia resta. Esce dall'organigramma."
+  },
+  "ready": {
+    "title": "Strutture della fabbrica pronte",
+    "subtitle": "Parti da una. Poi cambiala come vuoi.",
+    "act": "Usa questa struttura",
+    "choose": "Scegli una struttura",
+    "OWNER_TEAMS": {
+      "name": "Il titolare e le squadre",
+      "does": "Il titolare guida ogni squadra e ogni servizio. Nessun livello in mezzo."
+    },
+    "SUPERVISORS": {
+      "name": "Con supervisori",
+      "does": "Il titolare → supervisori → squadre. I servizi accanto."
+    },
+    "GENERAL_MANAGER": {
+      "name": "Con un direttore generale",
+      "does": "Il titolare → il direttore generale → supervisori → squadre."
+    },
+    "nothing": "Non cambia niente: i livelli sono già così.",
+    "changes_one": "Cambia {count} unità:",
+    "changes_other": "Cambiano {count} unità:",
+    "note": "Squadre, persone e ordini restano come sono. Si impostano di nuovo solo i livelli sopra le squadre. La cronologia di ogni unità tiene il cambiamento."
+  },
+  "add": {
+    "title": "Aggiungi una persona",
+    "subtitle": "Una nuova persona della fabbrica.",
+    "act": "Aggiungi",
+    "first": "Nome",
+    "last": "Cognome",
+    "unit": "L'unità",
+    "pickUnit": "Scegli un'unità",
+    "held": {
+      "name": "Scrivi il nome e il cognome.",
+      "unit": "Scegli l'unità."
+    }
+  },
+  "held": {
+    "long": "Al massimo {count} caratteri."
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "error": {
+    "read": "Qualcosa è andato storto durante la lettura.",
+    "write": "Non è stato salvato. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "offline": "Nessuna risposta dalla fabbrica: controlla la rete e riprova.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "È stato rifiutato così com'è: controlla cosa hai scritto."
+  }
+}

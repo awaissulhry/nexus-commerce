@@ -13,6 +13,7 @@ import { revisionToAskOf } from '../../revised-order-ask'
 import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OC-101 (L6): the Production kit, in place
 import { AGREEMENT_TONE, agreementOf, SIGNED_TONE, signedCheckOf, type AgreementState } from '../agreement'
 import './changes.css'
+import { SendDesignDoor } from '../../view/overview/FlowParts' // owb-of7 step 2: Send the design for approval (Customer's agreement)
 
 /**
  * F-OC-203 (order CHANGES tab, 10-design §6; 18-lead-settles L5, L9, L10) — section 4, Customer's agreement (#confirmation: the band's,
@@ -78,6 +79,8 @@ export function AgreementSection({ order, model, actions }: { order: Order; mode
   return (
     <Section id="confirmation" title={title} answer={answer} info={info}>
       <div className="fw-oc-ag">
+        {/* owb-of7 step 2 (design § 5l: "Customer's agreement … Send the design for a yes"): the same door as Overview's. */}
+        {model.flow ? <SendDesignDoor design={model.flow.design} onSend={actions?.flow?.onSendDesign} /> : null}
         <TheirYes order={order} model={model} actions={actions} />
         <ConfirmationCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
       </div>

@@ -33,6 +33,15 @@ import { seed as seedParties } from './parties'
  *               with its ONE default library operation (DEPT-<n>, ids of eight f's: the generated isolation tests copy the
  *               FIRST operation by id, and a copy of a default would break "one default per department"); every seeded
  *               operation and route step names its department (seedDepartmentOfKind, the domain's departmentOfKind table)
+ *   routes      owb-pd2w (order workflow build, S4 schema wave "routes"; lead 88's yes in LF shared-asks 07:41; S4 settle 1):
+ *               three product types of the whole factory, kind OTHER (Hoodie, T-shirt, Molded part: product types are data,
+ *               no ProductType value); the four ready-made routes of design § 5u (Leather garment 1-2-3-4-5-6, Textile on a
+ *               line 2-3-4-5-6, Molded part 7-8-5-6, Molded and assembled 7-8-9-5-6; no minutes typed); and the demo
+ *               product SEED-KS-01 "Knee slider, molded" of our range (no brand), one size (its own scale SEED-ONE), a
+ *               Molded part, revision 1 DRAFT with the molded route as its own (Design → Molding → Quality → Packing: each
+ *               department's default operation, no Pattern). Ids of eight f's (never the first row the isolation tests
+ *               copy); written after the block above in a transaction of their own, each row once (skipped when it
+ *               exists), so a later change by the office is never undone.
  *
  * Every name and code is invented. Idempotent: rows are upserted with fixed times. The revision is left DRAFT (a
  * released revision's parts can never be written again, and the generated isolation tests copy a seeded part); when
@@ -87,6 +96,32 @@ export function seedDepartmentOfKind(namespace: string, kind: WorkCentreKind): s
   const number = DEPARTMENT_OF_KIND[kind]
   return number === null ? null : seedDepartmentId(namespace, number)
 }
+
+/**
+ * owb-pd2w (S4 schema wave "routes"; design order-workflow-2026-11-25 § 5u, prototype prod.js ROUTE_TPL): the ready-made routes,
+ * each a list of seeded department numbers in route order.
+ */
+export const SEED_ROUTE_TEMPLATES = [
+  { key: 'leather', name: 'Leather garment', departments: [1, 2, 3, 4, 5, 6] },
+  { key: 'textile', name: 'Textile, on a line', departments: [2, 3, 4, 5, 6] },
+  { key: 'molded', name: 'Molded part', departments: [7, 8, 5, 6] },
+  { key: 'built', name: 'Molded and assembled', departments: [7, 8, 9, 5, 6] },
+] as const
+
+/** owb-pd2w (S4 settle 1): product types are data — profiles of kind OTHER, of the whole factory. */
+export const SEED_PRODUCT_TYPES = [
+  { key: 'hoodie', code: 'SEED-PT-HOODIE', name: 'Hoodie', it: 'Felpa con cappuccio' },
+  { key: 'tshirt', code: 'SEED-PT-TSHIRT', name: 'T-shirt', it: 'T-shirt' },
+  { key: 'molded', code: 'SEED-PT-MOLDED', name: 'Molded part', it: 'Parte stampata' },
+] as const
+
+/** owb-pd2w: the knee slider's own route (Molded part), with made-up minutes a piece. */
+const KNEE_SLIDER_ROUTE = [
+  { department: 7, minutes: '30.000' },
+  { department: 8, minutes: '4.000' },
+  { department: 5, minutes: '2.000' },
+  { department: 6, minutes: '1.000' },
+] as const
 
 /** The style's size range and the leather (ft²) one jacket of each size takes, before wastage. */
 const SIZES = [
@@ -374,5 +409,84 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
       for (const { id: rowId, ...data } of routing) await tx.routingOperation.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
     }),
   )
+
+  // ---- owb-pd2w (order workflow build, S4 schema wave "routes"): product types, ready-made routes, the molded knee slider.
+  // Each row once (createMany … skipDuplicates): a ready-made route the office renamed or closed stays as it is.
+  const typeId = (key: string): string => lastId(`product:type:${key}`)
+  const productTypes: Prisma.ProductTypeProfileCreateManyInput[] = SEED_PRODUCT_TYPES.map((type) => ({
+    id: typeId(type.key),
+    companyId: null,
+    code: type.code,
+    name: type.name,
+    nameI18n: { en: type.name, it: type.it },
+    productType: ProductType.OTHER,
+    ...stamp,
+  }))
+  const templateRowId = (key: string): string => lastId(`product:route-template:${key}`)
+  const routeTemplates: Prisma.RouteTemplateCreateManyInput[] = SEED_ROUTE_TEMPLATES.map((template) => ({ id: templateRowId(template.key), companyId: null, name: template.name, ...stamp }))
+  const routeTemplateSteps: Prisma.RouteTemplateStepCreateManyInput[] = SEED_ROUTE_TEMPLATES.flatMap((template) =>
+    (template.departments as readonly number[]).map((number, index) => ({
+      id: lastId(`product:route-template:${template.key}:${index + 1}`),
+      templateId: templateRowId(template.key),
+      seq: index + 1,
+      departmentId: seedDepartmentId(namespace, number),
+      ...stamp,
+    })),
+  )
+  const oneScaleId = lastId('product:size-scale:ONE')
+  const oneScale: Prisma.SizeScaleCreateManyInput = { id: oneScaleId, code: 'SEED-ONE', name: 'Seed one size', ...stamp }
+  const oneSize: Prisma.SizeCreateManyInput = { id: lastId('product:size:ONE:ONE'), scaleId: oneScaleId, code: 'ONE', label: 'One size', seq: 1, ...stamp }
+  const sliderId = lastId('product:style:KS-01')
+  const slider: Prisma.StyleCreateManyInput = {
+    id: sliderId,
+    code: 'SEED-KS-01',
+    name: 'Knee slider, molded',
+    nameI18n: { en: 'Knee slider, molded', it: 'Saponetta stampata' },
+    description: 'A made-up molded knee slider of our range: product design, injection molding, a quality check and packing, no pattern.',
+    productType: ProductType.OTHER,
+    productTypeProfileId: typeId('molded'),
+    sizeScaleId: oneScaleId,
+    sizes: ['ONE'],
+    baseSize: 'ONE',
+    ppeCategory: PpeCategory.NOT_PPE,
+    status: StyleStatus.DRAFT,
+    ...stamp,
+  }
+  const sliderRevisionId = lastId('product:revision:KS-01:1')
+  const defaultOperationOf = (number: number): (typeof departmentDefaults)[number] => departmentDefaults.find((row) => row.departmentId === seedDepartmentId(namespace, number))!
+  const sliderRouting: Prisma.RoutingOperationCreateManyInput[] = KNEE_SLIDER_ROUTE.map((step, index) => {
+    const op = defaultOperationOf(step.department)
+    return {
+      id: lastId(`product:routing:KS-01:1:${index + 1}`),
+      styleId: sliderId,
+      revisionId: sliderRevisionId,
+      seq: (index + 1) * 10,
+      operationId: op.id,
+      code: op.code,
+      name: op.name,
+      nameI18n: op.nameI18n,
+      workCentreKind: op.workCentreKind,
+      standardMinutes: step.minutes,
+      departmentId: op.departmentId,
+      ...stamp,
+    }
+  })
+
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      await tx.productTypeProfile.createMany({ data: productTypes, skipDuplicates: true })
+      await tx.routeTemplate.createMany({ data: routeTemplates, skipDuplicates: true })
+      await tx.routeTemplateStep.createMany({ data: routeTemplateSteps, skipDuplicates: true })
+      await tx.sizeScale.createMany({ data: [oneScale], skipDuplicates: true })
+      await tx.size.createMany({ data: [oneSize], skipDuplicates: true })
+      await tx.style.createMany({ data: [slider], skipDuplicates: true })
+      // Its revision stays DRAFT here; once released, its route is frozen and left as it is.
+      const existing = await tx.styleRevision.findUnique({ where: { id: sliderRevisionId }, select: { status: true } })
+      if (existing && existing.status !== StyleRevisionStatus.DRAFT) return
+      if (!existing) await tx.styleRevision.create({ data: { id: sliderRevisionId, styleId: sliderId, revision: 1, status: StyleRevisionStatus.DRAFT, changeNote: 'First revision: the molded route.', ...stamp }, select: { id: true } })
+      await tx.routingOperation.createMany({ data: sliderRouting, skipDuplicates: true })
+    }),
+  )
+  // ---- end owb-pd2w
   return { styleId, revisionId, colourwayIds: [colourway.BLK, colourway.RED], leatherId: item.leather, protectorId: item.protector }
 }

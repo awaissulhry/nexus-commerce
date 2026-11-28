@@ -1,0 +1,148 @@
+/*
+ * owb-fl9 — the phone's Board and a chain on the floor: layout only, inside the DS FloorFrame. Sizes read the floor tier's
+ * `--nds-density-*` tokens (every control a FloorButton or a FloorListRow: 48 px and more), colours semantic `--nds-*` roles;
+ * logical properties only (Urdu reads right to left). 375 px: the chips scroll inside their row, never the page.
+ */
+.fw-fb {
+  max-width: 900px;
+  margin-inline: auto;
+}
+.fw-fb-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-fb-scope > .nds-floor-btn {
+  width: 100%;
+  min-width: 0;
+}
+.fw-fb-chips {
+  display: flex;
+  gap: var(--nds-space-8);
+  overflow-x: auto;
+  padding-block-end: var(--nds-space-4);
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+}
+.fw-fb-chip.nds-floor-btn {
+  flex: none;
+  scroll-snap-align: center;
+  font-size: var(--nds-density-font-label);
+}
+.fw-fb-chip[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  box-shadow: inset 0 0 0 2px var(--nds-primary);
+}
+.fw-fb-count,
+.fw-fb-no {
+  min-width: 1.6em;
+  padding-inline: var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.fw-fb-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-fb-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.fw-fb-pic {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--nds-radius-sm);
+  object-fit: cover;
+}
+.fw-fb-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-fb-meta,
+.fw-fb-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-fb-flags {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── a chain: one step, its lots as big rows ───────────────────────────────────────────────────────────────────────── */
+.fw-fb-stephead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+.fw-fb-slow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-4) var(--nds-space-10);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-fb-lots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fb-lot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-fb-lot[data-full] {
+  border-color: var(--nds-success);
+}
+.fw-fb-lottext {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-fb-size {
+  padding-inline: var(--nds-space-8);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  font-family: var(--nds-font-mono);
+  font-size: calc(var(--nds-density-font-body) * 1.3);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-fb-model {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.fw-fb-done {
+  font-size: var(--nds-density-font-body);
+  font-variant-numeric: tabular-nums;
+}
+.fw-fb-ok {
+  color: var(--nds-success);
+}
+.fw-fb-lotacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}

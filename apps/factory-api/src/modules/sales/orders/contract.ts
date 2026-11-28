@@ -445,6 +445,12 @@ export const orderView = output({
   // F-OO-206 (order overview §6; review F5; Owner D8): no tab counts of its own — the page's tabs and its Linked records card count
   // `chain` by ONE rule (factory-domain sales/orders/linked-counts `orderLinkCountsOf`: live records only).
   // ── end B-OP-020 ──
+  // ── owb-of1 (order workflow, PL-schema § 3, § 5A row 1; settle L6) ──
+  /** The picture chosen for the order (null: the first line's design picture); set with POST /sales/orders/:orderId/picture. */
+  pictureFileId: id().nullable(),
+  /** Restricted on the floor (a worker opens its baskets only when given them by name): who restricted it and since when; null: open. */
+  restricted: output({ by: z.string(), at: instant() }).nullable(),
+  // ── end owb-of1 ──
 })
 
 const one = output({ order: orderView })

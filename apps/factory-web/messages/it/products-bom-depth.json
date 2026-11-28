@@ -13,7 +13,7 @@
   "hold": {
     "noManage": "Il tuo ruolo legge questa distinta; per cambiarla serve il diritto di modifica della distinta.",
     "loading": "Attendi che la struttura della distinta sia letta.",
-    "archived": "Il modello è archiviato: riattivalo per cambiarne la distinta.",
+    "archived": "Il prodotto è archiviato: riattivalo per cambiarne la distinta.",
     "frozen": "Questa revisione non è una bozza: avvia una nuova revisione per cambiarla.",
     "offline": "Offline — non si invia nulla finché la connessione non torna.",
     "busy": "Attendi il salvataggio in corso."
@@ -207,7 +207,7 @@
     "ALTERNATE_BLOCKED": "Riga {line}: l'alternativa {alternate} è bloccata. Toglila o scegline un'altra.",
     "SUB_ASSEMBLY_NOT_RELEASED": "Riga {line}: il sottoassieme {sub} non è rilasciato. Rilascialo, o prendi la sua revisione rilasciata.",
     "SUB_ASSEMBLY_NOT_MADE": "Riga {line}: {material} non è più un componente che facciamo a pezzi, paia o set (oppure lo manda un cliente). Cambia la riga o togli il sottoassieme.",
-    "SUB_ASSEMBLY_CIRCLE": "Riga {line}: il sottoassieme {sub} contiene di nuovo questo modello (un cerchio). Prendi un altro sottoassieme.",
+    "SUB_ASSEMBLY_CIRCLE": "Riga {line}: il sottoassieme {sub} contiene di nuovo questo prodotto (un cerchio). Prendi un altro sottoassieme.",
     "SUB_ASSEMBLY_TOO_DEEP": "Riga {line}: i sottoassiemi vanno oltre 10 livelli.",
     "SUB_ASSEMBLY_UNIT": "Riga {line}: la sua unità non conta ciò che fa il sottoassieme {sub}.",
     "SUB_ASSEMBLY_SIZE_MISSING": "Riga {line}: il sottoassieme {sub} non ha una taglia per la taglia {size}.",
@@ -215,7 +215,7 @@
     "GROUP_CIRCLE": "Riga {line}: raggruppata sotto una riga raggruppata sotto di lei (un cerchio). Togline una dal gruppo.",
     "PPE_MATERIAL_NOT_APPROVED": "Riga {line}: {material} serve alla protezione e non è ancora approvato.",
     "ALTERNATE_ARCHIVED": "Riga {line}: l'alternativa {alternate} è archiviata: non si prende mai.",
-    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Riga {line}: il modello del sottoassieme {sub} è archiviato."
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Riga {line}: il prodotto del sottoassieme {sub} è archiviato."
   },
   "keyHint": {
     "open": "Apri la riga in dettaglio",
@@ -255,16 +255,16 @@
       "title": "Sottoassieme",
       "none": "Nessun sottoassieme.",
       "remove": "Toglilo",
-      "another": "Prendi un'altra revisione o un altro modello",
+      "another": "Prendi un'altra revisione o un altro prodotto",
       "change": "Scegli un altro",
-      "search": "Modello del sottoassieme",
-      "searchHint": "La distinta di un altro modello che la riga {line} usa (una fodera staccabile, un inserto protettivo).",
+      "search": "Prodotto del sottoassieme",
+      "searchHint": "La distinta di un altro prodotto che la riga {line} usa (una fodera staccabile, un inserto protettivo).",
       "placeholder": "Fodera, inserto, polsino…",
-      "reading": "Lettura delle revisioni del modello…",
-      "failed": "Impossibile leggere le revisioni di quel modello.",
+      "reading": "Lettura delle revisioni del prodotto…",
+      "failed": "Impossibile leggere le revisioni di quel prodotto.",
       "revision": "Revisione",
       "revisionHint": "Prima le rilasciate; una bozza blocca il rilascio di questa distinta finché non è rilasciata.",
-      "noRevision": "Quel modello non ha ancora una revisione.",
+      "noRevision": "Quel prodotto non ha ancora una revisione.",
       "take": "Prendi la revisione {revision}",
       "held": {
         "notComponent": "La riga {line} usa un materiale comprato: una riga di sottoassieme usa il componente che facciamo noi. Scegli prima quel componente come materiale della riga.",
@@ -294,9 +294,9 @@
     "option": {
       "title": "Solo per un'opzione",
       "hint": "Una riga solo per un'opzione si prende solo quando quell'opzione è scelta.",
-      "none": "Il modello non offre ancora opzioni.",
-      "failed": "Impossibile leggere le opzioni del modello.",
-      "link": "Opzioni e regole di questo modello"
+      "none": "Il prodotto non offre ancora opzioni.",
+      "failed": "Impossibile leggere le opzioni del prodotto.",
+      "link": "Opzioni e regole di questo prodotto"
     }
   },
   "search": {
@@ -345,18 +345,18 @@
     },
     "empty": {
       "title": "Nessun sottoassieme",
-      "body": "Un componente che facciamo noi (una fodera, un inserto protettivo) può usare la revisione di un altro modello: apri la sua riga e scegli il sottoassieme."
+      "body": "Un componente che facciamo noi (una fodera, un inserto protettivo) può usare la revisione di un altro prodotto: apri la sua riga e scegli il sottoassieme."
     }
   },
   "usedIn": {
     "title": "Usato come sottoassieme in",
-    "intro": "Le revisioni di altri modelli che usano {code} come sottoassieme.",
+    "intro": "Le revisioni di altri prodotti che usano {code} come sottoassieme.",
     "loading": "Lettura di dove è usato…",
     "failed": "Impossibile leggere dove è usato.",
-    "none": "Nessun altro modello lo usa come sottoassieme.",
+    "none": "Nessun altro prodotto lo usa come sottoassieme.",
     "line": "Riga {seq} · {qty} {unit}",
     "col": {
-      "style": "Modello",
+      "style": "Prodotto",
       "revision": "Sua revisione",
       "line": "Riga",
       "takes": "Usa"
@@ -380,6 +380,86 @@
       "qty": "Per capo",
       "min": "Scelta minima",
       "sizes": "Taglie"
+    }
+  },
+  "mat": {
+    "top": {
+      "lines_one": "{count} materiale",
+      "lines_other": "{count} materiali",
+      "leather": "la pelle {code} {name}",
+      "customer_one": "{count} manda il cliente",
+      "customer_other": "{count} manda il cliente",
+      "wait_one": "l'attesa più lunga {count} giorno",
+      "wait_other": "l'attesa più lunga {count} giorni",
+      "cost": "materiali di un pezzo {cost}"
+    },
+    "customer": "Lo manda il cliente",
+    "ce": {
+      "title": "CE: ricontrolla il certificato",
+      "answer": "In questa bozza è cambiata una parte su cui si basa il certificato CE.",
+      "info": "Una protezione o l'etichetta CE tolta, o mandata ora dal cliente, può cambiare il tipo certificato. La Conformità lo verifica con l'organismo notificato prima del rilascio.",
+      "tell": "Avvisa la Conformità…",
+      "heldCompliance": "Il tuo ruolo non legge i certificati: chiedi alla Conformità o al titolare.",
+      "heldTask": "Avvisare la Conformità crea un'attività: il tuo ruolo non può creare attività.",
+      "takenOut": "{code} {name} è tolto (la revisione rilasciata lo ha).",
+      "customerSends": "{code} {name} ora lo manda {customer}."
+    },
+    "main": {
+      "title": "Materiale principale",
+      "answer": "{code} {name}.",
+      "none": "Ancora nessun materiale principale segnato.",
+      "info": "Il materiale che il cliente sceglie sulla riga d'ordine (le pelli tra cui scegliere dipendono da lui). Non si può togliere.",
+      "fixed": "Non si può togliere dalla lista.",
+      "howTo": "Segnane uno nella lista: ⋯ › Rendilo il materiale principale.",
+      "noneRead": "Lo segna chi cambia i materiali.",
+      "tag": "Principale",
+      "make": "Rendilo il materiale principale",
+      "held": "Il materiale principale non si può togliere."
+    },
+    "before": {
+      "title": "Prima che parta il lavoro",
+      "answer_one": "{code} ci mette di più: {count} giorno. Decide quando ordinare.",
+      "answer_other": "{code} ci mette di più: {count} giorni. Decide quando ordinare.",
+      "noWaits": "Non si conosce ancora nessuna attesa per i materiali che la fabbrica compra.",
+      "info": "I tre materiali che arrivano più tardi (l'attesa del materiale, se no quella del fornitore) e quello che manda il cliente.",
+      "days_one": "{count} giorno",
+      "days_other": "{count} giorni",
+      "sentTitle_one": "{count} riga la manda il cliente",
+      "sentTitle_other": "{count} righe le manda il cliente",
+      "sentBy": "La manda {customer}"
+    },
+    "list": {
+      "title_one": "Lista dei materiali ({count} riga)",
+      "title_other": "Lista dei materiali ({count} righe)",
+      "info": "Una riga per materiale: per un pezzo e la sua unità, lo scarto, quanto in più per ogni taglia, chi lo porta, l'attesa e il costo di un pezzo per chi vede i costi. Per taglia riempie le taglie dalla base e tiene ogni taglia scritta a mano.",
+      "view": "Lista",
+      "step": "+{step} {unit}",
+      "waitCustomer": "Lo manda il cliente",
+      "col": {
+        "step": "Per taglia in più",
+        "wait": "Attesa",
+        "cost": "Un pezzo"
+      }
+    },
+    "need": {
+      "title": "Cosa serve a un ordine",
+      "answer": "Scrivi i pezzi e la taglia: il fabbisogno di ogni materiale, scarto compreso. Non si salva niente.",
+      "info": "Per un pezzo × (1 + scarto) × pezzi. Una taglia senza quantità lo dice; le righe del cliente le manda lui.",
+      "pieces": "Pezzi",
+      "piecesHeld": "Scrivi un numero intero da 1 a 100.000.",
+      "size": "Taglia",
+      "baseSize": "{size} (base)",
+      "col": {
+        "material": "Materiale",
+        "need": "Serve"
+      },
+      "unknown": "Nessuna quantità per questa taglia"
+    },
+    "open": {
+      "title": "Cosa serve agli ordini aperti",
+      "answer": "{pieces} pezzi aperti in {orders} ordini, contati alla taglia base {size}.",
+      "none": "Ora nessun ordine aperto ne ha bisogno.",
+      "info": "I pezzi aperti degli ordini aperti con questo prodotto, tutti contati alla taglia base: qui le taglie di ogni ordine non si dividono."
     }
   }
 }

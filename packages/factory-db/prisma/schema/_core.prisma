@@ -380,6 +380,9 @@ model Company {
   partyOfficePeople    PartyOfficePerson[] @relation("PartyOfficePersonCompany")
   // owb-ssw structures.prisma (S3 schema wave "structures + units"): its order structures.
   orderStructures      OrderStructure[]    @relation("OrderStructureCompany")
+  // owb-pd2w product.prisma (S4 schema wave "routes"): the routes of its styles and its ready-made routes.
+  styleRoutes          StyleRoute[]        @relation("StyleRouteCompany")
+  routeTemplates       RouteTemplate[]     @relation("RouteTemplateCompany")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

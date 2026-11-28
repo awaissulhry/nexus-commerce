@@ -1,0 +1,330 @@
+/* owb-of3 — THE ORDERS SHEET (lib/orders-sheet): layout only, design-system tokens only (no raw colour). The grid's own look (the
+   group tones of the strip, the active cell's ring, the selection column) is the design system's NexusGrid; this file places the
+   part's cells, its tiles and filters, the phone cards. */
+
+.fw-osh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-osh-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* ---- the cells ---- */
+.fw-osh-id,
+.fw-osh-cellrow,
+.fw-osh-chips,
+.fw-osh-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  height: 100%;
+}
+.fw-osh-chips {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: var(--nds-space-4);
+}
+.fw-osh-acts {
+  gap: var(--nds-space-2);
+}
+.fw-osh-id-new {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-osh-id-line {
+  padding-left: var(--nds-space-22);
+}
+.fw-osh-id-total {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.fw-osh-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-micro);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-osh-badge.is-new {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.fw-osh-chev {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: transparent;
+  color: var(--nds-text-2);
+  cursor: pointer;
+}
+.fw-osh-chev:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-osh-pic {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.fw-osh-cam {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  padding: 1px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  opacity: 0;
+  pointer-events: none;
+}
+.ag-row-hover .fw-osh-cam,
+.ag-row-focus .fw-osh-cam,
+.fw-osh-card .fw-osh-cam {
+  opacity: 1;
+}
+.fw-osh-door {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-osh-number {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-osh-door:hover .fw-osh-strong,
+.fw-osh-number:hover {
+  text-decoration: underline;
+}
+.fw-osh-grow {
+  flex: 1 1 auto;
+}
+.fw-osh-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-osh-muted {
+  color: var(--nds-text-2);
+}
+.fw-osh-placeholder {
+  color: var(--nds-text-3);
+}
+.fw-osh-code {
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+.fw-osh-ell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-osh-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-warning-text);
+}
+.fw-osh-num {
+  justify-content: flex-end;
+}
+.fw-osh-heldmark {
+  flex: none;
+  color: var(--nds-text-3);
+}
+
+/* The customer's ask: the asked value in amber beside the official one (hourglass + "Asked: …"). */
+.fw-osh-ask {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--nds-space-2);
+  padding: 0 var(--nds-space-4);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+
+/* ---- rows ---- */
+.ag-row.fw-osh-row.is-c {
+  background: var(--nds-surface-sunken);
+}
+.ag-row.fw-osh-row.is-n .fw-osh-cell-id {
+  color: var(--nds-text-2);
+}
+.ag-row.fw-osh-row.is-gone .ag-cell {
+  color: var(--nds-text-3);
+  text-decoration: line-through;
+}
+.ag-row.fw-osh-row.is-gone .ag-cell button {
+  text-decoration: none;
+}
+.ag-cell.fw-osh-cell-ed {
+  cursor: text;
+}
+.ag-cell.fw-osh-cell-num {
+  text-align: right;
+}
+@keyframes fw-osh-flash {
+  from {
+    background: var(--nds-info-soft);
+  }
+  to {
+    background: transparent;
+  }
+}
+.ag-row.fw-osh-flash .ag-cell {
+  animation: fw-osh-flash 1.6s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-row.fw-osh-flash .ag-cell {
+    animation: none;
+    box-shadow: inset 2px 0 0 var(--nds-info);
+  }
+}
+
+/* ---- toolbar and foot ---- */
+.fw-osh-selcount {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-osh-save {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+.fw-osh-save.is-saved,
+.fw-osh-save.is-idle {
+  color: var(--nds-success-text);
+}
+.fw-osh-save.is-refused {
+  color: var(--nds-danger-text);
+  white-space: normal;
+}
+.fw-osh-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+.fw-osh-live > i {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-success);
+}
+.fw-osh-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the phone: one card per order, every button 48 px to touch ---- */
+.fw-osh-cards-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-osh-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-osh-cards-empty {
+  margin: var(--nds-space-16) 0;
+  text-align: center;
+}
+.fw-osh-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.fw-osh-card.is-gone {
+  opacity: 0.7;
+}
+.fw-osh-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-osh-card-door {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 48px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-osh-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-osh-card .fw-osh-chips {
+  flex-wrap: wrap;
+  height: auto;
+}
+.fw-osh-card-acts {
+  display: flex;
+  justify-content: flex-end;
+}
+.fw-osh-card-acts button,
+.fw-osh-card .fw-osh-chips button {
+  min-height: 48px;
+}

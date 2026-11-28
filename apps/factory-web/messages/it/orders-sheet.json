@@ -584,5 +584,341 @@
   "receipt": {
     "showThread": "Mostra la conversazione di {number}"
   },
-  "searchShort": "Cerca ordini"
+  "searchShort": "Cerca ordini",
+  "part": {
+    "head": {
+      "order": "Ordine",
+      "yours": "Il vostro ordine"
+    },
+    "group": {
+      "orders": "Ordini",
+      "yours": "I vostri ordini",
+      "order": "Ordine",
+      "production": "Produzione",
+      "news": "Aspetta voi · novità",
+      "product": "Prodotto"
+    },
+    "col": {
+      "what": "Oggetto · prodotto",
+      "customer": "Cliente",
+      "wanted": "Voluto per",
+      "promised": "Promesso",
+      "where": "Dove si trova",
+      "news": "Attese · novità",
+      "material": "Pelle",
+      "sizes": "Taglie",
+      "pieces": "Pezzi",
+      "details": "Dettagli"
+    },
+    "totals": {
+      "all_one": "Totali di {count} ordine",
+      "all_other": "Totali di {count} ordini",
+      "selected_one": "Totali di {count} ordine selezionato",
+      "selected_other": "Totali di {count} ordini selezionati"
+    },
+    "newRow": {
+      "words": "Nuovo ordine",
+      "hint": "una riga scritta è una bozza",
+      "tip": "Inizia un nuovo ordine: è una bozza finché non viene inviato",
+      "customer": "Scegli un cliente…",
+      "subject": "Scrivi un oggetto…",
+      "type": "Scrivete per iniziare un ordine…"
+    },
+    "line": {
+      "of": "Pezzo {seq} di {count}"
+    },
+    "noNumber": "Bozza",
+    "lines": {
+      "show": "Mostra i pezzi di {number}",
+      "hide": "Nascondi i pezzi di {number}"
+    },
+    "open": "Apri {number}",
+    "addLine": "Aggiungi un pezzo a {number}",
+    "deleteDraft": "Elimina questa bozza ({number}): non è mai stata inviata",
+    "picture": {
+      "choose": "L’immagine di {number}: scegline un’altra"
+    },
+    "ask": {
+      "asked": "Chiesto: {to}",
+      "tip": "Chiesto: {to}. Cambia solo dopo un sì."
+    },
+    "more": "+ {count}",
+    "yes": "Sì",
+    "no": "No",
+    "act": {
+      "open": "Apri",
+      "confirm": "Conferma",
+      "send": "Invia…",
+      "withdraw": "Ritirate questo ordine. Resta sotto “Ritirati”.",
+      "askCancel": "Chiedete alla fabbrica di annullare questo ordine"
+    },
+    "held": {
+      "confirmFirst": "Prima confermalo",
+      "readOnly": "Questo ordine non si può più cambiare qui"
+    },
+    "noSubject": "Ancora nessun oggetto",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo",
+    "promisedLater": "La fabbrica promette un giorno quando conferma l’ordine",
+    "onHold": "In sospeso",
+    "notDecided": "Non ancora deciso",
+    "pickProduct": "Prima scegli il prodotto",
+    "asText": "Come testo",
+    "sizeFile": "File delle taglie",
+    "comeLater": "Arrivano dopo",
+    "empty": "Nessun ordine qui.",
+    "cards": {
+      "label": "Ordini",
+      "select": "Seleziona {number}",
+      "pieces_one": "{pieces} pezzo",
+      "pieces_other": "{pieces} pezzi",
+      "promised": "Promesso il {day}"
+    },
+    "filters": "Mostra",
+    "refused": {
+      "pieces": "Scrivi il numero di pezzi: un numero intero, 1 o più (va bene anche una somma come =4+2).",
+      "day": "Scrivi un giorno, per esempio 2027-01-31 o 31/01/2027.",
+      "failed": "Non è stato possibile salvare. Riprova."
+    },
+    "selected_one": "{count} selezionato",
+    "selected_other": "{count} selezionati",
+    "clear": "Deseleziona",
+    "countOrders_one": "{count} ordine",
+    "countOrders_other": "{count} ordini",
+    "countLines_one": "{count} riga di pezzi",
+    "countLines_other": "{count} righe di pezzi",
+    "foot": {
+      "rows_one": "{count} riga",
+      "rows_other": "{count} righe",
+      "live": "In diretta",
+      "liveAt": "In diretta · ultima modifica {time}"
+    },
+    "lock": {
+      "office": "Una bozza si può eliminare. Dopo la conferma le modifiche del cliente aspettano il tuo sì.",
+      "portal": "Una bozza si può eliminare. Un ordine inviato no: dopo la conferma una modifica è una richiesta alla fabbrica."
+    },
+    "keys": {
+      "arrows": "Spostati da una cella all’altra",
+      "enter": "Scrivi nella cella, o apri ciò che nomina",
+      "tab": "Salva e vai alla cella dopo",
+      "esc": "Esci dalla cella senza salvare",
+      "select": "Seleziona l’ordine della riga",
+      "range": "Seleziona tutti gli ordini tra due caselle"
+    },
+    "save": {
+      "idle": "Salvataggio automatico attivo",
+      "saving": "Salvataggio…",
+      "saved": "Salvato",
+      "asked": "Chiesto: cambia dopo il sì della fabbrica"
+    }
+  },
+  "office": {
+    "chip": {
+      "new": "{count} nuovi",
+      "newHint_one": "Un nuovo messaggio: apri l’ordine",
+      "newHint_other": "{count} nuovi messaggi: apri l’ordine",
+      "remakeOf": "Rifacimento di {number}",
+      "remakeOfHint": "Apri l’ordine di cui è il rifacimento",
+      "sentAsText": "Inviato come testo",
+      "sentAsTextHint": "L’ordine è arrivato come testo: leggilo e scegli il prodotto",
+      "withDesigner": "Dal grafico",
+      "withDesignerHint": "Il grafico lavora sulla grafica",
+      "confirm": "Conferma",
+      "confirmHint": "Conferma l’ordine…",
+      "print": "Stampa e avvia…",
+      "printHint": "Stampa le pagine e le schede dei cesti: il lavoro parte",
+      "printAgain": "Stampa di nuovo",
+      "printAgainHint": "Il reparto ha perso una pagina: stampala di nuovo",
+      "designWaits": "Grafica: in attesa",
+      "designWaitsHint": "La grafica aspetta il sì del cliente",
+      "designApproved": "Grafica approvata",
+      "designChange": "Grafica: modifica chiesta",
+      "problems_one": "{count} problema",
+      "problems_other": "{count} problemi",
+      "ship": "Spedisci",
+      "labelReceived": "Etichetta ricevuta",
+      "labelWaits": "Aspetta l’etichetta",
+      "toAnswer": "{count} da rispondere",
+      "toAnswerHint_one": "Il cliente chiede una modifica: rispondi sì o no",
+      "toAnswerHint_other": "Il cliente chiede {count} modifiche: rispondi sì o no",
+      "open": "{count} aperti",
+      "openHint_one": "{count} dettaglio ancora aperto",
+      "openHint_other": "{count} dettagli ancora aperti",
+      "late": "In ritardo",
+      "paid": "{count} “Ho pagato”",
+      "paidHint": "Il cliente dice di aver pagato: apri Pagamenti"
+    },
+    "filter": {
+      "all": "Tutti",
+      "drafts": "Bozze",
+      "incoming": "In arrivo",
+      "confirmed": "Confermati",
+      "production": "In produzione",
+      "ready": "Pronti da spedire",
+      "shipped": "Spediti",
+      "delivered": "Consegnati",
+      "withdrawn": "Ritirati"
+    },
+    "tile": {
+      "incoming": "In arrivo",
+      "waitingForPrint": "In attesa della stampa",
+      "inProduction": "In produzione",
+      "problems": "Problemi",
+      "late": "In ritardo",
+      "readyToShip": "Pronti da spedire"
+    },
+    "export": {
+      "number": "Numero",
+      "subject": "Oggetto",
+      "customer": "Cliente",
+      "state": "Stato",
+      "wanted": "Voluto per",
+      "promised": "Promesso",
+      "lines": "Righe",
+      "pieces": "Pezzi"
+    },
+    "title": "Ordini",
+    "search": "Trova un ordine…",
+    "updates_one": "{count} aggiornamento · Mostra",
+    "updates_other": "{count} aggiornamenti · Mostra",
+    "more": "Mostra altri",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "reading": "Lettura…",
+    "refused": {
+      "stale": "Qualcuno ha cambiato questo ordine nel frattempo. Mostra gli aggiornamenti e riprova.",
+      "forbidden": "Il tuo ruolo non può farlo.",
+      "gone": "Questo ordine non c’è più.",
+      "invalid": "Questo valore qui non è accettato.",
+      "offline": "Non è stato possibile raggiungere la fabbrica. Riprova.",
+      "failed": "Non è stato possibile salvare. Riprova.",
+      "confirmFirst": "Prima confermalo",
+      "readOnly": "Questa cella non si può cambiare qui. Apri l’ordine.",
+      "sizes": "Scrivi le taglie come taglia:pezzi, per esempio 48:2 50:3.",
+      "catalogueMaterial": "Una riga di catalogo prende il colore nella pagina dell’ordine.",
+      "cataloguePieces": "I pezzi di una riga di catalogo vengono dalle taglie: scrivi le taglie.",
+      "catalogueProduct": "Il prodotto di una riga di catalogo si sceglie nella pagina dell’ordine."
+    },
+    "bulk": {
+      "confirm": "Conferma",
+      "deleteDrafts": "Elimina le bozze",
+      "restrict": "Limita in reparto",
+      "export": "Esporta",
+      "confirmed_one": "{count} ordine confermato",
+      "confirmed_other": "{count} ordini confermati",
+      "skippedText_one": "{count} ordine in testo saltato: prima scegli il prodotto",
+      "skippedText_other": "{count} ordini in testo saltati: prima scegli i prodotti",
+      "skippedHeld_one": "{count} saltato: una riga non ha prodotto o il cliente è in sospeso",
+      "skippedHeld_other": "{count} saltati: una riga non ha prodotto o il cliente è in sospeso",
+      "skippedOther_one": "{count} saltato: non è un ordine inviato",
+      "skippedOther_other": "{count} saltati: non sono ordini inviati",
+      "refused_one": "{count} rifiutato",
+      "refused_other": "{count} rifiutati",
+      "restricted_one": "{count} ordine limitato",
+      "restricted_other": "{count} ordini limitati",
+      "skippedNotOrder_one": "{count} saltato: non ancora confermato, o già limitato",
+      "skippedNotOrder_other": "{count} saltati: non ancora confermati, o già limitati",
+      "noDrafts": "Nessuna bozza selezionata. Un ordine inviato non si elimina mai.",
+      "designer": "Dai al grafico…",
+      "left_one": "{count} rimasto: confermalo dopo",
+      "left_other": "{count} rimasti: confermali dopo"
+    },
+    "asks": {
+      "title_one": "Il cliente chiede {count} modifica",
+      "title_other": "Il cliente chiede {count} modifiche",
+      "nothingBefore": "Niente cambia prima della tua risposta.",
+      "none": "Ogni richiesta ha una risposta.",
+      "cancel": "Annullare l’ordine",
+      "what": "{column} · pezzo {seq}",
+      "column": {
+        "product": "Prodotto",
+        "material": "Pelle",
+        "sizes": "Taglie",
+        "pieces": "Pezzi",
+        "cancel": "Annullamento"
+      },
+      "to": "diventa",
+      "by": "Chiesto da {who} · {when}",
+      "noWords": "Perché no? Il cliente lo legge.",
+      "sendNo": "Invia il no",
+      "no": "No",
+      "yes": "Sì, cambialo",
+      "needWords": "Di’ perché no: il cliente lo legge.",
+      "notRead": "Questa richiesta non è ancora stata letta. Chiudi e riapri.",
+      "done_one": "{count} richiesta con risposta",
+      "done_other": "{count} richieste con risposta"
+    },
+    "review": {
+      "title": "Rivedi e salva",
+      "saved": "{number}: la modifica è salvata",
+      "linesTab": "Apri la scheda Righe",
+      "save": "Salva",
+      "saving": "Salvataggio…",
+      "line": "Pezzo {seq} · {what}",
+      "pieces": "Pezzi dell’ordine: {before} → {after}",
+      "problems_one": "L’ordine non accetta questa modifica ({count} problema). Apri la scheda Righe per vedere perché.",
+      "problems_other": "L’ordine non accetta questa modifica ({count} problemi). Apri la scheda Righe per vedere perché.",
+      "cut": "Alcuni pezzi sono già tagliati oltre le nuove taglie: scegli cosa farne nella scheda Righe.",
+      "amount": "L’importo dell’ordine cambia con essa."
+    },
+    "pick": {
+      "title": "Nuovo ordine: scegli il cliente",
+      "subtitle": "La bozza viene fatta per questo cliente; poi scrivi nella sua riga.",
+      "withSubject": "La bozza “{subject}” viene fatta per questo cliente.",
+      "search": "Trova un cliente…",
+      "none": "Nessun cliente trovato.",
+      "started": "La bozza per {customer} è fatta. È il primo ordine del foglio."
+    },
+    "delete": {
+      "title_one": "Eliminare {count} bozza?",
+      "title_other": "Eliminare {count} bozze?",
+      "subtitle": "Una bozza non è mai stata inviata: non si perde nient’altro. Un ordine inviato non si elimina mai.",
+      "go_one": "Elimina la bozza",
+      "go_other": "Elimina {count} bozze",
+      "done_one": "{count} bozza eliminata",
+      "done_other": "{count} bozze eliminate"
+    },
+    "designer": {
+      "title_one": "Dai {count} ordine al grafico",
+      "title_other": "Dai {count} ordini al grafico",
+      "subtitle": "Scegli la persona. Entra in ogni ordine e nella sua chat.",
+      "skippedBefore_one": "{count} ordine selezionato resta fuori: non ancora confermato, o già dal grafico.",
+      "skippedBefore_other": "{count} ordini selezionati restano fuori: non ancora confermati, o già dal grafico.",
+      "go_one": "Dai l’ordine",
+      "go_other": "Dai {count} ordini",
+      "done_one": "{name} ora è su {count} ordine",
+      "done_other": "{name} ora è su {count} ordini",
+      "skipped_one": "{count} saltato",
+      "skipped_other": "{count} saltati",
+      "tooMany": "Al massimo {max} ordini alla volta.",
+      "none": "Nessun ordine selezionato si può dare: scegli ordini confermati.",
+      "who": "Chi lavora sulla grafica",
+      "me": "tu"
+    }
+  },
+  "incoming": {
+    "sentAsText": "Inviato come testo · prodotto non scelto",
+    "openDetails_one": "{count} dettaglio ancora aperto",
+    "openDetails_other": "{count} dettagli ancora aperti",
+    "onHold": "Cliente in sospeso",
+    "onHoldHint": "Il cliente è in sospeso: conferma solo quando la sospensione è tolta",
+    "confirm": "Conferma l’ordine…",
+    "bulkConfirm": "Conferma {count}…",
+    "bulkNone": "Nessun ordine spuntato si può confermare insieme: aprili uno per uno",
+    "bulkSkips": "Saltati: {text} inviati come testo · {held} in attesa",
+    "confirmed_one": "{count} ordine confermato",
+    "confirmed_other": "{count} ordini confermati",
+    "skippedText_one": "{count} ordine in testo saltato: prima scegli il prodotto",
+    "skippedText_other": "{count} ordini in testo saltati: prima scegli i prodotti",
+    "skippedHeld_one": "{count} saltato: una riga non ha prodotto o il cliente è in sospeso",
+    "skippedHeld_other": "{count} saltati: una riga non ha prodotto o il cliente è in sospeso",
+    "skippedOther_one": "{count} saltato: non è un ordine inviato",
+    "skippedOther_other": "{count} saltati: non sono ordini inviati",
+    "refused_one": "{count} rifiutato",
+    "refused_other": "{count} rifiutati",
+    "dismiss": "Chiudi",
+    "left_one": "{count} rimasto: confermalo dopo",
+    "left_other": "{count} rimasti: confermali dopo"
+  }
 }

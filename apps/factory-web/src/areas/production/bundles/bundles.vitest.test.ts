@@ -42,7 +42,7 @@ describe('the address: the API\'s own filters', () => {
   })
 
   it('the default leaves finished bundles out; void and all ask no place', () => {
-    expect(viewQuery('active', '', null).place).toEqual(['CUTTING', 'LINE', 'QUALITY', 'SUBCONTRACTOR'])
+    expect(viewQuery('active', '', null).place).toEqual(['CUTTING', 'WAITING', 'LINE', 'QUALITY', 'SUBCONTRACTOR'])
     expect(viewQuery('void', '', null)).toMatchObject({ status: 'VOID' })
     expect(viewQuery('void', '', null).place).toBeUndefined()
     expect(viewQuery('all', 'x', null)).toMatchObject({ q: 'x' })

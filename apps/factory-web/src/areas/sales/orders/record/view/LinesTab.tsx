@@ -23,6 +23,8 @@ import { SaveBar } from './lines/SaveBar' // F-OL-03
 import { ReviewSave } from './lines/ReviewSave' // F-OL-03
 import { AddColourDialog, AddStyleDialog } from './lines/AddStyleDialog' // F-OL-04
 import './lines/lines.css'
+import { OrderLinesTable } from '../../../../../lib/order-lines' // owb-of6 step 0: S1's ONE lines table (its read face here)
+import { oneTableModeOf, orderLineRowsOf } from '../lines-one/adapter'
 
 /**
  * F-OL-02 (Order LINES lane, plan v2 §1; 10-design-tab; replaces F-SA-231's view mode) — Lines, the commercial truth, changed in
@@ -90,6 +92,23 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
     return () => window.removeEventListener('keydown', onKey)
   }, [reader.writes])
   const addColourCard = tab?.addColour ? cards.find((card) => card.styleId === tab.addColour!.styleId) : undefined
+  // ---- owb-of6 step 0 (of5 step 3; the seam S1 po3 → S2): the read face of Lines is S1's ONE lines table — after shipping ("It left the
+  // factory. A change now is a return.") and for a reader who may not change lines (the designer reads); no price on it for anybody (its
+  // `prices` null). Who may change a confirmed order keeps today's editor: the save bar and Review and save with its ONE tick.
+  const oneMode = oneTableModeOf(order, reader.writes)
+  if (oneMode) {
+    return (
+      <div className="fw-lt">
+        <LinesHead order={order} model={model} actions={actions} head={headOf(order, draft)} total={orderTotalOf(totals)} basis={basis} reader={reader} held={held} busy={busy} />
+        <Card padded>
+          <OrderLinesTable model={{ rows: orderLineRowsOf(order), mode: oneMode, columns: [], styles: [], kinds: [], prices: null, pending: false, removed: [], writeHeld: null, saving: [], columnsDoor: false, door: 'office' }} />
+        </Card>
+        <ChargesBlock order={order} reader={reader} />
+        {reader.prices && cards.length > 0 && <TotalsBlock order={order} rows={totals} basis={basis} />}
+      </div>
+    )
+  }
+  // ---- end owb-of6
   return (
     <div className="fw-lt">
       <LinesHead order={order} model={model} actions={actions} head={headOf(order, draft)} total={orderTotalOf(totals)} basis={basis} reader={reader} held={held} busy={busy} />

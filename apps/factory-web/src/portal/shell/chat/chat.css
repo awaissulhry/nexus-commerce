@@ -1,0 +1,79 @@
+/*
+ * owb-po5.4 — the Chat panel's LAYOUT (the DS Drawer keeps its own look): the list of chats as rows that take the panel's width, one
+ * chat filling it under its back arrow. Semantic design-system tokens only.
+ */
+.fw-pchat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pchat-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-height: 48px;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 0;
+  border-radius: var(--nds-radius-md);
+  background: none;
+  color: var(--nds-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-pchat-row:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-pchat-row:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pchat-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pchat-row-title {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-pchat-row-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pchat-one {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-height: 0;
+}
+
+.fw-pchat-back {
+  align-self: flex-start;
+}
+
+.fw-pchat-thread {
+  min-height: 0;
+}
+
+.fw-pchat-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-muted);
+}

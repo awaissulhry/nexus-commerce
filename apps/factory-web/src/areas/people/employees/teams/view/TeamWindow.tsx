@@ -11,6 +11,7 @@ import type { Team } from '../../../_shared/api'
 import { useWords } from '../../../_shared/parts'
 import { ReviewWindow } from '../../../../_shared/review-window/ReviewWindow'
 import { teamTitle, teamWalk } from '../model'
+import { OpenProfileLink } from '../../../structure/parts/OpenProfileLink' // owb-ss8
 
 /**
  * B-TH-271 (threads plan PL6, picture 40; O-PPL-TEAM.list-F02, .thread-F01) — a team's window in Employees › Teams (a DetailModal at
@@ -69,6 +70,7 @@ export function TeamWindow({
                 { label: t('teams.window.site'), value: team.site.code },
               ]}
             />
+            <OpenProfileLink prefix={prefix} unitId={team.id} /* owb-ss8: the team's profile in Factory structure */ />
           </Card>
           <Card padded header={t('teams.window.members')} headingLevel={3}>
             {team.members.length === 0 ? (
