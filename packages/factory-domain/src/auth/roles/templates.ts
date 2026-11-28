@@ -1395,9 +1395,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // sees no money at all: no selling price, no margin %, no "under the floor", and keeps no price list (pricelists.manage
     // gone with the grains: no blind price change). Its quotes and orders take the customer's price list; a style without one
     // is priced by a person who sees prices. Two-factor kept.
+    // owb-b6 (the Owner's yes of 2026-11-28; design § 5q "Who"): Sales reads a product's certificates (the Compliance tab), never manages them.
     description: "Customers, quotes and orders; no prices: lines take the customer's price list, a price holder sets the rest.",
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'compliance.certificates.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
       // B-W2a-19: the customer price lists (read: which list prices a customer; its prices need the price grain) and the
       // payment terms library (pick from it). B-CP-011: no longer pricelists.manage (a price holder keeps the lists).
       'pricelists.view', 'paymentterms.view',
