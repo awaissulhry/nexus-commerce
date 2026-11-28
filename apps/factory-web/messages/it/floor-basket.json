@@ -1,0 +1,129 @@
+{
+  "homePage": {
+    "forYou": "Per te",
+    "scan": "Scansiona un cesto",
+    "scanHint": "Inquadra il cartellino del cesto, o scrivi il suo numero.",
+    "here": "In questo reparto",
+    "next": "In arrivo",
+    "nothingHere": "Nessun cesto qui ora. Scansiona il cartellino di un cesto per iniziare.",
+    "noDepartment": "Prima scegli il tuo reparto: tocca il reparto in alto.",
+    "loading": "Lettura dei cesti…",
+    "offline": "Niente rete: i cesti si vedono quando torna. La scansione funziona.",
+    "unavailable": "Non è stato possibile leggere i cesti.",
+    "retry": "Riprova",
+    "otherJobs": "Altri lavori",
+    "flash": {
+      "done": "{code} → {dept}",
+      "moved": "{code}: passato a {dept}",
+      "ready": "{code} è pronto da spedire",
+      "saved": "{code}: salvato su questo telefono. Parte quando torna la rete."
+    }
+  },
+  "item": {
+    "CHANGED_DESIGN": "Il disegno è cambiato",
+    "ANSWER": "Una risposta per te",
+    "SOLVED": "Il tuo problema è risolto",
+    "HANDOVER": "Nota di passaggio turno",
+    "PROBLEM": "Problema",
+    "ASK": "Richiesta"
+  },
+  "state": {
+    "WAITING": "In attesa",
+    "WORKING": "In lavorazione",
+    "PAUSED": "In pausa",
+    "READY": "Pronto da spedire"
+  },
+  "flag": {
+    "first": "Prima",
+    "problem": "Problema",
+    "late": "In ritardo",
+    "lateDays_one": "In ritardo: {count} giorno",
+    "lateDays_other": "In ritardo: {count} giorni",
+    "rush": "Urgente"
+  },
+  "dept": {
+    "button": "Reparto: {name}. Tocca per cambiarlo.",
+    "none": "Scegli un reparto",
+    "title": "Reparto",
+    "note": "Scegli il reparto in cui lavora questo telefono.",
+    "chooseStation": "Questo reparto ha più postazioni. Quale?",
+    "noStation": "Questo reparto non ha una postazione in questo sito. Chiedi all'ufficio di aggiungerne una.",
+    "offline": "Niente rete: il reparto cambia quando torna.",
+    "failed": "Il reparto non è cambiato. Riprova.",
+    "close": "Chiudi"
+  },
+  "page": {
+    "title": "Cesto {code}",
+    "loading": "Lettura del cesto…",
+    "notFound": "Nessun cesto con questo codice in questo sito.",
+    "offline": "Niente rete: il cesto si vede quando torna.",
+    "unavailable": "Non è stato possibile leggere il cesto.",
+    "retry": "Riprova",
+    "designPage": "Pagina del disegno",
+    "readAloud": "Cesto {code}. {state}. {step}",
+    "readStep": "Fase {at} di {total}: {now}.",
+    "readNext": "Poi: {next}."
+  },
+  "facts": {
+    "label": "Su questo cesto",
+    "customer": "Cliente {code}",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "due": "Consegna {date}"
+  },
+  "needs": {
+    "hold": {
+      "HOLD": "In sospeso",
+      "QUALITY_HOLD": "Blocco qualità",
+      "FIRST_PIECE": "Attende il controllo del primo pezzo"
+    },
+    "changed": "Il disegno è cambiato",
+    "seen": "Visto su questo telefono"
+  },
+  "lock": {
+    "RESTRICTED": "Solo un addetto indicato apre questo cesto.",
+    "OTHER_TEAM": "Questo cesto è di un'altra squadra."
+  },
+  "stepBar": {
+    "step": "Fase {at} / {total}",
+    "change": "Cambia",
+    "changeLabel": "Cambia la fase di {code}",
+    "own": "Percorso proprio",
+    "ready": "Pronto da spedire",
+    "label": "Il percorso: {count} fasi"
+  },
+  "dock": {
+    "label": "Il prossimo passo",
+    "start": "Inizia",
+    "resume": "Riprendi",
+    "pause": "Pausa",
+    "done": "Fatto",
+    "passed": "Superato",
+    "packed": "Imballato",
+    "sawDesign": "Ho visto il nuovo disegno",
+    "takeHere": "Prendilo qui",
+    "changeStep": "Cambia la fase",
+    "askLeader": "Chiedi al capo squadra",
+    "sendBack": "Non va bene: rimanda a {dept}",
+    "qcFirst": "Prima spunta i punti e scatta le foto.",
+    "failed": "Non è andato a buon fine. Riprova.",
+    "needsNetwork": "Serve la rete. Riprova quando torna."
+  },
+  "elsewhere": {
+    "title": "Questo cesto è in un altro reparto.",
+    "isAt": "Si trova a",
+    "offRoute": "Fuori dal suo percorso. La sua prossima fase è {step}.",
+    "offRouteNoNext": "Fuori dal suo percorso.",
+    "warned": "Prenderlo qui viene registrato con un avviso."
+  },
+  "qc": {
+    "title": "Controllo qualità",
+    "count": "{done} / {total}",
+    "photo": "Foto: {words}",
+    "noFace": "Niente volti nella foto.",
+    "take": "Scatta la foto",
+    "photoFailed": "La foto non è partita. Riprova.",
+    "photoOffline": "Una foto ha bisogno della rete.",
+    "ticked": "fatto"
+  }
+}
