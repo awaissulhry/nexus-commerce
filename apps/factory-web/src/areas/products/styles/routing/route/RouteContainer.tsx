@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fixedDepartments, type DepartmentAnswer } from '../../../../../lib/department/model'
 import { keptDepartments, wantDepartments } from '../../../../../lib/department/use-departments'
 import { useDepartmentWords } from '../../../../../lib/department/words'
-import { useLocale } from '../../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StyleView } from '../../api'
+import { createStyleRoute, saveProductRoute, updateStyleRoute } from '../builder/api'
+import { productBody, refusalOf, routeBody, type BuilderState } from '../builder/model'
+import { RouteBuilderWindow, type BuilderOpen } from '../builder/RouteBuilderWindow'
 import { RouteView, type RouteViewModel } from '../view/RouteView'
-import { deleteStyleRoute, readRoute, type RouteRouting } from './api'
-import { answerOf, chosenRouteOf, deptLooksOf, forWhomOf, problemKeyOf, routeChipsOf, routeEditHeld, routeRowsOf, ruleNotesOf, rulesOfChosen, totalMinutesOf, type RouteEditFacts } from './model'
+import { deleteStyleRoute, readRoute, type RouteRouting, type StyleRouteView } from './api'
+import { answerOf, chosenRouteOf, deptLooksOf, forWhomOf, problemKeyOf, routeChipsOf, routeEditHeld, routeRowsOf, ruleNotesOf, rulesOfChosen, totalMinutesOf, type RouteEditFacts, type Words } from './model'
 import { useOfficeReach } from './office'
 
 /**
@@ -16,6 +19,9 @@ import { useOfficeReach } from './office'
  * (route/api.ts) and the factory's departments (lib/department, one read per tab), keeps the chosen chip, takes a model or customer
  * route out, and tells the record (`onChanged`) after every write so the record's own reads (the depth under "More", the release
  * check, the revision's version) follow. A new `routingVersion` from the record (any write elsewhere) reads the route again.
+ * Step 6.2: "Edit this route…" opens the builder on the chosen route (the product's: its kept steps keep their `stepId`; a model or
+ * customer route: its name and who it is for), "New route…" on a copy of the product's route; the builder opens only when nothing
+ * holds it (routeEditHeld: product.routing.manage on a DRAFT, the departments read) and saves with this container's call per mode.
  */
 
 export interface RouteContainerProps {
@@ -38,6 +44,7 @@ type Read = { status: 'reading' } | { status: 'ready'; routing: RouteRouting } |
 export function RouteContainer({ style, revisionId, manage, busy, routingVersion, onChanged, onStartRevision }: RouteContainerProps) {
   const { api } = useOfficeReach()
   const locale = useLocale()
+  const t = useT('products-route')
   const sayDept = useDepartmentWords()
   const fixed = useMemo(() => fixedDepartments(sayDept), [sayDept])
   const [read, setRead] = useState<Read>({ status: 'reading' })
@@ -46,6 +53,7 @@ export function RouteContainer({ style, revisionId, manage, busy, routingVersion
   const [chosen, setChosen] = useState<string | null>(null)
   const [acting, setActing] = useState(false)
   const [actProblem, setActProblem] = useState<string | null>(null)
+  const [builder, setBuilder] = useState<{ readonly open: BuilderOpen; readonly route: StyleRouteView | null } | null>(null)
   const [round, setRound] = useState(0)
   const again = useCallback(() => setRound((value) => value + 1), [])
 
@@ -106,6 +114,45 @@ export function RouteContainer({ style, revisionId, manage, busy, routingVersion
     }
   }
 
+  // ---- step 6.2: the builder ----
+  const product = `${style.code} · ${style.name}`
+  const productStart = () => (routing ? [...routing.steps].sort((a, b) => a.seq - b.seq) : [])
+  const openEdit = () => {
+    if (!routing || !rows || routeEditHeld(facts)) return
+    if (route)
+      setBuilder({
+        route,
+        open: { mode: 'route', subtitle: t('builder.subtitle.route', { product, route: route.name }), start: route.steps.map((step) => ({ departmentId: step.departmentId, minutes: step.minutes })), name: route.name, forWhom: route.kind, partyId: route.party?.id ?? null },
+      })
+    else setBuilder({ route: null, open: { mode: 'product', subtitle: t('builder.subtitle.product', { product }), start: productStart().map((step) => ({ stepId: step.id, departmentId: step.department?.id ?? null, minutes: step.standardMinutes })) } })
+  }
+  const openNew = () => {
+    if (!routing || !rows || routeEditHeld(facts)) return
+    setBuilder({ route: null, open: { mode: 'new', subtitle: t('builder.subtitle.new', { product }), start: productStart().map((step) => ({ departmentId: step.department?.id ?? null, minutes: step.standardMinutes })), fresh: true } })
+  }
+  const saveBuilder = async (state: BuilderState): Promise<Words | null> => {
+    if (!api || !revisionId || !routing) return { key: 'problem.unavailable' }
+    try {
+      if (state.mode === 'product') setRead({ status: 'ready', routing: await saveProductRoute(api, style.id, revisionId, productBody(state, routing.revision.version)) })
+      else if (state.mode === 'route' && builder?.route) await updateStyleRoute(api, style.id, revisionId, builder.route.id, { ...routeBody(state), version: builder.route.version })
+      else if (state.mode === 'new') {
+        const made = await createStyleRoute(api, style.id, revisionId, routeBody(state))
+        if (made) setChosen(made)
+      } else return { key: 'problem.unavailable' }
+      setBuilder(null)
+      if (state.mode !== 'product') again()
+      onChanged()
+      return null
+    } catch (error) {
+      // Someone else changed the revision meanwhile: read again, so the next Save is made on the new version.
+      if ((error as { kind?: string } | null)?.kind === 'conflict') {
+        again()
+        onChanged()
+      }
+      return refusalOf(error)
+    }
+  }
+
   const model: RouteViewModel = {
     state: !api ? 'outside' : read.status === 'reading' ? 'reading' : read.status === 'failed' ? 'failed' : 'ready',
     problem: read.status === 'failed' ? read.problem : null,
@@ -123,19 +170,24 @@ export function RouteContainer({ style, revisionId, manage, busy, routingVersion
   }
 
   return (
-    <RouteView
-      model={model}
-      actions={{
-        onChoose: (routeId) => {
-          setChosen(routeId)
-          setActProblem(null)
-        },
-        onEdit: () => undefined,
-        onNew: () => undefined,
-        onTakeOut: () => void takeOut(),
-        onRetry: again,
-        ...(onStartRevision ? { onStartRevision } : {}),
-      }}
-    />
+    <>
+      <RouteView
+        model={model}
+        actions={{
+          onChoose: (routeId) => {
+            setChosen(routeId)
+            setActProblem(null)
+          },
+          onEdit: openEdit,
+          onNew: openNew,
+          onTakeOut: () => void takeOut(),
+          onRetry: again,
+          ...(onStartRevision ? { onStartRevision } : {}),
+        }}
+      />
+      {builder && api && rows && (
+        <RouteBuilderWindow api={api} open={builder.open} departments={rows} fixedParty={style.brand ?? null} companyId={style.companyId} onSave={saveBuilder} onClose={() => setBuilder(null)} />
+      )}
+    </>
   )
 }

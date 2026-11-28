@@ -87,5 +87,107 @@
     "rateLimited": "Too many requests: wait a moment.",
     "offline": "The factory server is not answering: nothing was changed.",
     "unavailable": "Something went wrong on the server: nothing was changed."
+  },
+  "builder": {
+    "title": {
+      "product": "Route builder · Edit the route",
+      "route": "Route builder · Edit the route",
+      "new": "Route builder · A new route for a model or a customer",
+      "line": "Route builder · Another route for this order"
+    },
+    "save": {
+      "product": "Save the route",
+      "route": "Save the route",
+      "new": "Save the new route",
+      "line": "Use this route for the order"
+    },
+    "subtitle": {
+      "product": "{product} · the product's route",
+      "route": "{product} · {route}",
+      "new": "{product} · a new route",
+      "line": "Line {line} · {product} · only this line, only this order"
+    },
+    "departments": "Departments",
+    "departmentsHint": "Drag one into the route, or press +.",
+    "noDepartments": "No open department. Open one under Manage, or add one.",
+    "new": "new",
+    "times_one": "{count} ×",
+    "times_other": "{count} ×",
+    "addOf": "Add {name} to the route",
+    "route": "The route",
+    "routeHint": "Drag a step to another place, or use the arrows. A department can be there twice.",
+    "keysLabel": "Keys of the route builder",
+    "keys": {
+      "add": "A department: drag it into the route, or press its +.",
+      "move": "A step: drag it, press its ↑ ↓, or Alt + ↑ / Alt + ↓ anywhere on its row.",
+      "save": "⌘ Enter (Ctrl Enter) saves; Esc leaves without saving."
+    },
+    "stepOf": "Step {no}, {name}",
+    "minutesOf": "Minutes for step {no}, {name}",
+    "min": "min",
+    "removeOf": "Take step {no}, {name}, out",
+    "dropEnd": "Drop a department here: it goes to the end.",
+    "empty": "The route is empty. Drag a department here, or press its +.",
+    "errorsTitle_one": "{count} thing holds Save",
+    "errorsTitle_other": "{count} things hold Save",
+    "error": {
+      "NO_DEPARTMENT": "Step {no} has no department: take it out.",
+      "MINUTES_BAD": "Step {no}: the minutes are a number, like 12 or 12.5.",
+      "NAME_NEEDED": "Give the route a name.",
+      "CUSTOMER_NEEDED": "Choose the customer this route is for.",
+      "REASON_NEEDED": "Say why this order is different."
+    },
+    "note": {
+      "NO_QUALITY": "This route has no quality check. You can save it.",
+      "twice": "{name} is there two times in a row. You can save it."
+    },
+    "copy": {
+      "label": "Start from a copy, then change it",
+      "choose": "Choose a route to copy…",
+      "templates": "Ready-made routes",
+      "products": "Routes of products",
+      "option_one": "{name} · {count} step",
+      "option_other": "{name} · {count} steps",
+      "steps_one": "{count} step",
+      "steps_other": "{count} steps",
+      "find": "Find a product to copy from",
+      "reading": "Reading the routes to copy…",
+      "failed": "The routes to copy could not be read."
+    },
+    "name": "The name of this route",
+    "namePlaceholder": "For example: with molded sliders",
+    "forWhom": "Who it is for",
+    "forModel": "A model: for any customer",
+    "forCustomer": "Only for one customer",
+    "forOnly": "Only for {customer}",
+    "customer": "The customer",
+    "customerPick": "Choose the customer…",
+    "customersReading": "Reading the customers…",
+    "customersFailed": "The customers could not be read: this route can be a model.",
+    "reason": "Why is this order different?",
+    "reasonHint": "The order's history keeps it (inside the factory only).",
+    "reasonPlaceholder": "For example: the customer sends the finished shells",
+    "template": {
+      "label": "Save it also as a ready-made route (every product can copy it)",
+      "placeholder": "For example: Molded, checked twice",
+      "save": "Save as ready-made",
+      "done": "“{name}” is a ready-made route now: every product can copy it.",
+      "list_one": "Ready-made routes ({count})",
+      "list_other": "Ready-made routes ({count})",
+      "takeOut": "Take the ready-made route {name} out of the list (it is kept)",
+      "closed": "Closed routes",
+      "openAgain": "Open again",
+      "nameNeeded": "Type a name for the ready-made route first.",
+      "nameTaken": "A ready-made route with this name is there already. Type another name.",
+      "nameClosed": "A closed ready-made route has this name. Open it again under “Closed routes”, or type another name."
+    }
+  },
+  "refusal": {
+    "NAME_EMPTY": "A department needs a name.",
+    "NAME_TAKEN": "This name is used by another department.",
+    "FLOOR_FIXED": "This department has screens on the floor: its name stays and it cannot be closed.",
+    "FROZEN": "The basket cards of this order are printed: the route of a line is fixed now.",
+    "PRINTED": "The basket cards of this order are printed: the route of a line is fixed now.",
+    "NOT_DRAFT": "This revision is not a draft any more: its routes are frozen."
   }
 }

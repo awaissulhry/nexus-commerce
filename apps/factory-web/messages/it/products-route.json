@@ -87,5 +87,107 @@
     "rateLimited": "Troppe richieste: aspetta un momento.",
     "offline": "Il server della fabbrica non risponde: non è cambiato nulla.",
     "unavailable": "Qualcosa è andato storto sul server: non è cambiato nulla."
+  },
+  "builder": {
+    "title": {
+      "product": "Costruttore del percorso · Modifica il percorso",
+      "route": "Costruttore del percorso · Modifica il percorso",
+      "new": "Costruttore del percorso · Un nuovo percorso per un modello o un cliente",
+      "line": "Costruttore del percorso · Un altro percorso per questo ordine"
+    },
+    "save": {
+      "product": "Salva il percorso",
+      "route": "Salva il percorso",
+      "new": "Salva il nuovo percorso",
+      "line": "Usa questo percorso per l'ordine"
+    },
+    "subtitle": {
+      "product": "{product} · il percorso del prodotto",
+      "route": "{product} · {route}",
+      "new": "{product} · un nuovo percorso",
+      "line": "Riga {line} · {product} · solo questa riga, solo questo ordine"
+    },
+    "departments": "Reparti",
+    "departmentsHint": "Trascinane uno nel percorso, o premi +.",
+    "noDepartments": "Nessun reparto aperto. Riaprine uno in Gestisci, o aggiungine uno.",
+    "new": "nuovo",
+    "times_one": "{count} ×",
+    "times_other": "{count} ×",
+    "addOf": "Aggiungi {name} al percorso",
+    "route": "Il percorso",
+    "routeHint": "Trascina un passaggio in un altro posto, o usa le frecce. Un reparto può esserci due volte.",
+    "keysLabel": "Tasti del costruttore del percorso",
+    "keys": {
+      "add": "Un reparto: trascinalo nel percorso, o premi il suo +.",
+      "move": "Un passaggio: trascinalo, premi le sue ↑ ↓, o Alt + ↑ / Alt + ↓ in un punto qualsiasi della sua riga.",
+      "save": "⌘ Invio (Ctrl Invio) salva; Esc esce senza salvare."
+    },
+    "stepOf": "Passaggio {no}, {name}",
+    "minutesOf": "Minuti per il passaggio {no}, {name}",
+    "min": "min",
+    "removeOf": "Togli il passaggio {no}, {name}",
+    "dropEnd": "Lascia qui un reparto: va in fondo.",
+    "empty": "Il percorso è vuoto. Trascina qui un reparto, o premi il suo +.",
+    "errorsTitle_one": "{count} cosa blocca Salva",
+    "errorsTitle_other": "{count} cose bloccano Salva",
+    "error": {
+      "NO_DEPARTMENT": "Il passaggio {no} non ha un reparto: toglilo.",
+      "MINUTES_BAD": "Passaggio {no}: i minuti sono un numero, come 12 o 12,5.",
+      "NAME_NEEDED": "Dai un nome al percorso.",
+      "CUSTOMER_NEEDED": "Scegli il cliente per cui è questo percorso.",
+      "REASON_NEEDED": "Scrivi perché questo ordine è diverso."
+    },
+    "note": {
+      "NO_QUALITY": "Questo percorso non ha un controllo qualità. Puoi salvarlo.",
+      "twice": "{name} c'è due volte di fila. Puoi salvarlo."
+    },
+    "copy": {
+      "label": "Parti da una copia, poi cambiala",
+      "choose": "Scegli un percorso da copiare…",
+      "templates": "Percorsi pronti",
+      "products": "Percorsi dei prodotti",
+      "option_one": "{name} · {count} passaggio",
+      "option_other": "{name} · {count} passaggi",
+      "steps_one": "{count} passaggio",
+      "steps_other": "{count} passaggi",
+      "find": "Cerca un prodotto da cui copiare",
+      "reading": "Lettura dei percorsi da copiare…",
+      "failed": "Non è stato possibile leggere i percorsi da copiare."
+    },
+    "name": "Il nome di questo percorso",
+    "namePlaceholder": "Per esempio: con slider stampati",
+    "forWhom": "Per chi è",
+    "forModel": "Un modello: per qualsiasi cliente",
+    "forCustomer": "Solo per un cliente",
+    "forOnly": "Solo per {customer}",
+    "customer": "Il cliente",
+    "customerPick": "Scegli il cliente…",
+    "customersReading": "Lettura dei clienti…",
+    "customersFailed": "Non è stato possibile leggere i clienti: questo percorso può essere un modello.",
+    "reason": "Perché questo ordine è diverso?",
+    "reasonHint": "La storia dell'ordine lo conserva (solo dentro la fabbrica).",
+    "reasonPlaceholder": "Per esempio: il cliente manda i gusci finiti",
+    "template": {
+      "label": "Salvalo anche come percorso pronto (ogni prodotto può copiarlo)",
+      "placeholder": "Per esempio: Stampato, controllato due volte",
+      "save": "Salva come percorso pronto",
+      "done": "“{name}” è ora un percorso pronto: ogni prodotto può copiarlo.",
+      "list_one": "Percorsi pronti ({count})",
+      "list_other": "Percorsi pronti ({count})",
+      "takeOut": "Togli il percorso pronto {name} dalla lista (resta conservato)",
+      "closed": "Percorsi chiusi",
+      "openAgain": "Riapri",
+      "nameNeeded": "Scrivi prima un nome per il percorso pronto.",
+      "nameTaken": "C'è già un percorso pronto con questo nome. Scrivi un altro nome.",
+      "nameClosed": "Un percorso pronto chiuso ha questo nome. Riaprilo in “Percorsi chiusi”, o scrivi un altro nome."
+    }
+  },
+  "refusal": {
+    "NAME_EMPTY": "Un reparto ha bisogno di un nome.",
+    "NAME_TAKEN": "Questo nome è usato da un altro reparto.",
+    "FLOOR_FIXED": "Questo reparto ha schermi in reparto: il suo nome resta e non si può chiudere.",
+    "FROZEN": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
+    "PRINTED": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
+    "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati."
   }
 }
