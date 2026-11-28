@@ -360,7 +360,8 @@ function ComplaintRequest({ model, record, actions }: { model: CaseRecordViewMod
                   '—'
                 ),
               },
-              { label: t('request.shipment'), value: request.shipment?.number ?? '—' },
+              // owb-po6 (SH- wall): never the office's shipment number — the complaint names the delivery it came with in words.
+              { label: t('request.shipment'), value: request.shipment ? t('request.shipmentNamed') : '—' },
               { label: t('request.yourRef'), value: record.yourRef ?? '—' },
             ]}
           />

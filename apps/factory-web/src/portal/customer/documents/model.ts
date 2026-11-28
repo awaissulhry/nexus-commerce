@@ -426,7 +426,6 @@ export interface ConformityDoc {
 
 export interface ReceivedRow {
   readonly key: string
-  readonly shipment: string
   readonly order: string | null
   readonly orderId: string | null
   readonly shippedOn: string
@@ -466,7 +465,6 @@ export function conformityRowsOf(styles: readonly ConformityStyle[], locale: Loc
       const reports = row.reports.map((ref) => docOf(ref, locale, opened)!)
       return {
         key: `${row.shipment.id}:${style.style.code}`,
-        shipment: row.shipment.number,
         order: row.order ? orderWords(row.order) : null,
         orderId: row.order?.id ?? null,
         shippedOn: row.shippedOn,

@@ -153,7 +153,8 @@ export const complaintRecordSchema = z.object({
     item: z.object({ style: z.object({ code: z.string(), name: z.string() }).nullable(), size: z.string().nullable(), serial: z.string().nullable(), batchNumber: z.string().nullable() }),
     // fix-portal-numbers-1 (B-TH-303): the order by the customer's own number and PO, never the office's series.
     order: z.object({ id: z.string(), yourNumber: z.object({ seq: z.number(), words }).nullable(), yourRef: z.string().nullable() }).nullable(),
-    shipment: z.object({ id: z.string(), number: z.string() }).nullable(),
+    // owb-po6 (SH- wall): the office's shipment number is never read (optional until the server drops it); the DDT or the day names it.
+    shipment: z.object({ id: z.string(), number: z.string().optional() }).nullable(),
     photos: z.array(fileSchema),
   }),
   progress: z.object({ answerBy: z.string().nullable(), answeredAt: z.string().nullable() }),

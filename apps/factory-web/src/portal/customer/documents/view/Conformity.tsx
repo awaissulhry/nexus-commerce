@@ -145,7 +145,7 @@ function ShippedLine({ row }: { row: ReceivedRow }) {
   return (
     <span className="fw-pdoc-sub">
       {[
-        t('conformity.shipment', { number: row.shipment }),
+        // owb-po6 (SH- wall): never the office's shipment number — the row's title says its ship date.
         row.order ? t('row.order', { number: row.order }) : null,
         t('conformity.pieces', { count: row.pieces }),
         row.revision !== null ? t('conformity.revision', { revision: row.revision }) : null,

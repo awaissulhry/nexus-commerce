@@ -231,7 +231,8 @@
     "photoAdded": "Aggiunta il {date}",
     "view": "Vedi",
     "addPhotos": "Aggiungi foto",
-    "orderOpen": "Apri l’ordine"
+    "orderOpen": "Apri l’ordine",
+    "shipmentNamed": "La consegna con cui è arrivato"
   },
   "status": {
     "where": "A che punto è",
