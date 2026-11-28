@@ -1,0 +1,174 @@
+{
+  "tile": {
+    "problem": "Problema",
+    "ask": "Chiedi",
+    "photo": "Foto",
+    "notes": "Note",
+    "notesCount_one": "Note: {count} nota dall'ufficio",
+    "notesCount_other": "Note: {count} note dall'ufficio"
+  },
+  "problem": {
+    "title": "Problema · {code}",
+    "lead": "Un tocco avvisa il caposquadra e l'ufficio. Il lavoro può continuare.",
+    "question": "Qual è il problema?",
+    "none": "Questo stabilimento non ha ancora problemi da segnalare dal telefono. Chiedi al tuo caposquadra.",
+    "code": {
+      "MATERIAL": "Manca il materiale",
+      "DAMAGED": "Pezzo danneggiato",
+      "UNCLEAR": "Disegno non chiaro",
+      "MACHINE": "Problema alla macchina",
+      "PAPER": "Pagina persa o rovinata"
+    }
+  },
+  "ask": {
+    "title": "Chiedi · {code}",
+    "lead": "Un tocco chiede. La risposta torna su questo cesto.",
+    "question": "Di cosa hai bisogno?",
+    "none": "Questo stabilimento non ha ancora richieste dal telefono. Chiedi al tuo caposquadra.",
+    "code": {
+      "ASK_LOGO": "Manca il logo",
+      "ASK_PATCH": "Manca la toppa",
+      "ASK_TO_PATCH": "Mandalo alla squadra toppe",
+      "ASK_UNCLEAR": "Disegno non chiaro",
+      "ASK_OTHER": "Altro (voce)"
+    },
+    "to": {
+      "DESIGNER": "Designer",
+      "TEAM_LEADER": "Caposquadra"
+    },
+    "cardLabel": "La tua richiesta",
+    "state": {
+      "asked": "Chiesto",
+      "taken": "Ci sta lavorando",
+      "answered": "Risposto"
+    },
+    "answered": "Risposto",
+    "voiceLost": "Il messaggio vocale ha bisogno della rete: non è partito. Di' al tuo caposquadra cosa ti serve.",
+    "voiceFailed": "La richiesta è partita, il messaggio vocale no. Di' al tuo caposquadra cosa ti serve."
+  },
+  "answer": {
+    "title": "Una risposta per te"
+  },
+  "window": {
+    "loading": "Apertura…",
+    "sending": "Invio…",
+    "offline": "Nessuna rete. Riprova quando torna la rete.",
+    "offlineSaved": "Nessuna rete: un tocco funziona lo stesso. Resta salvato su questo telefono e parte quando torna la rete.",
+    "noStation": "Prima scegli il tuo reparto.",
+    "notFound": "Questo cesto non è in questo stabilimento.",
+    "forbidden": "Qui non puoi farlo. Chiedi al tuo caposquadra.",
+    "failed": "Non è partito. Riprova.",
+    "already": "Già segnalato per {code}: il caposquadra arriva.",
+    "saved": "{what}: salvato su questo telefono. Arriva al caposquadra quando torna la rete.",
+    "again": "Indietro",
+    "close": "Chiudi"
+  },
+  "department": {
+    "first": "Prima scegli il tuo reparto. Un tocco.",
+    "label": "Reparti",
+    "loading": "Apertura dei reparti…",
+    "station": "Dove sei? Tocca il tuo posto.",
+    "none": "Questo reparto non ha una postazione in questo stabilimento. Chiedi all'ufficio di aggiungerla."
+  },
+  "media": {
+    "offline": "Serve la rete",
+    "busy": "Invio… attendi un momento."
+  },
+  "card": {
+    "label": "Problema segnalato",
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "add": "Aggiungi al problema",
+    "spot": "Mostra il punto",
+    "photo": "Foto",
+    "voice": "Messaggio vocale",
+    "photoTitle": "Una foto del problema · {code}",
+    "voiceTitle": "Un messaggio vocale sul problema · {code}",
+    "answer": "Rispondi al problema",
+    "onMyWay": "Arrivo",
+    "solved": "Risolto",
+    "pending": "Salvato su questo telefono",
+    "officeNote": "Nessuno è arrivato in tempo: l'ufficio è avvisato.",
+    "state": {
+      "TOLD": "Segnalato",
+      "COMES": "Il caposquadra arriva",
+      "OFFICE": "Ora è in mano all'ufficio",
+      "SOLVED": "Risolto",
+      "reprint": "L'ufficio la ristampa"
+    },
+    "sent": {
+      "photo": "Foto inviata all'ufficio.",
+      "voice": "Messaggio vocale inviato all'ufficio.",
+      "spot": "Il punto è mostrato."
+    }
+  },
+  "spot": {
+    "title": "Mostra il punto · {code}",
+    "lead": "Tocca il punto del problema.",
+    "place": "Punto {no} di 9",
+    "shown": "Il problema è nel punto {no} di 9"
+  },
+  "photo": {
+    "title": "Foto · {code}",
+    "saved": "Foto salvata. L'ufficio la vede.",
+    "offline": "Serve la rete. Una foto non può aspettare sul telefono: scattala quando torna la rete."
+  },
+  "notes": {
+    "title": "Note dall'ufficio · {code}",
+    "lead": "Le note dell'ufficio per questo lavoro, dalla più recente.",
+    "none": "Nessuna nota dall'ufficio per questo lavoro.",
+    "files_one": "{count} foto allegata",
+    "files_other": "{count} foto allegate"
+  },
+  "me": {
+    "title": "Profilo",
+    "loading": "Apertura…",
+    "failed": "Non è stato possibile leggere la tua squadra ora.",
+    "retry": "Riprova",
+    "workerRole": "Operaio",
+    "leaderRole": "Caposquadra",
+    "noTeam": "Ancora nessuna squadra.",
+    "leaderIs": "Caposquadra: {name}",
+    "canWork": "Posso lavorare in",
+    "waiting_one": "Salvato su questo telefono: {count} aspetta di andare all'ufficio.",
+    "waiting_other": "Salvato su questo telefono: {count} aspettano di andare all'ufficio.",
+    "offline_one": "Nessuna rete. Il tuo lavoro è salvato su questo telefono: {count} aspetta.",
+    "offline_other": "Nessuna rete. Il tuo lavoro è salvato su questo telefono: {count} aspettano.",
+    "myDay": "La mia giornata",
+    "myDayNote": "La mia giornata la vedi solo tu: chiede il tuo PIN. Le mie registrazioni mostrano una spunta su questo telefono, due spunte in ufficio.",
+    "tell": "Di' all'ufficio",
+    "large": "Parole grandi",
+    "sound": "Suono e vibrazione",
+    "on": "Sì",
+    "off": "No",
+    "record": "Le mie registrazioni",
+    "person": "Cambia persona",
+    "language": "Lingua"
+  },
+  "tell": {
+    "title": "Di' all'ufficio",
+    "what": "Di cosa si tratta?",
+    "kind": {
+      "IDEA": "Un'idea",
+      "WRONG": "Qualcosa non va",
+      "THANKS": "Grazie"
+    },
+    "words": "Le tue parole (o un messaggio vocale)",
+    "voice": "Messaggio vocale",
+    "voiceTaken_one": "Messaggio vocale · {count} secondo",
+    "voiceTaken_other": "Messaggio vocale · {count} secondi",
+    "dropVoice": "Togli il messaggio vocale",
+    "offline": "Nessuna rete: un messaggio con il tuo nome aspetta su questo telefono; uno senza nome parte solo con la rete.",
+    "sendGroup": "Invia",
+    "withName": "Invia con il mio nome",
+    "withoutName": "Invia senza il mio nome",
+    "privacy": "Senza il tuo nome, l'ufficio non vede chi l'ha inviato.",
+    "sent": "L'ufficio l'ha ricevuto.",
+    "held": {
+      "kind": "Prima tocca di cosa si tratta.",
+      "empty": "Dillo in poche parole o con un messaggio vocale.",
+      "voiceOffline": "Un messaggio vocale ha bisogno della rete.",
+      "anonOffline": "Un messaggio senza il tuo nome parte solo quando c'è la rete."
+    }
+  }
+}
