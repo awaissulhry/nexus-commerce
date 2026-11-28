@@ -228,7 +228,7 @@ async function costs(client: Reader, actor: Actor, rows: readonly StyleRowData[]
 /** The price list kinds whose prices are "agreed" with a customer (design § 5q "Agreed price"). */
 export const AGREED_LIST_KINDS = ['CUSTOMER'] as const
 /** EUR only (R58 a): a list in another currency is left out, never converted. */
-const AGREED_CURRENCY = 'EUR'
+const AGREED_CURRENCY = 'EUR' as const
 const LIST_SCOPE = { company: { field: 'companyId', nullable: true } } as const
 
 const dayValue = (day: BusinessDate): Date => new Date(`${day}T00:00:00.000Z`)

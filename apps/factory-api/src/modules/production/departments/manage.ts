@@ -1,3 +1,4 @@
+import type { Prisma } from '@nexus/factory-db'
 import { DomainError, ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
@@ -144,7 +145,7 @@ export async function updateDepartment(caller: CommandCaller, departmentId: stri
   if (early) throw refused(early)
   const name = patch.name === undefined ? seen.name : cleanName(patch.name)
   const shortName = patch.shortName === undefined ? seen.shortName : cleanName(patch.shortName)
-  const names = patch.nameI18n === undefined ? undefined : patch.nameI18n === null ? null : { ...patch.nameI18n }
+  const names: Prisma.InputJsonObject | null | undefined = patch.nameI18n === undefined ? undefined : patch.nameI18n === null ? null : { ...patch.nameI18n }
   const wordsBefore = departmentViewOf(seen).nameI18n
   const namesChange = names !== undefined && JSON.stringify(names ?? {}) !== JSON.stringify(wordsBefore)
   if (name === seen.name && shortName === seen.shortName && !namesChange) return departmentViewOf(seen)
