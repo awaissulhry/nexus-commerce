@@ -26,7 +26,6 @@
     "auditRoom": "Sala revisione"
   },
   "rail": {
-    "label": "Aree del portale",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -83,7 +82,6 @@
     "portal": "Portale",
     "ask": "Fate una domanda",
     "more": "Altre azioni",
-    "pages": "Pagine",
     "pagesOf": "Pagine di {area}"
   },
   "live": {

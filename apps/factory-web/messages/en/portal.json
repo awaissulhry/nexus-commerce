@@ -26,7 +26,6 @@
     "auditRoom": "Audit room"
   },
   "rail": {
-    "label": "Portal areas",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -83,7 +82,6 @@
     "portal": "Portal",
     "ask": "Ask a question",
     "more": "More actions",
-    "pages": "Pages",
     "pagesOf": "Pages of {area}"
   },
   "live": {
