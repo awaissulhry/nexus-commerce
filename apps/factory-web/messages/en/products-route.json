@@ -211,5 +211,31 @@
       "closed": "{name} is closed. It leaves the list; the routes that use it keep it.",
       "opened": "{name} is open again."
     }
+  },
+  "line": {
+    "section": "Route of each line",
+    "info": "Which departments each line goes through, and where that route comes from: the product, a model, the customer, the order structure, or only this order. Only people of the factory see it; the customer never sees a route.",
+    "answer": {
+      "open": "Sales picks the model of a line; the route comes with it. Another route is an exception of the production manager.",
+      "frozen": "Fixed at the print of the basket cards: the route of each line does not change here any more."
+    },
+    "source": {
+      "REVISION": "From the product",
+      "MODEL": "Model",
+      "CUSTOMER": "For this customer",
+      "STRUCTURE": "Order structure",
+      "EXCEPTION": "Only this order",
+      "other": "Its route"
+    },
+    "title": "{seq} · {product}",
+    "titleNoProduct": "{seq} · No product yet",
+    "why": "Why: {reason}",
+    "whenBy": "{by}, {date}",
+    "when": "{date}",
+    "pickOf": "The model of {line}",
+    "normal": "Normal (the product's route)",
+    "another": "Another route for this order…",
+    "back": "Back to the normal route",
+    "none": "No line with a product yet."
   }
 }

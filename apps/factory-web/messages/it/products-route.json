@@ -211,5 +211,31 @@
       "closed": "{name} è chiuso. Esce dalla lista; i percorsi che lo usano lo tengono.",
       "opened": "{name} è di nuovo aperto."
     }
+  },
+  "line": {
+    "section": "Percorso di ogni riga",
+    "info": "Quali reparti attraversa ogni riga e da dove viene il percorso: il prodotto, un modello, il cliente, la struttura dell'ordine o solo questo ordine. Lo vedono solo le persone della fabbrica; il cliente non vede mai un percorso.",
+    "answer": {
+      "open": "Le vendite scelgono il modello di una riga; il percorso viene con lui. Un altro percorso è un'eccezione del responsabile di produzione.",
+      "frozen": "Fissato alla stampa delle schede dei cesti: il percorso di ogni riga qui non cambia più."
+    },
+    "source": {
+      "REVISION": "Dal prodotto",
+      "MODEL": "Modello",
+      "CUSTOMER": "Per questo cliente",
+      "STRUCTURE": "Struttura dell'ordine",
+      "EXCEPTION": "Solo questo ordine",
+      "other": "Il suo percorso"
+    },
+    "title": "{seq} · {product}",
+    "titleNoProduct": "{seq} · Ancora nessun prodotto",
+    "why": "Perché: {reason}",
+    "whenBy": "{by}, {date}",
+    "when": "{date}",
+    "pickOf": "Il modello di {line}",
+    "normal": "Normale (il percorso del prodotto)",
+    "another": "Un altro percorso per questo ordine…",
+    "back": "Torna al percorso normale",
+    "none": "Ancora nessuna riga con un prodotto."
   }
 }
