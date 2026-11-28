@@ -1,16 +1,20 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleAlert, CircleX, Download, Plus, Search, Upload } from 'lucide-react'
+import { CircleAlert, CircleX, Download, Layers3, Plus, Search, ShieldAlert, Upload } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, Menu } from '@nexus/ui/components'
-import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Toggle } from '@nexus/ui/primitives'
+import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { dimensionOf, UOMS } from '@nexus/factory-domain/product/units/units'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { BomLine, BomLineInput, BomView, MaterialView, StyleView } from '../../api'
 import { SheetImportDialog } from '../../import/view/SheetImportDialog'
-import { decimalInput, decimalText, draftOf, editableRevision, editText, isRoutingIssue, issueWords, nextRevisionNumber, revisionInView, stepLabel } from '../../model'
+import { decimalInput, decimalText, draftOf, editableRevision, editText, isRoutingIssue, issueWords, mayEditDraftParts, moneyText, nextRevisionNumber, revisionInView, stepLabel } from '../../model'
+// ---- owb-pd5 (steps 5.1, 5.2): the Materials tab in the section kit ----
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../lib/record-sections/Kit'
+import { ceRecheckOf, costsOf, customerSent, isMainLine, lineFactsOf, longestWaits, mainOf, openOrdersNeedOf, orderNeedOf, piecesOf, stepOf, topLineOf, type CeRecheck, type LineFacts, type MaterialsTop, type NeedRow } from '../materials-model'
+// ---- end owb-pd5
 import type { BomViewMode, StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 // B-W2b-241: the BOM in depth (sections and group rows, the sub-assembly tree, alternates, customer-supplied and option
 // lines, THE check, leather grades, fill by size).
@@ -41,7 +45,7 @@ const VIEWS: BomViewMode[] = ['lines', 'sizes', 'colours', 'tree']
  */
 export function BomTab(props: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   return (
-    <WithMessages namespaces={['products-bom-depth']}>
+    <WithMessages namespaces={['products-bom-depth', /* owb-pd5: the section kit's words */ 'orders']}>
       <BomTabBody {...props} />
     </WithMessages>
   )
@@ -51,14 +55,16 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
   const t = useT('products')
   const td = useT('products-bom-depth')
   const revision = revisionInView(style.revisions, model.revisionId)
-  const editable = editableRevision(style, revision) && model.can.bomManage
-  const heldWhy = !model.can.bomManage ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
+  // owb-pd5 (step 5.1; S4 settle 6): the BOM's right, or the designer's on a DRAFT.
+  const mayEdit = mayEditDraftParts(model.can)
+  const editable = editableRevision(style, revision) && mayEdit
+  const heldWhy = !mayEdit ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
   // B-W2b-241: the BOM in depth (its own read; design cases without one draw W1's data with "—" in the W2b columns).
-  const depth = model.bomDepth ?? { ...NO_BOM_DEPTH, canManage: model.can.bomManage }
+  const depth = model.bomDepth ?? { ...NO_BOM_DEPTH, canManage: mayEdit }
   const depthActions = actions?.bomDepth
   // W2a Import BOM (importer product.bom): rows go into a style's DRAFT revision, so a frozen one says where to go first.
   const draft = draftOf(style.revisions)
-  const importHeld = !model.can.bomManage
+  const importHeld = !mayEdit
     ? t('held.noManage')
     : !model.can.imports
       ? t('bom.import.held.noImports')
@@ -106,6 +112,18 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
   const bomIssues = bom.issues.filter((issue) => !isRoutingIssue(issue.code))
   const bomWarnings = bom.warnings.filter((issue) => !isRoutingIssue(issue.code))
   const structure = ready(depth.structure)
+  // owb-pd5 (steps 5.1, 5.2): the facts of each line (section, who brings it, wait, main), one piece's cost (cost grain only), the CE re-check.
+  const facts = lineFactsOf(bom, structure, ready(depth.depth))
+  const costs = costsOf(model.cost.status === 'ready' ? model.cost.value : null, model.grains)
+  const top = topLineOf(facts, costs?.piece ?? null)
+  const ce = revision.status === 'DRAFT' ? ceRecheckOf(bom, facts, model.releasedBom?.status === 'ready' ? model.releasedBom.value : null) : null
+  const sizeCodes = bom.sizes.map((size) => size.code)
+  const extras = {
+    facts,
+    costs,
+    steps: Object.fromEntries(bom.lines.map((line) => [line.id, stepOf(line, sizeCodes, bom.style.baseSize)])),
+    editable,
+  }
 
   const showMe = (issue: BomView['issues'][number]) => {
     const view: BomViewMode = issue.size ? 'sizes' : issue.colourwayId ? 'colours' : 'lines'
@@ -147,7 +165,11 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
   }
 
   return (
-    <div className="fw-st-stack-lg">
+    <div className="fw-pt fw-pd-mat">
+      {/* owb-pd5 (step 5.1): the top line — lines, the leather, what the customer sends, the longest wait, one piece's cost (cost grain). */}
+      <MaterialsAnswer top={top} currency={costs?.currency ?? null} />
+      {/* owb-pd5 (step 5.2): "CE: check the certificate again" with today's Tell Compliance (on the Compliance tab). */}
+      {ce ? <CeSection ce={ce} model={model} styleId={style.id} /> : null}
       {revision.status === 'DRAFT' && structure ? (
         <CheckCard structure={structure} depth={ready(depth.depth)} bom={bom} routing={routing} onShowMe={showTarget} />
       ) : (
@@ -200,19 +222,19 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
         <Banner tone="warning" title={td('depth.failed')} action={<Button size="sm" onClick={() => depthActions?.onRetry?.()}>{t('common.retry')}</Button>} />
       )}
 
-      <Card
-        header={t('bom.title', { count: bom.lines.length })}
-        description={t('bom.intro', { revision: bom.revision.revision })}
-        headerAction={
-          <span className="fw-st-inline">
-            <SegmentedControl
-              size="sm"
-              ariaLabel={t('bom.viewLabel')}
-              value={model.bomView}
-              onChange={(value) => actions?.onBomView?.(value as BomViewMode)}
-              options={VIEWS.map((view) => ({ value: view, label: view === 'tree' ? td('view.tree') : t(`bom.view.${view}`) }))}
-            />
+      <div className="fw-pt-pairs">
+        <MainSection facts={facts} editable={editable} />
+        <BeforeSection facts={facts} />
+      </div>
+
+      <Section
+        id="pd-mat-list"
+        title={td('mat.list.title', { count: bom.lines.length })}
+        answer={t('bom.intro', { revision: bom.revision.revision })}
+        info={<p>{td('mat.list.info')}</p>}
+        buttons={[
             <Menu
+              key="export"
               label={
                 <span className="fw-st-inline">
                   <Download size={13} aria-hidden /> {model.exporting ? t('bom.export.making') : t('bom.export.title')}
@@ -227,16 +249,26 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
                 disabled: !!model.exporting,
                 onSelect: () => actions?.onExportBom?.(format),
               }))}
-            />
-            <Button size="sm" heldReason={importHeld} onClick={() => actions?.onImportBom?.()}>
+            />,
+            <Button key="import" size="sm" heldReason={importHeld} onClick={() => actions?.onImportBom?.()}>
               <Upload size={13} aria-hidden /> {t('bom.import.open')}
-            </Button>
-            <Button size="sm" variant="primary" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'bomLine', lineId: null })} aria-keyshortcuts="n">
+            </Button>,
+            <Button key="add" size="sm" variant="primary" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'bomLine', lineId: null })} aria-keyshortcuts="n">
               <Plus size={13} aria-hidden /> {t('bom.add')}
-            </Button>
-          </span>
-        }
+            </Button>,
+        ]}
       >
+        {/* owb-pd5 (step 5.1): the material list first; By size, By colourway and Tree stay as more views of the same lines. */}
+        <span className="fw-pd-mat-views">
+          <Layers3 size={13} aria-hidden />
+          <SegmentedControl
+            size="sm"
+            ariaLabel={t('bom.viewLabel')}
+            value={model.bomView}
+            onChange={(value) => actions?.onBomView?.(value as BomViewMode)}
+            options={VIEWS.map((view) => ({ value: view, label: view === 'tree' ? td('view.tree') : view === 'lines' ? td('mat.list.view') : t(`bom.view.${view}`) }))}
+          />
+        </span>
         {model.bomView === 'tree' ? (
           <TreeSection model={depth} actions={depthActions} prefix={model.prefix} />
         ) : bom.lines.length === 0 ? (
@@ -264,9 +296,19 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
         ) : model.bomView === 'colours' ? (
           <ColoursView bom={bom} model={model} editable={editable} actions={actions} />
         ) : (
-          <LinesGrid bom={bom} model={depth} actions={depthActions} recordActions={actions} prefix={model.prefix} />
+          <LinesGrid bom={bom} model={depth} actions={depthActions} recordActions={actions} prefix={model.prefix} extras={extras /* owb-pd5 */} />
         )}
-      </Card>
+      </Section>
+
+      {/* owb-pd5 (step 5.1): what an order needs (browser arithmetic, nothing saved) beside what the open orders need. */}
+      {model.orders ? (
+        <div className="fw-pt-pairs">
+          <OrderNeedSection bom={bom} facts={facts} />
+          <OpenNeedSection bom={bom} facts={facts} model={model} actions={actions} />
+        </div>
+      ) : (
+        <OrderNeedSection bom={bom} facts={facts} />
+      )}
 
       <LeatherCard bom={bom} model={model} editable={editable} actions={actions} />
 
@@ -676,7 +718,10 @@ function LineDialog({ bom, model, actions, lineId }: { bom: BomView; model: Styl
 
 function RemoveLineDialog({ bom, model, actions, lineId }: { bom: BomView; model: StyleRecordViewModel; actions?: StyleRecordActions; lineId: string }) {
   const t = useT('products')
+  const td = useT('products-bom-depth')
   const line = bom.lines.find((entry) => entry.id === lineId)
+  // owb-pd5 (step 5.1): the main material cannot be taken out (pd3 MAIN_REQUIRED says the same).
+  const mainHeld = line && isMainLine(line) ? td('mat.main.held') : null
   const run = () => void actions?.onRemoveLine?.(lineId).then((ok) => ok && actions?.onDialog?.(null))
   return (
     <Modal
@@ -687,7 +732,7 @@ function RemoveLineDialog({ bom, model, actions, lineId }: { bom: BomView; model
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
-          <Button variant="danger" heldReason={model.busy ? t('held.busy') : null} onClick={run}>
+          <Button variant="danger" heldReason={mainHeld ?? (model.busy ? t('held.busy') : null)} onClick={run}>
             {t('bom.remove')}
           </Button>
         </>
@@ -695,5 +740,201 @@ function RemoveLineDialog({ bom, model, actions, lineId }: { bom: BomView; model
     >
       <p>{t('bom.removeBody', { revision: bom.revision.revision })}</p>
     </Modal>
+  )
+}
+
+// ---- owb-pd5 (steps 5.1, 5.2; design § 5zc, prototype mat.js prodMaterialsTab) — the Materials tab's sections ---------------------
+
+/** The top line: how many lines, the leather, what the customer sends, the longest wait and (cost grain) one piece's material cost. */
+function MaterialsAnswer({ top, currency }: { top: MaterialsTop; currency: string | null }) {
+  const td = useT('products-bom-depth')
+  const locale = useLocale()
+  const parts = [
+    td('mat.top.lines', { count: top.lines }),
+    top.leather ? td('mat.top.leather', { code: top.leather.code, name: top.leather.name }) : null,
+    top.customerLines > 0 ? td('mat.top.customer', { count: top.customerLines }) : null,
+    top.longestWait !== null ? td('mat.top.wait', { count: top.longestWait }) : null,
+    top.cost !== null && currency ? td('mat.top.cost', { cost: moneyText(top.cost, currency, locale) }) : null,
+  ].filter(Boolean)
+  return (
+    <p className="fw-pd-answer">
+      <Layers3 size={16} aria-hidden />
+      <span>{parts.join(' · ')}.</span>
+    </p>
+  )
+}
+
+/** 5.2: a protection or CE label material taken out, or set to "the customer sends it" — check the certificate again (today's Tell Compliance). */
+function CeSection({ ce, model, styleId }: { ce: CeRecheck; model: StyleRecordViewModel; styleId: string }) {
+  const td = useT('products-bom-depth')
+  const held = !model.can.complianceView ? td('mat.ce.heldCompliance') : !model.can.tellCompliance ? td('mat.ce.heldTask') : null
+  const href = `${model.prefix}/products/styles/${encodeURIComponent(styleId)}?tab=compliance${model.revisionId ? `&rev=${model.revisionId}` : ''}`
+  return (
+    <Section
+      id="pd-mat-ce"
+      title={td('mat.ce.title')}
+      answer={td('mat.ce.answer')}
+      info={<p>{td('mat.ce.info')}</p>}
+      buttons={[
+        held ? (
+          <Button key="tell" size="sm" variant="primary" heldReason={held}>
+            {td('mat.ce.tell')}
+          </Button>
+        ) : (
+          <Button key="tell" size="sm" variant="primary" asChild>
+            <a href={href}>{td('mat.ce.tell')}</a>
+          </Button>
+        ),
+      ]}
+    >
+      <ul className="fw-st-list">
+        {ce.takenOut.map((line) => (
+          <li key={`out:${line.code}`}>
+            <ShieldAlert size={13} aria-hidden /> {td('mat.ce.takenOut', { code: line.code, name: line.name })}
+          </li>
+        ))}
+        {ce.customerSends.map((line) => (
+          <li key={`cust:${line.code}`}>
+            <ShieldAlert size={13} aria-hidden /> {td('mat.ce.customerSends', { code: line.code, name: line.name, customer: line.sentBy || td('mat.customer') })}
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+/** Main material: the line the customer's leather choice hangs on — it cannot be taken out (pd3 `isMain`). */
+function MainSection({ facts, editable }: { facts: readonly LineFacts[]; editable: boolean }) {
+  const td = useT('products-bom-depth')
+  const main = mainOf(facts)
+  return (
+    <Section id="pd-mat-main" title={td('mat.main.title')} answer={main ? td('mat.main.answer', { code: main.code, name: main.name }) : td('mat.main.none')} info={<p>{td('mat.main.info')}</p>}>
+      <Quiet>{main ? td('mat.main.fixed') : editable ? td('mat.main.howTo') : td('mat.main.noneRead')}</Quiet>
+    </Section>
+  )
+}
+
+/** Before the work starts: the three longest waits (the first decides when to order) and the lines the customer sends. */
+function BeforeSection({ facts }: { facts: readonly LineFacts[] }) {
+  const td = useT('products-bom-depth')
+  const waits = longestWaits(facts)
+  const sent = customerSent(facts)
+  return (
+    <Section id="pd-mat-before" title={td('mat.before.title')} answer={waits[0] ? td('mat.before.answer', { code: waits[0].code, count: waits[0].wait ?? 0 }) : td('mat.before.noWaits')} info={<p>{td('mat.before.info')}</p>}>
+      {waits.length > 0 ? (
+        <ol className="fw-pd-mat-rows">
+          {waits.map((line) => (
+            <li key={line.id}>
+              <span>
+                <b>{line.code}</b> {line.name}
+              </span>
+              <span className="fw-pt-sub">{td('mat.before.days', { count: line.wait ?? 0 })}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {sent.length > 0 ? (
+        <div className="fw-pt-blk">
+          <h3 className="fw-pt-h3">{td('mat.before.sentTitle', { count: sent.length })}</h3>
+          <ul className="fw-pd-mat-rows">
+            {sent.map((line) => (
+              <li key={line.id}>
+                <span>
+                  <b>{line.code}</b> {line.name}
+                </span>
+                <span className="fw-pt-sub">{line.sentBy ? td('mat.before.sentBy', { customer: line.sentBy }) : td('mat.customer')}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </Section>
+  )
+}
+
+/** A need table: material, its need with its unit (waste included), the customer's lines said as theirs. */
+function NeedTable({ rows }: { rows: readonly NeedRow[] }) {
+  const td = useT('products-bom-depth')
+  const t = useT('products')
+  const locale = useLocale()
+  return (
+    <table className="fw-pt-table">
+      <thead>
+        <tr>
+          <th>{td('mat.need.col.material')}</th>
+          <th className="fw-pt-x">{td('mat.need.col.need')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.lineId}>
+            <td className="fw-pt-first">
+              <b>{row.code}</b> {row.name}
+              {row.sentBy !== null ? (
+                <span className="fw-pt-sub">
+                  <Tag tone="info">{row.sentBy ? td('mat.before.sentBy', { customer: row.sentBy }) : td('mat.customer')}</Tag>
+                </span>
+              ) : null}
+            </td>
+            <td className="fw-pt-x" data-label={td('mat.need.col.need')}>
+              {row.need === null ? td('mat.need.unknown') : `${decimalText(row.need, locale, 4)} ${t(`uom.${row.uom}`)}`}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** What an order needs: pieces and a size → the need of each material, waste included. Arithmetic in the browser; nothing is saved. */
+function OrderNeedSection({ bom, facts }: { bom: BomView; facts: readonly LineFacts[] }) {
+  const td = useT('products-bom-depth')
+  const [piecesText, setPiecesText] = useState('10')
+  const [size, setSize] = useState<string>(bom.style.baseSize ?? bom.sizes[0]?.code ?? '')
+  const pieces = piecesOf(piecesText)
+  const rows = pieces === null ? [] : orderNeedOf(bom, facts, size || null, pieces)
+  return (
+    <Section id="pd-mat-need" title={td('mat.need.title')} answer={td('mat.need.answer')} info={<p>{td('mat.need.info')}</p>}>
+      <div className="fw-pd-mat-need">
+        <Field label={td('mat.need.pieces')} error={pieces === null ? td('mat.need.piecesHeld') : undefined}>
+          <Input inputMode="numeric" value={piecesText} onChange={(event) => setPiecesText(event.target.value)} />
+        </Field>
+        {bom.sizes.length > 0 ? (
+          <Field label={td('mat.need.size')}>
+            <Select value={size} onChange={(event) => setSize(event.target.value)}>
+              {bom.sizes.map((entry) => (
+                <option key={entry.code} value={entry.code}>
+                  {entry.code === bom.style.baseSize ? td('mat.need.baseSize', { size: entry.code }) : entry.code}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+      </div>
+      {rows.length > 0 ? <NeedTable rows={rows} /> : null}
+    </Section>
+  )
+}
+
+/** Open orders need: the open pieces of the open orders with this product, at the base size (marked: the sizes are not split here). */
+function OpenNeedSection({ bom, facts, model, actions }: { bom: BomView; facts: readonly LineFacts[]; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  const td = useT('products-bom-depth')
+  const part = model.orders
+  const pieces = part?.status === 'ready' ? part.value.totals.openPieces : 0
+  return (
+    <Section
+      id="pd-mat-open"
+      title={td('mat.open.title')}
+      answer={part?.status === 'ready' ? (pieces > 0 ? td('mat.open.answer', { pieces, orders: part.value.totals.openOrders, size: bom.style.baseSize ?? '—' }) : td('mat.open.none')) : undefined}
+      info={<p>{td('mat.open.info')}</p>}
+    >
+      {!part || part.status === 'idle' || part.status === 'loading' ? (
+        <PartReading rows={2} />
+      ) : part.status === 'error' ? (
+        <PartFailed part={td('mat.open.title')} problem={part.problem} onRetry={actions?.onRetryOrders} />
+      ) : pieces > 0 ? (
+        <NeedTable rows={openOrdersNeedOf(bom, facts, pieces)} />
+      ) : null}
+    </Section>
   )
 }

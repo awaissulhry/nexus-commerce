@@ -137,12 +137,6 @@
       "on": "Yes: each piece can be cut to a rider's measurements",
       "off": "No: in sizes only"
     },
-    "table": {
-      "title": "Size table",
-      "held": "Your role does not read the size table.",
-      "heldWhy": "The size table, how to measure and the protectors are read with the materials right.",
-      "info": "One row for each measurement point, one column for each size, in millimetres."
-    },
     "riders": {
       "title": "Riders' measurement sheets",
       "none": "No open made-to-measure order line yet.",
