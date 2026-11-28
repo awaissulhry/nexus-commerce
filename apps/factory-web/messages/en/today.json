@@ -1,0 +1,16 @@
+{
+  "orders": {
+    "label": "Orders now",
+    "reading": "Reading…",
+    "tilesFailed": "The order counts could not be read now.",
+    "tileDoor": "Open the orders sheet: {tile}",
+    "factoryNow": "The factory now",
+    "factoryFailed": "Where the work is could not be read now.",
+    "factoryNone": "No order is in production now.",
+    "factoryPartial": "Counted from the first 100 orders in production.",
+    "lastChanges": "Last changes",
+    "changesFailed": "The last changes could not be read now.",
+    "changesNone": "No order yet.",
+    "openSheet": "Open the orders sheet"
+  }
+}

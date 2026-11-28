@@ -24,12 +24,32 @@ export interface StyleFilters {
   ppe: string
   /** owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" — the customer's party id, or '' (absent) for every product. */
   brand?: string
+  /** owb-pd5 (step 5.0; pd4s `family=`): "Our range" or "Made for a customer"; '' (absent): both. */
+  family?: '' | Family
 }
 
-export const NO_FILTERS: StyleFilters = { view: 'open', q: '', type: '', ppe: '', brand: '' }
+export type Family = 'OUR_RANGE' | 'FOR_CUSTOMER'
+export const FAMILIES: readonly Family[] = ['OUR_RANGE', 'FOR_CUSTOMER']
+export const isFamily = (value: string | null | undefined): value is Family => (FAMILIES as readonly string[]).includes(value ?? '')
+
+export const NO_FILTERS: StyleFilters = { view: 'open', q: '', type: '', ppe: '', brand: '', family: '' }
 
 /** The filters beyond the saved view (the chips in the toolbar). */
-export const extraFilterCount = (filters: StyleFilters): number => (filters.q.trim() ? 1 : 0) + (filters.type ? 1 : 0) + (filters.ppe ? 1 : 0) + (filters.brand ? 1 : 0)
+export const extraFilterCount = (filters: StyleFilters): number => (filters.q.trim() ? 1 : 0) + (filters.type ? 1 : 0) + (filters.ppe ? 1 : 0) + (filters.brand || filters.family ? 1 : 0)
+
+// ---- owb-pd5 (step 5.0): ONE "Who it is for" choice — every product, our range, made for a customer, or one customer ----------
+/** The choice's value in the select: '' · `family:OUR_RANGE` · `family:FOR_CUSTOMER` · `brand:<party id>`. */
+export const whoChoiceOf = (filters: Pick<StyleFilters, 'brand' | 'family'>): string => (filters.brand ? `brand:${filters.brand}` : filters.family ? `family:${filters.family}` : '')
+/** The filters after a choice: one customer implies "made for a customer" (the API filters by the customer). */
+export function withWhoChoice(filters: StyleFilters, value: string): StyleFilters {
+  if (value.startsWith('brand:')) return { ...filters, brand: value.slice(6), family: '' }
+  const family = value.startsWith('family:') ? value.slice(7) : ''
+  return { ...filters, brand: '', family: isFamily(family) ? family : '' }
+}
+/** What the list read sends: `brandPartyId` for one customer, else `family=` (pd4s) — never both. */
+export const whoQuery = (filters: Pick<StyleFilters, 'brand' | 'family'>): { brandPartyId?: string; family?: Family } =>
+  filters.brand ? { brandPartyId: filters.brand } : filters.family ? { family: filters.family } : {}
+// ---- end owb-pd5
 
 export interface NewStyleDraft {
   companyId: string | null
@@ -77,7 +97,7 @@ export interface ListWords {
 }
 
 /** The family: the row's own word when the API sends it (pd1), else the customer it is made for (empty: our range). */
-export const familyOf = (row: Pick<ProductRow, 'family' | 'brand'>): 'OUR_RANGE' | 'FOR_CUSTOMER' => row.family ?? (row.brand ? 'FOR_CUSTOMER' : 'OUR_RANGE')
+export const familyOf = (row: Pick<ProductRow, 'family' | 'brand'>): Family => row.family ?? (row.brand ? 'FOR_CUSTOMER' : 'OUR_RANGE')
 
 /** "Our range" / "Made for ⟨customer⟩". */
 export function familyWords(row: Pick<ProductRow, 'family' | 'brand'>): ListWords {

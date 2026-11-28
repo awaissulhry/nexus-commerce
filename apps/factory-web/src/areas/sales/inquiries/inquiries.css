@@ -449,3 +449,22 @@
   flex-direction: column;
   gap: var(--nds-space-8);
 }
+
+/* owb-of4 step 1 (design § 5f, § 5g): a Sent order's facts on its Incoming row — "Sent as text · product not picked" / "n details still
+   open", the flag "Customer on hold", and its ONE door Confirm the order… (48 px to touch on a phone). Tokens only. */
+.fw-inq-sent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+.fw-inq-sent-text {
+  color: var(--nds-info-text);
+  font-size: var(--nds-font-size-sm);
+}
+@media (max-width: 639px) {
+  .fw-inq-confirm {
+    min-height: 48px;
+  }
+}

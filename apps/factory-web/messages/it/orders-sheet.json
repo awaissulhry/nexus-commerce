@@ -819,7 +819,10 @@
       "restricted_other": "{count} ordini limitati",
       "skippedNotOrder_one": "{count} saltato: non ancora confermato, o già limitato",
       "skippedNotOrder_other": "{count} saltati: non ancora confermati, o già limitati",
-      "noDrafts": "Nessuna bozza selezionata. Un ordine inviato non si elimina mai."
+      "noDrafts": "Nessuna bozza selezionata. Un ordine inviato non si elimina mai.",
+      "designer": "Dai al grafico…",
+      "left_one": "{count} rimasto: confermalo dopo",
+      "left_other": "{count} rimasti: confermali dopo"
     },
     "asks": {
       "title_one": "Il cliente chiede {count} modifica",
@@ -875,6 +878,47 @@
       "go_other": "Elimina {count} bozze",
       "done_one": "{count} bozza eliminata",
       "done_other": "{count} bozze eliminate"
+    },
+    "designer": {
+      "title_one": "Dai {count} ordine al grafico",
+      "title_other": "Dai {count} ordini al grafico",
+      "subtitle": "Scegli la persona. Entra in ogni ordine e nella sua chat.",
+      "skippedBefore_one": "{count} ordine selezionato resta fuori: non ancora confermato, o già dal grafico.",
+      "skippedBefore_other": "{count} ordini selezionati restano fuori: non ancora confermati, o già dal grafico.",
+      "go_one": "Dai l’ordine",
+      "go_other": "Dai {count} ordini",
+      "done_one": "{name} ora è su {count} ordine",
+      "done_other": "{name} ora è su {count} ordini",
+      "skipped_one": "{count} saltato",
+      "skipped_other": "{count} saltati",
+      "tooMany": "Al massimo {max} ordini alla volta.",
+      "none": "Nessun ordine selezionato si può dare: scegli ordini confermati.",
+      "who": "Chi lavora sulla grafica",
+      "me": "tu"
     }
+  },
+  "incoming": {
+    "sentAsText": "Inviato come testo · prodotto non scelto",
+    "openDetails_one": "{count} dettaglio ancora aperto",
+    "openDetails_other": "{count} dettagli ancora aperti",
+    "onHold": "Cliente in sospeso",
+    "onHoldHint": "Il cliente è in sospeso: conferma solo quando la sospensione è tolta",
+    "confirm": "Conferma l’ordine…",
+    "bulkConfirm": "Conferma {count}…",
+    "bulkNone": "Nessun ordine spuntato si può confermare insieme: aprili uno per uno",
+    "bulkSkips": "Saltati: {text} inviati come testo · {held} in attesa",
+    "confirmed_one": "{count} ordine confermato",
+    "confirmed_other": "{count} ordini confermati",
+    "skippedText_one": "{count} ordine in testo saltato: prima scegli il prodotto",
+    "skippedText_other": "{count} ordini in testo saltati: prima scegli i prodotti",
+    "skippedHeld_one": "{count} saltato: una riga non ha prodotto o il cliente è in sospeso",
+    "skippedHeld_other": "{count} saltati: una riga non ha prodotto o il cliente è in sospeso",
+    "skippedOther_one": "{count} saltato: non è un ordine inviato",
+    "skippedOther_other": "{count} saltati: non sono ordini inviati",
+    "refused_one": "{count} rifiutato",
+    "refused_other": "{count} rifiutati",
+    "dismiss": "Chiudi",
+    "left_one": "{count} rimasto: confermalo dopo",
+    "left_other": "{count} rimasti: confermali dopo"
   }
 }

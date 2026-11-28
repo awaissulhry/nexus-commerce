@@ -75,6 +75,9 @@ import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
 import type { BulkDialog, InquiriesActions, InquiriesModel, ListSlots } from './view/InquiriesView'
 import { pictureReader } from '../../../lib/record-picture/api' // F-SA-212: the one picture part's batch read
+// ---- owb-of4 step 1: the Sent orders' facts (the office sheet's read) and bulk Confirm (today's office confirm, at the version read)
+import { afterConfirmed, catalogueConfirmPlan, confirmRunOf, confirmRunOne, receiptOf, receiptSays, useCatalogueFacts, type CatalogueConfirmed, type ConfirmRun } from './catalogue-facts'
+// ---- end owb-of4
 import type { ListScope } from '../_shared/scoped-list-tools/ScopedListTools' // F-SA-277
 
 /**
@@ -251,6 +254,12 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [confirmed, setConfirmed] = useState<CatalogueConfirmed | null>(null) // owb-of4
+  // owb-of4 (lead fix): THE Confirm window's run — one door is a run of one; bulk Confirm walks the plan's orders one window at a time.
+  const [run, setRun] = useState<ConfirmRun | null>(null)
+  const runRef = useRef<ConfirmRun | null>(null)
+  runRef.current = run
+  const justConfirmed = useRef(false)
   const [customers, setCustomers] = useState<PartyOption[] | null>(null)
   const [dismissed, setDismissed] = useState<string[]>([])
   useEffect(() => setDismissed(readDismissed()), [])
@@ -610,6 +619,40 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     }
   }
 
+  // ---- owb-of4 step 1: the Sent orders' facts, read again with the list; bulk Confirm skips text orders and the ones that hold ----
+  const catalogueFacts = useCatalogueFacts(api, can.ordersView, lock, asOf)
+  const startConfirm = (picked: readonly IncomingRow[]) => {
+    const next = confirmRunOf(catalogueConfirmPlan(picked, catalogueFacts))
+    setConfirmed(null)
+    if (next.queue.length > 0) setRun(next)
+    else setConfirmed(receiptOf(next)) // nothing to confirm together: only what was skipped is said
+  }
+  // The window confirmed its order (it closes itself right after): the next order of the run comes, or the run ends with its receipt.
+  const onConfirmed = () => {
+    justConfirmed.current = true
+    const now = runRef.current
+    if (!now) return
+    const next = afterConfirmed(now)
+    if (next.queue.length > 0) return setRun(next)
+    setRun(null)
+    setConfirmed(receiptOf(next))
+    void load()
+  }
+  // The person closed the window: the run stops; what was confirmed and skipped is said, the rest is left for later.
+  const onConfirmClose = () => {
+    if (justConfirmed.current) {
+      justConfirmed.current = false
+      return
+    }
+    const now = runRef.current
+    setRun(null)
+    if (!now) return
+    const receipt = receiptOf(now)
+    if (receiptSays(receipt)) setConfirmed(receipt)
+    if (now.done > 0) void load()
+  }
+  // ---- end owb-of4
+
   const model: InquiriesModel = {
     prefix,
     me,
@@ -646,7 +689,10 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     locked: !!lock,
     // ---- end F-SA-277
     // ---- F-CQ-201 / 204: the bar's rights, the windows open now (the loop, Add task, a row's own window in place)
-    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage'), threads: session.permissions.includes('threads.post') /* F-CQ-304 */ },
+    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage'), threads: session.permissions.includes('threads.post') /* F-CQ-304 */, orders: can.orders /* owb-of4 */ },
+    catalogueFacts, // owb-of4
+    catalogueConfirmed: confirmed, // owb-of4
+    confirmWindow: run && run.queue[0] ? { requestId: run.queue[0], left: run.queue.length } : null, // owb-of4: THE Confirm window
     many: many.model,
     tasks: tasks.model,
     reply: reply.model, // F-CQ-304
@@ -723,6 +769,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
       if (kind === 'assign' || kind === 'decline') return actions.onBulk?.(kind, open.map((row) => row.id), preview)
       if (kind === 'addTask') return openTasks(picked)
       if (kind === 'reply') return onReply(picked) // F-CQ-304
+      if (kind === 'confirm') return startConfirm(picked) // owb-of4: THE Confirm window, one order at a time
       const records = picked.map(recordOf)
       many.open(incomingActOf(kind, api, records), records)
     },
@@ -761,6 +808,14 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
         .catch(() => undefined)
     },
     onDismissNotice: () => setNotice(null),
+    onDismissConfirmed: () => setConfirmed(null), // owb-of4
+    // owb-of4 (lead fix): a Sent order's "Confirm the order…" opens THE Confirm window (owb-of5); its close and its confirm
+    onConfirmDoor: (row: IncomingRow) => {
+      setConfirmed(null)
+      setRun(confirmRunOne(row.id))
+    },
+    onConfirmed,
+    onConfirmClose,
     onDismissPageNotice: (key) =>
       setDismissed((now) => {
         const next = [...now.filter((one) => one !== key), key]

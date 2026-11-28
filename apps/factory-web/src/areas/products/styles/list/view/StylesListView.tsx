@@ -17,7 +17,7 @@ import { PpeFields, RangeFields, settlePpe } from '../../forms'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { CommerceImport, CommerceImportButton } from '../../import/commerce/view/CommerceImport'
 import { decimalText, revisionChips, STATUS_TONE, STYLE_TILES, STYLE_VIEWS } from '../../model'
-import { agreedText, extraFilterCount, familyWords, marginHintKey, NO_FILTERS, pictureSrcOf, productColumns, protectionWords, sizesWords, START_FROM, thingsBefore, typeWords, type ListWords, type NewStyleModel, type ProductColumn, type StylesListActions, type StylesListViewModel } from '../list-model'
+import { agreedText, extraFilterCount, whoChoiceOf, withWhoChoice, familyWords, marginHintKey, NO_FILTERS, pictureSrcOf, productColumns, protectionWords, sizesWords, START_FROM, thingsBefore, typeWords, type ListWords, type NewStyleModel, type ProductColumn, type StylesListActions, type StylesListViewModel } from '../list-model'
 // B-W2b-243: the row's ⋯ Tech pack PDF.
 import { windowAddress } from '../../techpack/model'
 import { usePhoneList } from '../use-phone'
@@ -327,17 +327,17 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           </option>
         ))}
       </Select>
-      {/* owb-pd4 (step 4.1): the family — "Made for ⟨customer⟩" (the API filters by the customer; "Our range" is the type column's word). */}
-      {model.brands && model.brands.length > 0 && (
-        <Select size="sm" aria-label={t('list.familyFilter')} value={model.filters.brand ?? ''} onChange={(event) => actions?.onFilters?.({ ...model.filters, brand: event.target.value })}>
-          <option value="">{t('list.allFamilies')}</option>
-          {model.brands.map((brand) => (
-            <option key={brand.id} value={brand.id}>
-              {t('family.madeFor', { customer: brand.name })}
-            </option>
-          ))}
-        </Select>
-      )}
+      {/* owb-pd4 / owb-pd5 (step 5.0): who it is for — our range, made for a customer (pd4s `family=`), or one customer (brandPartyId). */}
+      <Select size="sm" aria-label={t('list.familyFilter')} value={whoChoiceOf(model.filters)} onChange={(event) => actions?.onFilters?.(withWhoChoice(model.filters, event.target.value))}>
+        <option value="">{t('list.allFamilies')}</option>
+        <option value="family:OUR_RANGE">{t('family.ourRange')}</option>
+        <option value="family:FOR_CUSTOMER">{t('family.forCustomer')}</option>
+        {(model.brands ?? []).map((brand) => (
+          <option key={brand.id} value={`brand:${brand.id}`}>
+            {t('family.madeFor', { customer: brand.name })}
+          </option>
+        ))}
+      </Select>
     </>
   )
 
@@ -408,6 +408,11 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
               {t('family.madeFor', { customer: model.brands?.find((brand) => brand.id === model.filters.brand)?.name ?? '—' })}
             </TokenChip>
           )}
+          {!model.filters.brand && model.filters.family && (
+            <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, family: '' })}>
+              {t(model.filters.family === 'OUR_RANGE' ? 'family.ourRange' : 'family.forCustomer')}
+            </TokenChip>
+          )}
           {model.filters.q.trim() && (
             <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, q: '' })}>
               {t('list.chipSearch', { q: model.filters.q.trim() })}
@@ -447,7 +452,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           state={state}
           count={countWords}
           search={searchField}
-          filterCount={(model.filters.view !== 'open' ? 1 : 0) + (model.filters.type ? 1 : 0) + (model.filters.ppe ? 1 : 0) + (model.filters.brand ? 1 : 0)}
+          filterCount={(model.filters.view !== 'open' ? 1 : 0) + (model.filters.type ? 1 : 0) + (model.filters.ppe ? 1 : 0) + (model.filters.brand || model.filters.family ? 1 : 0)}
           onFilters={() => setDialog('filters')}
           selected={selected}
           onSelected={setSelected}
