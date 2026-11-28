@@ -78,7 +78,7 @@ import { ACCEPT, type UploadRow } from '../../../lib/order-draft/view/files'
 // "Your price" — every write a draft command at the draft's version; "Your price" only from a price holder (the grain filter refuses it
 // from anyone else: the page never sends the key without the grain).
 import { changeCustomLine, type CustomLineFields, type DraftChoice } from './api'
-import { customLinesOf, draftFilesOf, lineCountOf, ownPriceWriteOf, personBody, personChanges, personDraftOf, personProblems, type PersonDraft } from './model'
+import { customLinesOf, draftFilesOf, ownPriceWriteOf, personBody, personChanges, personDraftOf, personProblems, type PersonDraft } from './model'
 // ---- od-w1.2 (THE SIMPLE ORDER START R1): the mail and the products table — the shared part's rows, windows and words.
 import { TYPING_PAUSE_MS, changedByOf, choicesTyped, draftMailName, draftViewOf, filesAddHeld, HEADER_FIELDS, optionHeld, productRowsOf, uploadsOpenOf } from '../../../lib/order-draft/model'
 import type { SavedBy } from '../../../lib/order-draft/schema'
