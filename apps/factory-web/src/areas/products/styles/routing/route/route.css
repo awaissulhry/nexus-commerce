@@ -1,0 +1,128 @@
+/* owb-pd6 step 6.1 (S4; design plan § 5u, § 5v, § 5y "the page follows its room") — the product tab "Route": layout only, DS tokens
+   only, no raw colour. The tab is a room (`fw-rt`): the routes card and "Who decides the route" sit side by side where the ROOM is
+   wide (no dead space at 1440 / 1920) and stack where it is narrow (a phone, the thread open) — container queries only, so the chat
+   opening re-lays it at once. The steps table keeps its smallest width and scrolls inside its card; the page never scrolls sideways. */
+
+.fw-rt-room {
+  container: fw-rt / inline-size;
+  min-width: 0;
+}
+.fw-rt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+@container fw-rt (min-width: 960px) {
+  .fw-rt {
+    grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  }
+}
+
+.fw-rt-doors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+.fw-rt-doors .nds-btn {
+  height: var(--nds-control-h-sm);
+}
+
+.fw-rt-body,
+.fw-rt-skel {
+  display: grid;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-rt-chip-name {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-rt-chip-party {
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-for,
+.fw-rt-quiet,
+.fw-rt-total,
+.fw-rt-note {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rt-total {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-rt-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-rt-old {
+  color: var(--nds-text-2);
+}
+
+.fw-rt-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.fw-rt-table {
+  width: 100%;
+  min-width: 18rem;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rt-table th,
+.fw-rt-table td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  text-align: start;
+  vertical-align: middle;
+}
+.fw-rt-table th {
+  color: var(--nds-text-muted);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-rt-no {
+  width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.fw-rt-table .fw-rt-num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-rt-list {
+  margin: 0;
+  padding-inline-start: 1.25em;
+}
+
+/* "More": today's depth of the steps (times, cells, checkpoints, settings) under one closed section. */
+.fw-rt-more-body {
+  display: grid;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  padding-block-start: var(--nds-space-12);
+}
