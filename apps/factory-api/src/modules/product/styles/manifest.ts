@@ -8,13 +8,19 @@ import { defineManifest } from '../../../core/manifest'
  */
 const view = { audiences: ['office'], permission: 'product.styles.view', scope: 'record' } as const
 const manage = { audiences: ['office'], permission: 'product.styles.manage', scope: 'record' } as const
+// owb-pd1 1.4 (S4 settle 6): product.styles.manage, OR product.drafts.edit while the style's newest revision is a draft — the route
+// asks the read right (every holder of the manage right holds it) and the handler the write (modules/product/drafts/may-edit.ts).
+const draft = view
 
 export const manifest = defineManifest({
   // B-OL-033: `?forOrder=` — the search for an order (also orders.view over its customer, checked by the handler; else 404).
   'GET /product/styles': view,
   'GET /product/styles/:styleId': view,
-  'POST /product/styles': manage,
-  'PATCH /product/styles/:styleId': manage,
+  // owb-pd1 1.1: the product's open order lines ("Where it is used"); also orders.view, or orders.view.own and on the order
+  // (checked by the handler: ./orders.ts).
+  'GET /product/styles/:styleId/orders': view,
+  'POST /product/styles': draft,
+  'PATCH /product/styles/:styleId': draft,
   'POST /product/styles/:styleId/archive': manage,
   'POST /product/styles/:styleId/reactivate': manage,
   'PUT /product/styles/:styleId/garment-tracking': manage,
@@ -26,7 +32,7 @@ export const manifest = defineManifest({
   'GET /product/styles/:styleId/duplicate': view,
   'POST /product/styles/:styleId/duplicate': manage,
   'GET /product/styles/:styleId/revisions': view,
-  'POST /product/styles/:styleId/revisions': manage,
+  'POST /product/styles/:styleId/revisions': draft,
   'GET /product/colours': view,
   'GET /product/size-scales': view,
   'GET /product/size-scales/:scaleId': view,

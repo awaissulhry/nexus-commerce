@@ -1,14 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, Minus, Plus } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
+import { Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, Tag } from '@nexus/ui/primitives'
-import { EditModeBar, Modal } from '../../../../../lib/i18n/ds-parts'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { CoverageCell, StyleView } from '../../api'
-import { RangeFields, type RangeValue } from '../../forms'
-import { CELL_TONE, matrixCells, moveCell, rangeEffect, rowToggle, type MatrixCellState } from '../../model'
+import { CELL_TONE, matrixCells, moveCell, rowToggle, type MatrixCellState } from '../../model'
 import { ListKeysInfo } from '../../../../../list-frame/ListKeysInfo'
 import '../../../../../list-frame/list-frame.css'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
@@ -26,54 +25,13 @@ export function VariantsTab({ style, model, actions, depth }: { style: StyleView
   return (
     <div className="fw-st-stack-lg">
       {depth?.matrixNotice /* B-W2b-237 */}
-      <RangeCard style={style} model={model} actions={actions} />
+      {/* owb-pd4 (step 4.4): the size range is changed on the Sizes tab now (one path per change). */}
       <div className="fw-st-pair">
         <ColourwaysCard style={style} model={model} actions={actions} />
         <MeasuresCard style={style} />
       </div>
       <MatrixCard style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
     </div>
-  )
-}
-
-function RangeCard({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
-  const t = useT('products')
-  const base = useMemo<RangeValue>(() => ({ sizeScaleId: style.sizeScale.id, sizes: [...style.sizes], baseSize: style.baseSize }), [style])
-  const [draft, setDraft] = useState<RangeValue>(model.rangeDraft ?? base)
-  const [saving, setSaving] = useState(false)
-  // A new read starts the card again unless it holds unsaved changes (after Apply they equal the new read).
-  const lastBase = useRef(base)
-  useEffect(() => {
-    setDraft((current) => (JSON.stringify(current) === JSON.stringify(lastBase.current) ? base : current))
-    lastBase.current = base
-  }, [base])
-  const editable = model.can.manage && style.status !== 'ARCHIVED'
-  const dirty = draft.sizeScaleId !== base.sizeScaleId || draft.baseSize !== base.baseSize || draft.sizes.join(',') !== base.sizes.join(',')
-  const effect = rangeEffect(style, draft.sizes)
-  const held = draft.sizes.length === 0 ? t('range.held.empty') : draft.baseSize === null ? t('range.held.base') : saving ? t('held.busy') : null
-  const save = async () => {
-    if (held || !dirty) return
-    setSaving(true)
-    await actions?.onSaveRange?.(draft)
-    setSaving(false)
-  }
-  return (
-    <Card header={t('range.title')} description={editable ? t('range.intro') : t('identity.readOnly')}>
-      <RangeFields value={draft} scales={model.libraries.scales} onChange={setDraft} scaleLocked={style.matrix.generated ? 'range.scaleLocked' : null} readOnly={!editable} />
-      {dirty && (
-        <>
-          {(effect.added.length > 0 || effect.removed.length > 0) && (
-            <Banner tone={effect.skusOff > 0 ? 'warning' : 'info'} title={t('range.effectTitle')}>
-              <ul className="fw-st-list">
-                {effect.added.length > 0 && <li>{t(style.matrix.generated ? 'range.effectAdd' : 'range.effectAddPlain', { sizes: effect.added.join(', '), count: effect.skusOn })}</li>}
-                {effect.removed.length > 0 && <li>{t(style.matrix.generated ? 'range.effectRemove' : 'range.effectRemovePlain', { sizes: effect.removed.join(', '), count: effect.skusOff })}</li>}
-              </ul>
-            </Banner>
-          )}
-          <EditModeBar message={t('range.unsaved')} count={1} onDiscard={() => setDraft(base)} onApply={() => void save()} applyLabel={t('range.apply')} applyHeldReason={held} busy={saving} saveShortcut />
-        </>
-      )}
-    </Card>
   )
 }
 

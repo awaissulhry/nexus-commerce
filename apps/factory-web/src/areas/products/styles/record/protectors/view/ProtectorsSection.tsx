@@ -11,7 +11,7 @@ import { useT } from '../../../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../../../list-frame/model'
 import type { StyleView } from '../../../api'
-import { draftOf as draftRevisionOf, nextRevisionNumber, startRevisionHeld } from '../../../model'
+import { draftOf as draftRevisionOf, mayEditDraftParts, nextRevisionNumber, startRevisionHeld } from '../../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record-model'
 import type { PlacementView, ProtectorPlacementView } from '../api'
 import {
@@ -48,7 +48,7 @@ export function ProtectorsSection({ style, model, actions, recordActions }: { st
   const tp = useT('products')
   const protectors = model.protectors ?? NO_PROTECTORS
   const part = protectors.part
-  if (part.status === 'ready') return <Section style={style} view={part.value} protectors={protectors} canManage={model.can.bomManage} recordBusy={model.busy} can={model.can} actions={actions} recordActions={recordActions} />
+  if (part.status === 'ready') return <Section style={style} view={part.value} protectors={protectors} canManage={mayEditDraftParts(model.can) /* owb-pd4 (S4 settle 6): the designer places protectors on a DRAFT */} recordBusy={model.busy} can={model.can} actions={actions} recordActions={recordActions} />
   if (part.status === 'error') {
     return (
       <Banner

@@ -355,8 +355,8 @@ export const OFFICE: readonly TreeArea[] = [
           // W2b: B-W2b-56 Dispatch (SCR-138).
           { id: 'production.dispatch', title: 'Dispatch', titleIt: 'Assegnazione lavoro', wave: 'W2b', href: '/production/dispatch' },
           // owb-: Baskets board (/production/baskets), Chains (/production/chains), Teams (/production/teams).
-          { id: 'production.baskets', title: 'Baskets board', titleIt: 'Tabellone dei cesti', wave: 'owb', href: null, deferred: 'owb- S5 (fl9) builds it (order workflow, base settle 7)' },
-          { id: 'production.chains', title: 'Chains', titleIt: 'Catene', wave: 'owb', href: null, deferred: 'owb- S5 (fl9) builds it (order workflow, base settle 7)' },
+          { id: 'production.baskets', title: 'Baskets board', titleIt: 'Tabellone dei cesti', wave: 'owb', href: '/production/baskets' },
+          { id: 'production.chains', title: 'Chains', titleIt: 'Catene', wave: 'owb', href: '/production/chains' },
           { id: 'production.teams', title: 'Teams', titleIt: 'Squadre', wave: 'owb', href: null, deferred: 'owb- S3 (ss7) builds it (order workflow, base settle 7)' },
         ],
       },

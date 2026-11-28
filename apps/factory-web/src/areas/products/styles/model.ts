@@ -50,6 +50,12 @@ export interface StyleAbilities {
   prices: boolean
   /** W2a: make a task on the style for Compliance (Changes that may need the notified body). */
   tellCompliance: boolean
+  /**
+   * owb-pd4 (S4 settle 6; base settle 5): the designer's right — make a product and change a DRAFT revision of it (style facts while
+   * the newest revision is a draft, sizes, how to measure, protectors, pictures); never release, archive, duplicate, a price, a cost,
+   * a route or a department. The server checks it; the web offers only what it lets through.
+   */
+  draftsEdit: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
@@ -76,8 +82,39 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
     prices: has('pricelists.view'),
     // W2a (B-W2a-66): "Tell Compliance" makes a task on the style (tasks.manage, and threads.post on a record).
     tellCompliance: has('tasks.manage') && has('threads.post'),
+    draftsEdit: has('product.drafts.edit'),
   }
 }
+
+// ---- owb-pd4 (S4 settle 6): what a person may change on a product ------------------------------------------------------------
+
+type RevisionState = { readonly status: 'DRAFT' | 'RELEASED' | 'OBSOLETE'; readonly revision: number }
+
+/** The style's newest revision (the highest number), or null. */
+export const newestRevision = <R extends RevisionState>(revisions: readonly R[]): R | null => [...revisions].sort((a, b) => b.revision - a.revision)[0] ?? null
+
+/**
+ * The style's own facts (name, type, season, customer, made to measure, sizes, PPE, customs): product.styles.manage; the designer
+ * (product.drafts.edit) only while the newest revision is a draft. Never on an archived product.
+ */
+export function mayEditFacts(style: { readonly status: StyleView['status']; readonly revisions: readonly RevisionState[] }, can: Pick<StyleAbilities, 'manage' | 'draftsEdit'>): boolean {
+  if (style.status === 'ARCHIVED') return false
+  if (can.manage) return true
+  return can.draftsEdit && newestRevision(style.revisions)?.status === 'DRAFT'
+}
+
+/** A revision's draft parts (the size table, how to measure, protectors): product.bom.manage, or the designer's right on a DRAFT. */
+export const mayEditDraftParts = (can: Pick<StyleAbilities, 'bomManage' | 'draftsEdit'>): boolean => can.bomManage || can.draftsEdit
+
+/** The band's ONE main button by right (design prodBand): Release revision n · Start revision n · Take it back · none. */
+export type BandPrimary = 'release' | 'start' | 'takeBack' | null
+export function bandPrimaryOf(style: { readonly status: StyleView['status']; readonly revisions: readonly RevisionState[] }, revision: RevisionState | null, can: Pick<StyleAbilities, 'manage' | 'bomManage' | 'draftsEdit' | 'release'>): BandPrimary {
+  if (style.status === 'ARCHIVED') return can.manage ? 'takeBack' : null
+  if (revision?.status === 'DRAFT') return can.release ? 'release' : null
+  if (style.revisions.some((entry) => entry.status === 'DRAFT')) return null
+  return can.manage || can.bomManage || can.draftsEdit ? 'start' : null
+}
+// ---- end owb-pd4
 
 // ---- the studio's tabs ------------------------------------------------------------------------------------------------
 
@@ -136,21 +173,27 @@ export const isWideTab = (tab: StyleTab): boolean => WIDE_TABS.includes(tab)
 export const VARIANTS_ANCHOR = 'style-variants'
 // ---- end B-TH-261
 
-/** The tabs a person may open: a tab whose API they cannot read is not drawn (its page is absent, not empty). */
-export function tabsFor(can: StyleAbilities): StyleTab[] {
+/**
+ * The tabs a person may open: a tab whose API they cannot read is not drawn (its page is absent, not empty). owb-pd4 (step 4.2; design
+ * § 5q "Who", prodTabs): Cost opens only with the cost grain too (sales and the production manager read no cost); Compliance and
+ * Versions & changes show to every reader of the product — without their right the tab says why (Compliance: held until the Owner's
+ * rights batch; Versions: the revisions from the product's own read).
+ */
+export function tabsFor(can: StyleAbilities, grains: Pick<Grains, 'cost'> = { cost: true }): StyleTab[] {
   return STYLE_TABS.filter((tab) => {
     if (tab === 'bom') return can.bomView
     if (tab === 'routing') return can.routingView
-    if (tab === 'cost') return can.costView
-    if (tab === 'compliance') return can.complianceView
+    if (tab === 'cost') return can.costView && grains.cost
+    if (tab === 'compliance') return can.complianceView || can.view
     // B-W2b-95: the pattern pieces (and B-W2b-236's pattern files) read with the BOM's right.
     if (tab === 'patterns') return can.bomView
     // B-W2b-233: Sizes & measurements opens with the style's read (its prepacks); its revision-bound sections ask the BOM's.
     if (tab === 'sizes') return can.view
     // B-W2b-243: the live tech pack reads with the BOM's right (its sections ask theirs).
     if (tab === 'techpack') return can.bomView
-    // B-W2b-245: Versions & changes reads the revisions, the compare and the drift with the BOM's right (its changes ask theirs).
-    if (tab === 'versions') return can.bomView
+    // B-W2b-245: Versions & changes reads the revisions, the compare and the drift with the BOM's right (its changes ask theirs);
+    // owb-pd4: a reader without it gets the revisions from the product's own read.
+    if (tab === 'versions') return can.bomView || can.view
     return true
   })
 }
@@ -192,7 +235,8 @@ export function startRevisionHeld(style: Pick<StyleView, 'status' | 'revisions'>
   const draft = draftOf(style.revisions)
   if (draft) return 'held.draftOpen'
   const frozen = style.revisions.length > 0
-  if (frozen ? !can.bomManage : !can.manage) return 'held.noManage'
+  // owb-pd4 (S4 settle 6): the designer starts revision n too.
+  if (frozen ? !(can.bomManage || can.draftsEdit) : !(can.manage || can.draftsEdit)) return 'held.noManage'
   return null
 }
 
@@ -244,12 +288,6 @@ export function revisionChips(row: Pick<StyleRow, 'releasedRevision' | 'draftRev
   if (row.releasedRevision !== null) chips.push({ kind: 'released', revision: row.releasedRevision })
   if (row.draftRevision !== null) chips.push({ kind: 'draft', revision: row.draftRevision })
   return chips
-}
-
-/** What the completeness column counts: the five things a style needs before it can be made. */
-export function completenessOf(row: Pick<StyleRow, 'completeness'>): { done: number; of: number; missing: Array<keyof StyleRow['completeness']> } {
-  const entries = Object.entries(row.completeness) as Array<[keyof StyleRow['completeness'], boolean]>
-  return { done: entries.filter(([, done]) => done).length, of: entries.length, missing: entries.filter(([, done]) => !done).map(([key]) => key) }
 }
 
 /** The CSV of the selected rows (no money: the list carries none). */

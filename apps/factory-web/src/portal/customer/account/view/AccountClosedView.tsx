@@ -9,6 +9,8 @@ import { useT } from '../../../../lib/i18n/provider'
 export interface AccountClosedModel {
   homeHref: string
   admins: readonly string[]
+  /** owb-po4.3: the page it says is closed (Your people); absent: the Account page. */
+  title?: string
 }
 
 export function AccountClosedView({ model }: { model: AccountClosedModel }) {
@@ -16,7 +18,7 @@ export function AccountClosedView({ model }: { model: AccountClosedModel }) {
   return (
     <EmptyState
       icon={<Lock size={22} aria-hidden />}
-      title={t('closed.title')}
+      title={model.title ?? t('closed.title')}
       description={model.admins.length > 0 ? t('closed.askAdmin', { names: model.admins.join(', ') }) : t('closed.askUs')}
       action={
         <Button size="sm" asChild>

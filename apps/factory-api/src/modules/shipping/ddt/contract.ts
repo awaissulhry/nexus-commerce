@@ -5,6 +5,7 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { DDT_SOURCE_TYPES, MAX_OTHER_GOODS } from '@nexus/factory-domain/shipping/ddt/sources'
 import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+import { overridesSchema } from '@nexus/factory-domain/sales/warnings/kinds' // owb- (S3 ss1)
 import { fileView, presignedView } from '../../../platform/files/contract'
 import { oneShipment, statusSchema, transportBySchema } from '../views'
 
@@ -57,6 +58,8 @@ const ddtRequest = input({
   transportMode: z.enum(TRANSPORT_MODES).nullish(),
   /** B-W2a-F8 with B-W2b-19: with `ship`, why the garments' moves out of finished goods go into a SOFT-locked month. */
   periodLockOverride: periodLockOverride.optional(),
+  /** owb- (S3 ss1 step 1.4): with `ship`, the warnings the person saw and goes on with (PAYMENT_DUE_AT_SHIP: a payment due). */
+  overrides: overridesSchema,
 })
 
 const address = output({ line1: z.string(), line2: z.string().nullable().optional(), postalCode: z.string(), city: z.string(), province: z.string().nullable().optional(), country: z.string() })
@@ -168,7 +171,9 @@ export const shipContract = defineContract({
   // B-W2a-F8 with B-W2b-19: the garments' moves out of finished goods honour the month locks.
   // B-OS-014: + when the goods were handed over (default now: not ahead of now, not before packing nor the DDT, at most 60 days
   // back) and why, when more than 15 minutes back (3 to 500 characters).
-  body: input({ version, periodLockOverride: periodLockOverride.optional(), shippedAt: instant().optional(), reason: z.string().trim().max(500).nullish() }),
+  // owb- (S3 ss1 step 1.4; settle L2): + the warnings passed on (`overrides`): a payment due before shipping is a 409 of warnings
+  // (issue path warning/PAYMENT_DUE_AT_SHIP) until the body names it; the way to our own warehouse first never asks it.
+  body: input({ version, periodLockOverride: periodLockOverride.optional(), shippedAt: instant().optional(), reason: z.string().trim().max(500).nullish(), overrides: overridesSchema }),
   response: { 200: oneShipment },
 })
 
