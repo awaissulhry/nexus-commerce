@@ -1,0 +1,79 @@
+{
+  "title": "Persone per cliente",
+  "intro": {
+    "title": "Decidi tu quali persone della fabbrica lavorano per quale cliente.",
+    "body": "Il cliente e le vendite poi scelgono solo tra queste persone, per un gruppo o un ordine. Un cliente legge il nome di una persona della fabbrica solo quando hai dato quella persona a quel cliente. Le persone del reparto non sono qui."
+  },
+  "readOnly": "Solo il titolare e un amministratore cambiano questa pagina. Tu puoi leggerla.",
+  "dismiss": "Chiudi",
+  "retry": "Riprova",
+  "reading": "Lettura…",
+  "cancel": "Annulla",
+  "empty": "Ancora nessuna persona dell’ufficio.",
+  "count": "Persone: {people} · clienti: {customers}",
+  "foot": "Una persona che togli lascia i gruppi e gli ordini di quel cliente. La cronologia lo tiene.",
+  "col": {
+    "person": "Nome · ruolo",
+    "extra": "Permessi in più"
+  },
+  "group": {
+    "person": "Persona",
+    "customers": "Lavora per questo cliente"
+  },
+  "extra": {
+    "ALLOW_PRODUCTION": "Consenti la produzione",
+    "PACK_AND_SEND": "Imballa e spedisci",
+    "PRINT_AND_START": "Stampa e avvia",
+    "aria": "{right} per {name}"
+  },
+  "extraHint": {
+    "ALLOW_PRODUCTION": "Vede la bacheca dei cesti, le catene e la scheda Produzione di un ordine",
+    "PACK_AND_SEND": "Imballa e spedisce le spedizioni",
+    "PRINT_AND_START": "Stampa e avvia il lavoro di un ordine"
+  },
+  "tick": {
+    "on": "{name} lavora per {customer}: togli",
+    "off": "{name} non lavora per {customer}: dai",
+    "given": "Lavora per lui",
+    "notGiven": "Non dato"
+  },
+  "bulk": {
+    "selected_one": "{count} selezionata",
+    "selected_other": "{count} selezionate",
+    "give": "Dai a ogni cliente",
+    "takeOut": "Togli per ogni cliente…",
+    "clear": "Deseleziona",
+    "gaveDone_one": "{count} persona data a ogni cliente",
+    "gaveDone_other": "{count} persone date a ogni cliente",
+    "tookDone_one": "{count} persona tolta per ogni cliente",
+    "tookDone_other": "{count} persone tolte per ogni cliente",
+    "refused_one": "{count} rifiutata",
+    "refused_other": "{count} rifiutate"
+  },
+  "ask": {
+    "title_one": "Togliere {count} persona per ogni cliente?",
+    "title_other": "Togliere {count} persone per ogni cliente?",
+    "subtitle": "Finiscono {rows} legami con i clienti. Le persone lasciano i gruppi e gli ordini di quei clienti; la cronologia lo tiene.",
+    "go_one": "Togli la persona",
+    "go_other": "Togli {count} persone",
+    "customers_one": "lavora per {count} cliente",
+    "customers_other": "lavora per {count} clienti"
+  },
+  "cards": {
+    "label": "Persone",
+    "select": "Seleziona {name}",
+    "none": "Ancora nessun cliente"
+  },
+  "keys": {
+    "arrows": "Spostati da una cella all’altra",
+    "tick": "Spunta la casella della cella",
+    "range": "Seleziona tutte le persone tra due caselle"
+  },
+  "refused": {
+    "forbidden": "Solo il titolare e un amministratore lo cambiano.",
+    "stale": "Qualcuno lo ha cambiato nel frattempo. Leggi di nuovo la pagina.",
+    "gone": "Questa persona o questo cliente non c’è più.",
+    "offline": "Non è stato possibile raggiungere la fabbrica. Riprova.",
+    "failed": "Non è stato possibile salvare. Riprova."
+  }
+}

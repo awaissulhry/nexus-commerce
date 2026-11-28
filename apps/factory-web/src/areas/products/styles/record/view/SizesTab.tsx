@@ -39,16 +39,11 @@ export function SizesTab({ style, model, actions }: { style: StyleView; model: S
         <span>{t(answer.key, answer.params)}</span>
       </p>
       <SizesSection style={style} model={model} actions={actions} />
-      {model.can.bomView ? (
-        <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />
-      ) : (
-        <Section id="pd-table" title={t('sizes.table.title')} answer={t('sizes.table.held')} info={<p>{t('sizes.table.info')}</p>}>
-          <Quiet>{t('sizes.table.heldWhy')}</Quiet>
-        </Section>
-      )}
+      {/* owb-pd5 (step 5.0; pd4s s.2): the size table, how to measure and the protectors read with the product's own right (Sales reads them). */}
+      <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />
       {showRiders ? <RidersSection model={model} actions={actions} /> : null}
-      {model.can.bomView ? <HowToSection model={model} /> : null}
-      {model.can.bomView ? <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} /> : null}
+      <HowToSection model={model} />
+      <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />
       <PrepacksSection model={model} actions={actions?.prepacks} />
     </div>
   )

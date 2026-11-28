@@ -1,6 +1,6 @@
 'use client'
 
-import { FileText, Image as ImageIcon, Lock, Users } from 'lucide-react'
+import { FileText, Image as ImageIcon, Lock, Send, Users } from 'lucide-react'
 import type { OrderLife } from '@nexus/factory-domain/sales/order-life'
 import { Banner } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
@@ -142,5 +142,24 @@ export function OrderTextCard({ card }: { readonly card: TextCard }) {
         ) : null}
       </div>
     </OverviewCard>
+  )
+}
+
+/**
+ * owb-of7 step 2 (design plan § 5f, § 5zk; prototype office.js designAsk) — "Send the design for approval": ONE `POST /approvals-out`
+ * (kind ARTWORK on the order, its picture as the mockup); the state then shows as the band's Design tag (waits / approved / change).
+ * Drawn only for who may (partners.approvals.ask + orders.manage); held in words while the order has no picture or a request waits.
+ */
+export function SendDesignDoor({ design, onSend }: { readonly design: { readonly state: 'WAITS' | 'APPROVED' | 'CHANGE' | null; readonly may: boolean; readonly held: string | null; readonly busy: boolean; readonly problem: string | null }; readonly onSend?: () => void }) {
+  const f = useFlowWords()
+  if (!design.may) return null
+  return (
+    <div className="fw-flow-design">
+      <Button size="sm" variant="secondary" heldReason={design.busy ? f('design.busy') : design.held ? f(design.held) : null} onClick={() => onSend?.()}>
+        <Send size={14} aria-hidden /> {f('design.send')}
+      </Button>
+      {design.state ? <span className="fw-so-hint">{f(`design.state.${design.state}`)}</span> : null}
+      {design.problem ? <Banner tone="danger" title={design.problem === 'design.failed' ? f('design.failed') : design.problem} /> : null}
+    </div>
   )
 }

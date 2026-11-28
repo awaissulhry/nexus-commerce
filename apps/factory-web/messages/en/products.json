@@ -1692,6 +1692,7 @@
   },
   "family": {
     "ourRange": "Our range",
-    "madeFor": "Made for {customer}"
+    "madeFor": "Made for {customer}",
+    "forCustomer": "Made for a customer"
   }
 }

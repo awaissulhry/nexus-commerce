@@ -51,6 +51,8 @@ describe('owb-fl8 — the Me page', () => {
   it('offers the site\'s floor languages this web speaks, in the site\'s order, never a raw tag', () => {
     expect(floorLanguages(['en', 'it', 'xx', 'en'])).toEqual(['en', 'it'])
     expect(floorLanguages([])).toEqual([])
+    // owb-fl7 (pick J): Urdu where the site lists it.
+    expect(floorLanguages(['it', 'ur'])).toEqual(['it', 'ur'])
   })
 
   it('counts this person\'s actions saved on this phone, and shows the strip only offline or while something waits', () => {

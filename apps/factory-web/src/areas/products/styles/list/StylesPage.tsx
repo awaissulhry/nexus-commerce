@@ -13,7 +13,7 @@ import { useCommerceImport } from '../import/commerce/use-commerce-import'
 import { EVERY_COMPANY } from '../import/sheet-import'
 import { abilitiesOf, grainsOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from '../model'
 import { readProblem, writeProblem } from '../problems'
-import type { NewStyleDraft, NewStyleModel, StyleFilters, StylesListViewModel } from './list-model'
+import { isFamily, whoQuery, type NewStyleDraft, type NewStyleModel, type StyleFilters, type StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
 // B-W2b-236 (SCR-303): List · Gallery.
 import { galleryOn, withGallery } from '../gallery/gallery-model'
@@ -34,7 +34,9 @@ function filtersOf(params: URLSearchParams | null): StyleFilters {
   const ppe = params?.get('ppe') ?? ''
   // owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" — a party id (the API checks it; another brand's answers nothing).
   const brand = (params?.get('brand') ?? '').trim().slice(0, 64)
-  return { view: viewOf(params?.get('view')), q: params?.get('q') ?? '', type: PRODUCT_TYPES.includes(type) ? type : '', ppe: PPE_CATEGORIES.includes(ppe) ? ppe : '', brand }
+  // owb-pd5 (step 5.0): our range or made for a customer (pd4s `family=`).
+  const family = params?.get('family')
+  return { view: viewOf(params?.get('view')), q: params?.get('q') ?? '', type: PRODUCT_TYPES.includes(type) ? type : '', ppe: PPE_CATEGORIES.includes(ppe) ? ppe : '', brand, family: !brand && isFamily(family) ? family : '' }
 }
 
 function searchOf(filters: StyleFilters): string {
@@ -43,6 +45,7 @@ function searchOf(filters: StyleFilters): string {
   if (filters.type) search.set('type', filters.type)
   if (filters.ppe) search.set('ppe', filters.ppe)
   if (filters.brand) search.set('brand', filters.brand)
+  else if (filters.family) search.set('family', filters.family)
   if (filters.q.trim()) search.set('q', filters.q.trim())
   const text = search.toString()
   return text ? `?${text}` : ''
@@ -139,7 +142,7 @@ function StylesContainer() {
   })
 
   const query = useCallback(
-    (from: StyleFilters, at: string | null) => ({ ...viewQuery(from.view), q: from.q, productType: from.type || undefined, ppeCategory: from.ppe || undefined, brandPartyId: from.brand || undefined, cursor: at }),
+    (from: StyleFilters, at: string | null) => ({ ...viewQuery(from.view), q: from.q, productType: from.type || undefined, ppeCategory: from.ppe || undefined, ...whoQuery(from), cursor: at }),
     [],
   )
 

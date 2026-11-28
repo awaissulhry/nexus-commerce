@@ -75,6 +75,8 @@ export interface ComponentStep {
   readonly name: string
   readonly workCentreKind: WorkCentreKind
   readonly standardMinutes: string
+  /** owb-pd2 2.5: the step's department (RoutingOperation.departmentId): its own labour rate wins over the kind's. */
+  readonly departmentId?: string | null
   // ---- B-W2b-GB02 (G056; B-W2b-418 gap 3, B-W2b-419 gap 3)
   /** Its extra minutes in a size (PRD-114: the step in that size takes standardMinutes + extraMinutes); none: every size alike. */
   readonly sizeTimes?: readonly SizeTime[] | undefined
@@ -403,7 +405,8 @@ export function componentsOf(facts: ComponentFacts): Components {
         }
         warn('NO_PIECE_RATE', step.id, `${step.code} has no published piece rate for every size of the style: it is costed by its minutes.`)
       }
-      const rate = pickRate(facts.rates, step.workCentreKind, facts.companyId, facts.on)
+      // owb-pd2 2.5: the step's department's own rate wins when one is valid on the day; the kind's rate stays the fallback.
+      const rate = pickRate(facts.rates, step.workCentreKind, facts.companyId, facts.on, step.departmentId ?? null)
       if (rate === null) {
         miss({ key: `LABOUR_RATE:${step.workCentreKind}`, code: 'LABOUR_RATE', workCentreKind: step.workCentreKind, message: `No cost per minute for ${step.workCentreKind} work centres is in force on ${facts.on}.` })
         continue

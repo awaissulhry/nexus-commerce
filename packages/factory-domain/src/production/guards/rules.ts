@@ -165,6 +165,12 @@ export interface GuardFacts {
   readonly settings: GuardSettings
   /** The station's line and the work order's (allocated) line, when known; `lineHasKind`: the work order's line has an active station of the operation's kind. */
   readonly lines: { readonly station: { readonly code: string; readonly line: GuardLine | null } | null; readonly workOrder: GuardLine | null; readonly lineHasKind: boolean }
+  /**
+   * owb-fl2 (the basket's place, factory-domain production/baskets): the basket came INTO this operation by a hand move (its
+   * place is this step by a move). Then nothing before it is "skipped" and no earlier report caps it: the bundle's own
+   * garments reached it, so the STRICT quantity guard does not hold its next report. Left out: false (as before).
+   */
+  readonly movedInto?: boolean | undefined
 }
 
 export interface GuardFinding {
@@ -187,7 +193,7 @@ const counted = (mode: FloorRuleMode): mode is 'WARN' | 'STRICT' => mode !== 'FR
 
 /** The checks of one report at its operation (after W1's operation, kind, already-reported and bundle-size checks). */
 export function guardFindings(facts: GuardFacts): GuardResult {
-  const passed = passedTo(facts.operations, facts.operation, facts.bundle.quantity, facts.standing, facts.bundleId)
+  const passed: PassedTo = facts.movedInto === true ? { previous: null, from: null, passed: facts.bundle.quantity, skipped: [] } : passedTo(facts.operations, facts.operation, facts.bundle.quantity, facts.standing, facts.bundleId)
   const total = countsTotal(facts.counts)
   const findings: GuardFinding[] = []
   const { quantityGuard, skippedOperationRule } = facts.settings

@@ -39,7 +39,9 @@
     "MATERIAL": "Materiale",
     "PURCHASE_ORDER": "Ordine di acquisto",
     "LOT": "Lotto",
-    "WORK_ORDER": "Ordine di lavoro"
+    "WORK_ORDER": "Ordine di lavoro",
+    "TEAM": "Squadra o unità",
+    "EMPLOYEE": "Dipendente"
   },
   "shared": {
     "title": "{record} condivide i campi con {other}",

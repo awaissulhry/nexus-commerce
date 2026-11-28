@@ -60,6 +60,8 @@ import { useTermsTab } from './terms/use-terms-tab'
 import { TermsTab } from './view/terms/TermsTab'
 import { TermsNotices } from './view/terms/TermsNotices'
 import { useCustomerTerms } from '../depth/CustomerDepth'
+import { useFactoryPeople } from './people/factory-people' // owb-of7 step 3: the card "Factory people"
+import { FactoryPeopleCard } from './view/people/FactoryPeopleCard'
 // F-CT-405: end
 
 /**
@@ -221,9 +223,12 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // sections until ca-w2. "Add as a contact…" starts the record's own Add contact window with the portal person's name and e-mail.
   const privacy = useCustomerPrivacy(record.reload) // F-CA-224: an erase reads the party again
   const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.state.read, openPrivacy: privacy.state.onOpen /* F-CA-224 */, retryPrivacy: privacy.state.onRetry, enabled: tab === 'people' }) // F-CA-204: Riders read the riders and profiles, no longer the glance
+  // owb-of7 step 3: "Factory people" — who of the factory is given to this customer (owb-of2's People by customer read), read while People shows.
+  const factoryPeople = useFactoryPeople(api, partyId, tab === 'people')
   const peopleTab =
     named && record.party && tab === 'people' ? (
       <PeopleTab
+        factory={factoryPeople ? <FactoryPeopleCard card={factoryPeople} prefix={prefix} /> : null}
         model={people.model}
         actions={people.actions}
         portal={people.portal}

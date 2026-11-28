@@ -30,6 +30,8 @@ export const STEP_COLUMNS = {
   instructions: true,
   // B-W2b-88 (MES-025): side by side steps.
   parallelGroup: true,
+  // owb-pd2: the step's department (owb-b1 G3).
+  departmentId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -48,6 +50,8 @@ export const OPERATION_REF_COLUMNS = {
   standardMinutes: true,
   instructions: true,
   status: true,
+  // owb-pd2: the operation's department (a step made from it is in it).
+  departmentId: true,
 } as const satisfies Prisma.OperationSelect
 type OperationRefRow = Prisma.OperationGetPayload<{ select: typeof OPERATION_REF_COLUMNS }>
 
@@ -79,6 +83,7 @@ const operationOf = (row: OperationRefRow): OperationFacts => ({
   standardMinutes: text(row.standardMinutes),
   instructions: row.instructions,
   status: row.status,
+  departmentId: row.departmentId,
 })
 
 const stepOf = (row: StepRow): StepRecord => ({
@@ -93,6 +98,7 @@ const stepOf = (row: StepRow): StepRecord => ({
   scanRequired: row.scanRequired,
   instructions: row.instructions,
   parallelGroup: row.parallelGroup,
+  departmentId: row.departmentId,
   version: row.version,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -128,3 +134,29 @@ export async function readWorkshops(client: FactoryClient | CommandTx, subcontra
   const rows = ids.length === 0 ? [] : await client.party.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   return new Map(rows.map((row) => [row.id, { id: row.id, code: row.code, name: row.tradeName ?? row.legalName }]))
 }
+
+// ---- owb-pd2: the departments ----------------------------------------------------------------------------------------------
+
+/** owb-pd2 2.2: a department as the routing reads it (the step's chip, the route rules). */
+export interface RoutingDepartment {
+  readonly id: string
+  readonly companyId: string | null
+  readonly number: number
+  readonly workCentreKind: StepData['workCentreKind']
+  readonly status: 'ACTIVE' | 'CLOSED'
+}
+
+/** owb-pd2 2.2: the tenant's departments, by number (a short list: 1 Pattern … 9 Assembly and the ones added). */
+export const readDepartments = (client: FactoryClient | CommandTx): Promise<RoutingDepartment[]> =>
+  client.department.findMany({ select: { id: true, companyId: true, number: true, workCentreKind: true, status: true }, orderBy: { number: 'asc' } })
+
+/**
+ * owb-pd2: the departments a copied step may keep (open, of the style's company or the whole factory: the G3 guard's rule). A copy
+ * of a step whose department was closed since takes none, so it shows its kind's department (closing changes no product: S4 settle 8).
+ */
+export async function usableDepartmentIds(client: FactoryClient | CommandTx, styleCompanyId: string | null): Promise<Set<string>> {
+  const departments = await readDepartments(client)
+  return new Set(departments.filter((department) => department.status === 'ACTIVE' && (department.companyId === null || department.companyId === styleCompanyId)).map((department) => department.id))
+}
+export const keptDepartmentId = (departmentId: string | null | undefined, usable: ReadonlySet<string>): string | null => (departmentId && usable.has(departmentId) ? departmentId : null)
+

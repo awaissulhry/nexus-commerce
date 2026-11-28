@@ -151,5 +151,27 @@
     "failed": "Non è stato possibile preparare lo zip. Riprova.",
     "leftOut_one": "{count} file è rimasto fuori dallo zip: non puoi aprirlo.",
     "leftOut_other": "{count} file sono rimasti fuori dallo zip: non puoi aprirli."
+  },
+  "design": {
+    "send": "Invia la grafica per l’approvazione",
+    "busy": "Invio…",
+    "noPicture": "Scegli prima l’immagine dell’ordine (il mockup): è ciò che il cliente approva.",
+    "waits": "Il cliente ha già la grafica da approvare.",
+    "failed": "Non è stato possibile inviare la grafica. Riprova.",
+    "question": "Vi chiediamo di approvare la grafica dell’ordine {number}. Il lavoro intanto va avanti; la vostra approvazione lo rende sicuro.",
+    "state": {
+      "WAITS": "Grafica: attende l’approvazione del cliente",
+      "APPROVED": "Grafica approvata",
+      "CHANGE": "Grafica: il cliente chiede una modifica"
+    }
+  },
+  "factoryPeople": {
+    "title": "Persone della fabbrica",
+    "count_one": "{count} persona della fabbrica lavora per questo cliente",
+    "count_other": "{count} persone della fabbrica lavorano per questo cliente",
+    "door": "Persone per cliente ›",
+    "info": "Le persone dell’ufficio affidate a questo cliente: sono messe sui suoi ordini, e il cliente legge i loro nomi.",
+    "none": "Ancora nessuno della fabbrica è affidato a questo cliente.",
+    "since": "dal {date}"
   }
 }

@@ -5,6 +5,7 @@ import { FloorButton } from '@nexus/ui/floor'
 import type { Department } from '../../../../lib/department/model'
 import { DeptChip } from '../../../../lib/department/view/DeptChip'
 import { Modal } from '../../../../lib/i18n/ds-parts'
+import { useFloorWords } from '../../../../lib/floor-words/FloorWords'
 import { useT } from '../../../../lib/i18n/provider'
 import { BASKET_NS, Flag, StateFlag, StepName } from '../../parts'
 import { RouteEditorFoot, RouteEditorView, type RouteEditorAction, type RouteEditorModel } from '../../route/view/RouteEditorView'
@@ -245,6 +246,7 @@ function ManyRows({ many, busy, onAction }: { readonly many: NonNullable<StepsWi
 
 function WhyBack({ to, busy, onAction }: { readonly to: NonNullable<StepsWindowModel['whyTo']>; readonly busy: boolean; readonly onAction: (action: StepsWindowAction) => void }) {
   const tb = useT(BASKET_NS)
+  const fw = useFloorWords(BASKET_NS)
   const held = busy ? tb('homePage.loading') : null
   return (
     <>
@@ -258,7 +260,7 @@ function WhyBack({ to, busy, onAction }: { readonly to: NonNullable<StepsWindowM
       <div className="fw-bk-why" role="group" aria-label={tb('steps.whyBack')}>
         {BACK_WHY.map((why) => (
           <FloorButton key={why} size="lg" variant="secondary" heldReason={held} onClick={() => onAction({ type: 'why', why })}>
-            {tb(`steps.why.${why}`)}
+            {fw(`steps.why.${why}`)}
           </FloorButton>
         ))}
       </div>

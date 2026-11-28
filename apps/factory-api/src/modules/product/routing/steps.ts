@@ -37,6 +37,7 @@ import {
   insertSteps,
   invalid,
   isUniqueViolation,
+  keptDepartmentId,
   lockDraft,
   lockOperations,
   moveSteps,
@@ -48,6 +49,7 @@ import {
   readSubcontracts,
   routingViewInTx,
   subcontractColumns,
+  usableDepartmentIds,
   workshopProblems,
   type LockedDraft,
   type StepRecord,
@@ -298,7 +300,9 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
       for (const step of current) tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, before: { revisionId, ...auditedStep(step) }, after: { removed: true } })
     }
     // B-W2b-88: a copied parallel group is numbered after the kept steps' groups, so it never joins one of them.
-    const copied = copySteps(sourceSteps, first, newId, groupsAfter(kept, sourceSteps))
+    // owb-pd2: each copy keeps its source step's department while that one is open and fits this style (else its kind's).
+    const usable = await usableDepartmentIds(tx, draft.style.companyId)
+    const copied = copySteps(sourceSteps, first, newId, groupsAfter(kept, sourceSteps)).map((step) => ({ ...step, departmentId: keptDepartmentId(step.departmentId, usable) }))
     // copySteps keeps the source's order: the n-th copy is the n-th source step.
     const copiedSubcontracts = new Map(
       copied.flatMap((step, index): [string, Subcontract][] => {

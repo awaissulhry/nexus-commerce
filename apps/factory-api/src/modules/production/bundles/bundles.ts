@@ -340,11 +340,23 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
 
   const before = activeCounts(await readBundles(tx, workOrder.id))
   const { cut, cells } = await countsOf(tx, workOrder, before)
+  // ── owb- (order workflow, S3 ss2 step 2.4, guard 2): the baskets made at "Print and start the work" (madeAtPrint) take the cell's
+  // live cut log entries here, under the same cell locks: parents before split children, each the same new entries. ──
+  const printBaskets = await tx.bundle.findMany({
+    where: { workOrderId: workOrder.id, status: 'ACTIVE', madeAtPrint: true },
+    select: { id: true, code: true, workOrderSizeId: true, part: true, quantity: true, cutLogIds: true, parentBundleId: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const liveEntries = new Map(cut.map((cell) => [cell.workOrderSizeId, [...cell.cutLogIds]]))
+  const newEntriesOf = (basket: { readonly workOrderSizeId: string; readonly cutLogIds: readonly string[] }) => (liveEntries.get(basket.workOrderSizeId) ?? []).filter((id) => !basket.cutLogIds.includes(id))
+  // ── end owb- ──
   const plan = planBundles({
     workOrder,
     cells: cells.map((cell) => {
       const label = labels.get(cell.cellId)
-      return { ...cell, label: label ? cellLabel(label.colourwayCode, label.size) : cell.cellId }
+      // owb- (S3 ss2, guard 2): the cell's print baskets and the most new entries one of them takes.
+      const baskets = printBaskets.filter((basket) => basket.workOrderSizeId === cell.cellId)
+      return { ...cell, label: label ? cellLabel(label.colourwayCode, label.size) : cell.cellId, printBaskets: baskets.length, toAttach: Math.max(0, ...baskets.map((basket) => newEntriesOf(basket).length)) }
     }),
     asks,
     bundleSize: body.bundleSize,
@@ -352,7 +364,9 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     standardSize: await standardBundleSizeFor(tx, workOrder.siteId),
   })
   if (!plan.ok) return refused(plan.refusal)
-  if (body.clientEventId !== undefined && plan.bundles.length !== 1) {
+  // owb- (S3 ss2, guard 2): an offline ticket names one NEW bundle; the cuts going on print baskets take none.
+  if (body.ticketCode !== undefined && plan.bundles.length === 0) refused({ code: 'NOTHING_TO_BUNDLE', message: 'Baskets were made at print: the cuts go on them, and this ticket is not used.' })
+  if (body.clientEventId !== undefined && plan.bundles.length !== 1 && !(plan.bundles.length === 0 && (plan.attach?.length ?? 0) > 0)) {
     throw new ValidationError(`An event of the floor queue makes one bundle; this one makes ${plan.bundles.length}.`, [
       { path: 'body/clientEventId', message: 'Send one event per bundle: one cell, with its quantity (quantities: [n]) or a size that holds it.' },
     ])
@@ -364,7 +378,9 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
   const taken =
     body.ticketCode !== undefined
       ? (await useScanIds(tools, 'BUNDLE', [{ code: body.ticketCode, record: { type: 'Bundle', id: ids[0]! } }])).map((use) => use.code)
-      : await codes.take(tx, plan.bundles.length)
+      : plan.bundles.length > 0
+        ? await codes.take(tx, plan.bundles.length)
+        : [] // owb- (S3 ss2): attach only — no code is taken
   const entriesOf = new Map(cut.map((cell) => [cell.workOrderSizeId, cell.cutLogIds]))
   const rows = plan.bundles.map((bundle, index) => ({
     id: ids[index]!,
@@ -382,9 +398,33 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     updatedAt: tools.now,
     createdById,
   }))
-  await tx.bundle.createMany({ data: rows })
+  if (rows.length > 0) await tx.bundle.createMany({ data: rows })
 
   const event = { subject: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId }
+  // ── owb- (S3 ss2 step 2.4, guard 2): ATTACH — each print basket of an attached cell takes the cell's new live entries (old ∪ new,
+  // old first; parents before split children: a child takes the same new entries); no new code, no new bundle (the database's
+  // G10 (b): they only grow). ONE audit row per cell. A basket that takes its FIRST entries becomes "cut" now: its
+  // production.bundle_created is emitted here, not at print (the brand keeper reads that event as CUTTING and the order views as
+  // the cut; at print it would say "Cutting" on day 1). ──
+  for (const cellId of plan.attach ?? []) {
+    const baskets = printBaskets.filter((basket) => basket.workOrderSizeId === cellId).sort((a, b) => Number(a.parentBundleId !== null) - Number(b.parentBundleId !== null))
+    const attached: { bundleId: string; code: string; added: string[] }[] = []
+    for (const basket of baskets) {
+      const added = newEntriesOf(basket)
+      if (added.length === 0) continue
+      await tx.bundle.update({ where: { id: basket.id }, data: { cutLogIds: [...basket.cutLogIds, ...added], version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+      attached.push({ bundleId: basket.id, code: basket.code, added })
+      if (basket.cutLogIds.length === 0) {
+        tools.emit({
+          ...event,
+          type: 'production.bundle_created',
+          payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, bundleId: basket.id, code: basket.code, workOrderSizeId: basket.workOrderSizeId, part: basket.part, quantity: basket.quantity, postedBy: 'FLOOR' },
+        })
+      }
+    }
+    if (attached.length > 0) tools.audit({ action: 'production.bundles.attachCuts', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { workOrderSizeId: cellId, madeAtPrint: true, baskets: attached } })
+  }
+  // ── end owb- ──
   for (const row of rows) {
     tools.audit({
       recordType: 'Bundle',
@@ -399,7 +439,8 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
       payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, bundleId: row.id, code: row.code, workOrderSizeId: row.workOrderSizeId, part: row.part, quantity: row.quantity, postedBy: 'FLOOR' },
     })
   }
-  tools.audit({
+  // owb- (S3 ss2): an attach-only make writes no "bundles made" row (its cells' attach rows say what changed).
+  if (rows.length > 0) tools.audit({
     recordType: 'WorkOrder',
     recordId: workOrder.id,
     companyId: workOrder.companyId,

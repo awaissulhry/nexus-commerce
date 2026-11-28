@@ -4,6 +4,7 @@ import { Check, CircleAlert, Lock, Plus, RotateCcw, Undo2, X } from 'lucide-reac
 import { FloorButton } from '@nexus/ui/floor'
 import type { Department } from '../../../../lib/department/model'
 import { DeptChip } from '../../../../lib/department/view/DeptChip'
+import { useFloorWords } from '../../../../lib/floor-words/FloorWords'
 import { useT } from '../../../../lib/i18n/provider'
 import { BASKET_NS, Flag, StepName } from '../../parts'
 import { ROUTE_WHY, type RouteDraft, type RouteView, type RouteWhy } from '../../steps/model'
@@ -47,6 +48,7 @@ export type RouteEditorAction =
 
 export function RouteEditorView({ model, onAction }: { readonly model: RouteEditorModel; readonly onAction: (action: RouteEditorAction) => void }) {
   const tb = useT(BASKET_NS)
+  const fw = useFloorWords(BASKET_NS)
   const held = model.busy ? tb('homePage.loading') : null
   return (
     <div className="fw-bk-steps">
@@ -74,7 +76,7 @@ export function RouteEditorView({ model, onAction }: { readonly model: RouteEdit
       <div className="fw-bk-why" role="group" aria-label={tb('route.whyRoute')}>
         {ROUTE_WHY.map((why) => (
           <FloorButton key={why} size="md" variant={model.draft.why === why ? 'primary' : 'secondary'} aria-pressed={model.draft.why === why} icon={model.draft.why === why ? <Check /> : undefined} onClick={() => onAction({ type: 'why', why })}>
-            {tb(`route.why.${why}`)}
+            {fw(`route.why.${why}`)}
           </FloorButton>
         ))}
       </div>
@@ -91,7 +93,7 @@ export function RouteEditorView({ model, onAction }: { readonly model: RouteEdit
               ) : null}
             </span>
             <FloorButton size="md" variant={step.skipped ? 'secondary' : 'danger'} aria-pressed={step.skipped} icon={step.skipped ? <Undo2 className="fw-bk-mirror" /> : <X />} onClick={() => onAction({ type: 'turn', operationId: step.operationId })}>
-              {step.skipped ? tb('route.putBack') : tb('route.skip')}
+              {step.skipped ? fw('route.putBack') : fw('route.skip')}
             </FloorButton>
           </li>
         ))}

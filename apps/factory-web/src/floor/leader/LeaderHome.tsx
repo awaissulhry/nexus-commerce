@@ -129,7 +129,7 @@ export function LeaderHome() {
           forYou: team ? leaderForYouOf(team, seen) : [],
           groups,
           total: team ? teamBasketsOf(team) : 0,
-          locale: store.locale,
+          locale: store.floorLocale,
           readAt: load.state === 'ready' ? load.at : 0,
           people: team ? givePeopleOf(team, '', words).map(({ key, label, holds }) => ({ key, label, holds })) : [],
           noNames: team ? namesNoWorkers(team) : false,

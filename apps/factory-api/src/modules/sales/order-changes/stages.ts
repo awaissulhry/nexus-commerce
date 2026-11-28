@@ -1,6 +1,8 @@
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { furthestStage, stageRank, type OrderFreezeStage, type StageReached } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { LEFT, type Reader } from '../orders/store'
+// owb- (order workflow, S3 ss2 step 2.4, guard 3): a basket made at print counts as cut once its first cuts are on it.
+import { BUNDLE_IS_CUT } from '../../production/print-start/cut-filter'
 
 /**
  * How far production got with each size of an order's lines (B-W2b-309; SAL-218 "needs floor stage signals"): the production
@@ -60,7 +62,7 @@ export async function readStages(db: Reader, lineIds: readonly string[]): Promis
     if (cellIds.length > 0) {
       // Cutting: per cell (B-W2b-183 reads it per line; the same two signals).
       const pieces = await db.cutLogPiece.findMany({ where: { workOrderSizeId: { in: cellIds }, pieces: { gt: 0 }, cutLog: { reversalOfId: null, reversals: { none: {} } } }, select: { workOrderSizeId: true, serverTime: true } })
-      const bundles = await db.bundle.findMany({ where: { workOrderSizeId: { in: cellIds }, status: { not: 'VOID' } }, select: { id: true, workOrderSizeId: true, createdAt: true } })
+      const bundles = await db.bundle.findMany({ where: { workOrderSizeId: { in: cellIds }, status: { not: 'VOID' }, ...BUNDLE_IS_CUT /* owb- S3 ss2 guard 3 */ }, select: { id: true, workOrderSizeId: true, createdAt: true } })
       for (const row of [...pieces.map((piece) => ({ cellId: piece.workOrderSizeId, at: piece.serverTime })), ...bundles.map((bundle) => ({ cellId: bundle.workOrderSizeId, at: bundle.createdAt }))]) {
         const cell = cellOf.get(row.cellId)
         if (cell?.salesOrderLineId) note(cell.salesOrderLineId, cell.size ?? '', 'CUT', row.at)

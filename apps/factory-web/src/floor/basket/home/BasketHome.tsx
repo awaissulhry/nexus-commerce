@@ -25,7 +25,8 @@ type Load = { readonly state: 'loading' | 'offline' | 'unavailable' } | { readon
 export function BasketHome() {
   const store = useFloor()
   const router = useFloorRouter()
-  const { me, api, online, locale, sessionEnded } = store
+  // owb-fl7: department names in the floor's own language (Urdu names where the server has them).
+  const { me, api, online, floorLocale: locale, sessionEnded } = store
   const phone = me?.device.mode === 'PHONE'
   const { frame, onFrame } = store.frame('tile.baskets', { showHome: !phone })
   const [load, setLoad] = useState<Load>({ state: 'loading' })

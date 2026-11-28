@@ -10,10 +10,22 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../../../list-frame/model'
 import type { BomLineInput, BomView } from '../../../api'
-import { decimalText, stepLabel } from '../../../model'
+import { decimalText, moneyText, stepLabel } from '../../../model'
 import type { StyleRecordActions } from '../../../record/record-model'
 import { moveSeq } from '../../bom-model'
 import { depthHeld, lineName, lineRows, ready, type BomDepthActions, type BomDepthModel, type LineRow } from '../model'
+// owb-pd5 (step 5.1): the Materials tab's extra facts of a line — main material, step per size up, wait, cost (cost grain only).
+import type { costsOf, LineFacts } from '../../materials-model'
+
+export interface LineExtras {
+  facts: readonly LineFacts[]
+  /** One piece's cost per line (cost grain only); null: no amount is shown at all. */
+  costs: ReturnType<typeof costsOf>
+  /** The step to the next size up of a size-dependent line. */
+  steps: Readonly<Record<string, string | null>>
+  /** The person may change this revision's lines (marks the main material). */
+  editable: boolean
+}
 
 /**
  * The Lines view of the Materials (BOM) tab on the shared list frame (B-W2b-241; design style.bom.lines with W2b's Section
@@ -25,7 +37,7 @@ import { depthHeld, lineName, lineRows, ready, type BomDepthActions, type BomDep
  * Alt+↑ / Alt+↓ move the focused line. With rows selected: Section… N, Group… N, Supply… N (held with why). A frozen
  * revision draws the same rows read only.
  */
-export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom: BomView; model: BomDepthModel; actions?: BomDepthActions; recordActions?: StyleRecordActions; prefix: string }) {
+export function LinesGrid({ bom, model, actions, recordActions, prefix, extras }: { bom: BomView; model: BomDepthModel; actions?: BomDepthActions; recordActions?: StyleRecordActions; prefix: string; extras?: LineExtras }) {
   const t = useT('products-bom-depth')
   const tp = useT('products')
   const locale = useLocale()
@@ -39,8 +51,11 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
   // W1's line writes (edit, move, remove) keep W1's rule: a draft and the right; offline they are held too.
   const lineHeld = !model.canManage ? 'hold.noManage' : bom.revision.status !== 'DRAFT' || bom.style.status === 'ARCHIVED' ? 'hold.frozen' : model.offline ? 'hold.offline' : null
   const base = bom.style.baseSize
-  const latest = useRef({ actions, recordActions, held, lineHeld, rows, lines: bom.lines })
-  latest.current = { actions, recordActions, held, lineHeld, rows, lines: bom.lines }
+  const latest = useRef({ actions, recordActions, held, lineHeld, rows, lines: bom.lines, extras })
+  latest.current = { actions, recordActions, held, lineHeld, rows, lines: bom.lines, extras }
+  // owb-pd5: the extras' identity for the columns (a new read of the facts redraws them).
+  const extrasKey = extras ? JSON.stringify([extras.facts.map((fact) => [fact.id, fact.main, fact.wait]), extras.steps, extras.costs?.byLine ?? null, extras.editable]) : ''
+  const costsShown = Boolean(extras?.costs)
 
   const move = (row: LineRow, delta: -1 | 1) => {
     const seq = moveSeq(latest.current.lines, row.id, delta)
@@ -77,6 +92,13 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
                 <b>{data.line.item.code}</b>
               </Link>{' '}
               {data.line.item.name}
+              {/* owb-pd5 (step 5.1): the main material (the customer's leather choice hangs on it). */}
+              {latest.current.extras?.facts.find((fact) => fact.id === data.id)?.main ? (
+                <>
+                  {' '}
+                  <Tag tone="success">{t('mat.main.tag')}</Tag>
+                </>
+              ) : null}
             </span>
             <span className="fw-bmd-sub">{materialSub(data)}</span>
           </span>
@@ -145,6 +167,21 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
         </span>
       )
     }
+    // ---- owb-pd5 (step 5.1): more for each size up · wait in days · cost of one piece (cost grain only) ----
+    const stepText = (row: LineRow) => {
+      const step = latest.current.extras?.steps[row.id] ?? null
+      return step === null ? '—' : t('mat.list.step', { step: decimalText(step, locale), unit: tp(`uom.${row.line.uom}`) })
+    }
+    const waitText = (row: LineRow) => {
+      const fact = latest.current.extras?.facts.find((entry) => entry.id === row.id)
+      return fact?.sentBy !== null && fact?.sentBy !== undefined ? t('mat.list.waitCustomer') : fact?.wait === null || fact?.wait === undefined ? '—' : t('mat.before.days', { count: fact.wait })
+    }
+    const costText = (row: LineRow) => {
+      const costs = latest.current.extras?.costs
+      const amount = costs?.byLine[row.id] ?? null
+      return costs && amount !== null ? moneyText(amount, costs.currency, locale) : '—'
+    }
+    // ---- end owb-pd5
     const OptionCell = ({ data }: ICellRendererParams<LineRow>) => (data?.option ? <Tag tone="info">{data.option.label}</Tag> : <span className="fw-bmd-sub">{data?.structure ? t('option.every') : '—'}</span>)
     const MoreCell = ({ data }: ICellRendererParams<LineRow>) => {
       if (!data) return null
@@ -153,8 +190,11 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
       const lineWhy = now.lineHeld ? t(now.lineHeld) : undefined
       const sorted = [...now.lines].sort((a, b) => a.seq - b.seq)
       const at = sorted.findIndex((line) => line.id === data.id)
+      // owb-pd5 (step 5.1): the main material cannot be taken out (pd3 MAIN_REQUIRED); a draft's editor marks another one main.
+      const isMain = now.extras?.facts.find((fact) => fact.id === data.id)?.main ?? false
       const items: MenuItemDef[] = [
         { id: 'open', label: t('menu.open'), onSelect: () => now.actions?.onDialog?.({ kind: 'line', lineId: data.id, part: 'structure' }) },
+        ...(now.extras?.editable && !isMain && !lineWhy ? [{ id: 'main', label: t('mat.main.make'), onSelect: () => void now.recordActions?.onEditLine?.(data.id, { isMain: true } as unknown as BomLineInput) }] : []),
         { id: 'alternates', label: t('menu.alternates', { count: fresh.depth?.alternates.length ?? fresh.structure?.alternates ?? 0 }), onSelect: () => now.actions?.onDialog?.({ kind: 'line', lineId: data.id, part: 'alternates' }) },
         { id: 'edit', label: tp('bom.editOne', { line: data.seq }), disabled: !!lineWhy, description: lineWhy, onSelect: () => now.recordActions?.onDialog?.({ kind: 'bomLine', lineId: data.id }) },
         { id: 'up', label: tp('bom.moveUp', { line: data.seq }), disabled: !!lineWhy || at <= 0, description: lineWhy ?? (at <= 0 ? tp('bom.held.first') : undefined), onSelect: () => moveRef.current(data, -1) },
@@ -163,8 +203,8 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
           id: 'remove',
           label: tp('bom.removeOne', { line: data.seq }),
           tone: 'danger',
-          disabled: !!lineWhy || (fresh.structure?.groupedLineIds.length ?? 0) > 0,
-          description: lineWhy ?? ((fresh.structure?.groupedLineIds.length ?? 0) > 0 ? t('lines.removeGroupHeld') : undefined),
+          disabled: !!lineWhy || isMain || (fresh.structure?.groupedLineIds.length ?? 0) > 0,
+          description: lineWhy ?? (isMain ? t('mat.main.held') : (fresh.structure?.groupedLineIds.length ?? 0) > 0 ? t('lines.removeGroupHeld') : undefined),
           onSelect: () => now.recordActions?.onDialog?.({ kind: 'removeLine', lineId: data.id }),
         },
       ]
@@ -172,10 +212,14 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
     }
     return [
       { colId: 'seq', headerName: tp('bom.col.seq'), width: 76, minWidth: 64, valueGetter: (params) => params.data?.seq ?? '', cellClass: 'fw-bmd-num', ...plain },
-      { colId: 'material', headerName: tp('bom.col.material'), minWidth: 240, flex: 2, cellRenderer: MaterialCell, valueGetter: (params) => (params.data ? `${'↳ '.repeat(params.data.level)}${params.data.line.item.code} ${params.data.line.item.name} · ${materialSub(params.data)}` : ''), ...plain },
+      { colId: 'material', headerName: tp('bom.col.material'), minWidth: 240, flex: 2, cellRenderer: MaterialCell, valueGetter: (params) => (params.data ? `${'↳ '.repeat(params.data.level)}${params.data.line.item.code} ${params.data.line.item.name} · ${materialSub(params.data)}${latest.current.extras?.facts.find((fact) => fact.id === params.data!.id)?.main ? ` · ${t('mat.main.tag')}` : ''}` : ''), ...plain },
       { colId: 'section', headerName: t('col.section'), minWidth: 130, flex: 0.9, cellRenderer: SectionCell, valueGetter: (params) => (params.data?.structure ? `${t(`section.${params.data.structure.section}`)}${params.data.structure.filed ? '' : ` · ${t('lines.fromKind')}`}` : ''), ...plain },
       { colId: 'placement', headerName: tp('bom.col.placement'), minWidth: 130, flex: 1, valueGetter: (params) => params.data?.line.placement ?? '—', ...plain },
       { colId: 'qty', headerName: tp('bom.col.qty', { size: base ?? '—' }), minWidth: 150, flex: 1, cellRenderer: QtyCell, valueGetter: (params) => (params.data ? `${qtyText(params.data)} · ${wastageText(params.data)}` : ''), ...plain },
+      // owb-pd5 (step 5.1): more for each size up (By size fills it, keeping typed sizes) · wait in days · cost of one piece (cost grain).
+      ...(extras ? [{ colId: 'step', headerName: t('mat.list.col.step'), minWidth: 130, flex: 0.8, valueGetter: (params: { data?: LineRow }) => (params.data ? stepText(params.data) : ''), cellClass: 'fw-bmd-num', ...plain }] : []),
+      ...(extras ? [{ colId: 'wait', headerName: t('mat.list.col.wait'), minWidth: 110, flex: 0.7, valueGetter: (params: { data?: LineRow }) => (params.data ? waitText(params.data) : ''), cellClass: 'fw-bmd-num', ...plain }] : []),
+      ...(costsShown ? [{ colId: 'cost', headerName: t('mat.list.col.cost'), minWidth: 110, flex: 0.7, valueGetter: (params: { data?: LineRow }) => (params.data ? costText(params.data) : ''), cellClass: 'fw-bmd-num', ...plain }] : []),
       {
         colId: 'depends',
         headerName: tp('bom.col.depends'),
@@ -209,7 +253,7 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix }: { bom:
       { colId: 'option', headerName: t('col.option'), minWidth: 150, flex: 1, cellRenderer: OptionCell, valueGetter: (params) => params.data?.option?.label ?? (params.data?.structure ? t('option.every') : ''), ...plain },
       { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', suppressMovable: true, cellRenderer: MoreCell, ...plain },
     ]
-  }, [t, tp, locale, base, prefix])
+  }, [t, tp, locale, base, prefix, extrasKey, costsShown])
 
   const picked = rows.filter((row) => model.selected.includes(row.id))
   const bulkHeld = held ? t(held) : null

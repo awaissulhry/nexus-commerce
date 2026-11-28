@@ -25,3 +25,18 @@ const ordersAnswer = z.object({ items: z.array(orderRow), count: z.number().int(
 /** The customer's orders and requests that name this product (at most 6, newest first as the list sorts them). */
 export const fetchOrdersWith = (api: ApiClient, code: string, signal?: AbortSignal): Promise<{ items: PortalOrderRow[]; count: number }> =>
   api.get('/portal/sales-orders', { query: { chip: 'ALL', q: code.slice(0, 80), limit: 6 }, schema: ordersAnswer, signal })
+
+// ---- owb-pd5 (step 5.0; pd4s s.3): the product's Sizes for its customer — GET /portal/catalogue/:styleId/sizes (the reach of the
+// catalogue's style read: another party's design answers 404; the newest RELEASED revision only; no cost, price, revision or route).
+const sizesAnswer = z.object({
+  picture: z.object({ fileId: z.string(), url: z.string() }).nullable(),
+  mode: z.enum(['SIZES', 'MADE_TO_MEASURE']),
+  sizes: z.array(z.string()),
+  baseSize: z.string().nullable(),
+  points: z.array(z.object({ code: z.string(), name: z.string(), howTo: z.string().nullable(), values: z.record(z.string(), z.number().nullable()) })),
+  protectors: z.array(z.object({ zone: z.string(), level: z.enum(['LEVEL_2', 'LEVEL_1', 'NONE']) })),
+})
+export type PortalProductSizes = z.infer<typeof sizesAnswer>
+
+export const fetchProductSizes = (api: ApiClient, styleId: string, signal?: AbortSignal): Promise<PortalProductSizes> =>
+  api.get(`/portal/catalogue/${encodeURIComponent(styleId)}/sizes`, { schema: sizesAnswer, signal })

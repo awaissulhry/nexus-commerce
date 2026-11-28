@@ -1,0 +1,87 @@
+/* owb-of4 step 2 — the orders on Today: the six tiles, "The factory now", "Last changes". Layout only, design-system tokens only. On a
+   phone the parts stack; side by side from 960 px. */
+.fw-onow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-onow-parts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+@media (min-width: 960px) {
+  .fw-onow-parts {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+.fw-onow-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.fw-onow-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-onow-quiet {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-onow-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-onow-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-height: 48px;
+  padding: var(--nds-space-6) var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  color: inherit;
+  text-decoration: none;
+}
+.fw-onow-row:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-onow-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-onow-muted {
+  color: var(--nds-text-2);
+}
+.fw-onow-ell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-onow-more {
+  align-self: flex-start;
+  min-height: 32px;
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+}
+@media (max-width: 639px) {
+  .fw-onow-more {
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
