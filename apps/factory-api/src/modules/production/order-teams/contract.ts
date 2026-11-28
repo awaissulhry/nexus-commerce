@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
-import { MAX_ORDER_TEAMS, ORDER_TEAM_MODES, TEAM_MARKS } from '@nexus/factory-domain/production/order-teams/rules'
+import { MAX_ORDER_TEAMS, ORDER_TEAM_MODES } from '@nexus/factory-domain/production/order-teams/rules'
 import { PICTURE_KINDS } from '@nexus/factory-domain/people/teams/picture'
 
 /**
@@ -69,8 +69,8 @@ export const teamsBoardContract = defineContract({
           /** null: "No team yet". */
           team: teamFaceOut.nullable(),
           load: output({ inWork: z.number().int().nullable(), maxBaskets: z.number().int().nullable() }),
-          /** Mark codes (TEAM_MARKS); the words are the web's. */
-          marks: z.array(z.enum(TEAM_MARKS)),
+          /** Mark codes: OVER_LIMIT, NO_NEW_ORDERS, MISSING_TODAY:<n>, LATE:<n> (rules.ts teamMarks); the words are the web's. */
+          marks: z.array(z.string()),
           orders: z.array(output({ orderId: id(), number: z.string(), customerCode: z.string(), baskets: z.number().int().nullable(), inCharge: z.boolean(), due: businessDate().nullable(), late: z.boolean() })),
         }),
       ),

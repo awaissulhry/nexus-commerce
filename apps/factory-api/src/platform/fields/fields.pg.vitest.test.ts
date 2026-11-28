@@ -102,7 +102,8 @@ afterAll(async () => {
 describe('the editor (PLT-111, PLT-115)', () => {
   it('reads the record types, a type\'s fields with their counts, and every list', async () => {
     const view = await ok('keeper', 'GET', '/fields/editor?recordType=ORDER')
-    expect(view.records.map((record: Json) => record.key)).toEqual(['CUSTOMER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'SUPPLIER', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER'])
+    // owb-ss5 5.3: + a team or unit and a person ("your own facts").
+    expect(view.records.map((record: Json) => record.key)).toEqual(['CUSTOMER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'SUPPLIER', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER', 'TEAM', 'EMPLOYEE'])
     expect(view.records.find((record: Json) => record.key === 'CUSTOMER').sharedWith).toEqual(['SUPPLIER'])
     expect(view.records.find((record: Json) => record.key === 'STYLE').fieldCount).toBe(4)
     expect(view.fields.map((field: Json) => field.code).sort()).toEqual(['fair_date', 'finish_grade', 'rush_packaging', 'target_retail_price'])
