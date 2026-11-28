@@ -10,6 +10,8 @@ import { TabLink } from '../../../../../../lib/tab-link/TabLink' // F-OM-204
 import { tabHref } from '../../../../../_shared/record-frame/address' // F-OM-204
 import type { Order } from '../../../api'
 import { dayInstant, readOnlyOnPage, type Phrase } from '../../../model'
+import { isFinal } from '../../../model' // owb-of5: a closed or cancelled order is not restricted any more
+import { FloorFact } from './FlowParts' // owb-of5 step 2: On the floor · Restrict on the floor / Open it to the department
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { factsDoorsOf, incotermOf, languageOf, madeOf, shipToOf } from '../../overview/facts'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
@@ -126,6 +128,9 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
           />
         )}
       </FactCols>
+      {/* owb-of5 step 2 (design § 5g R23; of1 step 4; L6 orders.manage): who sees the order on the floor, and the door to change it —
+          drawn for sales and the owner, never for the designer (the floor lock that reads it is S3/S5's). */}
+      {model.flow ? <FloorFact restricted={model.flow.restrict.now} may={model.flow.restrict.may && !readOnly && !isFinal(order)} busy={model.flow.restrict.busy} problem={model.flow.restrict.problem} onRestrict={actions?.flow?.onRestrict} /> : null}
     </OverviewCard>
   )
 }

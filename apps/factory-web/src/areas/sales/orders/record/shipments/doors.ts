@@ -3,6 +3,9 @@ import { createShipmentHref, isFinal, mayCreateShipment, type OrderAbilities, ty
 import type { DeliveryRow } from './delivered/api'
 import type { ShipmentRow, WhereModel } from './where'
 import { word, wordOf, type ShipWord } from './word'
+// owb-ss3 (settle L3): the plan right beside pack and send; a leg holds Mark delivered until it is sent on (G9).
+import type { Leg } from './legs/api'
+import type { ShipRights } from './legs/model'
 
 /**
  * F-OS-101 (order SHIPMENTS tab, 10-design §2, §5, §8; plan D2; 18-lead-settles L9, L10) — the tab's doors, pure: a door is HIDDEN
@@ -12,6 +15,13 @@ import { word, wordOf, type ShipWord } from './word'
  * with the true words: everything shipped · still to be made or released · every released garment already on a shipment · the
  * garments that came back are not received yet. W2 adds the rows' acts here (the ⋯ by state).
  */
+
+/**
+ * owb-ss3 (settle L3; design plan § 5n R38 "TWO rights"): who may plan a shipment — Create shipment…, the customer's drafts it may join,
+ * Ship the whole order… — shipping.plan OR shipping.manage. The order page's own ability (`can.createShipment` = shipping.manage, S2's
+ * model.ts) stays; the plan right is read beside it (null rights: not read — the design index — today's rule).
+ */
+export const planOf = (can: Pick<OrderAbilities, 'createShipment'>, rights: Pick<ShipRights, 'plan'> | null): boolean => can.createShipment === true || rights?.plan === true
 
 export type CreateDoor =
   | { readonly kind: 'hidden' }
@@ -73,7 +83,7 @@ const SPLIT = wordOf('depth', 'split.menu')
 const act = (id: RowActId, group: RowActGroup, label: ShipWord, held: ShipWord | null = null, more: { readonly holdId?: string } = {}): RowAct => ({ id, group, label, held, ...more })
 const labelled = (row: ShipmentRow): boolean => (row.parcels ?? []).some((parcel) => parcel.source === 'LABEL')
 
-export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<DeliveryRow, 'openProblems' | 'pod' | 'returned'> | null, can: Pick<OrderAbilities, 'returnsManage' | 'complaintsLog'> = {}): RowAct[] {
+export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<DeliveryRow, 'openProblems' | 'pod' | 'returned'> | null, can: Pick<OrderAbilities, 'returnsManage' | 'complaintsLog'> = {}, /* owb-ss3 */ leg: Pick<Leg, 'state'> | null = null): RowAct[] {
   const may = row.may
   // F-OS-303: a shipped row's after-sales doors are the order's rights (Returns', Quality's), whatever the row's own `may` says.
   if (!may) return afterSalesRowActs(row, can)
@@ -105,7 +115,9 @@ export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<Deli
     if (may.manage) acts.push(act('cancel', 'danger', word('ships.act.cancel'), labelled(row) ? word('ships.act.held.labelled') : live ? word('ships.act.held.ddtLive') : null))
   }
   if (row.status === 'SHIPPED' && may.manage) {
-    acts.push(act('delivered', 'arrive', word('ships.act.delivered')), act('returned', 'arrive', word('ships.act.returned')))
+    // owb-ss3 (G9): a shipment to our warehouse first is delivered only after Send on to the customer — held with why until then.
+    const viaWarehouse = leg !== null && leg.state !== 'SENT_ON' ? wordOf('ways', 'leg.held.deliveredFirst') : null
+    acts.push(act('delivered', 'arrive', word('ships.act.delivered'), viaWarehouse), act('returned', 'arrive', word('ships.act.returned')))
     acts.push(act('eta', 'arrive', word('ships.act.eta'), labelled(row) ? word('ships.act.held.carrierFed') : null))
     if (delivery && delivery.openProblems > 0) acts.push(act('resolve', 'arrive', word('ships.act.resolve')))
   }

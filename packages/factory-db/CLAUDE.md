@@ -697,7 +697,15 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    the voice note an AUDIO file this session can open), `OperationChecklistResult.fileId` (the quality step's photo: an image
    this session can open, never a fiscal archive, a voice note, body data or a priced file; of the work order's company), and
    `HelpCall.spot` (the CHECK `HelpCall_spot_range` 0-8 and its own trigger `HelpCall_spot`: changed only while the call is
-   open)):
+   open)),
+   `…_order_structures_guards` (order workflow build owb-ssw, S3 schema wave 'structures + units', between its generated schema
+   and policy folders; it redefines no earlier function: NEW `Team_unit_check` (a unit's word, profile and stand-in day; never
+   under or merged into itself, a merged unit archived, no cycle and under 50 deep), the OrderStructure and OrderStructureRule
+   guards (closed, never deleted; teams and people of the company; an open rule gives an open structure; the partial uniques
+   `OrderStructureRule_open_same_orders(_any_kind)`: two open rules never fit exactly the same orders), the order's structure by
+   hand (`OrderStructureOverride_one_open`, only ended, normal way exactly without a structure), OrderLineStructureKept
+   append-only with its insert check, and ScanCodePlacement (a line of its own order, an image or PDF of its own customer,
+   page, place and a side of 20 mm or more)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

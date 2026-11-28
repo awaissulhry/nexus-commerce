@@ -30,6 +30,26 @@ function readingRight(actor: Actor): Permission {
 const asWords = (value: Prisma.JsonValue | null): Record<string, string> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).flatMap(([key, word]) => (typeof word === 'string' ? [[key, word]] : []))) : {}
 
+/** The columns a department row is read with (owb-pd1 1.3: the manage routes answer the same row). */
+export const DEPARTMENT_COLUMNS = { id: true, number: true, name: true, shortName: true, nameI18n: true, tone: true, icon: true, workCentreKind: true, seq: true, floorReady: true, status: true, version: true } as const satisfies Prisma.DepartmentSelect
+type DepartmentRow = Prisma.DepartmentGetPayload<{ select: typeof DEPARTMENT_COLUMNS }>
+
+/** A department row as the read answers it. */
+export const departmentViewOf = (row: DepartmentRow): DepartmentView => ({
+  id: row.id,
+  number: row.number,
+  name: row.name,
+  shortName: row.shortName,
+  nameI18n: asWords(row.nameI18n),
+  tone: row.tone,
+  icon: row.icon,
+  workCentreKind: row.workCentreKind,
+  seq: row.seq,
+  floorReady: row.floorReady,
+  status: row.status,
+  version: row.version,
+})
+
 export async function readDepartments(caller: CommandCaller): Promise<{ departments: DepartmentView[] }> {
   const context = caller.factoryContext
   if (!context) throw new UnauthenticatedError()
@@ -39,8 +59,8 @@ export async function readDepartments(caller: CommandCaller): Promise<{ departme
     client.department.findMany({
       where: scopeWhere(actor, right, { company: { field: 'companyId', nullable: true } }) as Prisma.DepartmentWhereInput,
       orderBy: [{ seq: 'asc' }, { number: 'asc' }],
-      select: { id: true, number: true, name: true, shortName: true, nameI18n: true, tone: true, icon: true, workCentreKind: true, seq: true, floorReady: true, status: true },
+      select: DEPARTMENT_COLUMNS,
     }),
   )
-  return { departments: rows.map((row) => ({ ...row, nameI18n: asWords(row.nameI18n), workCentreKind: row.workCentreKind, status: row.status })) }
+  return { departments: rows.map(departmentViewOf) }
 }

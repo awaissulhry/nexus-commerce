@@ -18,6 +18,7 @@ import {
   revisionView,
   styleRow,
   styleStatusBody,
+  styleOrdersView,
   styleView,
   updateColourwayBody,
   updateSkuBody,
@@ -40,6 +41,8 @@ export const listStylesContract = defineContract({
   response: { 200: output({ styles: z.array(styleRow), nextCursor: z.string().nullable(), count: z.number().int() }) },
 })
 export const getStyleContract = defineContract({ params: style, response: one })
+// owb-pd1 1.1: where the product is used — its open order lines (no money).
+export const styleOrdersContract = defineContract({ params: style, response: { 200: styleOrdersView } })
 export const createStyleContract = defineContract({ body: createStyleBody, response: created })
 export const updateStyleContract = defineContract({ params: style, body: updateStyleBody, response: one })
 export const styleStatusContract = defineContract({ params: style, body: styleStatusBody, response: one })

@@ -21,6 +21,7 @@ export function useShipSay(): Say {
     depth: useT(NAMESPACE_OF.depth),
     dv: useT(NAMESPACE_OF.dv),
     complaints: useT(NAMESPACE_OF.complaints),
+    ways: useT(NAMESPACE_OF.ways), // owb-ss3
   }
   const say: Say = (said) => {
     const values: Record<string, string | number> = { ...(said.params ?? {}) }

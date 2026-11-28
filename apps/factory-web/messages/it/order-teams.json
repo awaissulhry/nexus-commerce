@@ -1,0 +1,120 @@
+{
+  "part": {
+    "title": "Squadra",
+    "info": "La squadra che fa questo ordine. Il responsabile di produzione assegna un ordine a una squadra; più squadre possono lavorare insieme o dividersi i cesti. Le vendite possono chiedere un'altra squadra. Il cliente non vede nessuna squadra.",
+    "none": "Ancora nessuna squadra. Ogni operaio vede i suoi cesti.",
+    "one": "{team}.",
+    "together": "{teams} lavorano insieme · {team} è responsabile.",
+    "split": "I cesti sono divisi: {teams}.",
+    "splitSoon": "I cesti in arrivo sono divisi: {teams}.",
+    "byRule": "Assegnata dalla sua struttura d'ordine.",
+    "leader": "Capo: {name}",
+    "noLeader": "Ancora nessun capo",
+    "inCharge": "Responsabile",
+    "share_one": "{count} cesto",
+    "share_other": "{count} cesti",
+    "shareSoon_one": "{count} cesto in arrivo",
+    "shareSoon_other": "{count} cesti in arrivo",
+    "give": "Assegna a una squadra…",
+    "change": "Cambia…",
+    "ask": "Chiedi un'altra squadra",
+    "asked": "Chiesto: risponde il responsabile di produzione.",
+    "failed": "Non è stato possibile leggere la squadra di questo ordine."
+  },
+  "give": {
+    "title": "Le squadre di questo ordine",
+    "planned_one": "{count} cesto previsto",
+    "planned_other": "{count} cesti previsti",
+    "count_one": "{count} squadra su questo ordine",
+    "count_other": "{count} squadre su questo ordine",
+    "countNone": "Ancora nessuna squadra su questo ordine",
+    "mode": {
+      "label": "Come lavorano",
+      "TOGETHER": "Lavorano insieme",
+      "SPLIT": "Si dividono i cesti"
+    },
+    "inCharge": "Responsabile",
+    "putInCharge": "Rendi responsabile",
+    "inChargeHint": "Il capo della squadra responsabile risponde dell'ordine.",
+    "remove": "Togli {team} da questo ordine",
+    "locked": "Diviso alla stampa",
+    "together": "Vede ogni cesto",
+    "less": "Un cesto in meno per {team}",
+    "more": "Un cesto in più per {team}",
+    "shareLabel": "Cesti per {team}",
+    "even": "Dividili in parti uguali",
+    "sum": {
+      "ok": "{given} di {planned} cesti sono assegnati.",
+      "short": "{given} di {planned} cesti sono assegnati: {count} ancora da assegnare.",
+      "over": "{given} di {planned} cesti sono assegnati: {count} di troppo."
+    },
+    "note": {
+      "together": "Ogni squadra vede ogni cesto. Ogni squadra tiene il suo nome e le sue persone. Il capo della squadra responsabile risponde dell'ordine.",
+      "split": "Ogni squadra fa i suoi cesti: la prima squadra prende i primi cesti, e così via. Il capo della squadra responsabile risponde dell'ordine.",
+      "sharedAtPrint": "I cesti sono stati divisi alla stampa: le parti restano. Si possono ancora aggiungere o togliere squadre che lavorano insieme.",
+      "noTeam": "Questo ordine non avrà una squadra: ogni operaio vede i suoi cesti."
+    },
+    "empty": "Aggiungi una squadra qui sotto. Senza squadra, ogni operaio vede i cesti di questo ordine.",
+    "add": "Aggiungi una squadra",
+    "search": "Trova una squadra",
+    "addOne": "Aggiungi {team}",
+    "noMore": "Ogni squadra della fabbrica è su questo ordine.",
+    "noMatch": "Nessuna squadra corrisponde a «{query}».",
+    "noBoard": "Non è stato possibile leggere le squadre.",
+    "suggested": "Consigliata",
+    "worked": "Ha lavorato per questo cliente",
+    "why": "Perché (facoltativo)",
+    "whyHint": "Per esempio: un ordine grande, una data vicina",
+    "act": "Salva",
+    "held": {
+      "unchanged": "Ancora niente è cambiato.",
+      "addTeam": "Aggiungi prima una squadra.",
+      "shareZero": "Ogni squadra ha bisogno di uno o più cesti: togli una squadra, o dalle dei cesti.",
+      "notAddUp": "I cesti non tornano: {given} di {planned} sono assegnati.",
+      "sharedAtPrint": "I cesti sono stati divisi alla stampa: le parti restano.",
+      "splitTwo": "Due o più squadre possono dividersi i cesti.",
+      "splitTooFew": "Questo ordine ha {count} cesti: non si può dividere tra {teams} squadre."
+    }
+  },
+  "facts": {
+    "leader": "{name}",
+    "noLeader": "ancora nessun capo",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "small": "Le squadre piccole non mostrano numeri",
+    "loadOf": "{count} di {max} cesti in lavorazione",
+    "load_one": "{count} cesto in lavorazione",
+    "load_other": "{count} cesti in lavorazione"
+  },
+  "mark": {
+    "OVER_LIMIT": "Oltre il suo limite",
+    "NO_NEW_ORDERS": "Non prende nuovi ordini",
+    "MISSING_TODAY": "Persone assenti oggi",
+    "MISSING_TODAY_n": "{count} assenti oggi",
+    "LATE": "In ritardo",
+    "LATE_n": "{count} in ritardo"
+  },
+  "ask": {
+    "title": "Chiedi un'altra squadra",
+    "body": "Il responsabile di produzione assegna gli ordini alle squadre. Di' perché questo ordine ha bisogno di un'altra squadra: riceve un compito con l'ordine e le tue parole.",
+    "why": "Perché un'altra squadra?",
+    "whyHint": "Per esempio: il cliente ha chiesto la squadra che ha fatto l'ultimo ordine",
+    "act": "Chiedi al responsabile di produzione",
+    "held": {
+      "why": "Di' prima perché.",
+      "long": "Al massimo {count} caratteri."
+    }
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "error": {
+    "read": "Qualcosa è andato storto durante la lettura.",
+    "write": "Non è stato salvato. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "offline": "Nessuna risposta dalla fabbrica: controlla la rete e riprova.",
+    "notFound": "Questo ordine non c'è più.",
+    "conflict": "Qualcuno ha cambiato le squadre di questo ordine nel frattempo: sono state rilette. Controllale e salva di nuovo.",
+    "invalid": "È stato rifiutato così com'è: controlla le squadre e i cesti."
+  }
+}

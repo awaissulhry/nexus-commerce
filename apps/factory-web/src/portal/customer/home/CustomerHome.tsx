@@ -47,7 +47,7 @@ import {
   type OpenItemsRead,
   type OrdersRead,
 } from './api'
-import { firstWaiting } from './model' // F-PR-15
+import { firstWaiting, waitingLinkOf } from './model' // F-PR-15; owb-po4.1
 import {
   answerProblem,
   answerRefusal,
@@ -510,7 +510,7 @@ function HomeContainer() {
   const waitingPage = pageBuilt('home.waiting') && can('portal.approvals.view')
   const firstFive = waitingPage && tasks.model.state === 'ready' ? firstWaiting(tasks.model.groups) : null
   const tasksShown = firstFive ? { ...tasks.model, groups: firstFive.groups } : tasks.model
-  const tasksMore = firstFive?.more ? { href: `${prefix}/waiting`, label: t('waiting.all', { count: firstFive.open }) } : null
+  const tasksMore = waitingLinkOf(prefix, firstFive, (count) => t('waiting.all', { count })) // owb-po4.1: Home's card is its door
   // ---- end F-PR-15
 
   return (
@@ -538,7 +538,7 @@ function HomeContainer() {
               company: frame.me.company.name,
               buyer,
               newOrderHref,
-              catalogueHref: pageBuilt('quotes.catalogue') && can('portal.catalogue.view') ? `${prefix}/catalogue` : null,
+              catalogueHref: pageBuilt('products.catalogue') /* owb-po4.1: the Catalogue is Products */ && can('portal.catalogue.view') ? `${prefix}/catalogue` : null,
               admins,
             }
           : null,

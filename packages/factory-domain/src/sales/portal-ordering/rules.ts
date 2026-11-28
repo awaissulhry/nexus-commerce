@@ -347,9 +347,11 @@ export function customLineShapeProblems(line: CustomLineInput): string[] {
   if (line.description !== undefined && line.description !== null && line.description.trim() === '') out.push('Say in your words what you need (1 to 2000 characters), or leave the words out for now.')
   if (filled(line.description) && line.description!.trim().length > CUSTOM_LINE_LIMITS.description) out.push(`A description is at most ${CUSTOM_LINE_LIMITS.description} characters.`)
   if (filled(line.colourText) && line.colourText!.trim().length > CUSTOM_LINE_LIMITS.colourText) out.push(`The colours in words are at most ${CUSTOM_LINE_LIMITS.colourText} characters.`)
+  // owb- po1.3 (S1 lead, web A's ONE lines table #2052): "A new design: <kind>" is a DESCRIBED line WITH a garment type (the draft's
+  // made-to-measure garment types), so the garment type's shape holds for both kinds (was: made to measure only).
+  if (filled(line.garmentType) && line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push(`A garment type is at most ${CUSTOM_LINE_LIMITS.garmentType} characters.`)
+  if (line.garmentType !== undefined && line.garmentType !== null && line.garmentType.trim() === '') out.push(line.kind === 'MADE_TO_MEASURE' ? 'Choose the garment type to make to measure, or leave it out for now.' : 'Choose the garment type of the new design, or leave it out for now.') // od-fx4
   if (line.kind === 'MADE_TO_MEASURE') {
-    if (filled(line.garmentType) && line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push(`A garment type is at most ${CUSTOM_LINE_LIMITS.garmentType} characters.`)
-    if (line.garmentType !== undefined && line.garmentType !== null && line.garmentType.trim() === '') out.push('Choose the garment type to make to measure, or leave it out for now.') // od-fx4
     if (line.byPerson === false) out.push('A made-to-measure line is always by person.')
     if (line.quantity !== undefined && line.quantity !== null) out.push('A made-to-measure line counts its people, not a total.')
   } else if (line.quantity !== undefined && line.quantity !== null && (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CUSTOM_LINE_LIMITS.total)) {

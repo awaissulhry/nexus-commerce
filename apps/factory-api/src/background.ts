@@ -109,6 +109,7 @@ import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
 import { routingCheckpointHandlers } from './modules/product/routing-depth/checkpoints'
 // B-W2b-96: machine requests nobody acknowledged escalate by their routing rule.
 import { escalationCron } from './modules/plant/requests/escalation'
+import { callEscalationCron } from './modules/production/calls/escalation'
 // B-W2b-108: CAPA actions reminded before their due day and escalated when overdue (tasks).
 import { capaRemindersCron } from './modules/quality/capa/reminders'
 // B-W2b-124: the reminders of statutory machine checks whose window opened.
@@ -474,6 +475,8 @@ if (mode === 'worker') {
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).
   crons.push(escalationCron({ database, log }))
+  // owb-fl3 (S5 floor, R53): a help call nobody came to escalates after its type's minutes (lead 88, shared-asks 09:15)
+  crons.push(callEscalationCron({ database, log }))
   // B-W2b-108: every 15 minutes, open CAPA actions are reminded (3 days before and on their day) and overdue ones escalate (QHS-096).
   crons.push(capaRemindersCron({ database, log }))
   // B-W2b-124: hourly, the statutory checks whose reminder window opened, once per due date (QHS-205).

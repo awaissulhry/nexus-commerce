@@ -13,4 +13,11 @@ export const manifest = defineManifest({
   // B-OF-034 (order files tab): the office's open asks for files this tablet answers (its site, its worker's team or floor role, a
   // step of its work); read through the system after these checks, never a worker named.
   'GET /production/floor-notes/asks': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
+  // ── owb-fl3 (S5 server B; order workflow): Tell the office (with or without the name; ./suggestions.ts) and the Me page's read
+  // (./profile.ts; GET /floor/me stays the session's). Every floor role: floor.work at the device's site.
+  'POST /floor/suggestions': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  'POST /floor/suggestions/files': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  'POST /floor/suggestions/files/:fileId/complete': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  'GET /floor/me/profile': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  // ── end owb-fl3 ──
 })
