@@ -108,7 +108,8 @@ const orderId = async (number: string) => (await admin<{ id: string }>(`SELECT i
 const piecesOf = async (id: string) => (await admin<{ n: number }>(`SELECT coalesce(sum(s.quantity), 0)::int AS n FROM "SalesOrderLineSize" s JOIN "SalesOrderLine" l ON l.id = s."lineId" WHERE l."orderId" = $1`, [id]))[0]!.n
 const workOrdersOf = (id: string) => admin<{ id: string; number: string; status: string }>(`SELECT DISTINCT w.id, w.number, w.status::text AS status FROM "WorkOrder" w JOIN "WorkOrderSize" c ON c."workOrderId" = w.id JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE l."orderId" = $1 ORDER BY w.number`, [id])
 const basketsOf = (id: string) => admin<{ id: string; code: string; madeAtPrint: boolean; cutLogIds: string[]; quantity: number }>(`SELECT b.id, b.code, b."madeAtPrint", b."cutLogIds"::text[] AS "cutLogIds", b.quantity FROM "Bundle" b JOIN "WorkOrderSize" c ON c.id = b."workOrderSizeId" JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE l."orderId" = $1 ORDER BY b.code`, [id])
-const ids: Record<string, string> = {}
+// Filled in order by the cases below (each case reads only the ids an earlier case set).
+const ids = {} as { deposit: string; off: string; on: string; print: string }
 
 beforeAll(async () => {
   db = await migratedDatabase('print_start')
