@@ -28,5 +28,11 @@ export const manifest = defineManifest({
   // Do this first and Will be late are the team leader's (floor.lead, `_owb-fl-common.md` § 1 D), at the device's own site.
   'POST /production/baskets/flags': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
   'POST /production/baskets/late': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  // owb-fl4: the Baskets board (office workorders.view; floor floor.lead: one route, both rights, the handler asks them), the
+  // leader's team home, From the floor (workorders.view) and the office's answer to a late warning (orders.manage).
+  'GET /production/baskets/board': { audiences: ['office', 'floor'], permission: SIGNED_IN, scope: 'record' },
+  'GET /production/baskets/team': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'GET /production/baskets/from-the-floor': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'POST /production/baskets/late/:id/answer': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   // ---- end server B ----
 })

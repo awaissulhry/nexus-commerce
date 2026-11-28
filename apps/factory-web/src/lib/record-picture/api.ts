@@ -14,9 +14,10 @@ import type { PictureAnswer, PictureSource } from './model'
 
 const pictureSchema = z.object({
   id: z.string(),
-  styleId: z.string(),
-  styleCode: z.string(),
-  styleName: z.string(),
+  // owb-po7 (owb-po1): a request whose lines name no style but that has a chosen picture answers null style fields — read as '' (no words).
+  styleId: z.string().nullable().transform((value) => value ?? ''),
+  styleCode: z.string().nullable().transform((value) => value ?? ''),
+  styleName: z.string().nullable().transform((value) => value ?? ''),
   styleCount: z.number(),
   fileId: z.string().nullable(),
   contentType: z.string().nullable(),
@@ -44,13 +45,16 @@ export const PICTURE_ROUTES: Readonly<Record<BatchSource, { readonly path: strin
   // pg-w2 (D4, Z12): the customer's portal list — the partner read finds the party's OWN orders among the ids, then their first style's
   // small picture (walled as the order page's lines); an order the party does not own is absent. The answer names no file (fileId null).
   customerOrder: { path: '/portal/sales-orders/pictures', key: 'orderIds' },
+  // owb-po7 (owb-po1: body `{ orderIds?, requestIds? }`): the customer's draft or sent order (a portal order request) — its chosen picture
+  // first, else its first live line's style. Same route, its own key; never an office series.
+  customerRequest: { path: '/portal/sales-orders/pictures', key: 'requestIds' },
 })
 
 /**
  * pg-w2 (D4): the customer's answer never names a file (`fileId: null`), but the cache keeps a small address by its file: the
  * customer's picture is kept under its order instead — a key of this browser's cache only, never sent anywhere, never opened.
  */
-const keyedOf = (source: PictureSource, picture: PictureAnswer): PictureAnswer => (source === 'customerOrder' && picture.fileId === null && picture.small ? { ...picture, fileId: `${source}:${picture.id}` } : picture)
+const keyedOf = (source: PictureSource, picture: PictureAnswer): PictureAnswer => ((source === 'customerOrder' || source === 'customerRequest') && picture.fileId === null && picture.small ? { ...picture, fileId: `${source}:${picture.id}` } : picture)
 
 /** One batch read (the page's own API client). owb-b4: the floor's basket has no batch route — nothing is asked, nothing answers. */
 export async function readPictures(api: ApiClient, source: PictureSource, ids: readonly string[], signal?: AbortSignal): Promise<PictureAnswer[]> {

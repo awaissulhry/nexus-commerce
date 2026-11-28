@@ -11,7 +11,7 @@ import { TeamChip } from '../../../../lib/people-picture/view/TeamChip'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import { HidePhoto } from '../../../tasks/cutting/view/HidePhoto'
-import type { BasketRead } from '../../api'
+import { teamPictureOf, type BasketRead } from '../../api'
 import { BasketDock, dockDraws, type BasketDockModel, type DockAction } from '../../dock/BasketDock'
 import { QcCard, type QcAction, type QcCardModel } from '../../dock/QcCard'
 import { AskCard, AskTile, AskWindow, NotesTile, PhotoTile, ProblemCard, ProblemTile } from '../../help'
@@ -161,20 +161,20 @@ function Basket({ model, view, read, onAction }: { readonly model: BasketPageVie
           </div>
         </div>
       ) : null}
-      <ProblemCard read={read} onChanged={changed} />
-      <AskCard read={read} onChanged={changed} />
+      <ProblemCard read={view} onChanged={changed} />
+      <AskCard read={view} onChanged={changed} />
       {model.qc ? <QcCard model={model.qc} onAction={(action) => onAction({ type: 'qc', action })} /> : null}
       {model.helpReady ? (
         <div className="fw-bk-tiles">
-          <ProblemTile read={read} onChanged={changed} />
-          <AskTile read={read} onChanged={changed} />
-          <PhotoTile read={read} onChanged={changed} />
-          <NotesTile read={read} onChanged={changed} />
+          <ProblemTile read={view} onChanged={changed} />
+          <AskTile read={view} onChanged={changed} />
+          <PhotoTile read={view} onChanged={changed} />
+          <NotesTile read={view} onChanged={changed} />
         </div>
       ) : null}
       {model.leader ? <LeaderRow view={view} leader={model.leader} onChanged={changed} /> : null}
-      {model.stepsReady ? <StepsWindow open={model.stepsOpen} onClose={() => onAction({ type: 'closeSteps' })} view={view} leader={model.leader} onChanged={changed} /> : null}
-      {model.helpReady ? <AskWindow open={model.askOpen} onClose={() => onAction({ type: 'closeAsk' })} read={read} onChanged={changed} /> : null}
+      {model.stepsReady && model.stepsOpen ? <StepsWindow open onClose={() => onAction({ type: 'closeSteps' })} view={view} leader={model.leader} onChanged={changed} /> : null}
+      {model.helpReady ? <AskWindow open={model.askOpen} onClose={() => onAction({ type: 'closeAsk' })} read={view} onChanged={changed} /> : null}
       <Modal open={model.photo !== null} onClose={() => onAction({ type: 'photoCancel' })} title={model.photo ? tb('qc.photo', { words: model.photo.words }) : tb('qc.title')} size="md" sheet className="fw-floor-dialog">
         {model.photo ? <HidePhoto label={tb('qc.take')} heldReason={model.online ? null : tb('qc.photoOffline')} onCapture={(photo) => onAction({ type: 'photoTaken', photo: photo.photo })} onCancel={() => onAction({ type: 'photoCancel' })} /> : null}
       </Modal>
@@ -185,6 +185,8 @@ function Basket({ model, view, read, onAction }: { readonly model: BasketPageVie
 /** A basket this person may not open (R23, R44): its number and why, nothing of it; "Ask your team leader" once fl8 is built. */
 function Locked({ model, read, restricted, onAction }: { readonly model: BasketPageViewModel; readonly read: BasketRead; readonly restricted: 'RESTRICTED' | 'OTHER_TEAM'; readonly onAction: (action: BasketPageAction) => void }) {
   const tb = useT(BASKET_NS)
+  // fl8's ask names the basket: only when the read names it (a lock may come with nothing of it).
+  const help = read.basket && read.flags ? { ...read, basket: read.basket, flags: read.flags } : null
   return (
     <div className="fw-bk-stack">
       {read.basket ? (
@@ -193,13 +195,13 @@ function Locked({ model, read, restricted, onAction }: { readonly model: BasketP
         </h1>
       ) : null}
       <FloorState tone="warning" icon={<Lock />} title={tb(`lock.${restricted}`)}>
-        {model.helpReady ? (
+        {model.helpReady && help ? (
           <FloorButton size="lg" variant="primary" icon={<UserCheck />} onClick={() => onAction({ type: 'dock', action: 'askLeader' })}>
             {tb('dock.askLeader')}
           </FloorButton>
         ) : null}
       </FloorState>
-      {model.helpReady ? <AskWindow open={model.askOpen} onClose={() => onAction({ type: 'closeAsk' })} read={read} onChanged={() => onAction({ type: 'changed' })} /> : null}
+      {model.helpReady && help ? <AskWindow open={model.askOpen} onClose={() => onAction({ type: 'closeAsk' })} read={help} onChanged={() => onAction({ type: 'changed' })} /> : null}
     </div>
   )
 }
@@ -242,7 +244,7 @@ function Facts({ view, timeZone }: { readonly view: BasketView; readonly timeZon
       </li>
       {basket.team ? (
         <li className="fw-bk-fact">
-          <TeamChip team={{ name: basket.team.name, kind: basket.team.picture?.kind ?? null, icon: basket.team.picture?.icon ?? null, colour: basket.team.picture?.colour ?? null }} />
+          <TeamChip team={{ name: basket.team.name, ...teamPictureOf(basket.team) }} />
         </li>
       ) : null}
       {words.label ? (

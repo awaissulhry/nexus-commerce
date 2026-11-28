@@ -10,6 +10,8 @@ import { scanSubjectFor } from '../settings/subject'
 import { contextOf, knownSite, officeOf, refuse, type DispatchContext } from './access'
 import { ASSIGNMENT_SELECT, assignmentRow, assignmentsOf, dayColumn, lockDay, operationOf, stationOf, workerOf, type AssignmentRow, type OperationRow, type Reader, type StationRow, type WorkerRow } from './store'
 import { bundleFlows } from './world'
+// owb-fl4 (S5 server B; `_owb-fl-common.md` § 3 "Give to…"): a basket named without its step is given at the step it is at.
+import { basketPlacesOf } from '../baskets/board-store'
 
 /**
  * Assign an operator (B-W2b-49; MES-023, MES-028; design production.dispatch "drop an operator onto a station (assign); a
@@ -107,9 +109,26 @@ function bodyIssues(body: AssignBody): Issue[] {
   return issues
 }
 
+/**
+ * owb-fl4 (S5 server B; design "Give to…"): baskets named WITHOUT their step are given at the step they are at (the ONE pair
+ * basketRoute + basketPlace: scans plus hand moves and route edits). All of them at one step of one work order, else the words
+ * say so; a basket ready to ship has nothing left to give. A STATION site still names no worker (today's rule, in the command).
+ */
+async function withBasketStep(caller: CommandCaller, body: AssignBody): Promise<AssignBody> {
+  if (!body.bundleIds?.length || body.workOrderOperationId) return body
+  const places = await caller.withClient((db: Reader) => basketPlacesOf(db, body.bundleIds!))
+  if (body.bundleIds.some((id) => !places.has(id))) throw new NotFoundError('Basket not found.')
+  const steps = new Set(body.bundleIds.map((id) => places.get(id)!.operationId))
+  if (steps.has(null)) throw new ValidationError('A basket that is ready to ship has nothing left to give.', [{ path: 'body/bundleIds', message: 'Leave out the baskets that are ready to ship.' }])
+  if (steps.size > 1) throw new ValidationError('These baskets are at different steps: give them one step at a time.', [{ path: 'body/bundleIds', message: 'Pick baskets at the same step.' }])
+  return { ...body, workOrderOperationId: [...steps][0]! }
+}
+
 /** POST /production/dispatch/assignments. */
-export async function assignOperator(caller: CommandCaller, body: AssignBody, idempotencyKey?: string) {
+export async function assignOperator(caller: CommandCaller, sent: AssignBody, idempotencyKey?: string) {
   const context = contextOf(caller)
+  // owb-fl4: Give to… may name the baskets only.
+  const body = await withBasketStep(caller, sent)
   const issues = bodyIssues(body)
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
   const siteId = await caller.withClient(async (db: Reader) => {
@@ -121,7 +140,8 @@ export async function assignOperator(caller: CommandCaller, body: AssignBody, id
     return (station?.siteId ?? operation?.siteId)!
   })
   const site = await knownSite(caller, context, siteId, PRODUCTION_DISPATCH_MANAGE)
-  const { result } = await command(caller, { name: 'production.assignOperator', idempotencyKey, input: body }, async (tools) => {
+  // The receipt keeps what was sent (a resend after the basket moved on answers from it).
+  const { result } = await command(caller, { name: 'production.assignOperator', idempotencyKey, input: sent }, async (tools) => {
     const { tx, now } = tools
     const decidedBy = assertPersonDecides(tools.context, 'DISPATCH_ASSIGNMENT')
     const today = businessDate(now, site.timezone)

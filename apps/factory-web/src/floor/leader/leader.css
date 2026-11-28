@@ -1,0 +1,119 @@
+/*
+ * owb-fl6 — the team leader's home on a phone (design § 5zf C, § 5zg C): layout only, DS tokens, logical properties (right to left in
+ * Urdu, fl7). Two parts (Baskets · Team), four team numbers in ONE row, the team's baskets by order with the step of each as a button.
+ * Nothing to tap under 48 px; 360 / 390 / 430 px with no sideways scroll.
+ */
+.fw-ld-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-ld-parts > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-ld-nums {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-6);
+}
+.fw-ld-nums > .nds-floor-btn {
+  min-width: 0;
+  padding-inline: var(--nds-space-4);
+}
+.fw-ld-nums .nds-floor-btn-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  line-height: 1.15;
+}
+.fw-ld-num {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-extrabold);
+}
+.fw-ld-word {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--nds-density-font-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-ld-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+.fw-ld-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-ld-group-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-ld-group-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-ld-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-ld-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: var(--nds-space-6);
+}
+.fw-ld-row > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-ld-main {
+  justify-content: flex-start;
+}
+.fw-ld-main .nds-floor-btn-label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-ld-step .nds-floor-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.fw-ld-team {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+@container nds-floor-frame (max-width: 389.98px) {
+  .fw-ld-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fw-ld-row > .fw-ld-step {
+    grid-column: 1 / -1;
+  }
+}

@@ -24,6 +24,8 @@ import type { AskSampleKind } from '@nexus/factory-domain/sales/change-requests/
 import { isDesignAppliesTo, type DesignAppliesTo } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-PR-26: our counter-offer, where it stands.
 import { counteredWords, counterPriced, counterStateOf, COUNTER_STATE_WORDS, type Counter, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
+// owb- (order workflow, S3 ss2 step 2.4, guard 3): a basket made at print counts as cut once its first cuts are on it.
+import { BUNDLE_IS_CUT } from '../../production/print-start/cut-filter'
 
 /**
  * The reads of change and cancel requests (B-W2b-183). Two kinds, never mixed in one query:
@@ -85,7 +87,7 @@ export async function readCuts(db: Reader, lineIds: readonly string[]): Promise<
   }
   const pieces = await db.cutLogPiece.findMany({ where: { workOrderSizeId: { in: cellIds }, pieces: { gt: 0 }, cutLog: { reversalOfId: null, reversals: { none: {} } } }, select: { workOrderSizeId: true, serverTime: true } })
   for (const piece of pieces) note(piece.workOrderSizeId, piece.serverTime, true)
-  const bundles = await db.bundle.findMany({ where: { workOrderSizeId: { in: cellIds }, status: { not: 'VOID' } }, select: { workOrderSizeId: true, createdAt: true } })
+  const bundles = await db.bundle.findMany({ where: { workOrderSizeId: { in: cellIds }, status: { not: 'VOID' }, ...BUNDLE_IS_CUT /* owb- S3 ss2 guard 3 */ }, select: { workOrderSizeId: true, createdAt: true } })
   for (const bundle of bundles) note(bundle.workOrderSizeId, bundle.createdAt, false)
   return found
 }

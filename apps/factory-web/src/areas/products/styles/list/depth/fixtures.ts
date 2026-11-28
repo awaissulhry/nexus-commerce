@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import type { StyleRow } from '../../api'
-import { CAN, DEMO_PRICES, GRAINS, PREFIX, ROWS } from '../../demo/fixtures'
+import { CAN, GRAINS, PREFIX, ROWS } from '../../demo/fixtures'
 import type { GateSummaryRow } from '../../record/overview/api'
-import { pricesByStyle, type StylesListViewModel } from '../list-model'
+import type { StylesListViewModel } from '../list-model'
 import { StylesListView } from '../view/StylesListView'
 import type { ListGate } from './model'
 
@@ -39,7 +39,6 @@ const base: StylesListViewModel = {
   prefix: PREFIX,
   can: CAN.owner,
   grains: GRAINS.owner,
-  prices: { state: 'ready', list: DEMO_PRICES.list, byStyle: pricesByStyle(DEMO_PRICES.entries) },
   duplicate: null,
   filters: { view: 'open', q: '', type: '', ppe: '' },
   rows: { items: open, more: false, count: open.length, problem: null },

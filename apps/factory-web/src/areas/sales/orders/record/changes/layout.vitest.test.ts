@@ -8,15 +8,15 @@ import { CHANGES_SECTIONS, dayTimeOf, WAITING_ALIASES } from './layout'
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('F-OC-101: four sections, top to bottom, each its own file and address', () => {
-  it('Waiting · Can it still change? · What changed · Customer\'s agreement (O2 = A: the freeze second)', () => {
-    expect(CHANGES_SECTIONS).toEqual(['waiting', 'freeze', 'history', 'confirmation'])
+  it('Waiting · Can it still change? · Customer\'s agreement · What changed (owb-of6 step 2: the agreement before the log)', () => {
+    expect(CHANGES_SECTIONS).toEqual(['waiting', 'freeze', 'confirmation', 'history'])
     expect(WAITING_ALIASES).toEqual(['still-to-do', 'work-order-changes'])
   })
 
   it('the tab is its layout only: the kit\'s room container, the four sections in their order, nothing else drawn there', () => {
     const tab = source('./view/ChangesTab.tsx')
     expect(tab).toContain('<div className="fw-pt fw-oc">')
-    const order = ['<WaitingSection ', '<FreezeSection ', '<HistorySection ', '<AgreementSection '].map((part) => tab.indexOf(part))
+    const order = ['<WaitingSection ', '<FreezeSection ', '<AgreementSection ', '<HistorySection '].map((part) => tab.indexOf(part))
     expect(order.every((at) => at > -1)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
     for (const gone of ['<RequestsSection', '<StillToDo', '<DocumentsTab', '<ChangesDepth', 'function History(']) expect(tab, gone).not.toContain(gone)

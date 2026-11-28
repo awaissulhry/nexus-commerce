@@ -1,0 +1,19 @@
+/* owb-po7 — the orders sheet's own parts: layout only, semantic DS tokens. The picture's camera shows on hover and on focus, always on a
+   phone; the drafts bar wraps on a narrow room (no sideways scroll at 375 px). */
+.fw-pos-drafts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); min-width: 0; }
+.fw-pos-draft { display: inline-flex; align-items: center; gap: var(--nds-space-2); max-width: 100%; min-width: 0; }
+.fw-pos-link { color: var(--nds-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16rem; }
+.fw-pos-grow { flex: 1 1 auto; }
+.fw-pos-quiet { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.fw-pos-acts { display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+.fw-pos-chips { display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-4); min-width: 0; }
+.fw-pos-chip { all: unset; cursor: pointer; border-radius: var(--nds-radius-full); }
+.fw-pos-chip:focus-visible, .fw-pos-pic:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.fw-pos-pic { all: unset; cursor: pointer; position: relative; display: inline-flex; border-radius: var(--nds-radius-sm); }
+.fw-pos-cam { position: absolute; right: 2px; bottom: 2px; display: inline-flex; padding: 2px; border-radius: var(--nds-radius-full); background: var(--nds-surface); color: var(--nds-text-strong); opacity: 0; }
+.fw-pos-pic:hover .fw-pos-cam, .fw-pos-pic:focus-visible .fw-pos-cam { opacity: 1; }
+.fw-pos-top { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.fw-pos-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+@media (max-width: 719px), (hover: none) {
+  .fw-pos-cam { opacity: 1; }
+}

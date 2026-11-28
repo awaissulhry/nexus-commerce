@@ -100,3 +100,13 @@ describe('owb-of5 step 4: ONE window in so/draft/ — the draft page, the band, 
     expect(TODAY).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })
+
+describe('owb-of6 (lead S2, shared-asks 09:04): `&confirm=1` opens THE Confirm window on arrival', () => {
+  it('once, for one who may confirm, on a Draft or Sent order; then the term leaves the address', () => {
+    const page = read('./OfficeDraftPage.tsx')
+    expect(page).toContain("const confirmAsked = search?.get('confirm') === '1'")
+    expect(page).toContain("if (record.request.status !== 'DRAFT' && record.request.status !== 'SENT') return")
+    expect(page).toContain('if (mayConfirm) confirmOrder.actions.onOpen?.()')
+    expect(page).toContain("next.delete('confirm')")
+  })
+})

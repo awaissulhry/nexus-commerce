@@ -151,7 +151,17 @@ export function splitBundles(total: number, size: number): number[] {
 /** A cell of the work order as the plan sees it: its counts and its words ("BLK 52"). */
 export interface PlanCell extends CellBundles {
   readonly label: string
+  /**
+   * owb- (order workflow, S3 ss2 step 2.4, guard 2; PL-review § 4): the cell's ACTIVE baskets made at "Print and start the work"
+   * (madeAtPrint), and how many of the cell's live cut log entries are not on them yet. Absent: none (a site that bundles at
+   * cutting, as before).
+   */
+  readonly printBaskets?: number | undefined
+  readonly toAttach?: number | undefined
 }
+
+/** owb- (S3 ss2, guard 2): the words when baskets were made at print and nothing new was cut for them. */
+export const printBasketsWords = (label: string): string => `Baskets were made at print: the cuts go on them. ${label}: nothing new is cut for them yet.`
 
 /** What the floor asks for one cell (and part): how many garments, in bundles of which size or of these quantities. */
 export interface BundleAsk {
@@ -184,8 +194,10 @@ export interface PlannedBundle {
   readonly quantity: number
 }
 
+// owb- (S3 ss2, guard 2): `attach` — the cells whose baskets made at print take the cell's new cut log entries (no new bundle, no
+// new code); present only when there is one, so every plan of a site that bundles at cutting reads as before.
 export type BundlePlan =
-  | { readonly ok: true; readonly bundles: readonly PlannedBundle[]; readonly singlePiece: boolean }
+  | { readonly ok: true; readonly bundles: readonly PlannedBundle[]; readonly singlePiece: boolean; readonly attach?: readonly string[] }
   | { readonly ok: false; readonly refusal: BundleRefusal }
 
 const refuse = (code: BundleRefusalCode, message: string): { readonly ok: false; readonly refusal: BundleRefusal } => ({ ok: false, refusal: { code, message } })
@@ -200,9 +212,18 @@ export function planBundles(facts: PlanFacts): BundlePlan {
   const cellOf = new Map(facts.cells.map((cell) => [cell.cellId, cell]))
   const problems: Issue[] = []
   const asks: (BundleAsk & { readonly path: string })[] = []
+  // owb- (S3 ss2, guard 2): the cells whose baskets made at print take new cut log entries.
+  const attach: string[] = []
+  const attaches = (cell: PlanCell): boolean => (cell.printBaskets ?? 0) > 0 && (cell.toAttach ?? 0) > 0
   if (facts.asks === null) {
     for (const cell of facts.cells) if (cell.toBundle > 0) asks.push({ cellId: cell.cellId, path: 'body' })
-    if (asks.length === 0) return refuse('NOTHING_TO_BUNDLE', `Nothing cut is waiting for bundles on work order ${workOrder.number}.`)
+    // owb- (S3 ss2): "all cut, not bundled" also puts the new cuts on the baskets made at print.
+    for (const cell of facts.cells) if (attaches(cell)) attach.push(cell.cellId)
+    if (asks.length === 0 && attach.length === 0) {
+      const printed = facts.cells.find((cell) => (cell.printBaskets ?? 0) > 0)
+      if (printed) return refuse('NOTHING_TO_BUNDLE', printBasketsWords(printed.label))
+      return refuse('NOTHING_TO_BUNDLE', `Nothing cut is waiting for bundles on work order ${workOrder.number}.`)
+    }
   } else {
     const seen = new Set<string>()
     for (const [index, ask] of facts.asks.entries()) {
@@ -234,6 +255,13 @@ export function planBundles(facts: PlanFacts): BundlePlan {
       available = known.toBundle
       counts = `${piecesOf(known.pieces, part)} cut, ${known.bundled} in bundles`
     }
+    // owb- (S3 ss2, guard 2): a cell whose baskets were made at print takes its new cuts on them (an over-cut beyond the baskets
+    // still makes today's extra bundles below); nothing new cut: refused in the print words.
+    if (part === null && attaches(cell) && !attach.includes(cell.cellId)) attach.push(cell.cellId)
+    if (available <= 0 && (cell.printBaskets ?? 0) > 0) {
+      if (attach.includes(cell.cellId)) continue
+      return refuse('NOTHING_TO_BUNDLE', printBasketsWords(cell.label))
+    }
     if (available <= 0) return refuse('NOTHING_TO_BUNDLE', `${cell.label}: nothing cut is waiting for bundles (${counts}).`)
     const size = ask.bundleSize ?? facts.bundleSize ?? (singlePiece ? 1 : (facts.standardSize ?? DEFAULT_BUNDLE_SIZE))
     if (singlePiece && (size !== 1 || (ask.quantities ?? []).some((value) => value !== 1))) {
@@ -249,7 +277,7 @@ export function planBundles(facts: PlanFacts): BundlePlan {
   if (bundles.length > MAX_BUNDLES_PER_MAKE) {
     return refuse('TOO_MANY_BUNDLES', `That makes ${bundles.length} bundles; at most ${MAX_BUNDLES_PER_MAKE} are made at once. Take a larger bundle size, or bundle fewer cells at a time.`)
   }
-  return { ok: true, bundles, singlePiece }
+  return { ok: true, bundles, singlePiece, ...(attach.length > 0 ? { attach } : {}) }
 }
 
 // ---- reprint, void, scan -------------------------------------------------------------------------------------------------------
