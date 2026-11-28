@@ -71,5 +71,23 @@
   },
   "linked": {
     "customer": "Customer"
+  },
+  "cf": {
+    "windowTitle": "Confirm the order",
+    "promised": "Promised",
+    "promiseHint": "You promise this day. The customer sees it. Change it later on Production › Change the promise….",
+    "promiseEmpty": "Type the day you promise.",
+    "promisePast": "This day is in the past. Promise today or a later day.",
+    "wanted": "The customer wants it for",
+    "wantedNone": "No day given",
+    "openTitle_one": "{count} detail still open. You can confirm now.",
+    "openTitle_other": "{count} details still open. You can confirm now.",
+    "openWhy": "The design work and the pattern can start. The history keeps that you confirmed with open details.",
+    "pickProduct": "Pick the product first: line {seq}",
+    "pickProductTitle": "Pick the product first",
+    "pickProductWhy": "Line {seq} has no product yet. Pick it here or in the sheet; then you can confirm.",
+    "noProduct": "No product yet",
+    "failed": "The order could not be confirmed. Try again.",
+    "readFailed": "This order could not be read. Close and try again."
   }
 }

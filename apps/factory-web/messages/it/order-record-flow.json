@@ -71,5 +71,23 @@
   },
   "linked": {
     "customer": "Cliente"
+  },
+  "cf": {
+    "windowTitle": "Conferma l’ordine",
+    "promised": "Promesso",
+    "promiseHint": "Prometti questo giorno. Il cliente lo vede. Cambialo poi da Produzione › Cambia la promessa….",
+    "promiseEmpty": "Scrivi il giorno che prometti.",
+    "promisePast": "Questo giorno è passato. Prometti oggi o un giorno successivo.",
+    "wanted": "Il cliente lo vuole per il",
+    "wantedNone": "Nessun giorno indicato",
+    "openTitle_one": "{count} dettaglio ancora aperto. Puoi confermare ora.",
+    "openTitle_other": "{count} dettagli ancora aperti. Puoi confermare ora.",
+    "openWhy": "Il lavoro grafico e il modello possono partire. Lo storico ricorda che hai confermato con dettagli aperti.",
+    "pickProduct": "Scegli prima il prodotto: riga {seq}",
+    "pickProductTitle": "Scegli prima il prodotto",
+    "pickProductWhy": "La riga {seq} non ha ancora un prodotto. Sceglilo qui o nel foglio; poi puoi confermare.",
+    "noProduct": "Ancora nessun prodotto",
+    "failed": "Non è stato possibile confermare l’ordine. Riprova.",
+    "readFailed": "Non è stato possibile leggere questo ordine. Chiudi e riprova."
   }
 }

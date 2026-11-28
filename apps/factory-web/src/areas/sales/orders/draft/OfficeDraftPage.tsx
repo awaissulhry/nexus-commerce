@@ -21,13 +21,13 @@ import type { UploadRow } from '../../../../lib/order-draft/view/files'
 import { piecesOpenOf, type PiecesMode } from '../../../../lib/order-draft/view/RowWindows'
 import { CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { STYLE_CODE } from '@nexus/factory-domain/product/styles/rules'
-import { findStyles, listRequestCustomers, listScales, readStyle, type ScaleOption, type StyleDetail } from '../../inquiries/api'
+import { findStyles, listRequestCustomers, listScales, type ScaleOption } from '../../inquiries/api'
 import { mapStylesOf } from '../../inquiries/catalogue-model'
 import type { StyleDraftDraft } from '../../inquiries/model'
 import { listCustomerDrafts, type DraftRow } from '../../customers/record/drafts/api'
 import { officeDraftHref } from '../../customers/record/drafts/model'
-import { confirmDraft, createOfficeDraft, makeDraftStyle, officeDraftPort, readOfficeRequest, type ConfirmAnswer, type ConfirmBody, type OfficeRead } from './api'
-import { confirmBodyOf, confirmHeldOf, confirmRowsOf, type ConfirmEntry } from './confirm-model'
+import { confirmDraft, createOfficeDraft, makeDraftStyle, officeDraftPort, readOfficeRequest, type ConfirmAnswer, type OfficeRead } from './api'
+import { useConfirmOrder } from './use-confirm-order' // owb-of5 step 4: the ONE Confirm window's state and send (the promised day)
 import { OfficeDraftView } from './view/OfficeDraftView'
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 // ---- owb-of5 step 1 (L3: Draft and Sent keep this page; of5 puts the order band on it): the band's read (owb-of1 Shape) and the picture's ports
@@ -81,11 +81,7 @@ interface PersonState {
   busy: boolean
   failed: string | null
 }
-export interface ConfirmState {
-  entries: Record<string, ConfirmEntry>
-  busy: boolean
-  failed: string | null
-}
+export type { ConfirmState } from './use-confirm-order' // owb-of5 step 4: the window's state lives with its hook now
 interface StyleState {
   draft: StyleDraftDraft
   scales: { status: 'loading' } | { status: 'ready'; value: readonly ScaleOption[] } | { status: 'error'; problem: string }
@@ -129,12 +125,10 @@ function OfficeDraftContainer() {
   const [pending, setPending] = useState(false)
   const [saving, setSaving] = useState<string[]>([])
   const [styles, setStyles] = useState<{ id: string; code: string; name: string }[] | null>(null)
-  const [details, setDetails] = useState<Record<string, StyleDetail>>({})
   const [piecesWin, setPiecesWin] = useState<PiecesState | null>(null)
   const [optionsWin, setOptionsWin] = useState<OptionsState | null>(null)
   const [rowFilesId, setRowFilesId] = useState<string | null>(null)
   const [person, setPerson] = useState<PersonState | null>(null)
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null)
   const [styleWin, setStyleWin] = useState<StyleState | null>(null)
   const [done, setDone] = useState<ConfirmAnswer['made'] | null>(null)
   const [band, setBand] = useState<RequestBand | null>(null) // owb-of5: the band of a Draft or Sent order (null: not read, or before of1)
@@ -501,36 +495,28 @@ function OfficeDraftContainer() {
   }
 
   // ── Confirm (send if still a draft + the existing accept, ONE office command) ────────────────────────────────────────
-  const openConfirm = () => {
-    const current = recordRef.current
-    if (!current) return
-    const entries = Object.fromEntries(confirmRowsOf(productRowsOf(current.request, locale)).map((entry) => [entry.rowId, entry]))
-    setConfirm({ entries, busy: false, failed: null })
-  }
-  const pickStyle = (rowId: string, styleId: string) => {
-    setConfirm((now) => (now ? { ...now, entries: { ...now.entries, [rowId]: { ...now.entries[rowId]!, styleId, colourwayId: null } } } : now))
-    if (styleId && !details[styleId])
-      readStyle(api, styleId)
-        .then((detail) => setDetails((now) => ({ ...now, [styleId]: detail })))
-        .catch(() => undefined)
-  }
-  const sendConfirm = async () => {
-    const current = recordRef.current
-    if (!current || !confirm || confirm.busy) return
-    const rows = productRowsOf(current.request, locale)
-    if (confirmHeldOf(rows, confirm.entries)) return
-    const body: Omit<ConfirmBody, 'version'> = confirmBodyOf(rows, confirm.entries, current.seesPrices)
-    setConfirm({ ...confirm, busy: true, failed: null })
-    try {
-      const answer = await enqueue(() => confirmDraft(api, current.request.id, { version: recordRef.current!.request.version, ...body }, keyFor('confirm', { id: current.request.id, body })))
-      setConfirm(null)
-      setDone(answer.made)
-      const next = await port.read(current.request.id).catch(() => null)
-      if (next) apply(next)
-    } catch (error) {
-      setConfirm((now) => (now ? { ...now, busy: false, failed: refusalWords(error) } : now))
-    }
-  }
+  // owb-of5 step 4: the ONE window's hook (the sheet and Incoming mount the same window through ConfirmOrderWindow): the promised day,
+  // a line without a product held (A-5); after it, the draft is read again and the page says what was made.
+  const confirmOrder = useConfirmOrder({
+    api,
+    record,
+    locale,
+    today,
+    send: (body) => {
+      const current = recordRef.current!
+      return enqueue(() => confirmDraft(api, current.request.id, { version: recordRef.current!.request.version, ...body }, keyFor('confirm', { id: current.request.id, body })))
+    },
+    onDone: (made) => {
+      setDone(made)
+      const id = recordRef.current?.request.id
+      if (id)
+        void port
+          .read(id)
+          .then(apply)
+          .catch(() => undefined)
+    },
+  })
+  const confirm = confirmOrder.state
 
   // ── Design work: Make style draft (today's Incoming window) ───────────────────────────────────────────────────────────
   const openStyle = () => {
@@ -638,7 +624,7 @@ function OfficeDraftContainer() {
         filesRow: filesRow ?? null,
         person,
         confirm,
-        details,
+        details: confirmOrder.details,
         styleWin: styleWin ? { ...styleWin, held: styleHeld(styleWin.draft) } : null,
         done,
         band, // owb-of5
@@ -726,13 +712,7 @@ function OfficeDraftContainer() {
           element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
           element?.querySelector<HTMLElement>('input, select, button')?.focus({ preventScroll: true })
         },
-        confirm: {
-          onOpen: openConfirm,
-          onStyle: pickStyle,
-          onEntry: (rowId, patch) => setConfirm((now) => (now ? { ...now, entries: { ...now.entries, [rowId]: { ...now.entries[rowId]!, ...patch } } } : now)),
-          onSend: () => void sendConfirm(),
-          onClose: () => setConfirm((now) => (now?.busy ? now : null)),
-        },
+        confirm: confirmOrder.actions, // owb-of5 step 4
         style: {
           onOpen: openStyle,
           onDraft: (patch) => setStyleWin((now) => (now ? { ...now, draft: { ...now.draft, ...patch } } : now)),
