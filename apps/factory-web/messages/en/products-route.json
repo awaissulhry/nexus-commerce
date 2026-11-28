@@ -188,7 +188,9 @@
     "FLOOR_FIXED": "This department has screens on the floor: its name stays and it cannot be closed.",
     "FROZEN": "The basket cards of this order are printed: the route of a line is fixed now.",
     "PRINTED": "The basket cards of this order are printed: the route of a line is fixed now.",
-    "NOT_DRAFT": "This revision is not a draft any more: its routes are frozen."
+    "NOT_DRAFT": "This revision is not a draft any more: its routes are frozen.",
+    "CLOSED": "This department is closed: open it again before you change its name.",
+    "CODE_TAKEN": "The operation code of this department is used by another operation of the library: give that one another code first."
   },
   "manage": {
     "switch": "Manage",

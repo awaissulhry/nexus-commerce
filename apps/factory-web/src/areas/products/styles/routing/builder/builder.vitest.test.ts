@@ -312,7 +312,7 @@ describe('words and looks', () => {
     const built = [
       ...['product', 'route', 'new', 'line'].flatMap((mode) => [`builder.title.${mode}`, `builder.save.${mode}`, `builder.subtitle.${mode}`]),
       ...['NO_DEPARTMENT', 'MINUTES_BAD', 'NAME_NEEDED', 'CUSTOMER_NEEDED', 'REASON_NEEDED'].map((code) => `builder.error.${code}`),
-      ...['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'FROZEN', 'PRINTED', 'NOT_DRAFT'].map((code) => `refusal.${code}`),
+      ...['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'CLOSED', 'CODE_TAKEN', 'FROZEN', 'PRINTED', 'NOT_DRAFT'].map((code) => `refusal.${code}`),
     ]
     const named = [...new Set([...keys, ...built])]
     expect(named.length).toBeGreaterThan(40)

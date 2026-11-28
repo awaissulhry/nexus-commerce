@@ -95,14 +95,17 @@ describe('the name rules and the refusals in words', () => {
     expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'name/NAME_TAKEN' }] })).toEqual({ key: 'refusal.NAME_TAKEN' })
     expect(refusalOf({ kind: 'conflict', code: 'FLOOR_FIXED' })).toEqual({ key: 'refusal.FLOOR_FIXED' })
     expect(refusalOf({ kind: 'conflict', code: 'conflict' })).toEqual({ key: 'problem.conflict' })
-    for (const locale of LOCALES) for (const key of ['refusal.NAME_EMPTY', 'refusal.NAME_TAKEN', 'refusal.FLOOR_FIXED', 'problem.conflict']) expect(has(locale, key), `${locale} ${key}`).toBe(true)
+    // pd1 (PR #2054) puts the code at `refusal/<code>`; a closed department is opened before a rename; the DEPT-n code may be taken.
+    expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/CLOSED' }] })).toEqual({ key: 'refusal.CLOSED' })
+    expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/CODE_TAKEN' }] })).toEqual({ key: 'refusal.CODE_TAKEN' })
+    for (const locale of LOCALES) for (const key of ['refusal.NAME_EMPTY', 'refusal.NAME_TAKEN', 'refusal.FLOOR_FIXED', 'refusal.CLOSED', 'refusal.CODE_TAKEN', 'problem.conflict']) expect(has(locale, key), `${locale} ${key}`).toBe(true)
   })
 
   it('a refusal is shown under the list in words', () => {
     const html = render(createElement(ManageDepartments, { model: view({ problem: { key: 'refusal.NAME_TAKEN' } }), actions }))
     expect(textOf(html)).toContain('This name is used by another department.')
     const italian = render(createElement(ManageDepartments, { model: view({ problem: { key: 'refusal.FLOOR_FIXED' } }), actions }), 'it')
-    expect(textOf(italian)).toContain('il suo nome resta e non si può chiudere')
+    expect(textOf(italian)).toContain('il nome resta e non si può chiudere')
   })
 })
 

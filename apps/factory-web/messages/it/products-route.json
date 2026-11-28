@@ -184,18 +184,20 @@
   },
   "refusal": {
     "NAME_EMPTY": "Un reparto ha bisogno di un nome.",
-    "NAME_TAKEN": "Questo nome è usato da un altro reparto.",
-    "FLOOR_FIXED": "Questo reparto ha schermi in reparto: il suo nome resta e non si può chiudere.",
+    "NAME_TAKEN": "Questo nome è già usato da un altro reparto.",
+    "FLOOR_FIXED": "Questo reparto ha schermate in produzione: il nome resta e non si può chiudere.",
     "FROZEN": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
     "PRINTED": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
-    "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati."
+    "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati.",
+    "CLOSED": "Questo reparto è chiuso: riaprilo prima di cambiarne il nome.",
+    "CODE_TAKEN": "Il codice operazione di questo reparto è già usato da un’altra operazione della libreria: dai prima un altro codice a quella."
   },
   "manage": {
     "switch": "Gestisci",
-    "hint": "Aggiungi un reparto, cambiane il nome o chiudilo. I reparti con schermi in reparto tengono il loro nome e restano aperti. Premi di nuovo Gestisci quando hai finito.",
+    "hint": "Aggiungi un reparto, cambiane il nome o chiudilo. I reparti con schermate in produzione tengono il loro nome e restano aperti. Premi di nuovo Gestisci quando hai finito.",
     "listLabel": "I reparti della fabbrica",
     "nameOf": "Il nome del reparto {name}",
-    "onFloor": "schermi in reparto",
+    "onFloor": "in produzione",
     "closed": "chiuso",
     "closeOf": "Chiudi il reparto {name}",
     "closeHint": "Esce dalla lista. I percorsi che lo usano lo tengono. Non si cancella nulla.",

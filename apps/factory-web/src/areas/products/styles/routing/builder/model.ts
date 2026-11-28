@@ -295,7 +295,8 @@ export function stepRowsOf(state: BuilderState, looks: readonly DeptLook[]): Ste
 // ---- a refusal in words -----------------------------------------------------------------------------------------------------------
 
 /** The refusal codes the server sends that this window says in its own words (the server's English is for logs). */
-export const REFUSAL_CODES = ['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'FROZEN', 'PRINTED', 'NOT_DRAFT'] as const
+/** The departments' (pd1, `refusal/<code>`: D/production/departments/rules.ts) and the routes' refusals. */
+export const REFUSAL_CODES = ['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'CLOSED', 'CODE_TAKEN', 'FROZEN', 'PRINTED', 'NOT_DRAFT'] as const
 const RULE_CODES: readonly string[] = ['TOO_FEW', 'LAST_NOT_PACKING', 'DEPARTMENT_CLOSED']
 
 /** Every code a refusal carries: its own, each issue's, the last part of each issue's path (`name/NAME_TAKEN`). */

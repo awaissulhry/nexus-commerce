@@ -8,8 +8,11 @@ import { writeKey } from '../route/api'
  * owb-pd6 step 6.3 (S4; design plan § 5x; brief owb-pd-server.md pd1 step 1.3) — Manage, inside the route builder: add a department
  * (a name only; the server gives the number, the tone, the icon and its ONE default library operation), rename it, close it (it leaves
  * the list, the routes keep it, nothing is deleted) or open it again. Right: production.departments.manage. Each answers
- * `{ department }` — the same row as `GET /production/departments` (lib/department's own zod). Refusals: NAME_EMPTY 400 · NAME_TAKEN
- * 409 · FLOOR_FIXED 409 · a stale version 409 (builder/model.ts refusalOf says them in words).
+ * `{ department }` — the same row as `GET /production/departments` (lib/department's own zod), with its `version` (pd1, PR #2054: sent
+ * back on a rename, a close or an open). The route parameter is the department's id (`:departmentId`). Closing archives its default
+ * `DEPT-n` operation, opening makes it active again. Refusals (code at `refusal/<code>`): NAME_EMPTY 400 · NAME_TAKEN 409 · FLOOR_FIXED
+ * 409 (a floor department keeps its name and short name) · CLOSED 409 (a closed one is opened before a rename) · CODE_TAKEN 409 · a
+ * stale version 409 — builder/model.ts refusalOf says them in words.
  */
 
 const oneDepartment = z.object({ department: departmentsAnswerSchema.shape.departments.element })
