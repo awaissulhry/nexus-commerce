@@ -1,4 +1,4 @@
-import { defineManifest } from '../../../core/manifest'
+import { defineManifest, SIGNED_IN } from '../../../core/manifest'
 
 /**
  * The points of measure and the measurement spec's routes (B-W2b-224; design products.sizes "Points of measure",
@@ -16,6 +16,10 @@ const specRelease = { audiences: ['office'], permission: 'product.bom.release', 
 // — the route asks the read right (every holder of the manage right holds it) and the handler the write (modules/product/drafts).
 const specDraft = specView
 const libraryHowTo = libraryView
+// owb-pd4s s.2 (S4 products; design § 5q "Who": Sales reads the Sizes tab): the size table (and its points' how-to words) reads with
+// product.bom.view OR product.styles.view over the style — one right per manifest entry, so the route asks a signed-in office
+// person and the handler the right (../bom/store readRevisionForSizes: neither held 403, the style outside both 404). No money.
+const specRead = { audiences: ['office'], permission: SIGNED_IN, scope: 'record' } as const
 
 export const manifest = defineManifest({
   'GET /product/points-of-measure': libraryView,
@@ -37,7 +41,7 @@ export const manifest = defineManifest({
   'PUT /product/measurement-templates/:templateId/points': libraryManage,
   'POST /product/measurement-templates/:templateId/archive': libraryManage,
   'POST /product/measurement-templates/:templateId/restore': libraryManage,
-  'GET /product/styles/:styleId/revisions/:revisionId/measurement-spec': specView,
+  'GET /product/styles/:styleId/revisions/:revisionId/measurement-spec': specRead, // owb-pd4s s.2
   'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec': specDraft,
   'PATCH /product/styles/:styleId/revisions/:revisionId/measurement-spec': specDraft,
   'PUT /product/styles/:styleId/revisions/:revisionId/measurement-spec/cells': specDraft,
