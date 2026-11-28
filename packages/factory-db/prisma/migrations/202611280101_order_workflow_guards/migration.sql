@@ -723,3 +723,140 @@ $$;
 CREATE TRIGGER "BasketRouteEdit_check" AFTER INSERT ON "BasketRouteEdit"
   FOR EACH ROW EXECUTE FUNCTION "factory_basket_route_edit_check"();
 
+-- =====================================================================================================================
+-- FloorLateWarning (baskets.prisma; owb G6; PL-schema § 5A row 12): "this will be late" from the floor, answered by the office.
+--   INSERT    OPEN, unanswered, at version 1; late by 1, 2, 3 or 5 days; its basket, when it names one, a basket of its work
+--             order and site.
+--   UPDATE    the office answers once: OPEN → KEPT (the date holds) or CHANGED (the date moves), with when and who; nothing
+--             else changes; an answered warning never changes again.
+--   DELETE    refused. TRUNCATE refused.
+CREATE FUNCTION "factory_floor_late_warning_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  answer CONSTANT text[] := ARRAY['state', 'answeredAt', 'answeredById', 'version', 'updatedAt'];
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'production: late warning % is answered, never deleted', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."state"::text <> 'OPEN' OR NEW."answeredAt" IS NOT NULL OR NEW."answeredById" IS NOT NULL OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'production: a new late warning is OPEN, unanswered, at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."days" NOT IN (1, 2, 3, 5) THEN
+      RAISE EXCEPTION 'production: late warning % says late by 1, 2, 3 or 5 days', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."bundleId" IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM "Bundle" b WHERE b."tenantId" = NEW."tenantId" AND b."id" = NEW."bundleId" AND b."siteId" = NEW."siteId" AND b."workOrderId" = NEW."workOrderId") THEN
+      RAISE EXCEPTION 'production: late warning % names a basket of its own work order', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+  END IF;
+  IF NEW IS NOT DISTINCT FROM OLD THEN
+    RETURN NULL;
+  END IF;
+  IF OLD."state"::text <> 'OPEN' THEN
+    RAISE EXCEPTION 'production: late warning % was answered (%); it never changes again', OLD."id", OLD."state"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."state"::text NOT IN ('KEPT', 'CHANGED') OR NEW."answeredAt" IS NULL OR NEW."answeredById" IS NULL
+     OR (NEW."version" <> OLD."version" + 1 AND NEW."version" <> OLD."version")
+     OR (to_jsonb(NEW) - answer - 'tenantId') IS DISTINCT FROM (to_jsonb(OLD) - answer - 'tenantId') THEN
+    RAISE EXCEPTION 'production: late warning % is answered once, OPEN → KEPT or CHANGED, with when and who; nothing else of it changes', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "FloorLateWarning_guard" AFTER INSERT OR UPDATE OR DELETE ON "FloorLateWarning"
+  FOR EACH ROW EXECUTE FUNCTION "factory_floor_late_warning_guard"();
+CREATE TRIGGER "FloorLateWarning_no_truncate" BEFORE TRUNCATE ON "FloorLateWarning"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
+-- =====================================================================================================================
+-- PaymentNotice (portal-sales.prisma; owb G7; PL-schema § 5A row 4): the customer's "I paid" — a notice, not a payment.
+--   INSERT    OPEN, unanswered, at version 1 (a portal session for its own party, portal.payments.notify); an amount above 0
+--             in an ISO currency; what it pays, when it says, of its own order (a deposit request of the order; a step of the
+--             order's payment plan, where this session may read the plan — the partner role may not, and the reference keeps
+--             the step its customer's); the proof a file this session can open, shared with no other customer and of no other
+--             customer's record.
+--   UPDATE    the office answers once (the partner role has no update grant): OPEN → RECORDED (it recorded the payment with its
+--             own command) or DISMISSED (no such payment), with when and who; nothing else changes; an answered notice never
+--             changes again.
+--   DELETE    refused. TRUNCATE refused.
+CREATE FUNCTION "factory_payment_notice_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  answer CONSTANT text[] := ARRAY['state', 'answeredAt', 'answeredById', 'version', 'updatedAt'];
+  paid_order uuid;
+  proof record;
+  record_known boolean;
+  record_party uuid;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'portal: payment notice % is answered, never deleted', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF OLD."state"::text <> 'OPEN' THEN
+      RAISE EXCEPTION 'portal: payment notice % was answered (%); it never changes again', OLD."id", OLD."state"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."state"::text NOT IN ('RECORDED', 'DISMISSED') OR NEW."answeredAt" IS NULL OR NEW."answeredById" IS NULL
+       OR (NEW."version" <> OLD."version" + 1 AND NEW."version" <> OLD."version")
+       OR (to_jsonb(NEW) - answer - 'tenantId') IS DISTINCT FROM (to_jsonb(OLD) - answer - 'tenantId') THEN
+      RAISE EXCEPTION 'portal: payment notice % is answered once, OPEN → RECORDED or DISMISSED, with when and who; nothing else of it changes', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+  END IF;
+  IF NEW."state"::text <> 'OPEN' OR NEW."answeredAt" IS NOT NULL OR NEW."answeredById" IS NOT NULL OR NEW."version" <> 1 THEN
+    RAISE EXCEPTION 'portal: a new payment notice is OPEN, unanswered, at version 1'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."amount" <= 0 OR NEW."currency" !~ '^[A-Z]{3}$' THEN
+    RAISE EXCEPTION 'portal: payment notice % names an amount above 0 in an ISO currency', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."depositRequestId" IS NOT NULL THEN
+    SELECT d."orderId" INTO paid_order FROM "DepositRequest" d WHERE d."tenantId" = NEW."tenantId" AND d."id" = NEW."depositRequestId";
+    IF FOUND AND paid_order IS DISTINCT FROM NEW."salesOrderId" THEN
+      RAISE EXCEPTION 'portal: payment notice % pays a deposit request of its own order', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW."milestoneId" IS NOT NULL AND has_table_privilege('"SalesOrderMilestone"', 'SELECT') THEN
+    SELECT m."orderId" INTO paid_order FROM "SalesOrderMilestone" m WHERE m."tenantId" = NEW."tenantId" AND m."id" = NEW."milestoneId";
+    IF FOUND AND paid_order <> NEW."salesOrderId" THEN
+      RAISE EXCEPTION 'portal: payment notice % pays a step of its own order''s payment plan', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW."fileId" IS NOT NULL THEN
+    SELECT f."partyId" AS party, f."recordType" AS record_type, f."recordId" AS record INTO proof
+      FROM "StoredFile" f WHERE f."tenantId" = NEW."tenantId" AND f."id" = NEW."fileId";
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'portal: the proof of payment notice % is a file this person can open', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT r.known, r.party INTO record_known, record_party FROM "factory_file_record_party"(NEW."tenantId", proof.record_type, proof.record) r;
+    IF (proof.party IS NOT NULL AND proof.party <> NEW."partyId")
+       OR (record_known AND record_party IS NOT NULL AND record_party <> NEW."partyId") THEN
+      RAISE EXCEPTION 'portal: the proof of payment notice % is a file of its own customer, never another customer''s', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "PaymentNotice_guard" AFTER INSERT OR UPDATE OR DELETE ON "PaymentNotice"
+  FOR EACH ROW EXECUTE FUNCTION "factory_payment_notice_guard"();
+CREATE TRIGGER "PaymentNotice_no_truncate" BEFORE TRUNCATE ON "PaymentNotice"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
