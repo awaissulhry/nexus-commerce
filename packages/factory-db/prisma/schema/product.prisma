@@ -1079,6 +1079,8 @@ model Department {
   // Its library operations (one of them its default: the partial unique of G3) and the route steps made in it.
   operations        Operation[]
   routingOperations RoutingOperation[]
+  // owb-fl0 floor-auth.prisma (schema wave "floor baskets 2"): the phone sessions that picked it ("where am I").
+  floorSessions     FloorSession[]     @relation("FloorSessionDepartment")
 
   @@unique([tenantId, number])
   // The target of the operations' and route steps' tenant-safe references.
