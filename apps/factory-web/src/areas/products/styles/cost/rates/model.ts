@@ -36,7 +36,7 @@ const best = (rates: readonly RateRow[]): RateRow | null => rates.find((rate) =>
 export function deptRatesOf(looks: readonly DeptLook[], rates: readonly RateRow[]): DeptRate[] {
   return looks
     .filter((look) => !look.closed)
-    .map((look) => {
+    .map((look): DeptRate => {
       const own = best(rates.filter((rate) => inForce(rate) && rate.departmentId === look.id))
       const kindRate = look.kind ? best(rates.filter((rate) => inForce(rate) && !rate.departmentId && rate.workCentreKind === look.kind)) : null
       return { departmentId: look.id, dept: look.dept, kind: look.kind, own, kindRate, from: own ? 'DEPARTMENT' : kindRate ? 'KIND' : 'NONE' }

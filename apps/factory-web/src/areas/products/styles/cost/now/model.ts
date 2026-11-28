@@ -64,7 +64,7 @@ export interface CostOfOne {
 export function costOfOne(view: Pick<ComponentsView, 'split'>, size: string): CostOfOne | null {
   const cell = view.split.find((entry) => entry.size === size)
   if (!cell || cell.knownTotal === undefined) return null
-  const sums = new Map<CostPart, number>(COST_PARTS.map((part) => [part, 0]))
+  const sums = new Map<CostPart, number>(COST_PARTS.map((part): [CostPart, number] => [part, 0]))
   for (const category of cell.categories) sums.set(partOf(category.category), (sums.get(partOf(category.category)) ?? 0) + num(category.amount))
   const known = COST_PARTS.reduce((sum, part) => sum + (sums.get(part) ?? 0), 0)
   return {
