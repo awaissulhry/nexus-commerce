@@ -150,6 +150,8 @@ model Employee {
   // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): the same, by the person: marks set, suggestions with a name.
   basketFlags           BasketFlag[]       @relation("BasketFlagEmployee")
   floorSuggestions      FloorSuggestion[]  @relation("FloorSuggestionEmployee")
+  // owb-ssw (S3 schema wave "structures + units"): the units whose leader this person stands in for.
+  standInForTeams       Team[]             @relation("TeamStandIn")
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])
@@ -211,6 +213,41 @@ model Team {
   /// null: the chip's own pick.
   pictureColour String?
   // ── end owb-b1
+  // ── owb-ssw (order workflow build, S3 schema wave "structures + units"; _owb-ss-common L9; design order-workflow-2026-11-25
+  // § 5za-5zd "Teams own the work", "Factory structure"): the team as a UNIT of the factory's structure — the unit it sits
+  // under, the owner's own word for it, its profile (what it does, the most baskets it takes, whether it takes orders and new
+  // orders now, who stands in for its leader, the customers it likes to work for) and the unit it was merged into. Set by the
+  // office (people.structure.manage, apps/factory-api people/units); read by the office and by the floor (the team chip). None
+  // of it describes one person: the stand-in is named, never described. Closing a unit is today's archive (status). Checked by
+  // …_order_structures_guards (Team_unit_check).
+  /// The unit it sits under: a team of the same company (the foreign key), never itself nor a unit under it (no cycle, at most
+  /// 50 deep: Team_unit_check), open when it is set; null: a unit at the top.
+  parentTeamId      String?   @db.Uuid
+  /// The owner's own word for what this unit is ("Line", "Department", "Shift"), 1 to 40 trimmed characters; null: a team.
+  kindWord          String?
+  /// Orders may be given to it (the order teams board lists it). The default is the database's (dbgenerated, as
+  /// ShipmentWarehouseLeg.forwardedWithoutLabel's), so a Prisma insert leaves the column out; a cast from text, so Prisma
+  /// reads it back as written.
+  takesOrders       Boolean   @default(dbgenerated("('true'::text)::boolean"))
+  /// What it does, in the owner's words, 1 to 500 characters, not blank; null: nothing said.
+  about             String?
+  /// The most baskets it takes at once, 1 or more (the board marks it "over its limit" past it); null: no limit.
+  maxBaskets        Int?
+  /// It takes new orders now (false: "takes no new order" on the board, and a suggestion never names it). The default is the
+  /// database's, as takesOrders'.
+  takesNewOrders    Boolean   @default(dbgenerated("('true'::text)::boolean"))
+  /// Who stands in for its leader: a person of the same company (the foreign key); null: nobody.
+  standInEmployeeId String?   @db.Uuid
+  /// The last day the stand-in stands in, only beside the stand-in (Team_unit_check); null: until said otherwise.
+  standInUntil      DateTime? @db.Date
+  /// The customers it works for: a wish, not a wall (any order may still be given to it). Parties of the tenant of no other
+  /// company, each once (Team_unit_check). The default is the DATABASE's only (dbgenerated, as OrderTeam.bundleIds): with
+  /// `@default([])` Prisma would name the column in every insert.
+  worksForPartyIds  String[]  @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
+  /// The unit it was merged into: a team of the same company (the foreign key), never itself, open when it is set; set with
+  /// the archive of this one (a merged unit is ARCHIVED: Team_unit_check).
+  mergedIntoId      String?   @db.Uuid
+  // ── end owb-ssw
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -231,10 +268,22 @@ model Team {
   fileAsks             FileAsk[]            @relation("FileAskTeam")
   // owb-b1 brand-production.prisma (order workflow build, schema wave "order workflow 1/1"): the orders whose work it owns.
   orderTeams           OrderTeam[]          @relation("OrderTeamTeam")
+  // owb-ssw (S3 schema wave "structures + units"): the unit above it and the units under it; the unit it was merged into and
+  // the units merged into it (each a team of the same company); the stand-in for its leader (a person of the same company).
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  parent               Team?                @relation("TeamParent", fields: [tenantId, companyId, parentTeamId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  units                Team[]               @relation("TeamParent")
+  mergedInto           Team?                @relation("TeamMergedInto", fields: [tenantId, companyId, mergedIntoId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  mergedFrom           Team[]               @relation("TeamMergedInto")
+  standIn              Employee?            @relation("TeamStandIn", fields: [tenantId, companyId, standInEmployeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, siteId, code])
   // The target of the members' and loans' tenant- and site-safe references.
   @@unique([tenantId, siteId, id])
+  // owb-ssw: the target of the unit tree's company-safe references (parent, merged into).
+  @@unique([tenantId, companyId, id])
+  // owb-ssw: the units under a unit (the structure page, the cycle walk).
+  @@index([tenantId, parentTeamId])
 }
 
 /// How a team's chip pictures it (owb-b1; Owner decision K): its letters, or an icon. No photo.
