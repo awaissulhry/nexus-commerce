@@ -1,0 +1,26 @@
+{
+  "chain": {
+    "pick": "Chain",
+    "none": "Pick a chain",
+    "loading": "Reading the chain…",
+    "retry": "Try again",
+    "noLines": "No chain yet.",
+    "noLinesHint": "A chain is a production line with its work orders. It shows here when work orders are on a line.",
+    "noLots": "This chain has no models and sizes yet.",
+    "caption": "{name}: every model and size, at every step",
+    "lot": "Model · size",
+    "done": "{count} done",
+    "waiting_one": "{count} waits",
+    "waiting_other": "{count} wait",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "slowWord_one": "Slowest · {count} waits",
+    "slowWord_other": "Slowest · {count} wait",
+    "slowest_one": "Slowest step: {no} {step} · {count} piece waits",
+    "slowest_other": "Slowest step: {no} {step} · {count} pieces wait"
+  },
+  "error": {
+    "read": "The chain could not be read now.",
+    "forbidden": "You may not see the chains."
+  }
+}
