@@ -8,7 +8,7 @@ import type { OrderLogAnswerView } from '@nexus/factory-domain/sales/order-log/c
 import type { FaceGate, LogAudience, LogDoor } from '@nexus/factory-domain/sales/order-log/faces'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { workerGatesFor } from '../../people/privacy/worker-gate'
-import { assertMay, officeContextOf } from './access'
+import { assertSees, officeContextOf } from './access' // owb-of1a: the designer reads the log of an order it is on (R20)
 
 /**
  * The ONE order log (owb- order workflow, b3.1; research R-base D; the Shapes of owb-b23.md): the AuditLog rows of ONE order's
@@ -153,16 +153,20 @@ async function officeAnswer(db: Reader, records: LogRecords, query: { readonly c
 /** GET /sales/orders/:orderId/log (see the file's head). */
 export async function officeOrderLog(caller: CommandCaller, orderId: string, query: { readonly cursor?: string | undefined; readonly limit: number }): Promise<OrderLogAnswerView> {
   const context = officeContextOf(caller)
-  const order = isUuid(orderId) ? await caller.withClient((client) => client.salesOrder.findUnique({ where: { id: orderId }, select: { companyId: true, partyId: true } })) : null
-  assertMay(context, ORDERS_VIEW, order, 'Sales order')
-  return caller.withClient(async (client) => officeAnswer(client, await orderRecordsOf(client, orderId), query))
+  return caller.withClient(async (client) => {
+    const order = isUuid(orderId) ? await client.salesOrder.findUnique({ where: { id: orderId }, select: { companyId: true, partyId: true } }) : null
+    await assertSees(client, context, ORDERS_VIEW, order, { salesOrderId: orderId }, 'Sales order')
+    return officeAnswer(client, await orderRecordsOf(client, orderId), query)
+  })
 }
 
 /** GET /sales/order-requests/:requestId/log (see the file's head). */
 export async function officeRequestLog(caller: CommandCaller, requestId: string, query: { readonly cursor?: string | undefined; readonly limit: number }): Promise<OrderLogAnswerView> {
   const context = officeContextOf(caller)
-  const request = isUuid(requestId) ? await caller.withClient((client) => client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { companyId: true, partyId: true } })) : null
-  if (!request) throw new NotFoundError('Order request not found.')
-  assertMay(context, ORDERS_VIEW, request, 'Order request')
-  return caller.withClient(async (client) => officeAnswer(client, await requestRecordsOf(client, requestId), query))
+  return caller.withClient(async (client) => {
+    const request = isUuid(requestId) ? await client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { companyId: true, partyId: true } }) : null
+    if (!request) throw new NotFoundError('Order request not found.')
+    await assertSees(client, context, ORDERS_VIEW, request, { requestId }, 'Order request')
+    return officeAnswer(client, await requestRecordsOf(client, requestId), query)
+  })
 }

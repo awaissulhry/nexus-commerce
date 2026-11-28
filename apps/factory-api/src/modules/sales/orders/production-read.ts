@@ -1,5 +1,5 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
@@ -23,7 +23,7 @@ import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/pe
 import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import { OPEN_NCR_STAGES } from '@nexus/factory-domain/quality/ncr/rules'
 import { PRIORITY_WORDS, type SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules'
-import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_VIEW, ORDERS_VIEW_OWN } from '@nexus/factory-domain/sales/orders/permissions'
 import { PROGRESS_REFRESH_SECONDS } from '@nexus/factory-domain/sales/portal-orders/progress'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -44,7 +44,7 @@ import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { ncrsOfOrderWhere } from '../../quality/ncr/reads'
 import { ncrListWhere } from '../../quality/wall'
 import { officeProgressFor, type CellCount } from '../portal-orders/progress'
-import { officeContextOf } from './access'
+import { mayOn, officeContextOf } from './access'
 import { officeOrder } from './moves'
 import { PRODUCTION_PARTS, type ProductionPart, type WithheldKey } from './production-contract'
 import type { PlaceKind } from './production-contract' // B-OO-008
@@ -899,7 +899,8 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
   const world = { actor: actorOf(context), actorId: context.actorId, now }
   // Time & action's own world of this one order, under orders.view (the Sales template holds no planning.view). B-OO-010: each gate's
   // actions are readWorld's for THIS reader (planning.milestones.manage / .override over the order, and the gate's own refusals).
-  const read = await readWorld(db, world, { orderIds: [order.id] }, { permission: ORDERS_VIEW })
+  // owb-of1a (R20): a designer who reached the order through orders.view.own (on it: officeOrder checked) reads it under that right.
+  const read = await readWorld(db, world, { orderIds: [order.id] }, { permission: mayOn(context, ORDERS_VIEW, order) ? ORDERS_VIEW : ORDERS_VIEW_OWN })
   const view = read.orders.find((entry) => entry.id === order.id)
   const own = (await load.workOrders()).filter((workOrder) => workOrder.partyId === order.partyId).map((workOrder) => workOrder.id)
   const planned = (await readPlanned(db, new Map([[order.id, own]]))).get(order.id) ?? { cutStart: null, sewStart: null, finish: null }
@@ -1079,11 +1080,19 @@ export async function readOrderProduction(caller: CommandCaller, context: Office
   }
 }
 
+// owb-of1a (plan.md § 5 D R20, design § 5f "Allow production"): who sees the order only because it is on it (orders.view.own)
+// reads its production only with workorders.view over it — the base's extra role `extra_allow_production`.
+export const PRODUCTION_NEEDS_ALLOW = Object.freeze({
+  en: 'The production of this order needs "Allow production": ask the owner or an administrator.',
+  it: 'La produzione di questo ordine richiede «Consenti produzione»: chiedi al titolare o a un amministratore.',
+})
+
 /** GET /sales/orders/:orderId/production (B-SA-031, B-SA-032). */
 export async function orderProduction(caller: CommandCaller, orderId: string, query: { readonly parts?: string | undefined }) {
   const parts = partsOf(query.parts)
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId)
+  if (!mayOn(context, ORDERS_VIEW, order) && !mayOn(context, WORKORDERS_VIEW, order)) throw new ForbiddenError(PRODUCTION_NEEDS_ALLOW.en) // owb-of1a
   return readOrderProduction(caller, context, order, parts, serverClock.now())
 }
 

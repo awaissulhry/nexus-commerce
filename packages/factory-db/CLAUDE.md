@@ -688,7 +688,24 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    OrderTeam guard and its partial uniques (G4), OrderPrint, BasketMove and BasketRouteEdit append-only with their insert checks
    (G5), FloorLateWarning and PaymentNotice answered once (G6, G7), the own columns' shapes (G8), the warehouse leg and the
    trigger `Shipment_warehouse_leg_delivered` (no DELIVERED while a leg waits to be sent on; no shipment function redefined;
-   G9), the People-by-customer pool PartyOfficePerson (G11)):
+   G9), the People-by-customer pool PartyOfficePerson (G11)),
+   `…_production_floor_baskets_2_guards` (order workflow build owb-fl0, schema wave 'floor baskets 2', between its generated
+   schema and policy folders; no earlier function redefined: it verified `factory_help_call_guard` (the spot is in none of its
+   frozen columns) and the checklist result's append-only rule): the NEW `BasketFlag` ("Do this first": born open at version 1
+   on a basket of its work order, cleared once, then frozen, never deleted; one open mark per basket and kind, the partial
+   unique `BasketFlag_one_open`), `FloorSuggestion` append-only (words of 1 to 1000; without a name no employee and no device;
+   the voice note an AUDIO file this session can open), `OperationChecklistResult.fileId` (the quality step's photo: an image
+   this session can open, never a fiscal archive, a voice note, body data or a priced file; of the work order's company), and
+   `HelpCall.spot` (the CHECK `HelpCall_spot_range` 0-8 and its own trigger `HelpCall_spot`: changed only while the call is
+   open)),
+   `…_order_structures_guards` (order workflow build owb-ssw, S3 schema wave 'structures + units', between its generated schema
+   and policy folders; it redefines no earlier function: NEW `Team_unit_check` (a unit's word, profile and stand-in day; never
+   under or merged into itself, a merged unit archived, no cycle and under 50 deep), the OrderStructure and OrderStructureRule
+   guards (closed, never deleted; teams and people of the company; an open rule gives an open structure; the partial uniques
+   `OrderStructureRule_open_same_orders(_any_kind)`: two open rules never fit exactly the same orders), the order's structure by
+   hand (`OrderStructureOverride_one_open`, only ended, normal way exactly without a structure), OrderLineStructureKept
+   append-only with its insert check, and ScanCodePlacement (a line of its own order, an image or PDF of its own customer,
+   page, place and a side of 20 mm or more)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

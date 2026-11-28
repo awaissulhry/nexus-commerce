@@ -9,7 +9,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { serverClock } from '../../../core/time'
 import { actorOf } from '../../../core/context' // B-SA-034
 import { lockOrderLines } from '../../production/work-orders/store'
-import { assertMay, mayOn, officeContextOf } from './access'
+import { assertSees, mayOn, officeContextOf } from './access' // owb-of1a: assertSees (R20)
 import { impactView, readCancelFacts } from './impact'
 import { cancelScheduleInCommand } from './schedule'
 import { orderSettlement } from './settlement'
@@ -59,12 +59,17 @@ import { reasonOr } from '@nexus/factory-domain/sales/amendments/reasons' // B-O
 
 const today = (tools: Pick<CommandTools, 'now'>): BusinessDate => businessDate(tools.now)
 
-/** The order the office may see (else 404) and act on with `permission` (else 403). */
+/**
+ * The order the office may see (else 404) and act on with `permission` (else 403). owb-of1a (R20): "may see" is orders.view, or
+ * orders.view.own while the caller is on the order (access.ts assertSees → on-the-order.ts, the ONE rule).
+ */
 export async function officeOrder(caller: CommandCaller, orderId: string, permission: Permission = ORDERS_VIEW): Promise<OrderRow> {
   const context = officeContextOf(caller)
-  const row = await caller.withClient((client) => readOrder(client, orderId))
-  assertMay(context, permission, row)
-  return row!
+  return caller.withClient(async (client) => {
+    const row = await readOrder(client, orderId)
+    await assertSees(client, context, permission, row, { salesOrderId: row?.id ?? null })
+    return row!
+  })
 }
 
 /**
