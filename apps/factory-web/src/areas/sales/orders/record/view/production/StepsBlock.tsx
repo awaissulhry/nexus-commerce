@@ -23,7 +23,7 @@ import { planningGateHref } from '../../overview/dates'
 import { nowStepOf, STEP_ACT_ACTION, stepActsOf, stepsChipOf, stepsOf, type StepAct, type StepRow, type StepStatus, type WhoActs } from '../../production/steps'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../LineMenu'
-import { PartFailed, PartReading, Quiet } from './Kit'
+import { PartFailed, PartReading, Quiet } from '../../../../../../lib/record-sections/Kit'
 
 /**
  * F-PT-202 (order PRODUCTION tab, 10-design §5 Block B; S3) — "Steps to shipping": the deposit first (its door is Money), the order's

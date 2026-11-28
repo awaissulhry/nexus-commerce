@@ -20,7 +20,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { DiscussDoor } from '../Discuss'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { LineMenuButton } from '../LineMenu'
-import { Quiet, Section } from './Kit'
+import { Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 import { PromiseHistory } from './PromiseHistory'
 import { StepsBlock } from './StepsBlock'
 

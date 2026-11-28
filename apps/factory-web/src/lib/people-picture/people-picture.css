@@ -1,0 +1,104 @@
+/*
+ * owb-b5 (w5.4; design plan § 5zb; Owner decision K) — a person's or a team's picture: two letters or one icon on one of the 10 DS grid
+ * tones (`--nds-grid-tone-<tone>-{bg,fg,rule}`: AA in light and dark, from the tokens), a person round, a team a rounded square; the
+ * team chip = the picture + the name. Layout and tokens only (no raw colour).
+ */
+.fw-ppic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--nds-space-32);
+  height: var(--nds-space-32);
+  border-radius: var(--nds-radius-full);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  background: var(--nds-grid-tone-slate-bg);
+  color: var(--nds-grid-tone-slate-fg);
+  box-shadow: inset 0 0 0 1px var(--nds-grid-tone-slate-rule);
+  user-select: none;
+}
+.fw-ppic.is-team {
+  border-radius: var(--nds-radius-lg);
+}
+.fw-ppic.is-sm {
+  width: var(--nds-space-24);
+  height: var(--nds-space-24);
+  font-size: var(--nds-font-size-micro);
+}
+.fw-ppic.is-lg {
+  width: var(--nds-space-48);
+  height: var(--nds-space-48);
+  font-size: var(--nds-font-size-md);
+}
+.fw-ppic.is-lg.is-team {
+  border-radius: var(--nds-radius-xl);
+}
+.fw-ppic-l {
+  white-space: nowrap;
+}
+
+/* The 10 tones. */
+.fw-ppic.t-slate { background: var(--nds-grid-tone-slate-bg); color: var(--nds-grid-tone-slate-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-slate-rule); }
+.fw-ppic.t-purple { background: var(--nds-grid-tone-purple-bg); color: var(--nds-grid-tone-purple-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-purple-rule); }
+.fw-ppic.t-emerald { background: var(--nds-grid-tone-emerald-bg); color: var(--nds-grid-tone-emerald-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-emerald-rule); }
+.fw-ppic.t-pink { background: var(--nds-grid-tone-pink-bg); color: var(--nds-grid-tone-pink-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-pink-rule); }
+.fw-ppic.t-orange { background: var(--nds-grid-tone-orange-bg); color: var(--nds-grid-tone-orange-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-orange-rule); }
+.fw-ppic.t-blue { background: var(--nds-grid-tone-blue-bg); color: var(--nds-grid-tone-blue-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-blue-rule); }
+.fw-ppic.t-yellow { background: var(--nds-grid-tone-yellow-bg); color: var(--nds-grid-tone-yellow-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-yellow-rule); }
+.fw-ppic.t-red { background: var(--nds-grid-tone-red-bg); color: var(--nds-grid-tone-red-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-red-rule); }
+.fw-ppic.t-violet { background: var(--nds-grid-tone-violet-bg); color: var(--nds-grid-tone-violet-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-violet-rule); }
+.fw-ppic.t-cyan { background: var(--nds-grid-tone-cyan-bg); color: var(--nds-grid-tone-cyan-fg); box-shadow: inset 0 0 0 1px var(--nds-grid-tone-cyan-rule); }
+
+/* The team chip: the picture and the name on one line; a long name ends in "…" with the whole name on hover. */
+.fw-ppic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--nds-space-2) var(--nds-space-8) var(--nds-space-2) var(--nds-space-2);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.fw-ppic-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The lab (design index only). */
+.fw-ppic-lab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-ppic-lab-h {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+}
+.fw-ppic-lab-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-ppic-lab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-ppic-lab-name {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}

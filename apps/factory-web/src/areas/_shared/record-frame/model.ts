@@ -278,3 +278,21 @@ export function pendingAskOf(asks: FrameAsks | null | undefined): { readonly ask
   return null
 }
 // ---- end F-OP-212
+
+// ---- owb-b5 (w5.2; design plan § 5i): the design band's slots ---------------------------------------------------------------------
+/**
+ * The design band's three slots, in the order the band draws them: the picture before the title (the DetailHeader's leading slot);
+ * Chat in the frame's Thread button's place (one chat door in a band); People after it. The primary step keeps its place first among
+ * the band's tools, as today. Owner after the base: S2 (of5 fills them).
+ */
+export const BAND_SLOTS = ['picture', 'chat', 'people'] as const
+export type BandSlot = (typeof BAND_SLOTS)[number]
+
+/** The slots a band fills: one that is absent, null, a boolean or empty words draws nothing (the band is today's, node for node). */
+export function bandSlotsOf(band: { readonly [Slot in BandSlot]?: unknown }): readonly BandSlot[] {
+  return BAND_SLOTS.filter((slot) => {
+    const part = band[slot]
+    return part !== undefined && part !== null && typeof part !== 'boolean' && part !== ''
+  })
+}
+// ---- end owb-b5

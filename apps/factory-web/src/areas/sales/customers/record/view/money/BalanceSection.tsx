@@ -11,7 +11,7 @@ import { keepNumbers, sentenceOf } from '../../../../orders/record/money/view/sa
 import { word } from '../../../../orders/record/money/word'
 import { copyLinkTo } from '../../../../orders/record/shipments/view/hrefs'
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
-import { PartFailed, PartReading, Quiet, Section } from '../../../../orders/record/view/production/Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 import type { BalanceModel, BalanceTile, Need } from '../../money/balance'
 import { kitId } from '../../money/sections'
 import type { CustomerSay } from '../../money/say'

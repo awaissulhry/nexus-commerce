@@ -7,7 +7,7 @@ import { Fold } from '../../../../orders/record/money/view/parts'
 import { BalancedFacts } from './CommercialSection' // ct-fx3 G-W06: the facts balanced by their count
 import { RESULT_TONE } from '../../../../../parties/_shared/model' // the record's own tones of a VIES result
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
-import { PartFailed, Quiet, Section } from '../../../../orders/record/view/production/Kit'
+import { PartFailed, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 import type { DatedIdentityRow, IdentityFact, ViesRowModel } from '../../terms/identity'
 import { kitProblemOf, said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'

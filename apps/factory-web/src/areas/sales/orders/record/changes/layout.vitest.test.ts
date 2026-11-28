@@ -30,10 +30,12 @@ describe('F-OC-101: four sections, top to bottom, each its own file and address'
 
   it('the Production kit is reused in place (L6): Waiting draws with its Section, reading and failed parts; no copy of the kit', () => {
     const waiting = source('./view/WaitingSection.tsx')
-    expect(waiting).toContain("from '../../view/production/Kit'")
+    expect(waiting).toContain("from '../../../../../../lib/record-sections/Kit'") // owb-b5 (w5.1): the kit moved to lib, unchanged
     expect(waiting).toContain('<PartReading rows={3} height={44} />')
     expect(waiting).toContain('<PartFailed part={title} problem={waiting.problem} onRetry={() => actions?.onRetryProduction?.()} />')
-    expect(source('../view/production/Kit.tsx')).toContain('id: SectionId | ChangesSectionId /* F-OC-101 */')
+    // owb-b5 (w5.1): the kit takes the tab's own address (a shared part names no office type); no copy is left at the old place.
+    expect(source('../../../../../lib/record-sections/Kit.tsx')).toContain('export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: string /* owb-b5 (w5.1)')
+    expect(() => source('../view/production/Kit.tsx')).toThrow()
   })
 
   it('the stylesheet: the groups are their own size container, rows by the room they have (never @media), tokens only', () => {

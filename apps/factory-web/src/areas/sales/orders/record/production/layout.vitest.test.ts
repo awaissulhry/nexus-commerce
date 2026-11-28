@@ -28,7 +28,8 @@ describe('F-PT-101: the room → S / M / L at the widths the tab really gets', (
   })
 
   it('the stylesheet holds the same numbers: the tab root is the size container, queries on it (never @media)', () => {
-    const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8')
+    // owb-b5 (w5.1): the tab draws with two sheets — its own and the section kit's (the root container and the pairs moved with the kit).
+    const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8') + readFileSync(new URL('../../../../../lib/record-sections/record-sections.css', import.meta.url), 'utf8')
     expect(css).toMatch(/container: pt \/ inline-size/)
     expect(css).toContain(`@container pt (min-width: ${ROOM_M}px)`)
     expect(css).toContain(`@container pt (min-width: ${ROOM_L}px)`)

@@ -18,7 +18,7 @@ import { readOf } from '../../overview/model'
 import { askOf, boughtOf, customerGoodsOf, isThere, materialsAnswerOf } from '../../production/materials'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../LineMenu'
-import { PartFailed, PartReading, Quiet, Section, useUnitWords } from './Kit'
+import { PartFailed, PartReading, Quiet, Section, useUnitWords } from '../../../../../../lib/record-sections/Kit'
 import { ReceiptDialog } from './ReceiptDialog' // F-PT-304
 
 const WORK_ORDERS_NS = 'production-work-orders'

@@ -12,6 +12,12 @@ import { MakeToSection } from './production/MakeToSection' // F-PT-401 / 402: ou
 import { MaterialsSection } from './production/MaterialsSection' // F-PT-303: the customer's goods and what we buy, missing first
 import './production/production.css'
 // ---- end F-PT-101
+// ---- owb-b5 (w5.5): the slots other sessions fill (each draws nothing until its owner fills its own file)
+import { FromTheFloorPart } from '../../../../production/baskets/parts/FromTheFloorPart' // S5 (owb-fl9)
+import { OrderStructurePart } from '../../../../production/order-structures/parts/OrderStructurePart' // S3 (owb-ss8)
+import { OrderTeamPart } from '../../../../production/teams/parts/OrderTeamPart' // S3 (owb-ss7)
+import { RouteOfEachLinePart } from '../../../../products/_shared/parts/RouteOfEachLinePart' // S4 (owb-pd6)
+// ---- end owb-b5
 
 /** The readiness words are the production lane's (`production-work-orders` readiness.*), reused in place. */
 const WORK_ORDERS_NS = 'production-work-orders'
@@ -29,6 +35,8 @@ export function ProductionTab({ order, model, actions }: { order: Order; model: 
       <div className="fw-pt">
         <NowSection order={order} model={model} actions={actions} />
         <WorkOrdersSection order={order} model={model} actions={actions} />
+        {/* owb-b5 (w5.5; design rec.js productionTab): From the floor, right after the baskets. */}
+        <FromTheFloorPart companyId={order.companyId} orderId={order.id} />
         <DatesSection order={order} model={model} actions={actions} />
         {/* F-PT-101 (L10): Problems & holds and What we make it to, a pair by the tab's room. */}
         <div className="fw-pt-pairs">
@@ -36,6 +44,10 @@ export function ProductionTab({ order, model, actions }: { order: Order; model: 
           <MakeToSection order={order} model={model} actions={actions} />
         </div>
         <MaterialsSection order={order} model={model} actions={actions} />
+        {/* owb-b5 (w5.5; design rec.js orderBody › production): Order structure · Team · Route of each line, after the tab's sections. */}
+        <OrderStructurePart companyId={order.companyId} orderId={order.id} />
+        <OrderTeamPart companyId={order.companyId} orderId={order.id} />
+        <RouteOfEachLinePart companyId={order.companyId} orderId={order.id} />
       </div>
     </WithMessages>
   )

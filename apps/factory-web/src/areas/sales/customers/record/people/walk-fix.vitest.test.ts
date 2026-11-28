@@ -26,7 +26,7 @@ describe('W-03 (Z26): a section door lands under the record header, and does not
     expect(frame).toContain('const top = (band?.getBoundingClientRect().height ?? 0) + 16')
     expect(frame).toContain("element.style.setProperty('--fw-rcf-top', `${Math.round(top)}px`)")
     // The section kit is used in place, never edited: its 4 px margin stays (ours wins on our ids).
-    expect(source('../../../orders/record/view/production/production.css')).toContain('.fw-pt-sec { container: sec / inline-size; min-width: 0; scroll-margin-top: var(--nds-space-4); }')
+    expect(source('../../../../../lib/record-sections/record-sections.css')).toContain('.fw-pt-sec { container: sec / inline-size; min-width: 0; scroll-margin-top: var(--nds-space-4); }') // owb-b5 (w5.1): the kit's rules moved with it
     expect(source('../view/people/PeopleTab.tsx')).toContain('<div className="fw-pt fw-ca">')
   })
 

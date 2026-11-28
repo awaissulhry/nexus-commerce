@@ -512,7 +512,7 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
     // F-PT-101: each new section is its own file; the kit gives every section its address and the room above it.
     expect(readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="work-orders"')
     expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="now"')
-    expect(readFileSync(new URL('./view/production/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>')
+    expect(readFileSync(new URL('../../../../lib/record-sections/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>') // owb-b5 (w5.1): the kit moved to lib
     // F-PT-301 / 303: Problems & holds and Materials are kit sections with their old addresses.
     expect(tab).toContain('<ProblemsSection order={order} model={model} actions={actions} />')
     expect(readFileSync(new URL('./view/production/ProblemsSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="holds"')

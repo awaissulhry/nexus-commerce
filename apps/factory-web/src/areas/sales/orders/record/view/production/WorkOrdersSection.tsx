@@ -27,7 +27,7 @@ import { decisionsOf, priorityShownOf, rowMenuShown, shownActsOf, statusKeyOf, w
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { floorToldAt } from '../../told'
 import { LineMenuButton } from '../LineMenu'
-import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 import { PriorityRushDialog, WorkOrderDetail, type DetailEntry } from './WorkOrderDetail'
 
 const WORK_ORDERS_NS = 'production-work-orders'

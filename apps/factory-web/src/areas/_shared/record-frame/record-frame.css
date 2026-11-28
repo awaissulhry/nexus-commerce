@@ -67,6 +67,18 @@
   display: inline-flex;
 }
 
+/* ── owb-b5 (w5.2; design plan § 5i): the design band's slots, drawn only when the page fills them — the picture before the title,
+   the Chat door in the Thread button's place, People after it. Each keeps its size; the title gives way. ── */
+.fw-rcf-pic,
+.fw-rcf-chat,
+.fw-rcf-people {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+}
+/* ── end owb-b5 */
+
 .fw-rcf-keys {
   display: inline-flex;
   gap: 2px;
@@ -181,6 +193,11 @@
 
   /* PL4: with the thread open full screen the band keeps the title, the pill, the Thread button and ⋯; the step waits. */
   .fw-rcf-hdr.is-thread .fw-rcf-primary {
+    display: none;
+  }
+
+  /* owb-b5 (w5.2): People waits with the step while the conversation is open full screen (the Chat door stays, as the Thread button does). */
+  .fw-rcf-hdr.is-thread .fw-rcf-people {
     display: none;
   }
 

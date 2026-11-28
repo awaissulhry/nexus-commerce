@@ -16,7 +16,7 @@ import { money } from '../../../../quotes/model'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OM-101 (L6): the Production kit, in place
 import { marginOf, type MarginView } from '../margin'
 import { Fold } from './parts' // F-CM-k1: the shared fold
 import { lineOf, pctOf, useSay, type Say } from './say'

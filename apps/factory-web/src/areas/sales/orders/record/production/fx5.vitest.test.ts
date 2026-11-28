@@ -8,7 +8,8 @@ import { sizeTableOf } from './work-detail'
 // fx5 (the look-only walk on :3300, 30-walk.md §Problems): the tab never widens the page, matches the picture, says one thing once.
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
-const css = () => source('../view/production/production.css')
+// owb-b5 (w5.1): the tab's two sheets — its own and the section kit's (fx5 #1, #5 and the link moved verbatim with the kit to lib).
+const css = () => source('../view/production/production.css') + source('../../../../../lib/record-sections/record-sections.css')
 
 describe('fx5 #1, #8, #9: the page never scrolls sideways; Discuss only for who may write', () => {
   it('#1: a tooltip the reader does not see is not in the layout; row-end doors open towards the row’s start (packages/ui untouched)', () => {

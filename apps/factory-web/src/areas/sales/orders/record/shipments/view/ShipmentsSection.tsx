@@ -7,7 +7,7 @@ import { useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, Quiet, Section } from '../../view/production/Kit' // F-OS-101: the Production kit, in place
+import { PartFailed, Quiet, Section } from '../../../../../../lib/record-sections/Kit' // F-OS-101: the Production kit, in place
 import { createDoorOf, elsewhereDoorOf } from '../doors'
 import { shownShipments, type JoinableRow } from '../model'
 import { rowOf, shipmentsAnswer } from '../rows'

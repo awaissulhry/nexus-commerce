@@ -14,6 +14,7 @@ import { HoldSection } from './HoldSection'
 import { IdentitySection } from './IdentitySection' // F-CT-518 (W2.2)
 import { RequirementsSection } from './RequirementsSection' // F-CT-507 (W2.1)
 import { TermsAnswer } from './TermsAnswer'
+import { CustomerStructurePart } from '../../../../../production/order-structures/parts/CustomerStructurePart' // owb-b5 (w5.5): S3's slot (owb-ss8)
 import './terms.css'
 
 /**
@@ -33,6 +34,8 @@ export interface TermsTabProps {
   readonly hold?: { readonly model: HoldCardModel; readonly actions?: HoldCardActions | undefined } | null | undefined
   /** F-CT-507: the depth provider's requirement windows (their model and acts, as they are); null: not mounted. */
   readonly requirements?: { readonly model: RequirementsModel; readonly actions?: RequirementsActions | undefined } | null | undefined
+  /** owb-b5 (w5.5): the company the page works in (the session's), for S3's slot "How its orders are handled"; null: the slot waits. */
+  readonly companyId?: string | null | undefined
 }
 
 export function TermsTab(props: TermsTabProps) {
@@ -43,7 +46,7 @@ export function TermsTab(props: TermsTabProps) {
   )
 }
 
-function TermsTabBody({ model, actions, hold, requirements }: TermsTabProps) {
+function TermsTabBody({ model, actions, hold, requirements, companyId }: TermsTabProps) {
   if (!model)
     return (
       <div className="fw-pt fw-ctr">
@@ -65,6 +68,8 @@ function TermsTabBody({ model, actions, hold, requirements }: TermsTabProps) {
       <CommercialSection model={model} actions={actions} />
       <RequirementsSection model={model} actions={actions} />
       <IdentitySection model={model} actions={actions} />
+      {/* owb-b5 (w5.5; design rec.js customer › terms): "How its orders are handled", last (S3 fills it; nothing until then). */}
+      {companyId ? <CustomerStructurePart companyId={companyId} partyId={model.partyId} /> : null}
       {hold ? <HoldDialogView model={hold.model} actions={hold.actions} /> : null}
       {requirements ? <RequirementWindows model={requirements.model} actions={requirements.actions} /> : null}
       {open?.kind === 'terms' ? <ChangeTermsDialog window={open} windows={model.windows} actions={actions} /> : null}

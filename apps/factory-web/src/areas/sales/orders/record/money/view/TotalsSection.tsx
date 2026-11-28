@@ -10,7 +10,7 @@ import { money } from '../../../../quotes/model'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
+import { PartFailed, Section } from '../../../../../../lib/record-sections/Kit' // F-OM-101 (L6): the Production kit, in place
 import { totalsOf, type TotalsDoor } from '../totals'
 import { Facts, Fold, GapRow } from './parts' // F-CM-k1: the shared parts (a gap, the fold, the facts)
 import { useSay } from './say'

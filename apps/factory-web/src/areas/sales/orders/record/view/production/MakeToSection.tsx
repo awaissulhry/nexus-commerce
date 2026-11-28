@@ -13,7 +13,7 @@ import { NAMESPACE as DEPTH, packRows } from '../../../depth/model'
 import { readOf } from '../../overview/model'
 import { specRowsOf, specTone, type SpecRow, type SpecState, type StylePart } from '../../production/specs'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 
 const DISPOSITIONS = ['FINISH_OLD', 'REWORK', 'SCRAP', 'HOLD']
 
