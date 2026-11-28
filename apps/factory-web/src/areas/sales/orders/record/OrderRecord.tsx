@@ -98,6 +98,7 @@ import { CustomerOverrideProvider } from '../../../_shared/customer-override/Cus
 import { askFactsOf, changeFactsOf, readToldChanges, type ToldChanges } from './told'
 import { stillRowsOf } from './changes/model'
 import { WhoWasToldDialog } from './WhoWasTold'
+import { useOrderFlow } from './band/use-order-flow' // owb-of5: the design band's legs, picture, request and strip
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -597,6 +598,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // container's card ⋯; the dock keeps its own for its record). No document tags here (the documents read stays the dock's).
   const depthOpen = useRef<(fileId: string) => void>(() => undefined)
   const orderRead = orderFiles.model.read
+  // ---- owb-of5: what the design band and the Overview's new parts read beside the order (S3's legs, the picture's ports, the request it
+  // came from, S5's baskets per department) and Restrict on the floor; the order is read again after a picture save or a restrict.
+  const flow = useOrderFlow({ api, order: order.status === 'ready' ? order.value : null, permissions: session.permissions, files: orderRead, onReload: () => void load() })
+  // ---- end owb-of5
   const depthFiles = useMemo(() => (orderRead ? orderFilesOf(orderRead).filter((file) => file.version !== undefined).map((file) => ({ id: file.id, originalName: file.name, contentType: file.contentType, version: file.version! })) : null), [orderRead])
   // fx3w: `fileDepth` (the page's `depth` is the orders in depth, B-W2b-323).
   const fileDepth = useFileDepth({
@@ -742,6 +747,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- end F-SA-239
 
   const model: OrderRecordModel = {
+    flow: flow.model, // owb-of5
     depth: depth.model, // B-W2b-323
     reviewBanner: createElement(ReviewBanner, { model: reviewBanner.model, onRetry: reviewBanner.retry }), // B-W2b-368
     prefix,
@@ -850,6 +856,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       // B-TH-280: the order's custom fields; F-SA-233: on Overview; F-OO-211: beside Order facts (Overview's 7 + 8 pair).
       customFields={customFields}
       actions={{
+        flow: flow.actions, // owb-of5
         // ---- F-OP-134: each tab's acts (the band; Overview; Lines; Production; Money) ----
         ...band.actions,
         ...overview.actions,

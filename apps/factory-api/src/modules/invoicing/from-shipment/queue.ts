@@ -16,6 +16,8 @@ import { officeContextOf } from '../store'
 import { freightBilledOf, invoicedOf, orderPrices, presetsOf, readDdts, shippedOf } from './store'
 // B-W2b-GB02 (G148): goods shipped without a DDT (their immediate invoice) are in the list too.
 import { queueWithoutDdt } from './without-ddt'
+// owb- (order workflow, S3 ss1 step 1.3): our warehouse first.
+import { BILLABLE_DDT } from '../../shipping/warehouse-leg/invoice-filter'
 
 /**
  * Shipped, not invoiced (B-W1-51; FIN-054, FIN-116; A2 SCR-080 "Shipped, not invoiced"): every live DDT of a SHIPPED or
@@ -41,6 +43,7 @@ export async function shippedNotInvoiced(caller: CommandCaller, query: QueueQuer
     AND: [
       scopeWhere(actorOf(context), INVOICES_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.DdtWhereInput,
       { cancellations: { none: {} }, shipment: { status: { in: ['SHIPPED', 'DELIVERED'] } } },
+      BILLABLE_DDT, // owb- (S3 ss1): never the transfer to our warehouse, nothing not sent on from it
       query.companyId ? { companyId: query.companyId } : {},
       query.partyId ? { partyId: query.partyId } : {},
     ],

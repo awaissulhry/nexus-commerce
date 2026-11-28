@@ -1,7 +1,7 @@
 {
   "markets": {
     "title": "Markets",
-    "intro": "Where this style is sold. For goods going to a market it is sold in, the gates check that market's languages.",
+    "intro": "Where this product is sold. For goods going to a market it is sold in, the gates check that market's languages.",
     "change": "Change…",
     "dismiss": "Dismiss",
     "retry": "Try again",
@@ -20,7 +20,7 @@
     "pickEvery": "Nothing ticked: sold in every market.",
     "pickCount_one": "{count} market ticked.",
     "pickCount_other": "{count} markets ticked.",
-    "pickLegend": "The markets this style's company sells in",
+    "pickLegend": "The markets this product's company sells in",
     "pickMeans": "The markets and their languages are kept in Compliance › Rules & markets. A switched-off market's own rules wait until it is on.",
     "clear": "Every market",
     "cancel": "Cancel",
@@ -33,27 +33,27 @@
     "held": {
       "reading": "Reading the markets…",
       "failed": "The markets could not be read: try again first.",
-      "noRight": "Your role cannot change where a style is sold.",
+      "noRight": "Your role cannot change where a product is sold.",
       "offline": "Offline: the markets change when the connection is back.",
       "busy": "Saving…",
       "same": "Nothing changed yet.",
       "everyAlready": "Nothing is ticked: it is already every market."
     },
     "refusal": {
-      "EDIT_BLOCKED": "Nothing of this style changes in its lifecycle state (its edit rule in Product settings is \"blocked\"): move it to another state first.",
-      "STYLE_ARCHIVED": "The style is archived: reactivate it before changing where it is sold.",
-      "other": "Where this style is sold does not change now."
+      "EDIT_BLOCKED": "Nothing of this product changes in its lifecycle state (its edit rule in Product settings is \"blocked\"): move it to another state first.",
+      "STYLE_ARCHIVED": "The product is archived: reactivate it before changing where it is sold.",
+      "other": "Where this product is sold does not change now."
     },
     "problem": {
-      "moved": "Someone changed the style meanwhile: the markets were read again. Pick again.",
+      "moved": "Someone changed the product meanwhile: the markets were read again. Pick again.",
       "changed": "A market changed meanwhile: the markets were read again. Pick again.",
       "market": "A market can no longer be added (archived, removed or another company's): the markets were read again.",
       "invalid": "The list was not accepted: the markets were read again. Pick again.",
-      "forbidden": "Your role cannot change where this style is sold.",
+      "forbidden": "Your role cannot change where this product is sold.",
       "offline": "No connection: nothing was saved.",
-      "gone": "This style is no longer there.",
+      "gone": "This product is no longer there.",
       "failed": "The markets were not saved: try again.",
-      "readForbidden": "Your role does not read where this style is sold.",
+      "readForbidden": "Your role does not read where this product is sold.",
       "readFailed": "The markets could not be read."
     },
     "notice": {
@@ -63,7 +63,7 @@
     }
   },
   "templates": {
-    "hint": "The measures a made-to-measure style of this type takes. Its made-to-measure rules stay off until they are started per template.",
+    "hint": "The measures a made-to-measure product of this type takes. Its made-to-measure rules stay off until they are started per template.",
     "reading": "Reading the measurement templates…",
     "failed": "The measurement templates could not be read: the type keeps what it names.",
     "none": "No active measurement template of this kind of garment for this company yet.",

@@ -4,6 +4,8 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { COLLECTED_WORDS } from '@nexus/factory-domain/shipping/collection/rules'
 import { command } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
+// owb- (order workflow, S3 ss1): a shipment through our warehouse first.
+import { legOf } from '../warehouse-leg/store'
 
 /**
  * The customer's collection is its delivery (B-W2b-395; LOG-053; Incoterms 2020 EXW and FCA at our premises: the risk passes
@@ -31,7 +33,9 @@ export function collectionDeliveredHandler(): EventHandler {
       await command(caller, { name: 'shipping.collectionDelivered', idempotencyKey: `collection-delivered:${payload.shipmentId}`, input: { shipmentId: payload.shipmentId }, causationId: event.eventId }, async (tools) => {
         const rows = await tools.tx.$queryRaw<{ status: string }[]>`SELECT status::text AS status FROM "Shipment" WHERE id = ${payload.shipmentId}::uuid FOR UPDATE`
         const shipment = await tools.tx.shipment.findUniqueOrThrow({ where: { id: payload.shipmentId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, transportBy: true, shippedAt: true } })
-        if (rows[0]?.status !== 'SHIPPED' || shipment.transportBy !== 'RECIPIENT') {
+        // owb- (order workflow, S3 ss1; G9): a shipment through our warehouse first is delivered only after Send on — never here.
+        const leg = await legOf(tools.tx, shipment.id)
+        if (rows[0]?.status !== 'SHIPPED' || shipment.transportBy !== 'RECIPIENT' || (leg && leg.forwardedAt === null)) {
           tools.audit({ action: 'shipping.collectionDelivered', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { moved: false, status: rows[0]?.status ?? null } })
           return { moved: false }
         }

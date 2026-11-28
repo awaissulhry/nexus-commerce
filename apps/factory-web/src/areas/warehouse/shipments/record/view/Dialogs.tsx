@@ -24,6 +24,10 @@ import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { REASON_LIMITS, takeOffReasonProblem } from '../../queue/move/model'
 import { DOOR_NS } from '../../queue/shared/door-words'
 import { handOverTimeProblem, type HandOverAt } from '../hand-over'
+// owb-ss3 step 3.3: the first leg to our own warehouse travels as a transfer (read only); the hand-over's payment warning in words.
+import { ORDER_WARNING_WORD_KEYS } from '@nexus/factory-domain/sales/warnings/kinds'
+import { TRANSFER_REASON } from '../../api'
+import { handOverGoKey } from '../doors'
 
 /**
  * A shipment's dialogs (design sh-issue-ddt, sh-buy, sh-handover, sh-annul; W1): Issue DDT (what the office says on it,
@@ -77,7 +81,7 @@ interface DialogProps {
 
 // ---- F-OS-201 (13-backend §7): the narrow model and acts of the dialogs both pages mount (the record passes its whole model: a
 // structural subtype, no refactor) ----
-export type DoorModel = Pick<ShipmentRecordModel, 'busy' | 'dialogProblem' | 'ddt' | 'backorder'>
+export type DoorModel = Pick<ShipmentRecordModel, 'busy' | 'dialogProblem' | 'ddt' | 'backorder' | /* owb-ss3 */ 'handOverWarnings'>
 export type DoorActions = Pick<ShipmentRecordActions, 'onDialog' | 'onUnpack' | 'onCancel' | 'onTakeOff' | 'onHandOver'>
 export interface DoorProps {
   shipment: Shipment
@@ -90,6 +94,7 @@ export interface DoorProps {
 
 function IssueDdtDialog({ shipment, model, actions }: DialogProps) {
   const t = useT('shipments')
+  const ways = useT('ship-ways') // owb-ss3
   const locale = useLocale()
   const form = model.ddtForm
   const preview = model.preview?.value ?? null
@@ -125,15 +130,22 @@ function IssueDdtDialog({ shipment, model, actions }: DialogProps) {
       <div className="fw-sh-fields">
         {/* B-W2a-71 (the DDT reason choice): each reason says when it applies; processing on account and returns to a
             supplier travel with the DDT of their own record (B-W2a-17), never a shipment to a customer. */}
-        <Field label={t('issue.reason')} hint={t(`issue.reasonHint.${form.reason ?? 'SALE'}`)} error={field('reason')}>
-          <Select size="sm" value={form.reason ?? 'SALE'} onChange={(event) => set({ reason: event.target.value as DdtForm['reason'] })}>
-            {DDT_REASONS.map((reason) => (
-              <option key={reason} value={reason}>
-                {t(`reason.${reason}`)}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {form.reason === TRANSFER_REASON ? (
+          // owb-ss3 (settle L5): a shipment to our own warehouse first — its first leg travels as a transfer (the goods stay ours).
+          <Field label={t('issue.reason')} hint={ways('leg.transferWhy')} error={field('reason')}>
+            <Input size="sm" value={t(`reason.${TRANSFER_REASON}`)} readOnly aria-readonly />
+          </Field>
+        ) : (
+          <Field label={t('issue.reason')} hint={t(`issue.reasonHint.${form.reason ?? 'SALE'}`)} error={field('reason')}>
+            <Select size="sm" value={form.reason ?? 'SALE'} onChange={(event) => set({ reason: event.target.value as DdtForm['reason'] })}>
+              {DDT_REASONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  {t(`reason.${reason}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         {form.reason === 'OTHER' && (
           <Field label={t('issue.reasonText')} required error={field('reasonText')}>
             <Input size="sm" value={form.reasonText} onChange={(event) => set({ reasonText: event.target.value })} />
@@ -273,6 +285,10 @@ function BuyDialog({ shipment, model, actions }: DialogProps) {
 export function HandOverDialog({ shipment, model, actions }: DoorProps) {
   const t = useT('shipments')
   const own = useT(DOOR_NS)
+  const ways = useT('ship-ways') // owb-ss3
+  // owb-ss3 (settle L2, R39): refused with a payment due before shipping — a yellow line in words, no amount; "Ship it anyway".
+  const warnings = model.handOverWarnings ?? null
+  const go = handOverGoKey(warnings)
   const locale = useLocale()
   const ddt = model.ddt?.value ?? null
   // F-OS-203 (B-OS-014): handed over now, or at the time it really left (not before it was packed or its DDT issued, not in the
@@ -280,7 +296,14 @@ export function HandOverDialog({ shipment, model, actions }: DoorProps) {
   const [at, setAt] = useState<HandOverAt>({ when: null, reason: '' })
   const problem = handOverTimeProblem(at, { packedAt: shipment.packedAt, ddtAt: ddt?.startAt ?? null })
   return (
-    <Frame title={t('handOver.title')} subtitle={shipment.number} held={model.busy ? t('held.busy') : problem ? own(problem.key, problem.params) : null} go={() => actions?.onHandOver?.(at.when ? { shippedAt: new Date(at.when).toISOString(), reason: at.reason.trim() || null } : null)} goLabel={t('step.handOver')} onClose={close(actions)} problem={model.dialogProblem}>
+    <Frame title={t('handOver.title')} subtitle={shipment.number} held={model.busy ? t('held.busy') : problem ? own(problem.key, problem.params) : null} go={() => actions?.onHandOver?.(at.when ? { shippedAt: new Date(at.when).toISOString(), reason: at.reason.trim() || null } : null)} goLabel={go.ns === 'ship-ways' ? ways(go.key) : t(go.key)} onClose={close(actions)} problem={model.dialogProblem}>
+      {warnings && warnings.length > 0
+        ? warnings.map((kind) => (
+            <Banner key={kind} tone="warning" title={ways(ORDER_WARNING_WORD_KEYS[kind])}>
+              {ways('handOver.warningWhy')}
+            </Banner>
+          ))
+        : null}
       <ul className="fw-sh-list">
         <li>{t('handOver.stock', { count: shipment.garments })}</li>
         <li>{ddt ? t('handOver.ddt', { number: ddt.number, start: formatDateTime(ddt.startAt, { locale }) }) : t('handOver.noDdt')}</li>

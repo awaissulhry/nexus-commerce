@@ -7,6 +7,8 @@ import { assertMay, officeContextOf } from '../store'
 import { draftFromDdtsInCommand, draftPlanOf, type FromDdtsAnswer } from './draft'
 import { shippedNotInvoiced, type QueueQuery } from './queue'
 import { readDdts } from './store'
+// owb- (order workflow, S3 ss1 step 1.3): our warehouse first.
+import { BILLABLE_DDT } from '../../shipping/warehouse-leg/invoice-filter'
 
 /**
  * One invoice for many shipments (B-W2a-54; FIN-059 "One deferred invoice across many DDTs"; DPR 633/1972 art. 21 c.4
@@ -74,7 +76,8 @@ const monthRange = (month: string): { gte: Date; lt: Date } => {
 export async function createDeferred(caller: CommandCaller, body: DeferredInput, idempotencyKey?: string): Promise<FromDdtsAnswer> {
   const context = officeContextOf(caller)
   assertMay(context, INVOICES_VIEW, INVOICES_MANAGE, { companyId: body.companyId, partyId: body.partyId }, 'Customer')
-  const where = { companyId: body.companyId, partyId: body.partyId, documentDate: monthRange(body.month), cancellations: { none: {} }, shipment: { status: { in: ['SHIPPED' as const, 'DELIVERED' as const] } } }
+  // owb- (S3 ss1 step 1.3): + BILLABLE_DDT — never the transfer to our warehouse, nothing not sent on from it.
+  const where = { AND: [{ companyId: body.companyId, partyId: body.partyId, documentDate: monthRange(body.month), cancellations: { none: {} }, shipment: { status: { in: ['SHIPPED' as const, 'DELIVERED' as const] } } }, BILLABLE_DDT] }
   const ddts = await caller.withClient((client) => readDdts(client, where, 500))
   if (ddts.length === 0) throw new ConflictError(`No DDT of ${body.month} of this customer waits for an invoice (shipped, not cancelled).`)
   const scope = { companyId: body.companyId, partyId: body.partyId }

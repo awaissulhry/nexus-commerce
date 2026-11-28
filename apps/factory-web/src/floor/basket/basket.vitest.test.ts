@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ReactElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { LOCALES } from '../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../lib/i18n/messages'
@@ -28,6 +28,10 @@ import { STEPS_READY } from './steps'
  * step only once fl6's window exists), the phone's scan router, the Baskets tile, every word in it and en, and the render at 390 px:
  * the dock is the frame's sticky foot, so it is on the first screen whatever the page's length.
  */
+
+// fl8's help parts read the floor app (its queue, its person): a render of the page alone draws their places empty (the page's own
+// rule — no tile row while HELP_READY is false — is what is held here; fl8 holds its parts in its own tests).
+vi.mock('./help', () => ({ HELP_READY: false, ProblemTile: () => null, AskTile: () => null, PhotoTile: () => null, NotesTile: () => null, AskWindow: () => null, ProblemCard: () => null, AskCard: () => null }))
 
 const view = (read = basketRead()): BasketView => viewOf(read)!
 const input = (read = basketRead(), extra: Partial<DockInput> = {}): DockInput => {

@@ -1,0 +1,132 @@
+/* owb-of5 step 2 — the Overview's new parts (design § 5i; prototype rec.js mockViewer, nextBox, orderTextCard). Layout by the card's own
+   room (every Overview card is the container fw-so-ov-card), never the viewport; tokens only, light and dark. */
+
+/* The hero of "Where it is now": the mockup beside the next box and the departments strip; one column in a narrow card. */
+.fw-flow-hero {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+.fw-flow-hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-flow-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The mockup: the whole A4 page, never cut (contain on the page's own proportion). */
+.fw-flow-mock {
+  margin: 0;
+  aspect-ratio: 210 / 297;
+  width: 100%;
+  max-width: 200px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.fw-flow-mock img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.fw-flow-mock-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+}
+
+/* The next box: the next step in plain words. */
+.fw-flow-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-flow-next-h {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-flow-next-act {
+  color: var(--nds-text-strong);
+}
+
+/* "On the floor" in Order facts: label | value | door; the door goes under the words in a narrow card. */
+.fw-flow-floor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+.fw-flow-floor-label {
+  color: var(--nds-text-2);
+  min-width: 120px;
+}
+.fw-flow-floor-value {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* People's doors (Add people · Give the graphics to the designer): they wrap at 375 px. */
+.fw-flow-peopledoors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-8);
+}
+
+/* "The order as it was written": the text keeps its lines; the lists wrap. */
+.fw-flow-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-flow-text p {
+  margin: 0;
+}
+.fw-flow-text-subject {
+  font-weight: 600;
+}
+.fw-flow-text-body {
+  white-space: pre-wrap;
+}
+.fw-flow-text-lines,
+.fw-flow-text-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.fw-flow-text-files li {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

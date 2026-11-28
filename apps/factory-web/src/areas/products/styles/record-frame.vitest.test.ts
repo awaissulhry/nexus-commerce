@@ -25,11 +25,12 @@ const dockOf = (html: string) => textOf(html.slice(html.indexOf('class="fw-rcf-d
 const bandOf = (html: string) => html.slice(html.indexOf('fw-rcf-hdr'), html.search(/class="fw-rcf[ "]/))
 
 describe('the style on RecordFrame', () => {
-  it('the tabs 11 → 9: Overview & variants · Sizes & measurements · Materials (BOM) · Operations · Cost · Tech pack · Compliance · Patterns · Versions & changes', () => {
+  // owb-pd4 (step 4.2): the tab `routing` is named "Route" (design word table: "The product tab that holds the route").
+  it('the tabs 11 → 9: Overview & variants · Sizes & measurements · Materials (BOM) · Route · Cost · Tech pack · Compliance · Patterns · Versions & changes', () => {
     expect(STYLE_TABS).toEqual(['overview', 'sizes', 'bom', 'routing', 'cost', 'techpack', 'compliance', 'patterns', 'versions'])
     const text = textOf(draw('thread-docked'))
     let at = -1
-    for (const tab of ['Overview & variants', 'Sizes & measurements', 'Materials (BOM)', 'Operations', 'Cost', 'Tech pack', 'Compliance', 'Patterns', 'Versions & changes']) {
+    for (const tab of ['Overview & variants', 'Sizes & measurements', 'Materials (BOM)', 'Route', 'Cost', 'Tech pack', 'Compliance', 'Patterns', 'Versions & changes']) {
       const next = text.indexOf(tab, at + 1)
       expect(next, tab).toBeGreaterThan(at)
       at = next
@@ -53,7 +54,8 @@ describe('the style on RecordFrame', () => {
     const html = draw('variants-owner')
     expect(html).toContain(`id="${VARIANTS_ANCHOR}"`)
     const text = textOf(html)
-    for (const part of ['Add colourway', 'Release check']) expect(text, part).toContain(part)
+    // owb-pd4 (step 4.3): the release check is the Overview's "Before release"; the colourways sit in its closed "Variants and markets".
+    for (const part of ['Add colourway', 'Before release', 'Variants and markets']) expect(text, part).toContain(part)
     // Patterns keeps the pattern files and the pieces (cutting data): it is a tab, not the thread's Files view.
     expect(tabsFor(recordModel('owner').can)).toContain('patterns')
     expect(tabsFor(recordModel('sales').can)).not.toContain('patterns')

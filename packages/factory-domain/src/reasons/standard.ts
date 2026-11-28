@@ -54,6 +54,17 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     ['MAINTENANCE', 'Manutenzione', 'Maintenance', 'alert', RED],
     ['MATERIAL', 'Materiale', 'Material', 'package', AMBER],
     ['SAFETY', 'Sicurezza', 'Safety', 'shield', RED],
+    // owb-fl3 (order workflow S5, pick C; BASE-LANDED "known reds"): the floor's problems and asks are help-call types by these
+    // codes (factory-domain production/baskets/signals); listed here so the office's routing names them (MATERIAL is above).
+    ['DAMAGED', 'Pezzo rovinato', 'Damaged piece', 'alert', RED],
+    ['UNCLEAR', 'Disegno non chiaro', 'Design not clear', 'flag', BLUE],
+    ['MACHINE', 'Problema alla macchina', 'Machine problem', 'zap', ORANGE],
+    ['PAPER', 'Pagina persa o rovinata', 'Page lost or damaged', 'bookmark', AMBER],
+    ['ASK_LOGO', 'Domanda: manca il logo', 'Ask: logo missing', 'star', INDIGO],
+    ['ASK_PATCH', 'Domanda: manca la toppa', 'Ask: patch missing', 'shirt', VIOLET],
+    ['ASK_TO_PATCH', 'Domanda: mandarlo al reparto toppe', 'Ask: send it to the patch team', 'truck', BLUE],
+    ['ASK_UNCLEAR', 'Domanda: disegno non chiaro', 'Ask: design not clear', 'flag', INDIGO],
+    ['ASK_OTHER', 'Domanda: altro', 'Ask: something else', null, PINK],
   ],
   ADJUSTMENT: [['COUNT_ERROR', 'Errore di conteggio', 'Count error', null, BLUE], ['FOUND', 'Ritrovato', 'Found', null, EMERALD], ['DAMAGED', 'Danneggiato', 'Damaged', 'alert', RED], OTHER()],
   HOLD: [

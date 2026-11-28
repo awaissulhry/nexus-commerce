@@ -4,7 +4,8 @@ import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { StyleRecordView } from '../record/view/StyleRecordView'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
-import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, PriceEntry, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
+import { asMoney } from '@nexus/factory-domain/money/marked'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, ProductRow, RouteSummaryStep, RoutingView, ScaleRow, StyleComplianceView, StyleOrders, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
@@ -45,24 +46,29 @@ const NONE: StyleAbilities = {
   importsApply: false,
   prices: false,
   tellCompliance: false,
+  draftsEdit: false,
 }
 
 /** The Owner (every right, every grain), a product / technical office person (makes the style, sees cost), the production
  * manager (makes BOM and routing, no money), sales (reads the style and the cost structure, no cost figures). */
-export const CAN: Record<'owner' | 'product' | 'production' | 'sales' | 'viewer', StyleAbilities> = {
-  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true, workshops: true, imports: true, importsApply: true, prices: true, tellCompliance: true },
-  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true, workshops: true, imports: false, importsApply: false, prices: false, tellCompliance: true },
+export const CAN: Record<'owner' | 'product' | 'production' | 'sales' | 'viewer' | 'designer', StyleAbilities> = {
+  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true, workshops: true, imports: true, importsApply: true, prices: true, tellCompliance: true, draftsEdit: true },
+  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true, workshops: true, imports: false, importsApply: false, prices: false, tellCompliance: true, draftsEdit: false },
   // The production manager's template (factory-domain roles): imports yes, the parties list no (no workshop picker).
   production: { ...NONE, view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, materials: true, thread: true, imports: true, importsApply: true, tellCompliance: true },
   sales: { ...NONE, view: true, costView: true, materials: true, brands: true, thread: true, prices: true },
   viewer: { ...NONE, view: true, bomView: true, routingView: true, complianceView: true, materials: true, thread: true },
+  // owb-pd4 (S4 settle 6): the designer's template — reads the product and its BOM, changes a DRAFT (product.drafts.edit); no route, no cost.
+  designer: { ...NONE, view: true, bomView: true, thread: true, draftsEdit: true },
 }
 
-export const GRAINS: Record<'owner' | 'product' | 'production' | 'sales', Grains> = {
+export const GRAINS: Record<'owner' | 'product' | 'production' | 'sales' | 'designer', Grains> = {
   owner: { cost: true, price: true, margin: true },
   product: { cost: true, price: false, margin: false },
   production: { cost: false, price: false, margin: false },
   sales: { cost: false, price: true, margin: true },
+  // owb-pd4: the designer sees no money (no grain).
+  designer: { cost: false, price: false, margin: false },
 }
 
 // ---- libraries ----------------------------------------------------------------------------------------------------------
@@ -167,6 +173,8 @@ export function demoStyle(options: StyleOptions = {}): StyleView {
     code: 'DEMO-JKT-01',
     name: 'Giacca Touring Demo',
     nameI18n: null,
+    // owb-pd4 (pd1: every style answer carries it): How it is made — departments, never a minute.
+    routeSummary: DEMO_ROUTE,
     productType: 'JACKET',
     season: 'FW27',
     brand: null,
@@ -275,7 +283,7 @@ export function newStyle(): StyleView {
 
 // ---- the list rows ----------------------------------------------------------------------------------------------------
 
-const row = (n: number, code: string, name: string, extra: Partial<StyleRow>): StyleRow => ({
+const row = (n: number, code: string, name: string, extra: Partial<ProductRow>): ProductRow => ({
   id: uid('7777', 300 + n),
   companyId: COMPANY_ID,
   code,
@@ -306,10 +314,17 @@ const row = (n: number, code: string, name: string, extra: Partial<StyleRow>): S
   releasedRevision: 2,
   draftRevision: null,
   completeness: { colourways: true, sizeRange: true, baseSize: true, skus: true, releasedRevision: true },
+  // owb-pd4 (pd1 shape): the list row's extras — made up.
+  typeName: null,
+  family: extra.brand ? 'FOR_CUSTOMER' : 'OUR_RANGE',
+  openOrders: n % 4,
+  agreedRange: asMoney('price', n % 3 === 0 ? null : { low: String(240 + n * 10), high: String(300 + n * 15), count: 1 + (n % 3), currency: 'EUR' as const }),
+  marginPct: asMoney('margin', n % 3 === 0 ? null : String(30 + n)),
+  marginFrom: asMoney('margin', n % 3 === 0 ? null : n % 2 === 0 ? ('KIND' as const) : ('KEPT' as const)),
   ...extra,
 })
 
-export const ROWS: StyleRow[] = [
+export const ROWS: ProductRow[] = [
   { ...row(1, 'DEMO-JKT-01', 'Giacca Touring Demo', { releasedRevision: 2, draftRevision: 3 }), id: STYLE_ID },
   row(2, 'DEMO-JKT-02', 'Giacca Racing Demo', { ppeStandard: 'EN 17092-2:2020', ppeClass: 'AAA', skuCount: 14, colourwayCount: 2 }),
   row(3, 'DEMO-JKT-03', 'Giubbotto Urban Demo', { ppeStandard: 'EN 17092-5:2020', ppeClass: 'B', season: 'SS28', releasedRevision: 1, brand: { id: BRANDS[0]!.id, code: 'BR-DEMO', name: 'Esempio Moto' } }),
@@ -756,7 +771,6 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     libraries: { scales: SCALES, colours: COLOURS, brands: can.brands ? BRANDS : null, labels: null, workshops: can.workshops ? WORKSHOPS : null },
     materials: {},
     materialSearch: { query: '', results: null, problem: null },
-    operationSearch: { query: '', kind: null, results: null, problem: null },
     bomView: 'lines',
     costCell: null,
     save: { state: 'saved', at: at(29, 9, 12) },
@@ -770,8 +784,34 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     projects: { view: can.thread, manage: can.manage },
     duplicate: null,
     bomImport: null,
+    // owb-pd4 (steps 4.3, 4.4): How it is made, the open orders (no money in them), the agreed price range (the Owner only here).
+    routeSummary: DEMO_ROUTE,
+    ...(role === 'designer' ? {} : { orders: { status: 'ready' as const, value: DEMO_STYLE_ORDERS }, ordersOpen: true }),
+    ...(role === 'owner' ? { agreed: { status: 'ready' as const, value: ROWS[0]! } } : {}),
     ...overrides,
   }
+}
+
+// ---- owb-pd4: How it is made and the open orders of DEMO-JKT-01 (made up) --------------------------------------------------
+
+/** The route summary of revision 3 (pd1 shape: department, number, short name, tone, icon — never a minute). */
+export const DEMO_ROUTE: RouteSummaryStep[] = [
+  { departmentId: uid('6666', 1), number: 1, shortName: 'Pattern', tone: 'blue', icon: 'ruler' },
+  { departmentId: uid('6666', 2), number: 2, shortName: 'Cutting', tone: 'orange', icon: 'scissors' },
+  { departmentId: uid('6666', 4), number: 4, shortName: 'Stitching', tone: 'cyan', icon: 'shirt' },
+  { departmentId: uid('6666', 5), number: 5, shortName: 'Quality', tone: 'purple', icon: 'shield-check' },
+  { departmentId: uid('6666', 6), number: 6, shortName: 'Packing', tone: 'yellow', icon: 'package' },
+]
+
+/** The open order lines of DEMO-JKT-01 (pd1 shape): two orders in sizes, one made to measure per rider. */
+export const DEMO_STYLE_ORDERS: StyleOrders = {
+  lines: [
+    { orderId: uid('5555', 1), orderNumber: 'SO-2026-0141', customer: { id: BRANDS[0]!.id, code: 'BR-DEMO', name: 'Brand Alpha' }, lineId: uid('5556', 1), quantity: 24, sizes: '48–56', revision: 2, measurement: null, life: 'IN_PRODUCTION' },
+    { orderId: uid('5555', 1), orderNumber: 'SO-2026-0141', customer: { id: BRANDS[0]!.id, code: 'BR-DEMO', name: 'Brand Alpha' }, lineId: uid('5556', 2), quantity: 6, sizes: '58', revision: 2, measurement: null, life: 'IN_PRODUCTION' },
+    { orderId: uid('5555', 2), orderNumber: 'SO-2026-0152', customer: { id: uid('4444', 9), code: 'BR-BETA', name: 'Brand Beta' }, lineId: uid('5556', 3), quantity: 1, sizes: null, revision: 3, measurement: 'FILE', life: 'CONFIRMED' },
+    { orderId: uid('5555', 3), orderNumber: 'SO-2026-0158', customer: { id: uid('4444', 9), code: 'BR-BETA', name: 'Brand Beta' }, lineId: uid('5556', 4), quantity: 1, sizes: null, revision: 3, measurement: 'MISSING', life: 'SENT' },
+  ],
+  totals: { openOrders: 3, openPieces: 32 },
 }
 
 // ---- materials of the BOM (their colours fill the colour grid) ---------------------------------------------------------
@@ -802,14 +842,6 @@ export function lineMaterial(n: number): MaterialView {
 export const LINE_MATERIALS: Record<string, MaterialView> = Object.fromEntries([1, 6, 7].map((n) => [uid('4400', n), lineMaterial(n)]))
 
 export const MATERIAL_RESULTS = [MATERIAL, lineMaterial(2), lineMaterial(3)].map(({ units: _units, standardCostPerPurchaseUnit: _a, standardCostPerConsumptionUnit: _b, animalSpecies: _c, tannage: _d, grade: _e, finish: _f, thicknessMinMm: _g, thicknessMaxMm: _h, composition: _i, animalOrigin: _j, attributes: _k, colours: _l, warnings: _m, createdAt: _n, createdById: _o, ...row }) => row)
-
-// ---- the operation library (for Add operations) -----------------------------------------------------------------------------
-
-export const OPERATIONS: OperationRow[] = [
-  ...OPS.map(([code, name, kind, minutes, machine, skill]: (typeof OPS)[number], index: number) => ({ id: uid('2200', index + 1), companyId: null, code, name, nameI18n: null, workCentreKind: kind, machineType: machine, skill, standardMinutes: code === 'CUC-MAN' ? '17' : minutes, status: 'ACTIVE' as const, usedIn: 4, differing: code === 'CUC-MAN' ? 1 : 0, version: 1, updatedAt: at(10, 9) })),
-  { id: uid('2200', 20), companyId: null, code: 'CUC-RIF', name: 'Applicazione inserti riflettenti', nameI18n: null, workCentreKind: 'SEWING', machineType: 'Piana 1 ago', skill: 'Cucitrice', standardMinutes: '4.5', status: 'ACTIVE', usedIn: 1, differing: 0, version: 1, updatedAt: at(10, 9) },
-  { id: uid('2200', 21), companyId: null, code: 'IMB-SAC', name: 'Imbustamento e cartellino', nameI18n: null, workCentreKind: 'PACKING', machineType: null, skill: null, standardMinutes: '1.5', status: 'ACTIVE', usedIn: 6, differing: 0, version: 1, updatedAt: at(10, 9) },
-]
 
 // ---- the cost sheet (made-up prices and rates; every figure worked out below from the BOM and the routing) ----------------------
 
@@ -999,20 +1031,6 @@ export function demoDuplicated(): DuplicatedView {
       { code: 'BOM_LINES_LEFT_OUT', sizes: [], count: 1, colourway: null },
     ],
   }
-}
-
-/** The base price list in force (made-up): a price per style, two styles priced per colourway only, one unpriced. */
-export const DEMO_PRICES: { list: { id: string; code: string; name: string; currency: string }; entries: PriceEntry[] } = {
-  list: { id: uid('8888', 1), code: 'DEMO-LISTINO-27', name: 'Listino base demo 2027', currency: 'EUR' },
-  entries: [
-    { styleId: STYLE_ID, colourwayId: null, unitPrice: '389', marginPct: '41.2', belowFloor: false },
-    { styleId: ROWS[1]!.id, colourwayId: null, unitPrice: '459', marginPct: '38.6', belowFloor: false },
-    { styleId: ROWS[2]!.id, colourwayId: uid('7777', 991), unitPrice: '279', marginPct: '22.4', belowFloor: true },
-    { styleId: ROWS[2]!.id, colourwayId: uid('7777', 992), unitPrice: '299', marginPct: '27.5', belowFloor: false },
-    { styleId: ROWS[3]!.id, colourwayId: null, unitPrice: '249', marginPct: null, belowFloor: false },
-    { styleId: ROWS[5]!.id, colourwayId: null, unitPrice: '89.9', marginPct: '45', belowFloor: false },
-    { styleId: ROWS[7]!.id, colourwayId: null, unitPrice: '39.5', marginPct: '52.3', belowFloor: false },
-  ],
 }
 
 /** The routing with two steps done by workshops (sewing the sleeves, the finishing), as the API answers it. */

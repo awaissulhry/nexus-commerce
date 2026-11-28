@@ -57,7 +57,7 @@ import {
   type PortalNotice,
   type SessionEnd,
 } from './model'
-import { portalChords, portalNavFor, recordPageOf } from './nav/portal-nav'
+import { portalChordLabel, portalChords, portalNavFor, recordPageOf } from './nav/portal-nav'
 // ---- B-TH-273 (PL3-F03: no Ask modal): "Ask a question" focuses the docked conversation, else opens the conversation's page.
 import { accountConversationHref, askHref } from './record/model'
 import { PORTAL_ASK_EVENT } from './record/PortalRecordFrame'
@@ -120,7 +120,6 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   const path = portalPathOf(pathname, prefix)
   const kinds = useMemo(() => kindsOf(me), [me])
   const can = useMemo(() => new Set(me.permissions), [me.permissions])
-  const nav = useMemo(() => portalNavFor({ can: (permission) => can.has(permission), kinds }), [can, kinds])
   const brand = useMemo(() => (branding ? brandingTokensOf(branding, 'portal') : null), [branding])
 
   // ── the idle clock: each answer moves it (the API slides the idle end at most once a minute) ──
@@ -236,6 +235,9 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   // ── My access (the menu, the end of access, the admins) ──
   const [access, setAccess] = useState<MyAccess | null>(null)
   const [accessState, setAccessState] = useState<'loading' | 'error' | 'ready'>('loading')
+  // owb-po4.1: money rows (Prices, Agreed prices, Payments) only once My access says the role sees prices (fails closed until then).
+  const seesPrices = access?.role?.seesPrices === true
+  const nav = useMemo(() => portalNavFor({ can: (permission) => can.has(permission), kinds, prices: seesPrices }), [can, kinds, seesPrices])
   const readAccess = useCallback(async () => {
     try {
       setAccess(await fetchMyAccess(api))
@@ -507,7 +509,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
       title: t('keys.global'),
       keys: [
         ...(can.has('portal.search') ? [{ keys: ['/'], words: t('keys.search') }] : []),
-        ...Object.entries(chords).map(([key, href]) => ({ keys: ['g', key], words: t('keys.go', { area: t(nav.areas.find((area) => area.href === href)?.label ?? 'nav.home') }) })),
+        // owb-po4.1: a moved page's chord names its page (g p → Production, a row of Orders).
+        ...Object.entries(chords).map(([key, href]) => ({ keys: ['g', key], words: t('keys.go', { area: t(portalChordLabel(nav, href) ?? 'nav.home') }) })),
         { keys: ['?'], words: t('keys.help') },
         { keys: ['Esc'], words: t('keys.escape') },
       ],

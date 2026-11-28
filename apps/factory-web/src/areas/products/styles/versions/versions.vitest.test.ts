@@ -43,7 +43,9 @@ describe('Versions & changes: who reads what, the revisions and the pair compare
     expect(STYLE_TABS.indexOf('versions')).toBe(STYLE_TABS.length - 1)
     const all = tabsFor({ view: true, bomView: true } as never)
     expect(all).toContain('versions')
-    expect(tabsFor({ view: true, bomView: false } as never)).not.toContain('versions')
+    // owb-pd4 (step 4.2): a reader without the BOM right gets the tab too, with the revisions from the product's own read.
+    expect(tabsFor({ view: true, bomView: false } as never)).toContain('versions')
+    expect(tabsFor({ view: false, bomView: false } as never)).not.toContain('versions')
     expect(versionsCan(['product.bom.view'])).toEqual({ read: true, changes: false, request: false, release: false, cost: false })
     expect(versionsCan(['product.bom.view', 'product.changes.view', 'product.changes.request', 'product.bom.release', 'money.cost'])).toEqual({ read: true, changes: true, request: true, release: true, cost: true })
   })

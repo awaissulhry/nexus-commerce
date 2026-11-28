@@ -1,0 +1,110 @@
+/*
+ * owb-ss3 — the warehouse leg's window and the ship-ways window (legs/view/LegActView.tsx, ways/view/ShipWaysView.tsx) and the leg's
+ * marks on the order's Shipments tab. DS tokens only (no raw colour): light and dark come from the tokens. The window body is a room
+ * (lib/window-shell `fwroom`): what is inside follows the window's width.
+ */
+.fw-leg,
+.fw-ways {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-leg-line,
+.fw-ways-line {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.fw-leg-hint,
+.fw-ways-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.fw-leg-link,
+.fw-ways-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-leg-pick,
+.fw-ways-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.fw-leg-legend,
+.fw-ways-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.fw-leg-fields {
+  display: grid;
+  gap: var(--nds-space-12);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+@container fwroom (min-width: 520px) {
+  .fw-leg-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The three ways: big choices, one under the other (the design's "ways"), each with its own line under its name. */
+.fw-ways-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.fw-ways-way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  align-items: start;
+  min-width: 0;
+}
+.fw-ways-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.fw-ways-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-left: var(--nds-space-12);
+  border-left: 2px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+.fw-ways-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-ways-order .fw-ways-hint { flex: 1 1 160px; }
+
+/* The leg's mark on a shipment row of the order's Shipments tab (beside the row's own chips). */
+.fw-leg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}

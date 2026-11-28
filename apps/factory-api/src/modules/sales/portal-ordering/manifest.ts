@@ -20,6 +20,9 @@ export const manifest = defineManifest({
   'POST /portal/order-requests/:requestId/lines': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'PUT /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'DELETE /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // owb- po1.3 (order workflow, the ONE lines table): a line copied, a line taken out put back — a draft's, as every line write.
+  'POST /portal/order-requests/:requestId/lines/:lineId/copy': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/lines/:lineId/put-back': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/prices': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   // B-CP-072: the draft's files (logos, references, measurement sheets); the handler also asks portal.upload.
   'POST /portal/order-requests/:requestId/files': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
@@ -35,6 +38,8 @@ export const manifest = defineManifest({
   'DELETE /portal/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  // owb- po1.2 (order workflow, "Take it back"): as Send and Withdraw, portal.orderRequests.manage (the Buyer, the Admin).
+  'POST /portal/order-requests/:requestId/take-back': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   // Reorder (SAL-072): a past order is the orders' business — kept with portal.orderRequests.manage (a Designer reads no order).
   'GET /portal/reorder/orders': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'GET /portal/reorder/orders/:orderId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
@@ -63,6 +68,9 @@ export const manifest = defineManifest({
   'PUT /sales/order-requests/:requestId/custom-lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'PUT /sales/order-requests/:requestId/lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'DELETE /sales/order-requests/:requestId/lines/:lineId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // owb- po1.3: the office's twins (orders.manage over the draft's company and customer: the office writer).
+  'POST /sales/order-requests/:requestId/lines/:lineId/copy': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/lines/:lineId/put-back': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/lines/:lineId/people': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'PUT /sales/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'DELETE /sales/order-requests/:requestId/lines/:lineId/people/:personId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },

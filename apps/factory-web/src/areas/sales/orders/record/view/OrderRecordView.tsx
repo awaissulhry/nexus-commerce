@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react' // F-OP-102: useRef
+import { useEffect, useRef, useState, type ReactNode } from 'react' // F-OP-102: useRef · owb-of5: useState (the band's act window)
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation' // F-OP-210: the tab links keep the dock's scope
 import { FileX, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
-import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { StepUpModal } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -14,7 +14,7 @@ import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
 import { splitHeld } from '../../model' // F-OP-111
 import { DOCK_DEFAULTS } from '../../model' // F-SA-263
-import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, promiseHeld, readyHeld, recordTabs, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -79,6 +79,17 @@ import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the 
 // (the two dead align-items went), so the kit's stylesheet may load before or after the order's own (Changes reaches it first). ----
 import { CardState } from '../../../../../lib/record-overview/Overview'
 // ---- end F-CO-K1
+// ---- owb-of5 step 1 (design plan § 5i "ONE frame"): back that says where it goes · the picture · "number · subject" · ONE state chip (the
+// base's StateChip on the order's life, L9) · tags · People · ONE main act (S3's windows by the base's stubs) ----
+import { StateChip } from '../../../../../lib/order-cells/view/StateChip'
+import { useBackPlace } from '../../../../../lib/record-frame/use-back'
+import { isBandAct, type BandActKind } from '../../model'
+import { bandTagsOf, lifeOfOrder, openProblemsOf } from '../band/model'
+import { BandPeople, BandPicture, BandTags, useBackWords } from '../band/view/BandParts'
+import { OrderActWindows } from '../band/ActWindows'
+import { useFlowWords } from '../flow-words'
+import { PeopleCard } from './overview/PeopleCard'
+// ---- end owb-of5
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
 
@@ -179,7 +190,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   // F-OS-101 (18-lead-settles L10): on the Shipments tab Create shipment… is drawn ONCE, on the Shipments head — the band skips its own
   // copy there (its primary and its ⋯ item); on every other tab it stays.
-  const bandStep = bandStepOf(order, model.can, readOnly)
+  const bandStep = bandStepOf(order, model.can, readOnly, model.flow?.legs ?? null) // owb-of5: S3's legs (It arrived / Send on)
   const shipmentsTab = model.tab === 'shipments'
   const step: NextStep = shipmentsTab && bandStep.kind === 'createShipment' ? { kind: null, held: null } : bandStep
   // F-OS-204: the one notice says words of the order page's catalogue or of the Shipments tab's own (`order-shipments`, L11).
@@ -195,14 +206,25 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
   const yesRequest = approval ? openRequest(approval) : null
   const yesWait = step.kind === 'askYes' && approval && model.depth ? (yesRequest ? withdrawHeld(approval, model.depth.can) : askHeld(approval, model.depth.can)) : null
   const primaryHeld = step.kind === 'askYes' ? (stepHeld ?? (yesWait ? d(yesWait.key) : !approval ? d('held.reading') : null)) : stepHeld
+  // owb-of5: the band's acts that open S3's windows (Print and start the work…, Ship…, It arrived, Send on), mounted once below.
+  const [actOpen, setActOpen] = useState<BandActKind | null>(null)
+  const f = useFlowWords()
   const runPrimary = () => {
+    if (isBandAct(step.kind)) return setActOpen(step.kind)
     if (step.kind === 'makeWorkOrders') return actions?.makeWorkOrders?.onOpen?.()
     if (step.kind === 'confirmYes' && step.taskId) return actions?.yes?.onConfirm?.(step.taskId)
     if (step.kind === 'askYes') return actions?.depth?.onDialog?.(yesRequest ? { kind: 'withdraw' } : { kind: 'ask', note: '' })
     if (step.kind === 'createShipment') return actions?.onCreateShipment?.() // F-OP-121: in place
     if (step.kind === 'close' || step.kind === 'changePromise') actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
   }
-  const primaryLabel = step.kind === 'confirmYes' ? t('approval.confirm') : step.kind === 'askYes' ? d(yesRequest ? 'wait.withdraw' : 'wait.ask') : step.kind ? t(`step.${step.kind}`) : ''
+  const primaryLabel = step.kind === 'confirmYes' ? t('approval.confirm') : step.kind === 'askYes' ? d(yesRequest ? 'wait.withdraw' : 'wait.ask') : isBandAct(step.kind) ? f(`act.${step.kind}`) : step.kind ? t(`step.${step.kind}`) : ''
+  // ---- owb-of5 step 1: the band's life (L9: the base's orderLifeOf through the band's rule), its tags, Back's place ----
+  const life = lifeOfOrder(order, model.flow?.legs ?? null)
+  const tags = bandTagsOf({ life: life.life, restricted: !!model.flow?.restrict.now, problems: openProblemsOf(model.asks?.value?.issues) })
+  const backPlace = useBackPlace({ prefix: model.prefix, here: recordHref, customer: order.party ? { id: order.partyId, name: order.party.legalName } : null })
+  const backWords = useBackWords()
+  const subject = model.flow?.subject ?? null
+  // ---- end owb-of5
   // ---- end F-OP-102
 
   // Keys: ⌘↵ the next step (never while typing or inside a dialog). ⌘J is the frame's (the thread).
@@ -406,15 +428,45 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
         // F-SA-244: the thread's ask cards open this page's ONE review window (the frame's answer door; the same `?open=` address).
         {...(model.requestDoor?.open ? { answer: { open: model.requestDoor.open, href: model.requestDoor.hrefOf } } : {})}
         band={{
-          back: <Link href={ordersHref(model.prefix)}>{t('record.back')}</Link>,
+          // owb-of5 (design § 5p point 2): Back says where it goes and goes there (the tab kept); nothing before: ‹ Orders.
+          back: <Link href={backPlace?.href ?? ordersHref(model.prefix)}>{backWords(backPlace, t('record.back'))}</Link>,
+          // owb-of5: "number · subject" (the subject the customer gave; none: the customer, as before — then the customer is not repeated).
           title: (
             <span className="fw-so-title">
-              {order.number} <span className="fw-so-title-sub">· {order.party?.legalName ?? '—'}</span>
+              {order.number} <span className="fw-so-title-sub">· {subject ?? order.party?.legalName ?? '—'}</span>
             </span>
           ),
-          status: <Pill tone={STATUS_TONE[order.status]}>{t(`status.${order.status}`)}</Pill>,
+          // owb-of5 (L9): ONE state chip — the order's life in the nine words (the base's StateChip), never a second word map.
+          status: <StateChip life={life.life} note={life.note} />,
+          ...(model.flow
+            ? {
+                picture: (
+                  <BandPicture
+                    source="order"
+                    recordId={order.id}
+                    number={order.number}
+                    subject={subject}
+                    version={order.version}
+                    fileId={model.flow.picture.fileId}
+                    read={model.flow.picture.read}
+                    save={model.flow.picture.save}
+                    choices={model.flow.picture.choices}
+                    onSaved={actions?.flow?.onPictureSaved}
+                  />
+                ),
+              }
+            : {}),
+          people: (
+            <BandPeople count={order.people.length} number={order.number}>
+              <PeopleCard order={order} model={model} actions={actions} />
+            </BandPeople>
+          ),
           meta: (
             <>
+              {/* owb-of5: the customer beside the subject (the title names the subject when the customer gave one). */}
+              {subject && order.party ? <span className="fw-so-hint">{order.party.legalName}</span> : null}
+              {/* owb-of5: the design band's tags — Restricted, n problems (Late is the health chip below). */}
+              <BandTags tags={tags} />
               {/* F-SA-230 / F-SA-232: health only when it matters (Late · N d, At risk, from the production read; the order read's
                   lateness until it comes), never "On track"; the customer's own urgency. */}
               <BandHealth order={order} model={model} />
@@ -554,6 +606,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {/* owb-of5 step 1: the band's ONE act opens S3's window (the base's stubs, mounted once for the page). */}
+      <OrderActWindows open={actOpen} onClose={() => setActOpen(null)} companyId={order.companyId} orderId={order.id} />
       {/* F-OM-101 / 201: the payment plan's windows (Waive…, Open for payment, every hand act, Undo this payment…), mounted ONCE for the
           page — the GateDialogs pattern. */}
       <MoneyDialogs order={order} model={model} actions={actions} />

@@ -1,6 +1,6 @@
 {
   "head": {
-    "intro": "Ciò che ogni modello segue: il tipo di prodotto con i campi obbligatori e i valori iniziali, cosa si può cambiare in ogni fase della sua vita e quanto il materiale usato può scostarsi dalla stima.",
+    "intro": "Ciò che ogni prodotto segue: il tipo di prodotto con i campi obbligatori e i valori iniziali, cosa si può cambiare in ogni fase della sua vita e quanto il materiale usato può scostarsi dalla stima.",
     "reload": "Rileggi",
     "more": "Altro"
   },
@@ -23,7 +23,7 @@
   },
   "noAccess": {
     "title": "Le impostazioni prodotto non sono nel tuo ruolo",
-    "body": "Per leggerle serve il permesso di vedere i modelli. Lo assegna un amministratore in Sistema › Ruoli e permessi."
+    "body": "Per leggerle serve il permesso di vedere i prodotti. Lo assegna un amministratore in Sistema › Ruoli e permessi."
   },
   "card": {
     "neverChanged": "Mai cambiate qui: vale quanto è in vigore sopra.",
@@ -46,7 +46,7 @@
   },
   "loosen": {
     "title": "Conferma una regola meno restrittiva",
-    "intro": "Da quando salvi, nei modelli in queste fasi si potrà cambiare di più:",
+    "intro": "Da quando salvi, nei prodotti in queste fasi si potrà cambiare di più:",
     "line": "{state}: da “{from}” a “{to}”",
     "reason": "Perché",
     "reasonHint": "Resta con la modifica nel registro delle modifiche.",
@@ -77,7 +77,7 @@
   },
   "rules": {
     "title": "Regole di modifica per fase",
-    "description": "Cosa si può cambiare in un modello in ogni fase della sua vita. Ogni modifica a un prodotto chiede la regola della fase del suo modello.",
+    "description": "Cosa si può cambiare in un prodotto in ogni fase della sua vita. Ogni modifica a un prodotto chiede la regola della fase del suo prodotto.",
     "table": "Regola di modifica per fase",
     "unknown": "Non ancora nota",
     "failed": "Impossibile caricare le regole di modifica",
@@ -121,7 +121,7 @@
   },
   "kindHint": {
     "DETAILS": "Nome, nomi in altre lingue, descrizione, stagione",
-    "SPEC": "Ogni altro campo del modello, le sue varianti colore e il suo tipo",
+    "SPEC": "Ogni altro campo del prodotto, le sue varianti colore e il suo tipo",
     "NEW_REVISION": "Avviare una revisione o copiarne una in una nuova bozza",
     "DRAFT": "Distinta base, ciclo e pezzi di una bozza aperta",
     "RELEASE": "Rilasciare una revisione in bozza"
@@ -210,7 +210,7 @@
   },
   "types": {
     "title": "Tipi di prodotto",
-    "description": "Giacca, pantaloni, tuta, guanti, gilet: i campi che un modello di ciascuno deve avere prima del rilascio e i valori con cui parte un nuovo modello. Un tipo figlio eredita quelli del padre.",
+    "description": "Giacca, pantaloni, tuta, guanti, gilet: i campi che un prodotto di ciascuno deve avere prima del rilascio e i valori con cui parte un nuovo prodotto. Un tipo figlio eredita quelli del padre.",
     "table": "Tipi di prodotto",
     "failed": "Impossibile caricare i tipi di prodotto",
     "add": "Nuovo tipo di prodotto",
@@ -232,7 +232,7 @@
       "required": "Obbligatori prima del rilascio",
       "scale": "Scala taglie",
       "ppe": "DPI",
-      "styles": "Modelli",
+      "styles": "Prodotti",
       "actions": "Azioni"
     },
     "status": {
@@ -243,19 +243,19 @@
     },
     "empty": {
       "title": "Ancora nessun tipo di prodotto",
-      "body": "Un tipo dice cosa deve avere un modello e con cosa parte. I modelli funzionano anche senza."
+      "body": "Un tipo dice cosa deve avere un prodotto e con cosa parte. I prodotti funzionano anche senza."
     },
     "emptyArchived": {
       "title": "Nessun tipo archiviato",
-      "body": "Un tipo archiviato resta sui modelli che lo hanno; un nuovo modello non lo prende più."
+      "body": "Un tipo archiviato resta sui prodotti che lo hanno; un nuovo prodotto non lo prende più."
     },
-    "how": "Un nuovo modello prende i valori del suo tipo dove lascia un campo vuoto; il controllo di rilascio chiede i campi obbligatori."
+    "how": "Un nuovo prodotto prende i valori del suo tipo dove lascia un campo vuoto; il controllo di rilascio chiede i campi obbligatori."
   },
   "row": {
     "edit": "Apri e modifica",
     "view": "Apri",
     "archive": "Archivia",
-    "archiveHint": "I suoi modelli lo tengono; un nuovo modello non lo prende più.",
+    "archiveHint": "I suoi prodotti lo tengono; un nuovo prodotto non lo prende più.",
     "restore": "Ripristina",
     "menu": "Azioni per {code}"
   },
@@ -299,7 +299,7 @@
     "baseSize": "Taglia base",
     "ppeStandard": "Norma DPI",
     "ppeClass": "Classe DPI",
-    "measurementTemplateId": "Modello di misure",
+    "measurementTemplateId": "Prodotto di misure",
     "hsCode": "Codice doganale",
     "originCountry": "Paese di origine",
     "netMassKg": "Massa netta",
@@ -315,22 +315,22 @@
     "kindHint": "Un tipo padre è dello stesso tipo di capo.",
     "whose": "Di chi",
     "whoseFixed": "Resta come creato.",
-    "whoseHint": "Un tipo di tutte le aziende può essere preso dai modelli di ogni azienda.",
+    "whoseHint": "Un tipo di tutte le aziende può essere preso dai prodotti di ogni azienda.",
     "whoseCompany": "Solo {company}",
     "parent": "Tipo padre",
     "parentHint": "Eredita i campi obbligatori del padre e ogni valore che non imposta.",
     "noParent": "Nessun padre (tipo principale)",
     "required": "Obbligatori prima del rilascio",
-    "requiredHint": "I campi che un modello di questo tipo deve avere compilati prima del rilascio. Quelli del padre si aggiungono.",
+    "requiredHint": "I campi che un prodotto di questo tipo deve avere compilati prima del rilascio. Quelli del padre si aggiungono.",
     "requiredFrom": "{field} (da {code})",
     "requiredInherited": "Richiesto dal tipo padre {code}",
-    "defaults": "Con cosa parte un nuovo modello",
-    "defaultsHint": "Un nuovo modello di questo tipo li prende dove lascia il campo vuoto. Vuoto qui: quelli del padre.",
+    "defaults": "Con cosa parte un nuovo prodotto",
+    "defaultsHint": "Un nuovo prodotto di questo tipo li prende dove lascia il campo vuoto. Vuoto qui: quelli del padre.",
     "scale": "Scala taglie",
-    "label": "Modello di etichetta del capo",
+    "label": "Prodotto di etichetta del capo",
     "labelNoRight": "Per scegliere un modello di etichetta serve il permesso di leggere certificati ed etichette.",
     "labelOption": "{code} · {name} (rev. {revision})",
-    "template": "Modello di misure",
+    "template": "Prodotto di misure",
     "ppeCategory": "Categoria DPI",
     "standard": "Norma DPI",
     "standardHint": "Con la sua edizione, come EN 17092-4:2020.",
@@ -344,13 +344,13 @@
     "save": "Salva il tipo",
     "add": "Aggiungi il tipo",
     "archivedTitle": "Questo tipo è archiviato",
-    "archivedBody": "I suoi modelli lo tengono; un nuovo modello non lo prende più. Ripristinalo per cambiarlo.",
-    "styles": "Modelli con questo tipo",
-    "stylesCount_one": "1 modello",
-    "stylesCount_other": "{count} modelli",
+    "archivedBody": "I suoi prodotti lo tengono; un nuovo prodotto non lo prende più. Ripristinalo per cambiarlo.",
+    "styles": "Prodotti con questo tipo",
+    "stylesCount_one": "1 prodotto",
+    "stylesCount_other": "{count} prodotti",
     "children": "Tipi figli",
     "held": {
-      "kindInUse": "Il tipo di capo resta finché modelli o tipi figli usano questo tipo: un altro tipo di capo è un nuovo tipo.",
+      "kindInUse": "Il tipo di capo resta finché prodotti o tipi figli usano questo tipo: un altro tipo di capo è un nuovo tipo.",
       "archived": "Archiviato: ripristinalo per cambiarlo.",
       "nothing": "Ancora nessuna modifica."
     },
@@ -362,7 +362,7 @@
       "ppeClass": "Una classe è al massimo di 10 caratteri.",
       "ppeCategory": "Scegli la categoria DPI a cui vanno la norma e la classe (qui o sul padre).",
       "ppe": "Questa categoria, norma e classe DPI non vanno insieme per questo tipo di capo (EN 17092 mai sui guanti; un capo protettivo è almeno Categoria II).",
-      "kindInUse": "Modelli o tipi figli usano questo tipo: il tipo di capo resta.",
+      "kindInUse": "Prodotti o tipi figli usano questo tipo: il tipo di capo resta.",
       "parent": "Questo padre non si può prendere: deve essere attivo, dello stesso tipo di capo, dell’azienda di questo tipo o di tutte le aziende, e non uno dei suoi figli.",
       "required": "Uno dei campi obbligatori non si può richiedere.",
       "scale": "Questa scala taglie non si può prendere: deve essere attiva e dell’azienda di questo tipo o di tutte le aziende.",
@@ -383,7 +383,7 @@
     "write": {
       "moved": "Qualcuno lo ha cambiato nel frattempo: rileggi, poi rifai la modifica.",
       "codeTaken": "Questo codice è già di un altro tipo.",
-      "kindInUse": "Modelli o tipi figli usano questo tipo: il tipo di capo resta.",
+      "kindInUse": "Prodotti o tipi figli usano questo tipo: il tipo di capo resta.",
       "state": "Non è possibile nel suo stato attuale: rileggi.",
       "archived": "Archiviato: prima ripristinalo (un tipo sotto un padre archiviato: prima ripristina il padre).",
       "invalid": "Qualcosa non va: guarda i campi.",
@@ -403,8 +403,8 @@
     "tolerance": "Tolleranza di consumo salvata.",
     "typeSaved": "Tipo di prodotto {code} salvato.",
     "typeAdded": "Tipo di prodotto {code} aggiunto.",
-    "archived_one": "1 tipo archiviato. I suoi modelli lo tengono.",
-    "archived_other": "{count} tipi archiviati. I loro modelli li tengono.",
+    "archived_one": "1 tipo archiviato. I suoi prodotti lo tengono.",
+    "archived_other": "{count} tipi archiviati. I loro prodotti li tengono.",
     "restored_one": "1 tipo ripristinato.",
     "restored_other": "{count} tipi ripristinati.",
     "archivedSome": "{count} tipi su {total} archiviati; gli altri sono stati rifiutati (rileggi l’elenco).",

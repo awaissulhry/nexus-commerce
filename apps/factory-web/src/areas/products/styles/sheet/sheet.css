@@ -1,0 +1,29 @@
+/*
+ * owb-pd4 step 4.2 (design § 5q, prodSheetSvg) — the Product sheet: one A4 page in the Office's print view. The shell's print view
+ * draws the paper head, the toolbar (Print, Back) and the page numbers; this page keeps to one landscape A4 where it can. DS tokens
+ * only (no raw colour); on paper the browser prints the light theme's values.
+ */
+.fw-pd-sheet { display: flex; flex-direction: column; gap: var(--nds-space-16); max-width: 1100px; min-width: 0; }
+.fw-pd-sheet-head { display: flex; flex-direction: column; gap: var(--nds-space-4); border-bottom: 1px solid var(--nds-border); padding-bottom: var(--nds-space-12); }
+.fw-pd-sheet-title { margin: 0; font-size: var(--nds-font-size-xl); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-pd-sheet-sub { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-pd-sheet-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16); align-items: start; }
+@media (min-width: 720px) {
+  .fw-pd-sheet-top { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+.fw-pd-sheet-pics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--nds-space-12); min-width: 0; }
+.fw-pd-sheet-pic { margin: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-pd-sheet-pic img { width: 100%; max-height: 320px; object-fit: contain; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm); background: var(--nds-surface); }
+.fw-pd-sheet-pic figcaption { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); text-align: center; }
+.fw-pd-sheet-none { margin: 0; display: inline-flex; gap: var(--nds-space-6); align-items: center; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.fw-pd-sheet-part { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; overflow-x: auto; }
+.fw-pd-sheet-h2 { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-pd-sheet-how, .fw-pd-sheet-prot { margin: 0; padding-left: var(--nds-space-20); display: grid; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); }
+.fw-pd-sheet-prot { list-style: none; padding-left: 0; }
+.fw-pd-sheet-note { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+@media print {
+  @page { size: A4 landscape; }
+  .fw-pd-sheet { max-width: none; gap: 10px; }
+  .fw-pd-sheet-top { grid-template-columns: 3fr 2fr; }
+  .fw-pd-sheet-part, .fw-pd-sheet-pic { break-inside: avoid; }
+}

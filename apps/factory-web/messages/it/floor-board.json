@@ -1,0 +1,44 @@
+{
+  "leaderOnly": "Il Tabellone è del caposquadra. I tuoi cesti sono nella Home.",
+  "loading": "Apertura…",
+  "failed": "Non si può leggere ora.",
+  "retry": "Riprova",
+  "offline": "Nessuna rete: questo è ciò che il telefono ha letto l'ultima volta.",
+  "empty": "Nessun cesto qui ora.",
+  "scope": {
+    "label": "Di chi sono i cesti",
+    "team": "La mia squadra",
+    "floor": "Tutto il reparto"
+  },
+  "chips": {
+    "label": "Reparti",
+    "ready": "Pronto da spedire"
+  },
+  "list": {
+    "label": "Cesti"
+  },
+  "row": {
+    "first": "Prima",
+    "problem": "Problema",
+    "late": "In ritardo",
+    "ready": "Pronto da spedire",
+    "WORKING": "In lavorazione",
+    "PAUSED": "In pausa",
+    "WAITING": "In attesa"
+  },
+  "chain": {
+    "noLine": "Questo dispositivo non appartiene a nessuna catena. Chiedi al tuo caposquadra.",
+    "noSteps": "Questa catena non ha ancora passi.",
+    "steps": "Passi della catena",
+    "slowest_one": "Passo più lento · {count} pezzo aspetta",
+    "slowest_other": "Passo più lento · {count} pezzi aspettano",
+    "offline": "Serve la rete",
+    "sending": "Invio…",
+    "waiting_one": "{count} aspetta dal passo prima",
+    "waiting_other": "{count} aspettano dal passo prima",
+    "full": "Ogni pezzo di questa taglia è fatto qui.",
+    "plusBundle": "+ un fascio",
+    "undoLabel": "Togli {count} pezzi di {code}",
+    "failed": "Non è andato. Riprova."
+  }
+}

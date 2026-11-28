@@ -17,6 +17,7 @@ import { RequestsCard } from './overview/RequestsCard'
 import { LinkedCard } from './overview/LinkedCard'
 import { FactsCard } from './overview/FactsCard'
 // ---- end F-OO-100
+import { OrderTextCard } from './overview/FlowParts' // owb-of5 step 2: "The order as it was written" (a text order)
 // ---- F-CO-K1 (the shared overview kit): the tab's column and its pairs are the kit's parts; the kit brings its ONE stylesheet (the
 // old overview.css moved there: F-OO-201's pairs and the shared card row). Imported after the cards, where overview.css was. ----
 import { Overview, OverviewPair } from '../../../../../lib/record-overview/Overview'
@@ -63,6 +64,8 @@ export function OverviewTab({ order, model, actions, customFields }: { order: Or
         <FactsCard order={order} model={model} actions={actions /* F-OO-209: its doors */} />
         {customFields /* F-OO-211: the order's custom fields (RecordCustomFields: nothing when no field applies) */}
       </OverviewPair>
+      {/* owb-of5 step 2 (design § 5g): an order that came as text keeps "The order as it was written" — the customer's words and files. */}
+      {model.flow?.text ? <OrderTextCard card={model.flow.text} /> : null}
     </Overview>
   )
 }
