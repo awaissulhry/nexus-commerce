@@ -1038,7 +1038,9 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
           {(!customer || file.inThread) && (
             <span className="fw-rtv-card-actions">
               {!customer && (
-                <Button size="sm" variant="quiet" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
+                // owb-of6 step 4 (design § 5p point 1): the office card's download shows when the card is pointed at or focused, always on
+                // a touch screen (files-tab.css .fw-of-dl); the portal's face has no such button and stays as it is.
+                <Button size="sm" variant="quiet" className="fw-of-dl" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
                   <Download size={14} aria-hidden /> <span className="fw-of-dl-word">{t('card.download') /* fx5w (W-13): an icon at S; the name stays for screen readers */}</span>
                 </Button>
               )}
