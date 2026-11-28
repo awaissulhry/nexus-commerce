@@ -860,3 +860,161 @@ CREATE TRIGGER "PaymentNotice_guard" AFTER INSERT OR UPDATE OR DELETE ON "Paymen
 CREATE TRIGGER "PaymentNotice_no_truncate" BEFORE TRUNCATE ON "PaymentNotice"
   FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
 
+-- =====================================================================================================================
+-- The customer's own columns (order-columns.prisma; owb G8; PL-schema § 5A row 5). Every row carries the customer's partyId in
+-- its references, so a use and a value name a column, a record and a line of the same customer (a foreign key, for every
+-- login); one use per column and record and one value per column and line are the API's (DB-A's schema note).
+--
+-- PartyLineColumn
+--   INSERT     open (no closedAt), at version 1.
+--   UPDATE     the customer, the kind and the creation never change (a value is always of its column's kind); the version
+--              goes up by one; a closed column never changes again (closed once, kept with its values).
+--   every row  a name of 1 to 40 trimmed characters; a CHOICE column has at least one choice, each of 1 to 40 trimmed
+--              characters, each once; every other kind has none; its place 1 or more.
+--   DELETE     refused (closed instead). TRUNCATE refused.
+-- Partial unique PartyLineColumn_open_name: one open column of a name per customer, whatever its case.
+CREATE FUNCTION "factory_party_line_column_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'sales: own column % is closed, never deleted (its values stay)', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."closedAt" IS NOT NULL OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'sales: a new own column is open, at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF OLD."closedAt" IS NOT NULL THEN
+      RAISE EXCEPTION 'sales: own column % was closed; it never changes again', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF (NEW."id", NEW."partyId", NEW."kind", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."partyId", OLD."kind", OLD."createdAt", OLD."createdById") THEN
+      RAISE EXCEPTION 'sales: the customer, kind and creation of own column % never change', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'sales: the version of own column % goes up by one', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF btrim(NEW."name") <> NEW."name" OR NEW."name" = '' OR length(NEW."name") > 40 OR NEW."seq" < 1 THEN
+    RAISE EXCEPTION 'sales: own column % has a name of 1 to 40 trimmed characters and its place (1 or more)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."choices" IS NULL
+     OR (NEW."kind"::text = 'CHOICE') <> (cardinality(NEW."choices") > 0)
+     OR EXISTS (SELECT 1 FROM unnest(NEW."choices") c WHERE c IS NULL OR btrim(c) <> c OR c = '' OR length(c) > 40)
+     OR cardinality(NEW."choices") <> (SELECT count(DISTINCT c) FROM unnest(NEW."choices") c) THEN
+    RAISE EXCEPTION 'sales: own column % has its choices exactly when it is a CHOICE column: at least one, each of 1 to 40 trimmed characters, each once', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "PartyLineColumn_guard" AFTER INSERT OR UPDATE OR DELETE ON "PartyLineColumn"
+  FOR EACH ROW EXECUTE FUNCTION "factory_party_line_column_guard"();
+CREATE TRIGGER "PartyLineColumn_no_truncate" BEFORE TRUNCATE ON "PartyLineColumn"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+CREATE UNIQUE INDEX "PartyLineColumn_open_name" ON "PartyLineColumn" ("tenantId", "partyId", lower(btrim("name"))) WHERE "closedAt" IS NULL;
+
+-- OrderLineColumnUse
+--   every row  exactly one record: a sales order or a portal order request; of the record's company (an order's by its
+--              reference; a request's read here); its place 1 or more.
+--   UPDATE     the customer, the company, the record, the column and the creation never change; the version goes up by one.
+-- A use goes with its discarded draft (its reference cascades); nobody deletes one otherwise (no grant).
+CREATE FUNCTION "factory_order_line_column_use_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  request_company uuid;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF (NEW."id", NEW."partyId", NEW."companyId", NEW."salesOrderId", NEW."portalOrderRequestId", NEW."columnId", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."partyId", OLD."companyId", OLD."salesOrderId", OLD."portalOrderRequestId", OLD."columnId", OLD."createdAt", OLD."createdById")
+       OR NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'sales: own column use % keeps its record and its column; its version goes up by one', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF NEW."version" <> 1 THEN
+    RAISE EXCEPTION 'sales: a new own column use is at version 1'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."salesOrderId" IS NULL) = (NEW."portalOrderRequestId" IS NULL) OR NEW."seq" < 1 THEN
+    RAISE EXCEPTION 'sales: own column use % is on exactly one record (a sales order or an order request), in its place (1 or more)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."portalOrderRequestId" IS NOT NULL THEN
+    SELECT r."companyId" INTO request_company FROM "PortalOrderRequest" r WHERE r."tenantId" = NEW."tenantId" AND r."id" = NEW."portalOrderRequestId";
+    IF FOUND AND request_company <> NEW."companyId" THEN
+      RAISE EXCEPTION 'sales: own column use % is of its order request''s company', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "OrderLineColumnUse_check" AFTER INSERT OR UPDATE ON "OrderLineColumnUse"
+  FOR EACH ROW EXECUTE FUNCTION "factory_order_line_column_use_check"();
+CREATE TRIGGER "OrderLineColumnUse_no_truncate" BEFORE TRUNCATE ON "OrderLineColumnUse"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
+-- OrderLineOwnValue
+--   every row  exactly one line: a sales order line or a portal order request line; only the field its column's kind needs
+--              holds a value (TEXT valueText, YES_NO valueBool, CHOICE valueText — one of the column's choices —, NUMBER
+--              valueNumber, DATE valueDate), every other field none; that field may be none too (a value cleared: nobody
+--              deletes a value but with its line); words of 1 to 1000 characters, not blank.
+--   UPDATE     the customer, the column, the line and the creation never change; the version goes up by one.
+CREATE FUNCTION "factory_order_line_own_value_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  column_kind text;
+  column_choices text[];
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF (NEW."id", NEW."partyId", NEW."columnId", NEW."salesOrderLineId", NEW."portalOrderRequestLineId", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."partyId", OLD."columnId", OLD."salesOrderLineId", OLD."portalOrderRequestLineId", OLD."createdAt", OLD."createdById")
+       OR NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'sales: own column value % keeps its column and its line; its version goes up by one', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF NEW."version" <> 1 THEN
+    RAISE EXCEPTION 'sales: a new own column value is at version 1'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."salesOrderLineId" IS NULL) = (NEW."portalOrderRequestLineId" IS NULL) THEN
+    RAISE EXCEPTION 'sales: own column value % is on exactly one line (of a sales order or of an order request)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT c."kind"::text, c."choices" INTO column_kind, column_choices
+    FROM "PartyLineColumn" c WHERE c."tenantId" = NEW."tenantId" AND c."partyId" = NEW."partyId" AND c."id" = NEW."columnId";
+  IF FOUND AND ((NEW."valueText" IS NOT NULL AND column_kind NOT IN ('TEXT', 'CHOICE'))
+                OR (NEW."valueBool" IS NOT NULL AND column_kind <> 'YES_NO')
+                OR (NEW."valueNumber" IS NOT NULL AND column_kind <> 'NUMBER')
+                OR (NEW."valueDate" IS NOT NULL AND column_kind <> 'DATE')
+                OR (column_kind = 'CHOICE' AND NEW."valueText" IS NOT NULL AND NOT (NEW."valueText" = ANY (column_choices)))) THEN
+    RAISE EXCEPTION 'sales: own column value % fills only the field its column''s kind needs (%), a CHOICE one of its choices', NEW."id", column_kind
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."valueText" IS NOT NULL AND (btrim(NEW."valueText") = '' OR length(NEW."valueText") > 1000) THEN
+    RAISE EXCEPTION 'sales: own column value % has words of 1 to 1000 characters, not blank', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "OrderLineOwnValue_check" AFTER INSERT OR UPDATE ON "OrderLineOwnValue"
+  FOR EACH ROW EXECUTE FUNCTION "factory_order_line_own_value_check"();
+CREATE TRIGGER "OrderLineOwnValue_no_truncate" BEFORE TRUNCATE ON "OrderLineOwnValue"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+
