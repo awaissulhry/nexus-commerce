@@ -1,0 +1,146 @@
+{
+  "title": "Lines",
+  "empty": "No line yet. That is fine: the factory reads your message and fills the lines.",
+  "mode": {
+    "sent": "Sent to the factory: take it back to change the lines.",
+    "confirmed": "The factory confirmed this order: a change is an ask (Ask for a change…).",
+    "shipped": "It left the factory. A change now is a return."
+  },
+  "pending": "Choose the model of the new line first.",
+  "add": "Add a line",
+  "columns": {
+    "some": "Columns · {n}…",
+    "none": "Add a column…"
+  },
+  "total": "{pieces} pieces in all",
+  "removed": {
+    "title": "Lines taken out",
+    "line": "Line {seq} is taken out: {words}.",
+    "noWords": "no model yet"
+  },
+  "putBack": "Put it back",
+  "line": "Line {seq}",
+  "col": {
+    "model": "Model",
+    "material": "Material",
+    "sizes": "Sizes",
+    "pieces": "Pieces",
+    "price": "Your price"
+  },
+  "later": "Can come later",
+  "copy": "Copy line {seq}",
+  "takeOut": "Take line {seq} out",
+  "dropPending": "Take the new line out",
+  "sizes": {
+    "mtm": "Made to measure",
+    "mtmPeople_one": "Made to measure · {count} person",
+    "mtmPeople_other": "Made to measure · {count} people",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "file": "In the size file"
+  },
+  "model": {
+    "aria": "The model of line {seq}",
+    "choose": "Choose the model…",
+    "group": {
+      "own": "Your designs",
+      "range": "The factory’s range",
+      "new": "A new design",
+      "text": "As in my message"
+    },
+    "new": "New: {kind}",
+    "text": "As in my message"
+  },
+  "material": {
+    "add": "Add the material…",
+    "aria": "The material of line {seq}",
+    "open": "Not decided yet"
+  },
+  "pieces": {
+    "aria": "The pieces of line {seq}",
+    "refused": "Pieces: type a whole number from 1 to 100,000, or leave it empty."
+  },
+  "own": {
+    "aria": "{name} of line {seq}",
+    "yes": "Yes",
+    "no": "No",
+    "title": "Columns of your own",
+    "titleOffice": "The customer’s own columns",
+    "sub": "More to say about each line. The factory reads every column.",
+    "subOffice": "More to say about each line. They are the customer’s: you can set them for the customer.",
+    "busy": "Saving…",
+    "reading": "Reading your columns…",
+    "mine": "Your columns — switch one on for this order",
+    "mineOffice": "The customer’s columns — switch one on for this order",
+    "full": "This order has {max} columns: the most. Switch one off to add another.",
+    "closeAria": "Take the column {name} out of your list",
+    "onThis": "on this order",
+    "ask": "Lines of this order have a value in “{name}”. Switch it off and clear those values?",
+    "askKeep": "Keep it on",
+    "askDrop": "Switch it off and clear the values",
+    "quickTitle": "Often used — one press adds it",
+    "quick": {
+      "remake": "Remake",
+      "sizing": "Sizing",
+      "nameOn": "Name on the piece",
+      "comment": "Comment",
+      "neededBy": "Needed by"
+    },
+    "quickChoice": {
+      "standard": "Standard size",
+      "mtm": "Made to measure"
+    },
+    "newTitle": "A new column",
+    "name": "Its name",
+    "namePh": "For example: Team",
+    "kindAria": "The kind of the column",
+    "kind": {
+      "TEXT": "Text",
+      "YES_NO": "Yes / No",
+      "CHOICE": "Choice",
+      "NUMBER": "Number",
+      "DATE": "Date"
+    },
+    "choices": "The choices",
+    "choicesPh": "With a comma between them: Home, Away, Third",
+    "add": "Add the column",
+    "note": "A column is yours: your next order can use it again. The factory sees it on the order, in its list and on the worker’s phone.",
+    "noteOffice": "A column is the customer’s: its next order can use it again. It shows on the order, in the orders list and on the worker’s phone.",
+    "refused": {
+      "name": "Give the column a name.",
+      "long": "A name is at most 40 characters.",
+      "fixed": "That is the name of a fixed column: choose another name.",
+      "twice": "You have a column with this name already.",
+      "choices": "A choice needs two choices at least, with a comma between them.",
+      "text": "At most 200 characters.",
+      "number": "Type a number.",
+      "date": "Choose a day.",
+      "yesNo": "Choose Yes or No.",
+      "choice": "Choose one of the choices."
+    }
+  },
+  "price": {
+    "aria": "Your price for one piece of line {seq}",
+    "agreed": "agreed {amount}",
+    "material": "choose the material",
+    "factory": "the factory answers",
+    "frozen": "Sent: your price is kept as it is."
+  },
+  "chips": {
+    "more_one": "{count} more: {rest}",
+    "more_other": "{count} more: {rest}"
+  },
+  "office": {
+    "col": {
+      "price": "Price"
+    },
+    "mode": {
+      "sent": "Sent by the customer: it reads until you confirm it or the customer takes it back.",
+      "confirmed": "Confirmed: change it with Amend."
+    },
+    "price": {
+      "factory": "no list price yet",
+      "aria": "The price for one piece of line {seq}"
+    }
+  }
+}

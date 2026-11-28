@@ -1,0 +1,174 @@
+{
+  "tile": {
+    "problem": "Problem",
+    "ask": "Ask",
+    "photo": "Photo",
+    "notes": "Notes",
+    "notesCount_one": "Notes: {count} note from the office",
+    "notesCount_other": "Notes: {count} notes from the office"
+  },
+  "problem": {
+    "title": "Problem · {code}",
+    "lead": "One tap tells the team leader and the office. The work can go on.",
+    "question": "What is the problem?",
+    "none": "This site has no problems to tell from a phone yet. Ask your team leader.",
+    "code": {
+      "MATERIAL": "Material missing",
+      "DAMAGED": "Damaged piece",
+      "UNCLEAR": "Design not clear",
+      "MACHINE": "Machine problem",
+      "PAPER": "Page lost or damaged"
+    }
+  },
+  "ask": {
+    "title": "Ask · {code}",
+    "lead": "One tap asks. The answer comes back to this basket.",
+    "question": "What do you need?",
+    "none": "This site has no asks from a phone yet. Ask your team leader.",
+    "code": {
+      "ASK_LOGO": "Logo missing",
+      "ASK_PATCH": "Patch missing",
+      "ASK_TO_PATCH": "Send it to the patch team",
+      "ASK_UNCLEAR": "Design not clear",
+      "ASK_OTHER": "Something else (voice)"
+    },
+    "to": {
+      "DESIGNER": "Designer",
+      "TEAM_LEADER": "Team leader"
+    },
+    "cardLabel": "Your ask",
+    "state": {
+      "asked": "Asked",
+      "taken": "Works on it",
+      "answered": "Answered"
+    },
+    "answered": "Answered",
+    "voiceLost": "The voice note needs the network: it did not go. Tell your team leader what you need.",
+    "voiceFailed": "The ask went, but the voice note did not. Tell your team leader what you need."
+  },
+  "answer": {
+    "title": "An answer for you"
+  },
+  "window": {
+    "loading": "Opening…",
+    "sending": "Sending…",
+    "offline": "No network. Try again when the network is back.",
+    "offlineSaved": "No network: one tap still works. It is saved on this phone and goes when the network is back.",
+    "noStation": "Pick your department first.",
+    "notFound": "This basket is not at this site.",
+    "forbidden": "You may not do this here. Ask your team leader.",
+    "failed": "It did not go. Try again.",
+    "already": "Already told for {code}: the team leader comes.",
+    "saved": "{what}: saved on this phone. It goes to the team leader when the network is back.",
+    "again": "Back",
+    "close": "Close"
+  },
+  "department": {
+    "first": "Pick your department first. One tap.",
+    "label": "Departments",
+    "loading": "Opening the departments…",
+    "station": "Where are you? Tap your place.",
+    "none": "This department has no station at this site. Ask the office to add one."
+  },
+  "media": {
+    "offline": "Needs the network",
+    "busy": "Sending… wait a moment."
+  },
+  "card": {
+    "label": "Problem told",
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "add": "Add to the problem",
+    "spot": "Show the place",
+    "photo": "Photo",
+    "voice": "Voice note",
+    "photoTitle": "A photo of the problem · {code}",
+    "voiceTitle": "A voice note about the problem · {code}",
+    "answer": "Answer the problem",
+    "onMyWay": "On my way",
+    "solved": "Solved",
+    "pending": "Saved on this phone",
+    "officeNote": "Nobody came in time: the office is told.",
+    "state": {
+      "TOLD": "Told",
+      "COMES": "The team leader comes",
+      "OFFICE": "It is at the office now",
+      "SOLVED": "Solved",
+      "reprint": "The office prints it again"
+    },
+    "sent": {
+      "photo": "Photo sent to the office.",
+      "voice": "Voice note sent to the office.",
+      "spot": "The place is shown."
+    }
+  },
+  "spot": {
+    "title": "Show the place · {code}",
+    "lead": "Tap the place of the problem.",
+    "place": "Place {no} of 9",
+    "shown": "The problem is at place {no} of 9"
+  },
+  "photo": {
+    "title": "Photo · {code}",
+    "saved": "Photo saved. The office sees it.",
+    "offline": "Needs the network. A photo cannot wait on the phone: take it when the network is back."
+  },
+  "notes": {
+    "title": "Notes from the office · {code}",
+    "lead": "The office's notes for this work, newest first.",
+    "none": "No notes from the office for this work.",
+    "files_one": "{count} photo with it",
+    "files_other": "{count} photos with it"
+  },
+  "me": {
+    "title": "Me",
+    "loading": "Opening…",
+    "failed": "Your team could not be read now.",
+    "retry": "Try again",
+    "workerRole": "Worker",
+    "leaderRole": "Team leader",
+    "noTeam": "No team yet.",
+    "leaderIs": "Team leader: {name}",
+    "canWork": "I can work in",
+    "waiting_one": "Saved on this phone: {count} waits to go to the office.",
+    "waiting_other": "Saved on this phone: {count} wait to go to the office.",
+    "offline_one": "No network. Your work is saved on this phone: {count} waits.",
+    "offline_other": "No network. Your work is saved on this phone: {count} wait.",
+    "myDay": "My day",
+    "myDayNote": "My day is for your eyes only: it asks your PIN. My record shows one tick on this phone, two ticks at the office.",
+    "tell": "Tell the office",
+    "large": "Large words",
+    "sound": "Sound and vibration",
+    "on": "On",
+    "off": "Off",
+    "record": "My record",
+    "person": "Change person",
+    "language": "Language"
+  },
+  "tell": {
+    "title": "Tell the office",
+    "what": "What is it about?",
+    "kind": {
+      "IDEA": "An idea",
+      "WRONG": "Something is wrong",
+      "THANKS": "Thank you"
+    },
+    "words": "Your words (or a voice note)",
+    "voice": "Voice note",
+    "voiceTaken_one": "Voice note · {count} second",
+    "voiceTaken_other": "Voice note · {count} seconds",
+    "dropVoice": "Remove the voice note",
+    "offline": "No network: a message with your name waits on this phone; one without your name goes only with the network.",
+    "sendGroup": "Send",
+    "withName": "Send with my name",
+    "withoutName": "Send without my name",
+    "privacy": "Without your name, the office does not see who sent it.",
+    "sent": "The office got it.",
+    "held": {
+      "kind": "First tap what it is about.",
+      "empty": "Say it in a few words or a voice note.",
+      "voiceOffline": "A voice note needs the network.",
+      "anonOffline": "A message without your name goes only when the network is there."
+    }
+  }
+}

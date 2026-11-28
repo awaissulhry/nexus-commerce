@@ -4,7 +4,7 @@
  * each choice says, why Save waits, and a refusal in words. The window's choices: "Use the design" (back to the default: the design of
  * the first line) and the order's files that may be its picture — an image or a PDF (its first page) the customer can open, never a
  * file for the office only, a priced file or a size sheet (the host's walled read lists only those; the server refuses any other with
- * a 422). Choose, then Save; the save sends the record's version back (a 409 when someone changed it meanwhile).
+ * a 400 `validation_failed` — the API has no 422; owb-po3.4: `saveRefusalOf` says it as NOT_ALLOWED). Choose, then Save; the save sends the record's version back (a 409 when someone changed it meanwhile).
  *
  * Who may open it is the host's: the customer decides, sales or the owner set it for the customer; the designer and the floor never
  * (design § 5zj A). Owner after the base: S1 (PL-split § 3); S2 mounts it. Pure: no React, no API.
@@ -82,7 +82,10 @@ export const saveStarted = (state: OrderPictureState): OrderPictureState => ({ .
 /** A save or an upload was refused. */
 export const refusedWith = (state: OrderPictureState, refusal: PictureRefusal): OrderPictureState => ({ ...state, busy: 'idle', refused: refusal })
 
-/** The refusal of a failed save, by the API error's kind (lib/api/errors `ApiErrorKind`; anything else: it failed). */
+/**
+ * The refusal of a failed save, by the API error's kind (lib/api/errors `ApiErrorKind`; anything else: it failed). owb-po3.4 checked: the
+ * API refuses a file that may not be the picture with 400 `validation_failed` (never 422): `errorKindFor(400)` is `invalid` → NOT_ALLOWED.
+ */
 export function saveRefusalOf(kind: string | null | undefined): PictureRefusal {
   if (kind === 'conflict') return 'STALE'
   if (kind === 'not_found' || kind === 'forbidden') return 'GONE'

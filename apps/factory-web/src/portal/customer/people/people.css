@@ -1,0 +1,35 @@
+/*
+ * owb-po4.3 — Your people's LAYOUT (the cards are the account cards: shared/account/account.css). Semantic design-system tokens
+ * only; the DS parts keep their own look. The factory's people as a grid of name cards that takes the page's width.
+ */
+.fw-ppeople-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ppeople-person {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ppeople-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ppeople-wall {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}

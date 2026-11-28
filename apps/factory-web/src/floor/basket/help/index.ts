@@ -1,93 +1,25 @@
 /**
- * owner owb-fl8 — the basket page's problems, asks, photo and the office's notes (design § 5zf B–D; lead settles 1, 5). STUBS made
- * by owb-fl5 (web A) with the names web B chose; web B replaces this file's bodies in fl8 and never edits fl5's page.
+ * owner owb-fl8 — the basket page's help parts, imported by fl5's page ONLY from here (_owb-fl-common.md § 7). Pick C: no floor
+ * chat; the 4th tile is Notes (read only). fl5 placed this file with stubs; owb-fl8 replaces its bodies (the export names stay).
  *
- * The basket page imports Problem, Ask, Photo, Notes ONLY from here. While `HELP_READY` is false the page draws none of their
- * buttons (never a dead button): no tile row, no "Ask your team leader".
+ *   tiles     ProblemTile · AskTile · PhotoTile · NotesTile — each ONE button (icon above its word, 48 px and more) with its own
+ *             window; fl5 draws them in one row
+ *   windows   ProblemWindow · AskWindow · PhotoWindow · NotesWindow — { open, onClose, read, onChanged }: fl5's "Ask your team
+ *             leader" (a hold, not on its route, restricted) opens AskWindow
+ *   cards     ProblemCard (the red card: Told → The team leader comes → Solved) · AskCard (the open ask, "An answer for you") —
+ *             nothing drawn when the basket has none, so the page mounts them always
+ *   leader    CallAnswerButtons (On my way → Solved) for a list that holds a call
  *
- * Every tile and card takes `{ read, onChanged }`: `read` is the page's parsed basket read as it is (a structural superset of
- * HelpRead); `onChanged` re-reads the basket after a call is sent or answered.
+ * Props: `read` = fl1's basket read as fl5 parsed it (a structural subset, `HelpRead`), `onChanged` = read the basket again.
  */
-import type { ReactElement } from 'react'
+export { HELP2_NAMESPACE } from './words'
+export type { CallFlag, HelpRead } from './api'
+export { ProblemTile, AskTile, ProblemWindow, AskWindow, type TileProps, type WindowProps } from './HelpTiles'
+export { PhotoTile, PhotoWindow } from '../photo/PhotoTile'
+export { NotesTile, NotesWindow } from '../notes/NotesTile'
+export { ProblemCard } from './ProblemCard'
+export { AskCard } from './AskCard'
+export { CallAnswerButtons } from './CallAnswerButtons'
 
-/** A help call on the basket (a problem or an ask). */
-export interface HelpCallFlag {
-  readonly callId: string
-  readonly typeCode: string
-  readonly state: string
-  readonly minutes: number
-  readonly escalated: boolean
-  readonly spot?: number | null
-}
-
-/** What the help parts read of the basket read (common § 3 "fl1"). */
-export interface HelpRead {
-  readonly basket: { readonly id: string; readonly code: string; readonly workOrderId: string } | null
-  readonly picture: { readonly src: string } | null
-  readonly here: { readonly departmentId: string | null } | null
-  readonly flags: { readonly problem: HelpCallFlag | null; readonly ask: HelpCallFlag | null; readonly answer: { readonly words: string; readonly at: string } | null } | null
-  readonly notes: readonly { readonly at: string; readonly words: string; readonly fileIds: readonly string[] }[]
-}
-
-export interface HelpPartProps {
-  readonly read: HelpRead
-  readonly onChanged?: () => void
-}
-
-export interface HelpWindowProps extends HelpPartProps {
-  readonly open: boolean
-  readonly onClose: () => void
-}
-
-export interface CallAnswerButtonsProps {
-  readonly callId: string
-  readonly state: string
-  readonly onChanged?: () => void
-}
-
-/** fl8 sets true when the parts below are real. */
-export const HELP_READY: boolean = false
-
-/** The words of the help parts (fl8's catalogue). */
-export const HELP2_NAMESPACE = 'floor-help2'
-
-/** The four tiles in one row: each is its button and its own window. */
-export function ProblemTile(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-export function AskTile(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-export function PhotoTile(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-export function NotesTile(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-
-/** The windows alone (the dock's "Ask your team leader" opens AskWindow). */
-export function ProblemWindow(_props: HelpWindowProps): ReactElement | null {
-  return null
-}
-export function AskWindow(_props: HelpWindowProps): ReactElement | null {
-  return null
-}
-export function PhotoWindow(_props: HelpWindowProps): ReactElement | null {
-  return null
-}
-export function NotesWindow(_props: HelpWindowProps): ReactElement | null {
-  return null
-}
-
-/** "What needs you": the red problem card, the open ask with "An answer for you". Nothing when the flag is null. */
-export function ProblemCard(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-export function AskCard(_props: HelpPartProps): ReactElement | null {
-  return null
-}
-
-/** A team leader's On my way / Solved on a call. */
-export function CallAnswerButtons(_props: CallAnswerButtonsProps): ReactElement | null {
-  return null
-}
+/** The help parts are built: fl5's page draws the 4-tile row and "Ask your team leader" only when this is true (no dead button). */
+export const HELP_READY = true

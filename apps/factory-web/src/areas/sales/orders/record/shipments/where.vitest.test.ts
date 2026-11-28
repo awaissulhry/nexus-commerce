@@ -53,7 +53,7 @@ describe('the buckets add up to what was ordered (one counted set: Overview, Lin
     const where = whereOf(ORDER, RECEIVED)
     expect(where.mode).toBe('counted')
     expect(where.split).toBe(true)
-    expect(where.totals).toEqual({ shipped: 20, packed: 2, draft: 1, planned: 0, back: 4, ready: 2, making: 7, closed: 4 })
+    expect(where.totals).toEqual({ shipped: 20, atWarehouse: 0, packed: 2, draft: 1, planned: 0, back: 4, ready: 2, making: 7, closed: 4 })
     expect(where.ordered).toBe(40)
     expect(sumOf(where.totals)).toBe(40)
     // Still to ship = ready now + still to be made or released + came back: the garments on a draft or packed shipment are not "to ship".
@@ -170,5 +170,34 @@ describe('the answer and the summary\'s words', () => {
     const fresh = of([sized(base.lines[0]!, 'blk', [['50', p(4, { toShip: 4, planned: 0, readyNow: 0 })]])], [])
     expect(shownBuckets(whereOf(fresh, null))).toEqual(['shipped', 'making'])
     expect(whereOf(fresh, null).doors.shipped).toEqual([])
+  })
+})
+
+// ── owb-ss3 step 3.2 (design plan § 5n, § 7; the word "At our warehouse") ──────────────────────────────────────────────────────────
+describe('owb-ss3: the "At our warehouse" part (the legs read) adds up', () => {
+  it('a shipment at our warehouse moves its garments out of Shipped into At our warehouse; the buckets still add up to 40', () => {
+    const where = whereOf(ORDER, RECEIVED, new Set(['sh-1']))
+    expect(where.totals).toEqual({ shipped: 16, atWarehouse: 4, packed: 2, draft: 1, planned: 0, back: 4, ready: 2, making: 7, closed: 4 })
+    expect(sumOf(where.totals)).toBe(40)
+    expect(where.doors.atWarehouse.map((ref) => ref.number)).toEqual(['SEED-SH-0011'])
+    expect(where.doors.shipped.map((ref) => ref.number)).toEqual(['SEED-SH-0015'])
+    expect(shownBuckets(where)).toEqual(['shipped', 'atWarehouse', 'packed', 'draft', 'back', 'ready', 'making', 'closed'])
+    expect(sumWord(where)).toEqual({ key: 'where.eq', params: { sum: '16 + 4 + 2 + 1 + 4 + 2 + 7 + 4', ordered: 40 } })
+  })
+
+  it('only a SHIPPED shipment counts (a delivered one was sent on); not read or empty: nothing moves', () => {
+    expect(whereOf(ORDER, RECEIVED, new Set(['sh-5'])).totals.atWarehouse).toBe(0)
+    expect(whereOf(ORDER, RECEIVED, null).totals).toEqual(whereOf(ORDER, RECEIVED).totals)
+    expect(whereOf(ORDER, RECEIVED, new Set()).totals.atWarehouse).toBe(0)
+  })
+
+  it('never more than left the factory, and "everything left" still counts the garments at our warehouse', () => {
+    // A cell that says 2 shipped while the shipment names 4: at most the 2 that left move.
+    const short = of([sized(base.lines[0]!, 'blk', [['50', p(4, { released: 4, shipped: 2, toShip: 2, planned: 0, readyNow: 2 })]])], [ship('sh-1', 'SEED-SH-0011', 'SHIPPED', [{ lineId: 'blk', size: '50', pieces: 4 }])])
+    expect(whereOf(short, null, new Set(['sh-1'])).totals).toMatchObject({ shipped: 0, atWarehouse: 2, ready: 2 })
+    const all = of([sized(base.lines[0]!, 'blk', [['50', p(4, { released: 4, shipped: 4, toShip: 0, planned: 0, readyNow: 0 })]])], [ship('sh-1', 'SEED-SH-0011', 'SHIPPED', [{ lineId: 'blk', size: '50', pieces: 4 }])])
+    const where = whereOf(all, null, new Set(['sh-1']))
+    expect(where.allOut).toBe(true)
+    expect(whereAnswer(where, all)[0]).toMatchObject({ key: 'where.allOut', words: { garments: { key: 'where.garments', params: { count: 4 } } } })
   })
 })

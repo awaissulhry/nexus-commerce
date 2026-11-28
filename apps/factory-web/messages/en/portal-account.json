@@ -117,6 +117,7 @@
       "name": "Name",
       "email": "E-mail",
       "role": "Role",
+      "does": "What this person does",
       "prices": "Sees prices",
       "lastSignIn": "Last sign-in",
       "status": "Status",
@@ -453,5 +454,18 @@
       "who": "Who: {names}",
       "told": "Each one is told once, in their portal."
     }
+  },
+  "people": {
+    "title": "Your people",
+    "ours": "People of your company",
+    "factory": {
+      "title": "Factory people for your brand",
+      "who": "The factory decides who works for your brand.",
+      "none": "The factory gave nobody to your brand yet."
+    },
+    "wall": "Your people see only your own orders, designs and prices. Nobody of another customer sees them.",
+    "closed": "Your access does not include Your people.",
+    "moved": "Your colleagues, their roles and invitations are on Your people.",
+    "open": "Open Your people"
   }
 }

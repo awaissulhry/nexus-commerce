@@ -59,6 +59,8 @@ export interface PortalPeopleOptions {
   sees?: Translate
   /** The frame's unsaved-guard id of the e-mail settings card. */
   unsavedId: string
+  /** owb-po4.3: `team` reads the colleagues only (Your people draws no e-mail settings and no sessions). Default `all`. */
+  parts?: 'all' | 'team'
 }
 
 export interface PortalPeople {
@@ -84,7 +86,7 @@ export interface PortalPeople {
   dialogActions: PeopleDialogActions
 }
 
-export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOptions): PortalPeople {
+export function usePortalPeople({ onReceipt, sees, unsavedId, parts = 'all' }: PortalPeopleOptions): PortalPeople {
   const { api, me, kinds } = usePortalFrame()
   const customer = kinds.includes('CUSTOMER') // F-CP-153: the team's further acts are the customer portal's (review F4)
   const t = useT('portal-account')
@@ -127,9 +129,10 @@ export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOpti
 
   useEffect(() => {
     void readColleagues()
+    if (parts === 'team') return
     void readSessions()
     void readEmail()
-  }, [readColleagues, readSessions, readEmail])
+  }, [readColleagues, readSessions, readEmail, parts])
 
   usePortalLive({
     onChange: (change) => {

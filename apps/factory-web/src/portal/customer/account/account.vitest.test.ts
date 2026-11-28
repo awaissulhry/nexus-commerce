@@ -12,6 +12,7 @@ import { inviteFailed } from '../../shared/account/words'
 import { colleagueHeld, colleagueRows, deviceOf, handoverSummary, inviteProblems, maskedEmail, raisesToAdmin, seatsHeld, sessionRows, stepUpFresh, tasksToMove } from '../../shared/account/model'
 import type { DeliveryAddress } from './api'
 import { designScreen } from './fixtures'
+import { designScreen as peopleScreen } from '../people/fixtures' // owb-po4.3
 import { addressBody, addressLine, addressProblems, addressRows, addressState, companyRows, defaultHeld, EMPTY_ADDRESS, profileBody, profileChanges, profileProblem, removeHeld } from './model'
 // F-CP-153: "Your team".
 import type { ApiClient } from '../../../lib/api/client'
@@ -205,7 +206,8 @@ const KEY = /\b(team|state|status|keys|unsaved|receipt|failed|held|profile|email
 
 describe('SCR-188 design cases', () => {
   it('every case draws in Italian and English with no raw key and made-up data only', () => {
-    expect(designScreen.cases.length).toBeGreaterThanOrEqual(20)
+    // owb-po4.3: the colleagues' cases (and their pop-ups) moved to Your people (SCR-188-people).
+    expect(designScreen.cases.length).toBeGreaterThanOrEqual(18)
     for (const locale of ['it', 'en'] as const) {
       for (const entry of designScreen.cases) {
         const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
@@ -306,14 +308,15 @@ describe('F-CP-153 — Your team: acts by role and status, seats, the bulk previ
   it('the team’s pop-ups draw in it and en: who is reached, who is left out and why, the step-up; Add to a project', () => {
     for (const locale of ['it', 'en'] as const) {
       for (const id of ['team-pause', 'team-resend', 'team-project', 'team-selected', 'team-seats-full']) {
-        const entry = designScreen.cases.find((item) => item.id === id)!
-        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+        const entry = peopleScreen.cases.find((item) => item.id === id)!
+        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(peopleScreen.view, { model: entry.model })))
         expect(html, `${id} (${locale})`).not.toMatch(KEY)
         expect(scanText(html, BRAND_BETA), `${id} (${locale})`).toEqual([])
       }
     }
-    const draw = (id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(designScreen.view, { model: designScreen.cases.find((item) => item.id === id)!.model })))
-    expect(draw('team-selected')).toContain('Your team')
+    const draw = (id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(peopleScreen.view, { model: peopleScreen.cases.find((item) => item.id === id)!.model })))
+    // owb-po4.3: the team is on Your people now (its list: "People of your company").
+    expect(draw('team-selected')).toContain('People of your company')
     // The pop-ups open in the browser only (the DS Modal draws after hydration): their words, from the catalogue.
     for (const locale of ['it', 'en'] as const) {
       const t = createTranslator(locale, CATALOGUE[locale]['portal-account'] ?? {})
