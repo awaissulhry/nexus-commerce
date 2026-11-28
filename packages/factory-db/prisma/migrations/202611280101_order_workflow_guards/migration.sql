@@ -604,3 +604,122 @@ CREATE TRIGGER "OrderTeam_no_truncate" BEFORE TRUNCATE ON "OrderTeam"
 CREATE UNIQUE INDEX "OrderTeam_one_in_charge" ON "OrderTeam" ("tenantId", "salesOrderId") WHERE "inCharge" AND "endedAt" IS NULL;
 CREATE UNIQUE INDEX "OrderTeam_team_once" ON "OrderTeam" ("tenantId", "salesOrderId", "teamId") WHERE "endedAt" IS NULL;
 
+-- =====================================================================================================================
+-- OrderPrint, BasketMove, BasketRouteEdit (production.prisma, baskets.prisma; owb G5): append-only
+-- (scripts/factory/check-append-only.mjs) and their INSERT rules.
+CREATE TRIGGER "OrderPrint_append_only" BEFORE UPDATE OR DELETE ON "OrderPrint"
+  FOR EACH ROW EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+CREATE TRIGGER "OrderPrint_no_truncate" BEFORE TRUNCATE ON "OrderPrint"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+CREATE TRIGGER "BasketMove_append_only" BEFORE UPDATE OR DELETE ON "BasketMove"
+  FOR EACH ROW EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+CREATE TRIGGER "BasketMove_no_truncate" BEFORE TRUNCATE ON "BasketMove"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+CREATE TRIGGER "BasketRouteEdit_append_only" BEFORE UPDATE OR DELETE ON "BasketRouteEdit"
+  FOR EACH ROW EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+CREATE TRIGGER "BasketRouteEdit_no_truncate" BEFORE TRUNCATE ON "BasketRouteEdit"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_refuse_production_ledger_change"();
+
+-- OrderPrint (owb G5; PL-schema § 5A row 11): one print of an order's pages and basket cards ("Print and start the work",
+-- "Print again").
+--   INSERT    a FIRST print gives no reason; a print AGAIN gives one (LOST, DAMAGED, SMALL_CHANGE, ONE_MORE_COPY); a SMALL_CHANGE
+--             says what changed in words (it reaches the floor as the work order's "for the floor" note); words, when given,
+--             are 1 to 2000 characters, not blank; the pages and the cards are lists; of its order's company.
+CREATE FUNCTION "factory_order_print_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  order_company uuid;
+BEGIN
+  IF (NEW."kind"::text = 'FIRST') <> (NEW."reason" IS NULL) THEN
+    RAISE EXCEPTION 'production: print % of an order gives a reason exactly when it prints AGAIN (a first print gives none)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."reason" IS NOT DISTINCT FROM 'SMALL_CHANGE' AND btrim(coalesce(NEW."note", '')) = '')
+     OR (NEW."note" IS NOT NULL AND (btrim(NEW."note") = '' OR length(NEW."note") > 2000)) THEN
+    RAISE EXCEPTION 'production: print % for a small change says what changed in words (1 to 2000 characters, not blank)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF jsonb_typeof(NEW."pages"::jsonb) IS DISTINCT FROM 'array' OR jsonb_typeof(NEW."cards"::jsonb) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'production: print % names its pages and its basket cards as lists', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT o."companyId" INTO order_company FROM "SalesOrder" o WHERE o."tenantId" = NEW."tenantId" AND o."id" = NEW."salesOrderId";
+  IF FOUND AND order_company <> NEW."companyId" THEN
+    RAISE EXCEPTION 'production: print % is of its order''s company', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "OrderPrint_check" AFTER INSERT ON "OrderPrint"
+  FOR EACH ROW EXECUTE FUNCTION "factory_order_print_check"();
+
+-- BasketMove (owb G5; PL-schema § 4, § 5A row 12): a basket moved by hand on the floor (no scan, no pay, no cost entry; the
+-- standing-report rule of the scan guard does not change).
+--   INSERT    the basket of the move's work order and site; the step it leaves and the step it goes to (none: Ready to ship)
+--             are steps of that work order; a move BACK gives its reason (REDO, MISTAKE, OTHER); an UNDO names exactly one
+--             earlier hand move (FORWARD, BACK or TAKEN_HERE) of the same basket, which nothing else undid (BasketMove_undo_once),
+--             and only an UNDO names one; words, when given, are 1 to 500 characters, not blank.
+CREATE FUNCTION "factory_basket_move_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  undone_bundle uuid;
+  undone_kind text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "Bundle" b WHERE b."tenantId" = NEW."tenantId" AND b."id" = NEW."bundleId" AND b."siteId" = NEW."siteId" AND b."workOrderId" = NEW."workOrderId")
+     OR (NEW."fromOperationId" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM "WorkOrderOperation" o WHERE o."tenantId" = NEW."tenantId" AND o."id" = NEW."fromOperationId" AND o."siteId" = NEW."siteId" AND o."workOrderId" = NEW."workOrderId"))
+     OR (NEW."toOperationId" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM "WorkOrderOperation" o WHERE o."tenantId" = NEW."tenantId" AND o."id" = NEW."toOperationId" AND o."siteId" = NEW."siteId" AND o."workOrderId" = NEW."workOrderId")) THEN
+    RAISE EXCEPTION 'production: basket move % moves a basket of its work order between steps of that work order', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."kind"::text = 'BACK' AND NEW."reason" IS NULL THEN
+    RAISE EXCEPTION 'production: basket move % back to an earlier step gives its reason', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."note" IS NOT NULL AND (btrim(NEW."note") = '' OR length(NEW."note") > 500) THEN
+    RAISE EXCEPTION 'production: basket move % has words of 1 to 500 characters, not blank, or none', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."kind"::text = 'UNDO') <> (NEW."undoesId" IS NOT NULL) THEN
+    RAISE EXCEPTION 'production: basket move % names the move it undoes exactly when it is an UNDO', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."undoesId" IS NOT NULL THEN
+    SELECT m."bundleId", m."kind"::text INTO undone_bundle, undone_kind
+      FROM "BasketMove" m WHERE m."tenantId" = NEW."tenantId" AND m."id" = NEW."undoesId" AND m."id" <> NEW."id";
+    IF NOT FOUND OR undone_bundle <> NEW."bundleId" OR undone_kind = 'UNDO' THEN
+      RAISE EXCEPTION 'production: basket move % undoes an earlier hand move of the same basket (not an undo)', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "BasketMove_check" AFTER INSERT ON "BasketMove"
+  FOR EACH ROW EXECUTE FUNCTION "factory_basket_move_check"();
+CREATE UNIQUE INDEX "BasketMove_undo_once" ON "BasketMove" ("tenantId", "undoesId") WHERE "undoesId" IS NOT NULL;
+
+-- BasketRouteEdit (owb G5; PL-schema § 5A row 12): a change of a basket's steps on the floor (skip a step, put it back, add
+-- one, back to normal).
+--   INSERT    the step is a step of the edit's work order and the basket a basket of it, at its site (the references hold
+--             both too; this says it in words); words, when given, are 1 to 500 characters, not blank.
+CREATE FUNCTION "factory_basket_route_edit_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "WorkOrderOperation" o WHERE o."tenantId" = NEW."tenantId" AND o."id" = NEW."operationId" AND o."siteId" = NEW."siteId" AND o."workOrderId" = NEW."workOrderId")
+     OR NOT EXISTS (SELECT 1 FROM "Bundle" b WHERE b."tenantId" = NEW."tenantId" AND b."id" = NEW."bundleId" AND b."siteId" = NEW."siteId" AND b."workOrderId" = NEW."workOrderId") THEN
+    RAISE EXCEPTION 'production: route change % changes a step of its work order for a basket of it', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."note" IS NOT NULL AND (btrim(NEW."note") = '' OR length(NEW."note") > 500) THEN
+    RAISE EXCEPTION 'production: route change % has words of 1 to 500 characters, not blank, or none', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "BasketRouteEdit_check" AFTER INSERT ON "BasketRouteEdit"
+  FOR EACH ROW EXECUTE FUNCTION "factory_basket_route_edit_check"();
+
