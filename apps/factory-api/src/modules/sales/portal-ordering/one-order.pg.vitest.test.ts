@@ -332,6 +332,7 @@ describe('the accept carries the own columns; the picture on both records (owb- 
     expect(record.ownColumns.used.map((entry: Json) => entry.id)).toEqual([column.id])
     expect(record.ownColumns.values[orderLines[0]!.id][column.id].value).toBe('Made-up kept')
     expect(record.picture).toEqual({ fileId: null, setAt: null, contentType: null })
+    expect(record.order.subject).toBe('Made-up carried columns') // owb- po2 (S1 lead add): the subject of the request it came from
     expect(JSON.stringify(record)).not.toContain('Made-up gone')
   })
 })
@@ -378,6 +379,31 @@ describe('the designer wall: the office Draft/Sent reads and the order threads; 
       await client.user.create({ data: { id: designerId, email: 'dea.designer@owb-wall.example.com', displayName: 'Made-up Dea Designer', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
       await client.user.create({ data: { id: otherOfficeId, email: 'otto.office@owb-wall.example.com', displayName: 'Made-up Otto Office', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
     })
+  })
+
+  it('office request reads: on the order → read and listed; not on it → 404 and absent; no right → 403', async () => {
+    const onIt = await sentOrder('Made-up designer on it')
+    const offIt = await sentOrder('Made-up designer not on it')
+    await admin(`INSERT INTO "RecordFollower" (id, "tenantId", "recordType", "recordId", "userId", reason, version, "createdAt", "updatedAt") VALUES ($1, $2, 'PortalOrderRequest', $3, $4, 'CHOSE', 1, now(), now())`, [newId(), T, onIt.id, designerId])
+    expect((await officeRequestView(designer(), onIt.id)).request.id).toBe(onIt.id)
+    await expect(officeRequestView(designer(), offIt.id)).rejects.toThrow(/not found/)
+    expect((await officeDraftView(h.app, designer() as never, onIt.id)).request.id).toBe(onIt.id)
+    await expect(officeDraftView(h.app, designer() as never, offIt.id)).rejects.toThrow(/not found/)
+    const listed = (await listOfficeRequests(designer(), { status: 'OPEN' })).requests.map((entry) => entry.id)
+    expect(listed).toContain(onIt.id)
+    expect(listed).not.toContain(offIt.id)
+    expect(() => ordersReader(noRight())).toThrow(/may not/)
+  })
+
+  it('threads: the designer reads the thread of an order it is on; another order’s thread is 404 and never counted or readable', async () => {
+    const onIt = await sentOrder('Made-up thread on it')
+    const offIt = await sentOrder('Made-up thread not on it')
+    await admin(`INSERT INTO "RecordFollower" (id, "tenantId", "recordType", "recordId", "userId", reason, version, "createdAt", "updatedAt") VALUES ($1, $2, 'PortalOrderRequest', $3, $4, 'CHOSE', 1, now(), now())`, [newId(), T, onIt.id, designerId])
+    await expect(readThread(designer(), { type: 'PortalOrderRequest', id: onIt.id }, { limit: 20 })).resolves.toBeTruthy()
+    await expect(readThread(designer(), { type: 'PortalOrderRequest', id: offIt.id }, { limit: 20 })).rejects.toThrow(/not found/)
+    const counts = await unreadCounts(designer(), [{ type: 'PortalOrderRequest', id: onIt.id }, { type: 'PortalOrderRequest', id: offIt.id }], { readable: true })
+    expect(counts.counts.map((count) => [count.recordId, count.readable])).toEqual([[onIt.id, true], [offIt.id, false]])
+    expect(counts.counts[1]!.newCount).toBe(0)
   })
 
   it('factory people: the office people of THIS customer’s pool only — names, role words, letters; never an e-mail', async () => {
