@@ -45,10 +45,16 @@ type Translate = (key: string, params?: Readonly<Record<string, string | number>
 // conversation shown and its box focused (the frame's arrival rule), and so does any address the page does not know.
 // pp-w1 (w1.3; D2 a, L5): round 1's tabs in the office's words — Overview · Lines · Shipments · Files (Money comes with its own
 // round). The old addresses keep working: `?tab=status` opens Overview, `?tab=documents` opens Files (links in mails, My production).
-export const RECORD_TABS = ['overview', 'lines', 'shipments', 'files'] as const
+// owb-po5.2 (settle 2; plan § 5i portal row): Overview · Lines · Money · Shipments · Files — Money only for a person who sees prices.
+export const RECORD_TABS = ['overview', 'lines', 'money', 'shipments', 'files'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const OLD_RECORD_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ status: 'overview', documents: 'files' })
 export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(RECORD_TABS, value, OLD_RECORD_TABS)
+/** owb-po5.2: the tab a person lands on — Money only with the price grain (the customer's Designer: Overview instead). */
+export const tabFor = (value: string | null | undefined, seesPrices: boolean): RecordTab => {
+  const tab = tabOf(value)
+  return tab === 'money' && !seesPrices ? 'overview' : tab
+}
 // ---- end B-TH-275
 
 export function recordHref(prefix: string, id: string, tab: RecordTab = 'overview', extra: Readonly<Record<string, string>> = {}): string {

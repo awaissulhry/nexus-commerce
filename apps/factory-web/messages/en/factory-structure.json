@@ -1,0 +1,360 @@
+{
+  "head": {
+    "units_one": "{count} unit",
+    "units_other": "{count} units",
+    "teams_one": "{count} team",
+    "teams_other": "{count} teams",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "loose_one": "{count} person in no unit yet",
+    "loose_other": "{count} people in no unit yet",
+    "newUnit": "New unit…",
+    "addPerson": "Add a person…",
+    "readyMade": "Ready-made…",
+    "readOnly": "You read this page",
+    "infoLabel": "About this page",
+    "info": "A unit sits under a unit; a person sits in a unit; nothing else is fixed. A team is a unit that takes orders. Open a card for its profile. No figure about one person's work is kept here.",
+    "infoManage": "A unit sits under a unit; a person sits in a unit; nothing else is fixed. Drag a unit onto another unit, or a person onto a unit: a window asks first and says what moves. On a phone or with the keyboard, press Move…. A team has people under it, not units."
+  },
+  "notice": {
+    "dismiss": "Dismiss",
+    "saved": "The profile is saved.",
+    "made": "{name} is made. Add its people now.",
+    "movedUnit": "{name} is under {to} now.",
+    "movedTop": "{name} is at the top now.",
+    "movedPerson": "{name} is in {to} now.",
+    "merged": "The units are one now: {name}.",
+    "closed": "{name} is closed. Its history stays.",
+    "added": "{name} is added to {unit}.",
+    "leader": "{name} leads {unit} now.",
+    "ready": {
+      "OWNER_TEAMS": "The owner and the teams: the levels are set again.",
+      "SUPERVISORS": "With supervisors: the levels are set again.",
+      "GENERAL_MANAGER": "With a general manager: the levels are set again."
+    }
+  },
+  "tools": {
+    "view": "View",
+    "chart": "Chart",
+    "list": "List",
+    "find": "Find a person, a role or a unit",
+    "marked_one": "{count} unit marked",
+    "marked_other": "{count} units marked",
+    "nothing": "Nothing found for “{query}”",
+    "showAll": "Show all",
+    "openAll": "Open all",
+    "closeAll": "Close all",
+    "chartLabel": "The factory structure as a chart"
+  },
+  "failed": "The factory structure could not be read.",
+  "empty": "No unit yet. Start with New unit… or Ready-made….",
+  "privacy": "A profile holds who a person is and where the person works. It holds no figure about one person's work.",
+  "loose": {
+    "title": "In no unit yet",
+    "hint": "Drag a person onto a unit, or open the profile and press Move…."
+  },
+  "tab": {
+    "overview": "Overview",
+    "people": "People",
+    "work": "Work",
+    "history": "History"
+  },
+  "profile": {
+    "backToStructure": "Factory structure",
+    "edit": "Edit the profile…",
+    "move": "Move…",
+    "merge": "Merge…",
+    "close": "Close…",
+    "closedNote": "This unit is closed. Its history stays.",
+    "tabs": "The profile's tabs",
+    "failed": "The profile could not be read.",
+    "open": "Open the profile"
+  },
+  "unit": {
+    "team": "Team",
+    "unit": "Unit",
+    "leads": "{name} leads it",
+    "noLeader": "No leader yet",
+    "peopleOf": "People of {unit}",
+    "more_one": "+{count}",
+    "more_other": "+{count}",
+    "under_one": "{count} unit under it",
+    "under_other": "{count} units under it",
+    "newUnder": "Add a unit under {unit}",
+    "addPersonTo": "Add a person to {unit}",
+    "moveOne": "Move {unit}",
+    "show": "Show the units under {unit}",
+    "hide": "Hide the units under {unit}",
+    "takesOrders": "takes orders",
+    "closed": "closed",
+    "leader": "leader",
+    "leadsThis": "leads this unit",
+    "newName": "New unit",
+    "picture": "Its picture",
+    "pictureLetters": "Letters",
+    "colour": "Its colour",
+    "newTitle": "A new unit",
+    "editTitle": "Edit the profile",
+    "underName": "Under {unit}",
+    "make": "Make it",
+    "save": "Save",
+    "whatItIs": "What it is",
+    "isTeam": "A team: it takes orders",
+    "isUnit": "Another unit: a level, or a service",
+    "whoItIs": "Who it is",
+    "name": "Its name",
+    "nameTeamHint": "For example: Team Noor",
+    "nameUnitHint": "For example: Floor C",
+    "kind": "What kind of unit",
+    "kindHint": "Your own word is fine.",
+    "about": "About (not needed)",
+    "aboutHint": "What this unit does",
+    "howItWorks": "How it works",
+    "leaderLater": "The leader and the stand-in: after you added its people.",
+    "leaderLabel": "Its leader",
+    "nobody": "Nobody yet",
+    "addPeopleFirst": "Add people first. Then choose the leader.",
+    "standIn": "Who stands in when the leader is away",
+    "standInUntil": "Stands in until (not needed)",
+    "worksFor": "Works for",
+    "worksForHint": "A wish, not a wall: an order of any customer can still go to this team.",
+    "max": "Baskets at one time, at most",
+    "maxHint": "Empty = no limit. Over the limit is a mark, never a stop.",
+    "noLimit": "No limit",
+    "takesNew": "It takes new orders",
+    "takesNoNew": "It takes no new order now",
+    "ownFacts": "Your own facts",
+    "ownFactsNote": "Your own facts are read here. Changing them waits for the fields of teams (Admin › Fields).",
+    "held": {
+      "name": "Type a name first.",
+      "taken": "A unit with this name is there already. Type another name.",
+      "max": "Baskets at one time: a whole number from 1 to 999, or empty for no limit.",
+      "until": "The stand-in's last day is a date."
+    }
+  },
+  "icon": {
+    "factory": "A factory",
+    "shirt": "A shirt",
+    "scissors": "Scissors",
+    "layers": "Layers",
+    "shield": "A shield",
+    "ruler": "A ruler",
+    "flag": "A flag",
+    "package": "A package",
+    "briefcase": "A briefcase",
+    "image": "A picture",
+    "users": "People",
+    "truck": "A truck"
+  },
+  "tone": {
+    "slate": "Slate",
+    "purple": "Purple",
+    "emerald": "Emerald",
+    "pink": "Pink",
+    "orange": "Orange",
+    "blue": "Blue",
+    "yellow": "Yellow",
+    "red": "Red",
+    "violet": "Violet",
+    "cyan": "Cyan"
+  },
+  "kind": {
+    "COMPANY": "Company",
+    "MANAGEMENT": "Management",
+    "DEPARTMENT": "Department",
+    "GROUP": "Group",
+    "SERVICE": "Service"
+  },
+  "glance": {
+    "kind": "Kind",
+    "under": "Under",
+    "top": "the top",
+    "people": "People",
+    "peopleUnder_one": "{count} ({own} in it, {under} under it)",
+    "peopleUnder_other": "{count} ({own} in it, {under} under it)",
+    "units": "Units under it",
+    "worksFor": "Works for",
+    "allCustomers": "All customers",
+    "standIn": "Stands in for the leader",
+    "standInUntil": "{name} until {date}",
+    "newOrders": "New orders",
+    "takesNew": "It takes new orders",
+    "takesNoNew": "It takes no new order now",
+    "max": "Baskets at one time",
+    "maxN_one": "at most {count}",
+    "maxN_other": "at most {count}",
+    "about": "About"
+  },
+  "overview": {
+    "leads": "Who leads it",
+    "leadsName": "{name} leads it.",
+    "noLeader": "Nobody leads it yet. Its people answer to the leader of the unit above.",
+    "changeLeader": "Change the leader…",
+    "chooseLeader": "Choose a leader…",
+    "glance": "At a glance",
+    "people": "People",
+    "nobody": "Nobody yet.",
+    "under": "Units under it",
+    "noneUnder": "No unit under it."
+  },
+  "work": {
+    "now": "Orders now",
+    "before": "Orders before",
+    "noneTeam": "No order now. Give one on the Teams page.",
+    "noneUnit": "No order in the teams under it now.",
+    "openTeams": "Open Teams"
+  },
+  "history": {
+    "title": "What changed",
+    "none": "No change yet."
+  },
+  "facts": {
+    "phone": "Phone",
+    "speaks": "Reads and speaks",
+    "since": "With us since"
+  },
+  "speaks": {
+    "en": "English",
+    "ur": "Urdu",
+    "it": "Italian"
+  },
+  "person": {
+    "moveOne": "Move {name}",
+    "makeLeader": "Make leader",
+    "noRole": "No role yet",
+    "loose": "In no unit yet.",
+    "putIn": "Put in a unit…",
+    "where": "Where this person works",
+    "inUnit": "{role} in {unit}.",
+    "inUnitLeads": "{role} in {unit} (leads it).",
+    "answersTo": "Answers to {name}.",
+    "answersToNobody": "Answers to nobody: the top.",
+    "facts": "Facts",
+    "privacy": "No figure about the work of one person is kept here: no speed, no count, no rank.",
+    "editTitle": "Edit the person",
+    "role": "The role",
+    "roleHint": "Your own word is fine (for example: Machine technician).",
+    "phoneHint": "For a call from the office. Personal: only people with the personal right see it.",
+    "howWorks": "How this person works",
+    "speaksHint": "The floor screens follow it: Urdu words and a voice for a person who reads Urdu.",
+    "held": {
+      "since": "With us since: choose a date.",
+      "speaks": "Choose the language the person reads and speaks."
+    }
+  },
+  "move": {
+    "refused": {
+      "gone": "This is not in the factory structure any more.",
+      "self": "A unit cannot go under itself or a unit under it.",
+      "team": "A team has people under it, not units.",
+      "same": "It is there already."
+    },
+    "title": "Move {name}",
+    "askTitle": "Move {name}?",
+    "pickUnit": "Choose the unit it goes under. Its people and its orders go with it.",
+    "pickPerson": "Choose the new home unit.",
+    "act": "Move",
+    "otherPlace": "Another place",
+    "find": "Find a unit",
+    "askUnit_one": "{name} goes under {to}. Its {count} person goes with it.",
+    "askUnit_other": "{name} goes under {to}. Its people ({count}) and its orders go with it.",
+    "askPersonFrom": "{name} goes from {from} to {to}. It is the new home unit from today.",
+    "askPerson": "{name} goes to {to}. It is the home unit from today.",
+    "leavesLeader": "{unit} has no leader then.",
+    "top": "The top (under nothing)",
+    "none": "No unit matches."
+  },
+  "merge": {
+    "title": "Merge {name} with…",
+    "pickTeams": "Tick one team or more. All of them become ONE team.",
+    "pickUnits": "Tick one unit or more. All of them become ONE unit.",
+    "next": "Next",
+    "ticked_one": "{count} ticked",
+    "ticked_other": "{count} ticked",
+    "nothingTicked": "Nothing is ticked yet",
+    "none": "No unit of this kind to merge with.",
+    "confirmTitle_one": "{count} unit becomes one",
+    "confirmTitle_other": "{count} units become one",
+    "act": "Merge",
+    "back": "Back",
+    "keep": "Which profile stays (its picture, its place in the factory structure)?",
+    "nameTeam": "The name of the one team",
+    "nameUnit": "The name of the one unit",
+    "leader": "Who leads it",
+    "movesTeam_one": "{count} person and the open orders move to it.",
+    "movesTeam_other": "{count} people and the open orders move to it.",
+    "movesUnit_one": "{count} person moves to it.",
+    "movesUnit_other": "{count} people move to it.",
+    "closedNote_one": "The other one is closed, not erased: its history stays. A leader who does not lead any more becomes a member.",
+    "closedNote_other": "The other {count} are closed, not erased: their history stays. A leader who does not lead any more becomes a member.",
+    "held": {
+      "pick": "Tick one or more first.",
+      "name": "Type the name of the one unit."
+    }
+  },
+  "close": {
+    "top": "The top unit cannot be closed.",
+    "units_one": "Move the {count} unit under it to another unit.",
+    "units_other": "Move the {count} units under it to another unit.",
+    "people_one": "Move its {count} person to another unit.",
+    "people_other": "Move its {count} people to another unit.",
+    "orders_one": "Give its {count} open order to another team.",
+    "orders_other": "Give its {count} open orders to another team.",
+    "blockedTitle": "{name} cannot be closed yet",
+    "title": "Close {name}?",
+    "act": "Close it",
+    "first": "Do this first:",
+    "orMerge": "Or merge it with another unit: then its people and its orders move in one step.",
+    "kept": "It is closed and kept: nothing is erased, its history stays. It leaves the chart."
+  },
+  "ready": {
+    "title": "Ready-made factory structures",
+    "subtitle": "Start from one. Then change it as you like.",
+    "act": "Use this structure",
+    "choose": "Choose a structure",
+    "OWNER_TEAMS": {
+      "name": "The owner and the teams",
+      "does": "The owner leads every team and every service. No level between."
+    },
+    "SUPERVISORS": {
+      "name": "With supervisors",
+      "does": "The owner → supervisors → teams. Services beside them."
+    },
+    "GENERAL_MANAGER": {
+      "name": "With a general manager",
+      "does": "The owner → the general manager → supervisors → teams."
+    },
+    "nothing": "Nothing changes: the levels are like this already.",
+    "changes_one": "{count} unit changes:",
+    "changes_other": "{count} units change:",
+    "note": "Teams, people and orders stay as they are. Only the levels above the teams are set again. The history of each unit keeps the change."
+  },
+  "add": {
+    "title": "Add a person",
+    "subtitle": "A new person of the factory.",
+    "act": "Add",
+    "first": "First name",
+    "last": "Family name",
+    "unit": "The unit",
+    "pickUnit": "Choose a unit",
+    "held": {
+      "name": "Type the first name and the family name.",
+      "unit": "Choose the unit."
+    }
+  },
+  "held": {
+    "long": "At most {count} characters."
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "error": {
+    "read": "Something went wrong while reading.",
+    "write": "It was not saved. Try again.",
+    "forbidden": "You may not do this.",
+    "offline": "No answer from the factory: check the network and try again.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again. Check it and try again.",
+    "invalid": "It was refused as it is: check what you typed."
+  }
+}

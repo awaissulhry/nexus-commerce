@@ -289,7 +289,11 @@ export const orderRecordSchema = z.object({
     version: z.number(),
     // F-OM-204 (B-OM-005): what is still to pay on the order, by the office's own rule (a cancelled order owes 0; the price grain).
     stillToPay: price,
+    // owb-po5.1 (settle 3): the subject of the order when the read names it ("Your order 12 · <subject>"); absent: the number alone.
+    subject: z.string().nullable().optional(),
   }),
+  // owb-po1.5: the picture of the order (null file: the design of the first line); absent from an older answer.
+  picture: z.object({ fileId: z.string().nullable(), setAt: z.string().nullable().default(null), contentType: z.string().nullable().default(null) }).optional().catch(undefined),
   milestones: z.array(milestoneSchema),
   promiseHistory: z.array(promiseMoveSchema),
   deposits: z.array(depositSchema),

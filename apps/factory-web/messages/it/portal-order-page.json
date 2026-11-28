@@ -1,0 +1,97 @@
+{
+  "band": {
+    "back": "Ordini",
+    "send": "Controllate e inviate…",
+    "takeBack": "Ritiratelo"
+  },
+  "tabs": {
+    "label": "Ordine",
+    "overview": "Panoramica",
+    "lines": "Righe",
+    "money": "Importi",
+    "shipments": "Spedizioni",
+    "files": "File"
+  },
+  "request": {
+    "name": "Il vostro ordine",
+    "failed": "Non siamo riusciti a leggere l'ordine",
+    "failedBody": "Non è cambiato nulla. Riprovate tra un momento.",
+    "retry": "Riprovate",
+    "where": {
+      "draft": "Una bozza: la vedete solo voi e i vostri colleghi.",
+      "sent": "Inviato: la fabbrica lo legge e lo conferma."
+    },
+    "next": {
+      "draft": "Poi: controllatelo e inviatelo alla fabbrica.",
+      "sent": "Finché la fabbrica non lo conferma, potete ritirarlo per modificarlo."
+    },
+    "lines": {
+      "draft": "Le righe di una bozza si modificano nella finestra dell'ordine.",
+      "sent": "L'ordine è inviato: ritiratelo per modificarlo.",
+      "open": "Aprite l'ordine"
+    }
+  },
+  "where": {
+    "title": "Dove si trova il vostro ordine"
+  },
+  "asks": {
+    "title": "Richieste e modifiche",
+    "none": "Niente in attesa.",
+    "all": "Tutte le modifiche"
+  },
+  "changes": {
+    "title": "Tutte le modifiche"
+  },
+  "facts": {
+    "title": "Dati dell'ordine",
+    "subject": "Oggetto",
+    "ref": "Il vostro riferimento",
+    "wanted": "Richiesto per",
+    "lines": "Righe",
+    "linesPieces": "{lines} righe · {pieces} pezzi",
+    "sent": "Inviato il",
+    "none": "—"
+  },
+  "linked": {
+    "title": "Collegamenti"
+  },
+  "designer": {
+    "title": "Chiedete al designer della fabbrica",
+    "line": "Scrivete nella chat di questo ordine: digitate @ per chiedere al designer della fabbrica.",
+    "ask": "Aprite la chat"
+  },
+  "quiet": {
+    "money": "Gli importi partono quando la fabbrica conferma l'ordine.",
+    "shipments": "Non è ancora partito nulla dalla fabbrica."
+  },
+  "files": {
+    "kind": {
+      "mockups": "Bozzetti",
+      "sizes": "File delle taglie",
+      "other": "Altri file"
+    },
+    "locked": "Un file che non potete aprire",
+    "none": "Ancora nessun file su questo ordine."
+  },
+  "notice": {
+    "hide": "Nascondi"
+  },
+  "takeBack": {
+    "done": "Ritirato: il vostro ordine è di nuovo una bozza. Modificatelo e inviatelo quando è pronto.",
+    "started": "La fabbrica ha già iniziato a lavorare su questo ordine: chiedete alla fabbrica.",
+    "answered": "La fabbrica ha già risposto a questo ordine.",
+    "stale": "L'ordine è cambiato nel frattempo: lo abbiamo riletto. Riprovate.",
+    "failed": "L'ordine non è stato ritirato. Riprovate tra un momento."
+  },
+  "send": {
+    "done": "Il vostro ordine è presso la fabbrica.",
+    "failed": "L'ordine non è stato inviato. Riprovate tra un momento."
+  },
+  "held": {
+    "preview": "Un'anteprima dell'ufficio non può inviare nulla.",
+    "offline": "Nessuna connessione",
+    "busy": "Ci stiamo lavorando…",
+    "mayOrder": "Gli ordini li invia un Buyer o il vostro amministratore: chiedete a loro.",
+    "takeBack": "Questo ordine non si può più ritirare: chiedete alla fabbrica."
+  }
+}

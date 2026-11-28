@@ -12,7 +12,7 @@ import { PricesNote, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
 // ---- F-CP-143 (customer page plan C3, D2; 11 §3.4; picture 21): "Your price" beside our unit price, the Price check card, "Your prices…".
 import { diffText, sourceKey, yourPriceOf } from '../price-check'
-import { MatchTag, PriceCheckCard, PriceCheckDialog } from './PriceCheck'
+import { MatchTag, PriceCheckDialog } from './PriceCheck'
 // ---- end F-CP-143
 
 /**
@@ -135,8 +135,7 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
     <div className="fw-pord-tab">
       <h2 className="fw-pord-h2">{t('lines.title')}</h2>
       {!seesPrices ? <PricesNote /> : null}
-      {/* F-CP-143: the Price check card (a price holder: its Buyer, Finance, Admin); "Your prices…" opens its window. */}
-      {seesPrices && model.priceCheck ? <PriceCheckCard model={model.priceCheck} actions={actions?.priceCheck} /> : null}
+      {/* owb-po5.2: the Price check card moved to Money (the design's place); a line's price cells still open its window here. */}
       {seesPrices && model.priceCheck?.dialog && model.priceCheck.check ? <PriceCheckDialog model={model.priceCheck.dialog} check={model.priceCheck.check} actions={actions?.priceCheck?.dialog} /> : null}
       <ListFrame<OrderLine> label={t('lines.label')} title={t('lines.title')} listKey={null} rows={lines} rowId={(line) => line.id} columns={columns} count={t('lines.count', { count: lines.length, pieces: pieceCount(record.pieces.ordered, locale) })} onOpen={(line) => actions?.onLine?.(line.id)} />
       <section className="fw-pord-section" aria-labelledby="fw-pord-sizes">
