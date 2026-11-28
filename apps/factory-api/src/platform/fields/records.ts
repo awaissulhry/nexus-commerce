@@ -1,6 +1,9 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { Permission, ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+// owb-ss5 5.3 (design § 5zd "YOUR OWN FACTS"): a team or unit and a person take custom fields too.
+import { PEOPLE_EMPLOYEES_MANAGE, PEOPLE_VIEW } from '@nexus/factory-domain/people/employees/permissions'
+import { PEOPLE_STRUCTURE_MANAGE } from '@nexus/factory-domain/people/structure/permissions'
 import { EVERY_PARTY_MARKER } from '../../modules/quality/wall'
 // B-OO-014: a sales order's custom values keep the order's version and its freeze.
 import { InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
@@ -22,10 +25,10 @@ import { StaleVersionError, type CommandTools } from '../../core/command'
  *   portal       whether a partner reads it in the portal (the fields shown in it, on the party's own record)
  */
 
-export const CUSTOM_RECORD_KEYS = ['CUSTOMER', 'SUPPLIER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER'] as const
+export const CUSTOM_RECORD_KEYS = ['CUSTOMER', 'SUPPLIER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER', 'TEAM', 'EMPLOYEE'] as const
 export type CustomRecordKey = (typeof CUSTOM_RECORD_KEYS)[number]
 
-export const CUSTOM_MODELS = ['Party', 'Quote', 'SalesOrder', 'Style', 'Item', 'PurchaseOrder', 'Lot', 'WorkOrder'] as const
+export const CUSTOM_MODELS = ['Party', 'Quote', 'SalesOrder', 'Style', 'Item', 'PurchaseOrder', 'Lot', 'WorkOrder', 'Team', 'Employee'] as const
 export type CustomModel = (typeof CUSTOM_MODELS)[number]
 
 export interface CustomRecord {
@@ -37,7 +40,7 @@ export interface CustomRecord {
   readonly edit: Permission
   readonly listKey: string
   readonly importer: string
-  readonly keyColumn: 'code' | 'number'
+  readonly keyColumn: 'code' | 'number' | 'employeeCode'
   readonly portal: boolean
 }
 
@@ -51,6 +54,10 @@ export const CUSTOM_RECORDS: readonly CustomRecord[] = Object.freeze([
   { key: 'PURCHASE_ORDER', model: 'PurchaseOrder', labelIt: 'Ordine di acquisto', labelEn: 'Purchase order', view: 'purchasing.view', edit: 'purchasing.manage', listKey: 'purchasing.orders', importer: 'fields.purchaseOrders', keyColumn: 'number', portal: true },
   { key: 'LOT', model: 'Lot', labelIt: 'Lotto', labelEn: 'Lot', view: 'inventory.stock.view', edit: 'inventory.lots.manage', listKey: 'warehouse.lots', importer: 'fields.lots', keyColumn: 'code', portal: false },
   { key: 'WORK_ORDER', model: 'WorkOrder', labelIt: 'Ordine di lavoro', labelEn: 'Work order', view: 'workorders.view', edit: 'workorders.manage', listKey: 'production.work-orders', importer: 'fields.workOrders', keyColumn: 'number', portal: false },
+  // owb-ss5 5.3: a team or unit of the factory structure (kept by people.structure.manage) and a person (the payroll's code is the
+  // import's key; a person without one is not found by an import). Office only: never in the portal.
+  { key: 'TEAM', model: 'Team', labelIt: 'Squadra o unità', labelEn: 'Team or unit', view: PEOPLE_VIEW, edit: PEOPLE_STRUCTURE_MANAGE, listKey: 'people.teams', importer: 'fields.teams', keyColumn: 'code', portal: false },
+  { key: 'EMPLOYEE', model: 'Employee', labelIt: 'Dipendente', labelEn: 'Employee', view: PEOPLE_VIEW, edit: PEOPLE_EMPLOYEES_MANAGE, listKey: 'people.employees', importer: 'fields.employees', keyColumn: 'employeeCode', portal: false },
 ] satisfies readonly CustomRecord[])
 
 const BY_KEY = new Map<string, CustomRecord>(CUSTOM_RECORDS.map((record) => [record.key, record]))
@@ -88,6 +95,9 @@ const MODEL_SHAPES: Readonly<Record<CustomModel, { readonly select: Record<strin
   Lot: { select: { id: true, companyId: true, siteId: true, code: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, key: row.code as string, label: row.code as string }) },
   // fix-pr-8 (the brand wall): a work order is its customer's; one of no customer (mixed, made before the rule) every customer's.
   WorkOrder: { select: { id: true, companyId: true, siteId: true, partyId: true, number: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, partyId: (row.partyId as string | null) ?? EVERY_PARTY_MARKER, key: row.number as string, label: row.number as string }) },
+  // owb-ss5 5.3: a team (its code is unique on its site) and a person (no customer: never behind the brand wall).
+  Team: { select: { id: true, companyId: true, siteId: true, code: true, name: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, key: row.code as string, label: `${String(row.code)} · ${String(row.name)}` }) },
+  Employee: { select: { id: true, companyId: true, siteId: true, employeeCode: true, firstName: true, lastName: true }, facts: (row) => ({ id: row.id as string, companyId: row.companyId as string, siteId: row.siteId as string, key: (row.employeeCode as string | null) ?? '', label: `${String(row.firstName)} ${String(row.lastName)}` }) },
 }
 
 const readerOf = (client: Client, model: CustomModel): ModelReader => (client as unknown as Record<string, ModelReader>)[model.charAt(0).toLowerCase() + model.slice(1)]!
