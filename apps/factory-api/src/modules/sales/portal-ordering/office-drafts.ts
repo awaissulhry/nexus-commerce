@@ -7,8 +7,9 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 import type { RequestSource } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import type { FilesRuntime } from '../../../platform/files/service'
 import { mayOn, officeContextOf } from '../orders/access'
-import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, removeLineWithFiles, type DraftFileBody } from './draft-files'
+import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, type DraftFileBody } from './draft-files'
 import { addCustomLine, addPeople, changeCustomLine, changeHeader, changeLine, changePerson, createDraft, removePerson, requestView, type HeaderBody } from './requests'
+import { copyLine, putBackLine, removeLine } from './requests' // owb- po1.3
 import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } from './writer'
 
 /**
@@ -24,7 +25,9 @@ import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } fro
  *   POST   /sales/order-requests/:id/custom-lines                  a product row (described or made to measure; its sizing, choices)
  *   PUT    /sales/order-requests/:id/custom-lines/:lineId          a product row changed
  *   PUT    /sales/order-requests/:id/lines/:lineId                 a catalogue row's sizes, colour, note, sizing, choices
- *   DELETE /sales/order-requests/:id/lines/:lineId?version=        a row out (its people and files with it)
+ *   DELETE /sales/order-requests/:id/lines/:lineId?version=        a row taken out (owb- po1.3: soft — its people and files stay)
+ *   POST   /sales/order-requests/:id/lines/:lineId/copy            owb- po1.3: a row copied whole at the end (never its people or files)
+ *   POST   /sales/order-requests/:id/lines/:lineId/put-back        owb- po1.3: a row taken out comes back as it was
  *   POST   /sales/order-requests/:id/lines/:lineId/people          people of a by-person row (naming a sheet: sales.measurements.view)
  *   PUT    /sales/order-requests/:id/lines/:lineId/people/:personId
  *   DELETE /sales/order-requests/:id/lines/:lineId/people/:personId?version=
@@ -94,8 +97,19 @@ export async function officeChangeLine(app: FastifyInstance, request: FastifyReq
   return changeLine(writer, requestId, lineId, body, idempotencyKey)
 }
 
-export async function officeRemoveLine(files: () => FilesRuntime, app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
-  return removeLineWithFiles(files, await writerOf(app, request, requestId), requestId, lineId, version, idempotencyKey)
+/** owb- po1.3: "Take out" is a soft remove (the row's people and files stay for "Put it back"). */
+export async function officeRemoveLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
+  return removeLine(await writerOf(app, request, requestId), requestId, lineId, version, idempotencyKey)
+}
+
+/** owb- po1.3: a row copied (the customer's own price never: the office does not type it). */
+export async function officeCopyLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
+  return copyLine(await writerOf(app, request, requestId), requestId, lineId, version, idempotencyKey)
+}
+
+/** owb- po1.3: a row taken out put back. */
+export async function officePutBackLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
+  return putBackLine(await writerOf(app, request, requestId), requestId, lineId, version, idempotencyKey)
 }
 
 export async function officeAddPeople(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: Parameters<typeof addPeople>[3], idempotencyKey?: string) {

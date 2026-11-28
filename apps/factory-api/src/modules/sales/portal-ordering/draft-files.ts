@@ -16,8 +16,8 @@ import type { FilesRuntime } from '../../../platform/files/service'
 import { commandOn } from '../../../platform/portal/tasks/clock'
 import { partnerUploader } from '../../../platform/threads/partner/service'
 import type { DraftWriter } from './writer' // od-s s.2: the portal's session or the office person
-import { discardDraft, draftChanged, draftFileView, ownDraft, removeLine, requestView } from './requests'
-import { DRAFT_FILE_COLUMNS, draftFilesWhere, readLines, type RequestRow } from './store'
+import { discardDraft, draftChanged, draftFileView, ownDraft, requestView } from './requests'
+import { DRAFT_FILE_COLUMNS, draftFilesWhere, readAllLines, readLines, type RequestRow } from './store'
 import { markEdited } from './store' // B-CP-075: who saved the draft
 import type { CommandTools } from '../../../core/command'
 // od-ts t.6: a file moved between the draft's parts (the "Logo" toggle).
@@ -43,7 +43,8 @@ import { staleDraftError } from './requests'
  * read says the same before anything is dropped). The files module writes the row as the tenant's system with files.upload and
  * files.manage over the draft's company and the party only (the partner role writes no file), shared with the party (OFFICE,
  * PARTNER); then, in the person's own scope, the draft's audit row (who of the party added or removed it) and
- * portal_order_request.draft_changed. A discarded draft, or a line taken out, takes its files with it (personal data: sheets).
+ * portal_order_request.draft_changed. A discarded draft takes its files with it, a line's taken out too (personal data: sheets).
+ * owb- po1.3: a line taken out keeps its files (it is a soft remove: "Put it back" brings them back with it).
  *
  * od-s s.2 (Owner yes 1a): the office uploads onto a customer's draft through its twins under /sales/order-requests/:id/files with
  * files.upload over the draft's company and customer (instead of portal.upload); the outside-upload gate stays the same; the row is
@@ -206,20 +207,19 @@ export async function moveDraftFile(writer: DraftWriter, requestId: string, file
 }
 // ---- end od-ts t.6
 
-// ---- a discarded draft and a line taken out take their files with them -------------------------------------------------------
+// ---- a discarded draft takes its files with it ------------------------------------------------------------------------------------
 
-/** The party's files on the draft (lines: these only; null: the draft's own and every line's), read before they go. */
-async function filesToDrop(uploader: CommandCaller, row: RequestRow, lineIds: readonly string[] | null): Promise<string[]> {
-  const lines = lineIds ?? (await uploader.withClient((client) => readLines(client, [row.id]))).map((line) => line.id)
-  const where = lineIds === null ? draftFilesWhere([row.id], lines) : { status: { not: 'DELETED' as const }, recordType: DRAFT_FILE_RECORDS.line, recordId: { in: [...lines] } }
-  return (await uploader.withClient((client) => client.storedFile.findMany({ where: { AND: [where, { partyId: row.partyId }] }, select: { id: true } }))).map((file) => file.id)
+/** The party's files on the draft — its own and every line's (owb- po1.3: a line taken out too), read before they go. */
+async function filesToDrop(uploader: CommandCaller, row: RequestRow): Promise<string[]> {
+  const lines = (await uploader.withClient((client) => readAllLines(client, [row.id]))).map((line) => line.id)
+  return (await uploader.withClient((client) => client.storedFile.findMany({ where: { AND: [draftFilesWhere([row.id], lines), { partyId: row.partyId }] }, select: { id: true } }))).map((file) => file.id)
 }
 
 /** Each file deleted (best effort, after the draft's own command: one held by a retention stays, logged; it is no draft's any more). */
 async function dropFiles(files: () => FilesRuntime, request: FastifyRequest, remover: CommandCaller, fileIds: readonly string[]): Promise<void> {
   for (const fileId of fileIds) {
     try {
-      await deleteFile(files(), remover, fileId, { reason: 'Its draft order was discarded, or its line taken out.' })
+      await deleteFile(files(), remover, fileId, { reason: 'Its draft order was discarded.' })
     } catch (error) {
       request.log.warn({ err: error, fileId }, 'a file of a discarded draft order could not be deleted')
     }
@@ -230,19 +230,8 @@ async function dropFiles(files: () => FilesRuntime, request: FastifyRequest, rem
 export async function discardDraftWithFiles(files: () => FilesRuntime, writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
   const row = await ownDraft(writer, requestId)
   const remover = uploaderOf(writer, row, [FILES_DELETE])
-  const doomed = await filesToDrop(remover, row, null)
+  const doomed = await filesToDrop(remover, row)
   const answer = await discardDraft(writer, requestId, version, idempotencyKey)
   await dropFiles(files, writer.request, remover, doomed)
   return answer
-}
-
-/** DELETE /portal/order-requests/:requestId/lines/:lineId — the line out (./requests.ts), then its files. */
-export async function removeLineWithFiles(files: () => FilesRuntime, writer: DraftWriter, requestId: string, lineId: string, version: number, idempotencyKey?: string) {
-  const row = await ownDraft(writer, requestId)
-  const remover = uploaderOf(writer, row, [FILES_DELETE])
-  const doomed = isUuid(lineId) ? await filesToDrop(remover, row, [lineId]) : []
-  const answer = await removeLine(writer, requestId, lineId, version, idempotencyKey)
-  await dropFiles(files, writer.request, remover, doomed)
-  // The read after the files went (the line's files are no longer listed).
-  return doomed.length > 0 ? requestView(writer, await ownDraft(writer, requestId)) : answer
 }
