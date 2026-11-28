@@ -93,5 +93,100 @@
     "busy": "Ci stiamo lavorando…",
     "mayOrder": "Gli ordini li invia un Buyer o il vostro amministratore: chiedete a loro.",
     "takeBack": "Questo ordine non si può più ritirare: chiedete alla fabbrica."
+  },
+  "lines": {
+    "notes": "Note sull'ordine: la fabbrica le vede.",
+    "asked_one": "{count} modifica non ancora chiesta",
+    "asked_other": "{count} modifiche non ancora chieste",
+    "undo": "Annullate",
+    "review": "Controllate e chiedete…",
+    "askLine": "Riga {seq}: {pieces} pezzi (ora {now})",
+    "unsaved_one": "{count} modifica alle righe non è ancora chiesta.",
+    "unsaved_other": "{count} modifiche alle righe non sono ancora chieste.",
+    "draftHeld": "Le righe di una bozza si modificano nella finestra dell'ordine."
+  },
+  "money": {
+    "totals": "Totali",
+    "order": "Totale dell'ordine",
+    "invoiced": "Fatturato",
+    "paid": "Pagato",
+    "stillToPay": "Ancora da pagare",
+    "addsUp": "Come si compone",
+    "addsUpKey": {
+      "LINES": "Le righe",
+      "CHARGES": "Spese",
+      "VAT": "IVA",
+      "CREDIT_NOTES": "Note di credito",
+      "PAID": "Pagato"
+    },
+    "cols": {
+      "what": "Voce",
+      "amount": "Importo",
+      "document": "Documento",
+      "date": "Data",
+      "open": "Aperto"
+    },
+    "plan": "Piano dei pagamenti",
+    "noPlan": "Nessun piano dei pagamenti su questo ordine.",
+    "kind": {
+      "DEPOSIT": "Acconto",
+      "MILESTONE": "Rata",
+      "REST": "Il saldo"
+    },
+    "kindPercent": "{kind} {percent} %",
+    "due": "scade il {date}",
+    "noDue": "nessuna scadenza ancora",
+    "stepOpen": "{amount} aperto",
+    "state": {
+      "PAID": "Pagato",
+      "PART_PAID": "Pagato in parte",
+      "DUE": "Da pagare ora",
+      "LATE": "In ritardo",
+      "LATER": "Non ancora dovuto"
+    },
+    "told": "Lo avete comunicato alla fabbrica il {date}.",
+    "notify": "Ho pagato: avvisate la fabbrica…",
+    "invoices": "Fatture e note di credito",
+    "noInvoices": "Ancora nessuna fattura: arriva quando l'ordine parte.",
+    "invoice": {
+      "INVOICE": "Fattura",
+      "CREDIT_NOTE": "Nota di credito"
+    },
+    "failed": "Non siamo riusciti a leggere gli importi di questo ordine.",
+    "retry": "Riprovate",
+    "window": "Ho pagato: avvisate la fabbrica",
+    "windowLine": "La fabbrica registra il pagamento quando arriva. Avvisarla non cambia nulla di quanto dovuto.",
+    "field": {
+      "amount": "Importo pagato",
+      "paidOn": "Pagato il",
+      "method": "Come (bonifico, carta…)",
+      "note": "Nota per la fabbrica"
+    },
+    "send": "Avvisate la fabbrica",
+    "sendFailed": "La fabbrica non è stata avvisata. Riprovate tra un momento.",
+    "problem": {
+      "amount": "Scrivete l'importo che avete pagato.",
+      "tooMuch": "È più di quanto resta aperto su questa rata.",
+      "day": "Scegliete il giorno in cui avete pagato: oggi o prima.",
+      "long": "Il testo è troppo lungo."
+    }
+  },
+  "shipments": {
+    "report": "Segnalate un reclamo o un reso…"
+  },
+  "warehouse": {
+    "title": "Nel magazzino della fabbrica",
+    "where": "Il vostro ordine aspetta presso {place}.",
+    "since": "Dal {date}.",
+    "send": "Inviate l'etichetta di spedizione",
+    "hint": "Scegliete l'etichetta: un PDF o un'immagine.",
+    "sending": "Stiamo inviando l'etichetta…",
+    "have": "Abbiamo la vostra etichetta: la fabbrica spedisce l'ordine.",
+    "mayUpload": "Il vostro accesso non comprende l'invio di file: chiedete al vostro amministratore."
+  },
+  "picture": {
+    "title": "L'immagine dell'ordine",
+    "line": "Un file che potete aprire può diventare l'immagine dell'ordine: tutti la vedono negli elenchi e sull'ordine.",
+    "use": "Usate come immagine"
   }
 }

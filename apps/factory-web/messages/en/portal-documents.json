@@ -318,7 +318,6 @@
     "downloadAll_one": "Download all ({count})",
     "downloadAll_other": "Download all ({count})",
     "shippedOn": "Shipped on {date}",
-    "shipment": "Shipment {number}",
     "pieces_one": "{count} piece",
     "pieces_other": "{count} pieces",
     "revision": "revision {revision}",

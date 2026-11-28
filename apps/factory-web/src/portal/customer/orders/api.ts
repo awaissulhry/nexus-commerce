@@ -1,3 +1,4 @@
+import { recordOwnColumnsSchema } from '../../../lib/order-lines/schema' // owb-po6.1
 import { z } from 'zod'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
@@ -292,6 +293,8 @@ export const orderRecordSchema = z.object({
     // owb-po5.1 (settle 3): the subject of the order when the read names it ("Your order 12 · <subject>"); absent: the number alone.
     subject: z.string().nullable().optional(),
   }),
+  // owb-po1.4: the order's own columns and their values (lib/order-lines' ONE schema); absent from an older answer.
+  ownColumns: recordOwnColumnsSchema.optional().catch(undefined),
   // owb-po1.5: the picture of the order (null file: the design of the first line); absent from an older answer.
   picture: z.object({ fileId: z.string().nullable(), setAt: z.string().nullable().default(null), contentType: z.string().nullable().default(null) }).optional().catch(undefined),
   milestones: z.array(milestoneSchema),
@@ -325,7 +328,8 @@ export const fetchProgress = (api: ApiClient, id: string, signal?: AbortSignal):
 
 export const shipmentSchema = z.object({
   id: z.string(),
-  number: z.string(),
+  // owb-po6.3 (WALL): the office's SH- series — never drawn, never read (the server drops it after owb-po2c); optional for that day.
+  number: z.string().optional(),
   status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
   words,
   transportBy: z.string(),
@@ -346,6 +350,10 @@ export const shipmentSchema = z.object({
   // F-OP-135 (B-OP-044): this customer's OWN other orders the shipment carries ("also N pieces of your order 12"); never another's.
   otherOrders: z.array(z.object({ yourNumber, customerRef: z.string().nullable(), pieces: z.number() })).optional(),
   papers: z.array(z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number(), versionNo: z.number() })),
+  // owb-po6.3 (server po2.6, S3's atWarehouseOf as is): the shipment waits at the factory's warehouse for the customer's label; absent:
+  // not on the warehouse way (or the server not there yet) — no label card. `version`: the shipment as read (the label sends it back).
+  atWarehouse: z.object({ place: z.string(), city: z.string().nullable(), since: z.string().nullable(), sentOn: z.boolean(), labelSent: z.boolean() }).nullable().optional().catch(undefined),
+  version: z.number().optional(),
 })
 export type ShipmentRead = z.infer<typeof shipmentSchema>
 
@@ -514,6 +522,17 @@ export interface DesignAskBody {
   readonly appliesTo?: DesignAppliesTo
 }
 // ---- end F-SA-246
+
+// ---- owb-po6.3 (S3's owb-ss1): the customer's shipping label — uploaded with today's portal upload ON THE SHIPMENT (its conversation's
+// file route: portal.comment + portal.upload), then sent: POST …/shipments/:shipmentId/label { fileId, version? } → { shipmentId, labelSentAt }.
+const shipmentFilesPath = (shipmentId: string) => `/portal/threads/Shipment/${encodeURIComponent(shipmentId)}/files`
+export const announceShipmentFile = (api: ApiClient, shipmentId: string, body: OrderFileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(shipmentFilesPath(shipmentId), { body: { ...body }, schema: z.object({ file: orderUpload, upload: presigned }), idempotencyKey })
+export const completeShipmentFile = (api: ApiClient, shipmentId: string, fileId: string, idempotencyKey: string = newIdempotencyKey()): Promise<OrderUpload> =>
+  api.post(`${shipmentFilesPath(shipmentId)}/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: orderUpload }), idempotencyKey }).then((answer) => answer.file)
+export const sendShipmentLabel = (api: ApiClient, orderId: string, shipmentId: string, body: { fileId: string; version?: number }, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/label`, { body, schema: z.object({ shipmentId: z.string(), labelSentAt: z.string() }), idempotencyKey })
+// ---- end owb-po6.3
 export type AskBody = ChangeBody | CancelBody | ProductionAskBody | DesignAskBody /* F-SA-246 */
 
 /** The impact of an ask (B-PR-24/25): what is frozen, priced or not (never an amount), the earliest date (a date only), notes. */

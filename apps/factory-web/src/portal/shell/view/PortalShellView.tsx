@@ -86,7 +86,7 @@ export interface PortalShellViewModel {
   /** owb-po5.1: the frame's batch picture reader (the band's order picture); absent: no picture read (a placeholder). */
   pictures?: ReadPictures | null
   /** owb-po5.4: the top bar's Chat — the new messages of every chat (null: not read: no number); absent: no Chat button. */
-  chat?: { readonly count: number | null; readonly open: boolean } | null
+  chat?: { readonly count: number | null; readonly open: boolean; /** owb-po6.4: the band's record's new messages (null: no band chat). */ readonly here?: number | null } | null
 }
 
 export type PortalDialog = 'search' | 'notifications' | 'email' | 'shortcuts' | 'access' | 'display' | 'chat' /* owb-po5.4 */
@@ -190,6 +190,8 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
   ]
   // pp-w1 (w1.1): the record frame's "Messages (2 new)" (the conversation not on screen); on a phone its icon alone, named.
   const threadWords = band.thread ? messagesButtonWords(band.thread.count) : null
+  // owb-po6.4: a page without a dock (the order page): the band's Chat opens the panel at its record, with that chat's new messages.
+  const bandChatWords = !band.thread && band.chat && model.chat ? messagesButtonWords(model.chat.here ?? 0) : null
   const moreItems: MenuItemDef[] = [...(band.more ?? []), ...(band.more?.length ? [{ id: 'sep-ask', separator: true } as MenuItemDef] : []), { id: 'ask', label: t('band.ask'), icon: <MessageCircleQuestion size={15} aria-hidden />, onSelect: onAsk }]
 
   const liveStatus =
@@ -201,7 +203,7 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
 
   // owb-po5.1: the order's picture before the title — a button with the camera when the person may change it, else the picture.
   const picture = band.picture ?? null
-  const pictureFace = picture ? <RecordPicture source="customerOrder" recordId={picture.recordId} number={picture.number} size="cell" read={model.pictures ?? null} /> : null
+  const pictureFace = picture ? <RecordPicture source={picture.source ?? 'customerOrder'} recordId={picture.recordId} number={picture.number} size="cell" read={model.pictures ?? null} /> : null
   const bandPicture = picture ? (
     picture.onOpen ? (
       <button type="button" className="fw-pband-pic" aria-label={t('band.pictureChange')} onClick={picture.onOpen}>
@@ -267,6 +269,11 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
           {band.people ? (
             <Button size="sm" variant="tonal" className="fw-pband-people" aria-label={`${t('band.peopleLabel')}: ${t('band.people', { count: band.people.count })}`} onClick={band.people.onOpen}>
               <Users size={14} aria-hidden /> <span className="fw-pband-thread-words">{t('band.people', { count: band.people.count })}</span>
+            </Button>
+          ) : null}
+          {bandChatWords ? (
+            <Button size="sm" variant="tonal" className="fw-pband-thread" aria-label={bandChatWords.label ? t(bandChatWords.label.key, { count: bandChatWords.label.count }) : t(bandChatWords.key)} aria-pressed={model.chat?.open ?? false} onClick={() => onOpen?.('chat')}>
+              <MessageSquare size={14} aria-hidden /> <span className="fw-pband-thread-words">{t(bandChatWords.key, bandChatWords.count === undefined ? undefined : { count: bandChatWords.count })}</span>
             </Button>
           ) : null}
           {band.thread && threadWords ? (

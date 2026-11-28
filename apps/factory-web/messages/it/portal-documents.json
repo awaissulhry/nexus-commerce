@@ -318,7 +318,6 @@
     "downloadAll_one": "Scarica tutto ({count})",
     "downloadAll_other": "Scarica tutto ({count})",
     "shippedOn": "Spedito il {date}",
-    "shipment": "Spedizione {number}",
     "pieces_one": "{count} pezzo",
     "pieces_other": "{count} pezzi",
     "revision": "revisione {revision}",

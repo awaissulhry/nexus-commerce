@@ -395,7 +395,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   const open = (next: PortalDialog) => {
     // owb-po5.4: Chat is a panel beside the page, not a pop-up: the button opens it (on a record page, at that record's chat) or shuts it.
     if (next === 'chat') {
-      setChat((current) => (current.open ? { open: false } : chatOpensAt(band?.ask ? { type: band.ask.type, id: band.ask.id, label: band.ask.label ?? null } : null)))
+      // owb-po6.4: a page without a dock names its chat (`band.chat`); else the band's "Ask a question" record.
+      setChat((current) => (current.open ? { open: false } : chatOpensAt(band?.chat ?? (band?.ask ? { type: band.ask.type, id: band.ask.id, label: band.ask.label ?? null } : null))))
       void readChats()
       return
     }
@@ -629,7 +630,7 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
                 preview: me.preview,
                 canSearch: can.has('portal.search'),
                 pictures, // owb-po5.1: the band's order picture
-                chat: can.has('threads.read') ? { count: chatCountOf(chats.list), open: chat.open } : null, // owb-po5.4
+                chat: can.has('threads.read') ? { count: chatCountOf(chats.list), open: chat.open, here: band?.chat ? (chats.list?.find((entry) => entry.record.type === band.chat!.type && entry.record.id === band.chat!.id)?.newCount ?? 0) : null } : null, // owb-po5.4, owb-po6.4
               }}
               onNavigate={(href) => leaveTo(href)}
               onOpen={open}
