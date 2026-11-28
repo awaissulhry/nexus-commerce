@@ -6,26 +6,27 @@ import { PHONE_LIST_QUERY } from './use-phone'
 
 /**
  * owb-pd4 step 4.1 (design § 5q "Office › Products", prototype prod.js prodList) — the Products list's pure rules: the columns per
- * money grain (no agreed price without the price grain, no margin without the cost grain), the family words, and the phone card at
+ * money grain (no agreed price without the price grain, no margin without the margin grain — pd1 marks it money.margin), the family words, and the phone card at
  * 375 px (one card per product, money only with its grain).
  */
 
 const row = (over: Partial<(typeof ROWS)[number]> = {}) => ({ ...ROWS[0]!, ...over })
 
 describe('the columns follow the money grains', () => {
-  it('the picture first; the agreed price only with the price grain; the margin only with the cost grain', () => {
-    expect(productColumns({ price: true, cost: true })).toEqual(['picture', 'product', 'type', 'status', 'revision', 'sizes', 'protection', 'orders', 'price', 'margin', 'more'])
-    expect(productColumns({ price: true, cost: false })).not.toContain('margin')
-    expect(productColumns({ price: false, cost: true })).not.toContain('price')
-    const none = productColumns({ price: false, cost: false })
+  it('the picture first; the agreed price only with the price grain; the margin only with the margin grain', () => {
+    expect(productColumns({ price: true, margin: true })).toEqual(['picture', 'product', 'type', 'status', 'revision', 'sizes', 'protection', 'orders', 'price', 'margin', 'more'])
+    expect(productColumns({ price: true, margin: false })).not.toContain('margin')
+    expect(productColumns({ price: false, margin: true })).not.toContain('price')
+    const none = productColumns({ price: false, margin: false })
     expect(none).not.toContain('price')
     expect(none).not.toContain('margin')
     expect(none[0]).toBe('picture')
   })
-  it('sales (price grain, no cost grain) reads the agreed price, never a margin', () => {
-    expect(productColumns(GRAINS.sales)).toContain('price')
-    expect(productColumns(GRAINS.sales)).not.toContain('margin')
+  it('a cost grain alone (the product office) gives no margin; sales (price + margin grains) reads both; the production manager neither', () => {
+    expect(productColumns(GRAINS.product)).not.toContain('margin')
+    expect(productColumns(GRAINS.sales)).toEqual(expect.arrayContaining(['price', 'margin']))
     expect(productColumns(GRAINS.production)).not.toContain('price')
+    expect(productColumns(GRAINS.production)).not.toContain('margin')
   })
 })
 
@@ -73,7 +74,7 @@ describe('the phone cards at 375 px', () => {
     expect(card.margin).toBeNull()
     expect(JSON.stringify(card)).not.toContain('€')
   })
-  it('a card shows the agreed price with the price grain and the margin with the cost grain', () => {
+  it('a card shows the agreed price with the price grain and the margin with the margin grain', () => {
     const card = productCardOf(row({ agreedRange: { low: '250', high: '315', count: 2, currency: 'EUR' }, marginPct: '31', marginFrom: 'KEPT' }), { grains: GRAINS.owner, looks, locale: 'en' })
     expect(card.price).toBe('€250.00 – €315.00')
     expect(card.margin).toEqual({ pct: '31', hint: 'list.margin.fromKept' })

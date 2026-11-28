@@ -29,8 +29,8 @@ export interface StyleCardsProps {
   onSelected: (ids: string[]) => void
   /** The bulk actions while select mode holds rows. */
   bulk: ReactNode
-  /** owb-pd4 (step 4.1): the agreed price with the price grain, the margin with the cost grain; the main pictures (the looks read). */
-  grains: Pick<Grains, 'price' | 'cost'>
+  /** owb-pd4 (step 4.1): the agreed price with the price grain, the margin with the margin grain; the main pictures (the looks read). */
+  grains: Pick<Grains, 'price' | 'margin'>
   looks?: LooksState
   recordHref: (row: StyleRow) => string
   onDuplicate?: (row: StyleRow) => void

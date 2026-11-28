@@ -109,7 +109,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
   const looks = model.looks
 
   // owb-pd4 (step 4.1; design § 5q, prodList): picture · product · type and family · status (+ "n things before release") · revision ·
-  // sizes · protection · orders · agreed price (price grain) · margin (cost grain, where it comes from) · ⋯. Money columns are absent
+  // sizes · protection · orders · agreed price (price grain) · margin (margin grain, where it comes from) · ⋯. Money columns are absent
   // without their grain (never "0", never a blank column).
   const columns = useMemo<ColDef<ProductRow>[]>(() => {
     const PictureCell = ({ data }: ICellRendererParams<ProductRow>) => {

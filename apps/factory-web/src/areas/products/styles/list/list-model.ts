@@ -61,10 +61,13 @@ export const START_FROM: readonly StartFrom[] = ['blank', 'copy', 'template', 'c
 
 // ---- owb-pd4 (step 4.1; design § 5q "Office › Products", prototype prod.js prodList) — the Products list, pure ----------------------
 
-/** The list's columns, in the design's order: the picture first; the agreed price only with the price grain, the margin only with the cost grain. */
+/**
+ * The list's columns, in the design's order: the picture first; the agreed price only with the price grain, the margin only with the
+ * margin grain (pd1 marks `marginPct` money.margin, as price lists and margins do today: a cost grain alone would give the price away).
+ */
 export type ProductColumn = 'picture' | 'product' | 'type' | 'status' | 'revision' | 'sizes' | 'protection' | 'orders' | 'price' | 'margin' | 'more'
-export function productColumns(grains: Pick<Grains, 'price' | 'cost'>): ProductColumn[] {
-  return ['picture', 'product', 'type', 'status', 'revision', 'sizes', 'protection', 'orders', ...(grains.price ? (['price'] as const) : []), ...(grains.cost ? (['margin'] as const) : []), 'more']
+export function productColumns(grains: Pick<Grains, 'price' | 'margin'>): ProductColumn[] {
+  return ['picture', 'product', 'type', 'status', 'revision', 'sizes', 'protection', 'orders', ...(grains.price ? (['price'] as const) : []), ...(grains.margin ? (['margin'] as const) : []), 'more']
 }
 
 /** A key of the products catalogue and its params. */
@@ -93,7 +96,7 @@ export function agreedText(range: ProductRow['agreedRange'], locale: 'it' | 'en'
   return Number(range.low) === Number(range.high) ? low : `${low} – ${moneyText(range.high, range.currency, locale)}`
 }
 
-/** Where the margin comes from: the kept standard cost, or a rough standard of its kind (cost grain). Null: no margin. */
+/** Where the margin comes from: the kept standard cost, or a rough standard of its kind (margin grain). Null: no margin. */
 export const marginHintKey = (row: Pick<ProductRow, 'marginPct' | 'marginFrom'>): string | null =>
   row.marginPct == null ? null : row.marginFrom === 'KIND' ? 'list.margin.fromKind' : 'list.margin.fromKept'
 
@@ -142,7 +145,7 @@ export interface ProductCard {
   price: string | null
   margin: { pct: string; hint: string | null } | null
 }
-export function productCardOf(row: ProductRow, options: { grains: Pick<Grains, 'price' | 'cost'>; looks?: LooksState; locale: 'it' | 'en' }): ProductCard {
+export function productCardOf(row: ProductRow, options: { grains: Pick<Grains, 'price' | 'margin'>; looks?: LooksState; locale: 'it' | 'en' }): ProductCard {
   return {
     id: row.id,
     code: row.code,
@@ -154,7 +157,7 @@ export function productCardOf(row: ProductRow, options: { grains: Pick<Grains, '
     protection: protectionWords(row),
     orders: row.openOrders ?? null,
     price: options.grains.price ? agreedText(row.agreedRange ?? null, options.locale) : null,
-    margin: options.grains.cost && row.marginPct != null ? { pct: row.marginPct, hint: marginHintKey(row) } : null,
+    margin: options.grains.margin && row.marginPct != null ? { pct: row.marginPct, hint: marginHintKey(row) } : null,
   }
 }
 // ---- end owb-pd4
