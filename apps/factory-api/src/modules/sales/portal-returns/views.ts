@@ -290,7 +290,7 @@ export async function complaintRecord(db: Reader, place: Place, row: CaseComplai
   const style = row.styleId ? await db.style.findUnique({ where: { id: row.styleId }, select: { code: true, name: true } }) : null
   // fix-portal-numbers-1 (B-TH-303): the customer's own order number (customerSeq), never the office's series.
   const order = row.salesOrderId ? await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { id: true, customerSeq: true, customerRef: true } }) : null
-  const shipment = row.shipmentId ? await db.shipment.findUnique({ where: { id: row.shipmentId }, select: { id: true, number: true } }) : null
+  const shipment = row.shipmentId ? await db.shipment.findUnique({ where: { id: row.shipmentId }, select: { id: true } }) : null
   const fallback = status === 'NEW' ? await answerByFor(db, place.companyId, options.now) : null
   const answerBy = dayOrNull(row.answerDueOn) ?? fallback
   const next = complaintNextStep({ status, answerBy, openTask: tasks.has(`${COMPLAINT_RECORD}:${row.id}`), readsAnswer: options.readsComplaints })
@@ -323,7 +323,8 @@ export async function complaintRecord(db: Reader, place: Place, row: CaseComplai
       description: row.description,
       item: { style: style ? { code: style.code, name: style.name } : null, size: row.size, serial: row.serial, batchNumber: row.batchNumber },
       order: order ? { id: order.id, yourNumber: customerNumberOf('ORDER', order.customerSeq) /* fix-portal-numbers-1 */, yourRef: order.customerRef } : null,
-      shipment: shipment ? { id: shipment.id, number: shipment.number } : null,
+      // owb-po2c (the brand wall, plan §0.5 "counts do not leak"): the shipment by its id only, never the office's series (SH-…).
+      shipment: shipment ? { id: shipment.id } : null,
       photos: files.filter((file) => file.kind === 'PHOTO').map((file) => fileView(file, 'PHOTO')),
     },
     progress: { answerBy, answeredAt: isoOrNull(row.answeredAt) },

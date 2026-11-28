@@ -238,7 +238,7 @@ const trackingEvent = output({ at: instant(), status: z.enum(TRACKING_STATUSES),
 
 const shipment = output({
   id: id(),
-  number: z.string(),
+  // owb-po2c: no `number` — the office's shipment series (SH-…) never reaches the customer (it would tell how much others ship).
   status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
   words,
   transportBy: z.string(),

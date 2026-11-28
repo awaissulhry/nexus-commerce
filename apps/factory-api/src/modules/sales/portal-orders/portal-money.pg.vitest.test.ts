@@ -198,3 +198,18 @@ describe('at the factory’s warehouse (owb- po2.6) and the order’s subject', 
     expect(record.order.subject === null || typeof record.order.subject === 'string').toBe(true)
   })
 })
+
+describe('the brand wall on the portal shipments read (owb-po2c)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('no shipment answer carries a `number` key or a value of the office series (SH-…)', async () => {
+    let seen = 0
+    for (const orderId of orders) {
+      const read = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${orderId}/shipments`)
+      for (const shipment of read.shipments as Json[]) {
+        seen += 1
+        expect(shipment).not.toHaveProperty('number')
+      }
+      expect(JSON.stringify(read)).not.toMatch(/\bSH-\d|SEED-SH-\d/)
+    }
+    expect(seen).toBeGreaterThan(0)
+  })
+})

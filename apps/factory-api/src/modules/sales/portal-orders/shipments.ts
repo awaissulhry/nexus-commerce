@@ -131,7 +131,8 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
     const status = customerShipmentStatusOf(shipment.status, latest.get(shipment.id) ?? [])
     return {
       id: shipment.id,
-      number: shipment.number,
+      // owb-po2c (the brand wall, plan §0.5 "counts do not leak"): never the office's shipment series (SH-…) — the web names a parcel
+      // by its place on the order ("Parcel 1, 2…"); the carrier's tracking numbers stay on its parcels.
       status,
       words: SHIPMENT_STATUS_WORDS[status],
       transportBy: shipment.transportBy,
