@@ -7,7 +7,8 @@ import { CUSTOMER_GROUPS, PHASE_ICON } from '../../order-groups/groups'
 import { GroupsBand, type GroupsBandModel } from '../../order-groups/view/GroupsBand'
 import { NewMessagesBubble } from '../../last-message-cell/view/NewMessagesBubble'
 import { RecordPicture } from '../../record-picture/view/RecordPicture'
-import { useT } from '../../i18n/provider'
+import { ReaderProvider, useT } from '../../i18n/provider'
+import { ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
 import { WithMessages } from '../../../record-panels/i18n'
 import { customerStateChipOf, ORDER_STATUS_TONE, type Door } from '../model'
 import { useCellWords } from '../words'
@@ -25,7 +26,7 @@ import { StateChip } from './StateChip'
  */
 
 export interface OrderCellsLabModel {
-  readonly show: 'band' | 'band-states' | 'chips' | 'cells' | 'card' | 'bubble'
+  readonly show: 'band' | 'band-states' | 'chips' | 'cells' | 'card' | 'bubble' | 'life'
 }
 
 const DOOR: Door = { href: '/design/order-list-parts', tip: { key: 'door.promise', params: { number: 'Your order 12' } } }
@@ -61,6 +62,26 @@ function Lab({ model }: { model: OrderCellsLabModel }) {
   const sheet = useT('orders-sheet')
   const l = useT('last-message')
   const noop = () => undefined
+  // owb-b4 w4.1: the nine life words and their notes — the office's face and the customer's (outside: "At the factory’s warehouse").
+  if (model.show === 'life') {
+    const lives = (
+      <span className="fw-sheet-wi" style={{ flexWrap: 'wrap' }}>
+        {ORDER_LIFE.map((life) => (
+          <StateChip key={life} life={life} />
+        ))}
+        <StateChip life="SENT" note={{ kind: 'WAITS_FOR_APPROVAL' }} />
+        <StateChip life="SENT" note={{ kind: 'QUOTE' }} />
+        <StateChip life="CONFIRMED" note={{ kind: 'WAITS_FOR_PRINT' }} />
+        <StateChip life="CONFIRMED" note={{ kind: 'PRINTED' }} />
+        <StateChip life="SHIPPED" note={{ kind: 'PARTLY_SHIPPED', shipped: 40, total: 114 }} />
+        <StateChip life="WITHDRAWN" note={{ kind: 'CANCELLED' }} />
+        <StateChip life="WITHDRAWN" note={{ kind: 'REFUSED' }} />
+        <StateChip status="READY" />
+        <StateChip status="REQUESTED" />
+      </span>
+    )
+    return <Pair office={lives} customer={<ReaderProvider reader="outside">{lives}</ReaderProvider>} />
+  }
   if (model.show === 'band') return <Pair office={<GroupsBand model={office()} actions={{ onGroup: noop }} />} customer={<GroupsBand model={customer()} actions={{ onGroup: noop, onEverything: noop }} />} />
   if (model.show === 'band-states')
     return (

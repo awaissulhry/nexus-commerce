@@ -17,6 +17,11 @@
     },
     "columnHint": "I vostri nuovi messaggi da quando avete letto la conversazione. Un clic apre la conversazione al primo nuovo."
   },
+  "order-life": {
+    "life": {
+      "AT_OUR_WAREHOUSE": "Nel magazzino della fabbrica"
+    }
+  },
   "photo-kit": {
     "photo": {
       "cameraBusy": "Un'altra app sta usando la fotocamera. Chiudetela, oppure usate un file.",

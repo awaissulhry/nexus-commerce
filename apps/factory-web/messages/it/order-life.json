@@ -1,0 +1,25 @@
+{
+  "life": {
+    "DRAFT": "Bozza",
+    "SENT": "Inviato",
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY_TO_SHIP": "Pronto per la spedizione",
+    "SHIPPED": "Spedito",
+    "AT_OUR_WAREHOUSE": "Nel nostro magazzino",
+    "DELIVERED": "Consegnato",
+    "WITHDRAWN": "Ritirato"
+  },
+  "note": {
+    "PARTLY_SHIPPED": "{shipped} di {total} spediti",
+    "CANCELLED": "Annullato",
+    "REFUSED": "Rifiutato",
+    "QUOTE": "Un preventivo",
+    "WAITS_FOR_APPROVAL": "In attesa di approvazione",
+    "WAITS_FOR_PRINT": "Confermato: attende la stampa",
+    "PRINTED": "Stampato"
+  },
+  "tail": {
+    "PARTLY_SHIPPED": "{shipped} di {total}"
+  }
+}
