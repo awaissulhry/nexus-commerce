@@ -54,7 +54,7 @@ const CLOSED: Pick = { open: false, stations: null, problem: null, busy: false, 
 
 /** The department pick: one tap; several stations → their names once; none → the words of settle 3. `after`: read the home again. */
 export function useDepartmentPick(current: Department | null, after: () => void): { readonly model: DepartmentPickModel; readonly act: (action: DepartmentPickAction) => void } {
-  const { api, online, sessionEnded, locale } = useFloor()
+  const { api, online, sessionEnded, floorLocale: locale } = useFloor()
   const feedback = useConfirmFeedback()
   const { departments } = useDepartments(api)
   const [pick, setPick] = useState<Pick>(CLOSED)

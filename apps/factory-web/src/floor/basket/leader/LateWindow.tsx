@@ -4,6 +4,7 @@ import { Check, CircleAlert, Info, Layers, RotateCcw, SlidersHorizontal, Users }
 import type { ReactNode } from 'react'
 import { FloorButton } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
+import { useFloorWords } from '../../../lib/floor-words/FloorWords'
 import { useT } from '../../../lib/i18n/provider'
 import { LATE_DAYS, LATE_REASONS, type LateReason } from '../api'
 import { BASKET_NS } from '../parts'
@@ -29,6 +30,7 @@ export type LateAction = { readonly type: 'close' } | { readonly type: 'days'; r
 
 export function LateWindow({ model, onAction }: { readonly model: LateWindowModel; readonly onAction: (action: LateAction) => void }) {
   const tb = useT(BASKET_NS)
+  const fw = useFloorWords(BASKET_NS)
   const waits = model.busy ? tb('homePage.loading') : model.days === null ? tb('late.pickDays') : null
   return (
     <Modal open={model.open} onClose={() => onAction({ type: 'close' })} title={tb('late.title', { code: model.code })} size="sm" sheet className="fw-floor-dialog">
@@ -37,7 +39,7 @@ export function LateWindow({ model, onAction }: { readonly model: LateWindowMode
         <div className="fw-bk-days" role="group" aria-label={tb('late.howLate')}>
           {LATE_DAYS.map((days) => (
             <FloorButton key={days} size="lg" variant={model.days === days ? 'primary' : 'secondary'} aria-pressed={model.days === days} icon={model.days === days ? <Check /> : undefined} onClick={() => onAction({ type: 'days', days })}>
-              {tb('late.days', { count: days })}
+              {fw('late.days', { count: days })}
             </FloorButton>
           ))}
         </div>
@@ -45,7 +47,7 @@ export function LateWindow({ model, onAction }: { readonly model: LateWindowMode
         <div className="fw-bk-why" role="group" aria-label={tb('late.why')}>
           {LATE_REASONS.map((reason) => (
             <FloorButton key={reason} size="lg" variant="danger" icon={LATE_ICON[reason]} heldReason={waits} onClick={() => onAction({ type: 'reason', reason })}>
-              {tb(`late.reason.${reason}`)}
+              {fw(`late.reason.${reason}`)}
             </FloorButton>
           ))}
         </div>

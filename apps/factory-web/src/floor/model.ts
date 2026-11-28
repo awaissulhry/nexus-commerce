@@ -1,4 +1,4 @@
-import { isLocale, localeOf, type Locale } from '../lib/i18n/locales'
+import { FLOOR_LOCALES, floorLocaleOf, isFloorLocale, type FloorLocale } from '../lib/i18n/locales'
 
 /**
  * The floor app's rules that need no screen and no API (SCR-020, 021, 022, 024, 025; design 02-sections-floor):
@@ -216,9 +216,19 @@ export function tilePage(tiles: readonly HomeTile[], page: number): TilePage {
 
 // ---- language (PLT-062: the screen follows the signed-in person; before a sign-in the device's, or the one picked) ----
 
-/** The screen's language: the person's (when we speak it), else the one picked on this screen, else the tenant's, else Italian. */
-export function floorLocale(input: { person?: string | null; picked?: string | null; tenant?: string | null }): Locale {
-  return localeOf(input.person) ?? (isLocale(input.picked) ? input.picked : null) ?? localeOf(input.tenant) ?? 'it'
+/**
+ * The screen's language: the person's (when we speak it), else the one picked on this screen, else the tenant's, else Italian.
+ * owb-fl7 (pick J): Urdu only where the SITE's floor languages list it (`site`: Site.floorLocales; a site adds `ur` only with an Urdu
+ * worker notice in force, factory-domain privacy/floor-languages.ts); unknown (no list): never Urdu.
+ */
+export function floorLocale(input: { person?: string | null; picked?: string | null; tenant?: string | null; site?: readonly string[] | null }): FloorLocale {
+  const offered = (locale: FloorLocale | null): FloorLocale | null => (locale === 'ur' && !(input.site ?? []).includes('ur') ? null : locale)
+  return offered(floorLocaleOf(input.person)) ?? offered(isFloorLocale(input.picked) ? input.picked : null) ?? offered(floorLocaleOf(input.tenant)) ?? 'it'
+}
+
+/** The floor languages a site offers on its picker: Italian and English always (the app's own words), Urdu where the site lists it. */
+export function floorLocalesOf(site: readonly string[] | null | undefined): FloorLocale[] {
+  return FLOOR_LOCALES.filter((locale) => locale !== 'ur' || (site ?? []).includes('ur'))
 }
 
 // ---- badges (factory-domain auth/floor/badge: 128 bits as 26 Crockford base32 characters) ----

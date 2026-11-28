@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Clock, Hand, Pin } from 'lucide-react'
 import { FloorButton, useConfirmFeedback } from '@nexus/ui/floor'
+import { useFloorWords } from '../../../lib/floor-words/FloorWords'
 import { useT } from '../../../lib/i18n/provider'
 import { useFloor } from '../../FloorApp'
 import { GiveWindow } from '../../leader/GiveWindow'
@@ -22,6 +23,7 @@ export function LeaderRow({ view, onChanged }: { readonly view: BasketView; read
   const { api, sessionEnded } = useFloor()
   const tb = useT(BASKET_NS)
   const feedback = useConfirmFeedback()
+  const fw = useFloorWords(BASKET_NS)
   const [give, setGive] = useState(false)
   const [late, setLate] = useState<{ readonly days: (typeof LATE_DAYS)[number] | null; readonly said: string | null } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -68,17 +70,17 @@ export function LeaderRow({ view, onChanged }: { readonly view: BasketView; read
       <div className="fw-bk-lead" role="group" aria-label={tb('leader.row')}>
         {can.give ? (
           <FloorButton size="md" variant="secondary" icon={<Hand />} heldReason={held} onClick={() => setGive(true)}>
-            {tb('leader.giveTo')}
+            {fw('leader.giveTo')}
           </FloorButton>
         ) : null}
         {can.flag ? (
           <FloorButton size="md" variant={flags.first ? 'primary' : 'secondary'} aria-pressed={flags.first} icon={<Pin />} heldReason={held} onClick={() => void toggleFirst()}>
-            {tb('leader.doFirst')}
+            {fw('leader.doFirst')}
           </FloorButton>
         ) : null}
         {can.late ? (
           <FloorButton size="md" variant="danger" icon={<Clock />} heldReason={held} onClick={() => setLate({ days: null, said: null })}>
-            {tb('leader.willLate')}
+            {fw('leader.willLate')}
           </FloorButton>
         ) : null}
       </div>
