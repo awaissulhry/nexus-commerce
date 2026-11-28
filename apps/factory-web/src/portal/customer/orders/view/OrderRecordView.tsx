@@ -144,6 +144,8 @@ export interface OrderRecordViewModel {
   /** owb-po6.3: the shipment whose label is being sent, and why "Send the shipping label" waits (a preview, offline, no upload right). */
   labelBusy?: string | null
   labelHeld?: string | null
+  /** owb-po6.4: "Use as the picture" is saving. */
+  pictureBusy?: boolean
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -183,6 +185,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onNoticeClose?: () => void
   /** owb-po6.3: the label file picked for a shipment at the factory's warehouse: uploaded on the shipment, then sent. */
   onSendLabel?: (shipmentId: string, file: File) => void
+  /** owb-po6.4: a file of the order becomes its picture (only for who may change it). */
+  onUsePicture?: (fileId: string) => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void

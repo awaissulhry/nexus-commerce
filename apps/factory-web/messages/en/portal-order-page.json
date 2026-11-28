@@ -183,5 +183,10 @@
     "sending": "Sending the label…",
     "have": "We have your shipping label: the factory sends the order on.",
     "mayUpload": "Your access does not include sending files: ask your admin."
+  },
+  "picture": {
+    "title": "The picture of the order",
+    "line": "A file you can open can be the order's picture: everyone sees it in the lists and on the order.",
+    "use": "Use as the picture"
   }
 }

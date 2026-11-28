@@ -21,5 +21,42 @@
     "attached_one": "{count} file attached",
     "attached_other": "{count} files attached",
     "drop": "Do not attach {name}"
+  },
+  "quiet": {
+    "pictureSet": {
+      "FACTORY": "The factory changed the picture of the order",
+      "CUSTOMER": "Your team changed the picture of the order"
+    },
+    "lineAdded": {
+      "FACTORY": "The factory added a line",
+      "CUSTOMER": "Your team added a line"
+    },
+    "lineChanged": {
+      "FACTORY": "The factory changed a line",
+      "CUSTOMER": "Your team changed a line"
+    },
+    "lineTakenOut": {
+      "FACTORY": "The factory took out a line",
+      "CUSTOMER": "Your team took out a line"
+    },
+    "ownColumnAdded": {
+      "FACTORY": "The factory added one of your columns",
+      "CUSTOMER": "Your team added one of your columns"
+    },
+    "promiseSet": {
+      "FACTORY": "The factory set the promised date",
+      "CUSTOMER": "The promised date was set"
+    },
+    "fileShared": {
+      "FACTORY": "The factory shared a file",
+      "CUSTOMER": "Your team shared a file"
+    },
+    "detail": {
+      "words": ": {words}",
+      "pieces_one": ", {count} piece",
+      "pieces_other": ", {count} pieces",
+      "count_one": " · {count} change",
+      "count_other": " · {count} changes"
+    }
   }
 }

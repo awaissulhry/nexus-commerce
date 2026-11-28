@@ -136,7 +136,7 @@ function RequestOrderContainer({ id, record, reading, failed, onRead, onRecord }
           refs: shown.customerRef ? { theirs: shown.customerRef, ours: null } : null,
           // The shared StateChip draws the life's own words (the label is only the plain pill's, never drawn with a life).
           status: { label: '', tone: 'neutral', life: shown.life, note: shown.note },
-          picture: { recordId: id, number: shown.title, onOpen: shown.may.picture ? () => setPictureOpen(true) : null },
+          picture: { recordId: id, number: shown.title, source: 'customerRequest', onOpen: shown.may.picture ? () => setPictureOpen(true) : null },
           actions: primary ? [primary] : [],
         }
       : { title: t('request.name'), back: { href: `${frame.prefix}/orders`, label: t('band.back') } },
@@ -191,7 +191,7 @@ function RequestOrderContainer({ id, record, reading, failed, onRead, onRecord }
           onClose={() => setPictureOpen(false)}
           number={shown.title}
           subject={shown.subject}
-          record={{ source: 'customerOrder', recordId: id, read: pictures }}
+          record={{ source: 'customerRequest', recordId: id, read: pictures }}
           now={{ fileId: shown.picture?.fileId ?? null, version: shown.version }}
           choices={pictureChoicesOfDraft(record)}
           save={orderPictureSaver(api, orderPicturePath('portal', 'request', id))}

@@ -183,5 +183,10 @@
     "sending": "Stiamo inviando l'etichetta…",
     "have": "Abbiamo la vostra etichetta: la fabbrica spedisce l'ordine.",
     "mayUpload": "Il vostro accesso non comprende l'invio di file: chiedete al vostro amministratore."
+  },
+  "picture": {
+    "title": "L'immagine dell'ordine",
+    "line": "Un file che potete aprire può diventare l'immagine dell'ordine: tutti la vedono negli elenchi e sull'ordine.",
+    "use": "Usate come immagine"
   }
 }

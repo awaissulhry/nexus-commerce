@@ -14,6 +14,7 @@ import { PinnedBar } from '../../head/view/PinnedBar'
 import { THREAD_NAMESPACES } from '../../parts/ThreadMessages'
 import { dayOf, timeOf } from '../../parts/time'
 import { tonesFor } from '../../parts/tones'
+import { quietLineOf } from '../quiet' // owb-po6.4
 import { partnerFeedOf, partnerMenuOf, partnerPinsOf, partnerRowOf, partnerUnreadOf, partnerWho, type PartnerFeedMessage, type PartnerKind, type PartnerNames, type PortalPin, type PortalThreadMessage } from '../model'
 import { PartnerComposer, type PartnerComposerActions, type PartnerComposerModel } from './PartnerComposer'
 import { PartnerHead, type PartnerWidth } from './PartnerHead'
@@ -113,7 +114,8 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
   // tw- fx2 (G-7): one colour per person inside this list (side + name: the read has no person id).
   const tones = useMemo(() => tonesFor(feed.map((message) => message.senderKey)), [feed])
   // pt-fx1 F-2: the reader's own messages are never unread — the band above the first new one that is not theirs, counted without them.
-  const unread = useMemo(() => partnerUnreadOf(model.messages, model.reading), [model.messages, model.reading])
+  // owb-po6.4: a quiet line is never unread (the server's rule too): the count reads the messages only.
+  const unread = useMemo(() => partnerUnreadOf(model.messages.filter((message) => !message.event), model.reading), [model.messages, model.reading])
   const firstNewId = unread.firstNewId
   const newSince = unread.newCount
   // …and one of their own that arrives always shows (the list follows it; it never adds to the down button's count).
@@ -166,6 +168,18 @@ function Column({ model, actions }: { model: PartnerColumnModel; actions?: Partn
           if (row.kind !== 'message') return null
           const message = row.message
           const time = timeOf(message.at, locale)
+          // owb-po6.4: a quiet line — a small line in the middle with its time: no bubble, no face, no menu; an unknown key draws nothing.
+          if (message.source.event) {
+            const said = quietLineOf(message.source.event, words)
+            return said ? (
+              <div key={row.key} className="fw-rt-feed-item fw-rtp-quiet" role="note" data-day={dayText(dayOf(message.at), today, locale, feedWords)}>
+                <span className="fw-rtp-quiet-words">{said}</span>
+                <time className="fw-rtp-quiet-time" dateTime={message.at}>
+                  {time}
+                </time>
+              </div>
+            ) : null
+          }
           const who = partnerWho(message.source, names)
           const email = message.source.channel === 'email'
           return (

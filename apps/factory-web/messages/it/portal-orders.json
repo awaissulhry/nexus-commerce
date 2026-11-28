@@ -973,5 +973,9 @@
   },
   "money": {
     "sent": "Abbiamo avvisato la fabbrica. Registra il pagamento quando arriva."
+  },
+  "picture": {
+    "saved": "L'immagine dell'ordine è cambiata.",
+    "failed": "L'immagine non è cambiata. Riprovate tra un momento."
   }
 }

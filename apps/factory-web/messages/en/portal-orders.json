@@ -973,5 +973,9 @@
   },
   "money": {
     "sent": "We told the factory. It records the payment when it arrives."
+  },
+  "picture": {
+    "saved": "The picture of the order changed.",
+    "failed": "The picture did not change. Try again in a moment."
   }
 }

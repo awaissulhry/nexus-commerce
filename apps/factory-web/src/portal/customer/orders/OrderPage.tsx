@@ -9,7 +9,6 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
 import { readFromStore, storeUrl } from '../../../record-panels/store'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
-import { PortalThread } from '../../shell/thread/PortalThread'
 // ---- B-TH-275: what the order was made from (the summary read, B-TH-076: its parent, only when the customer opens it too).
 import { fetchRecordSummary } from '../../shell/record/api'
 // ---- end B-TH-275
@@ -1050,6 +1049,19 @@ function OrderContainer({ id }: { id: string }) {
       setLabelBusy(null)
     }
   }
+  // owb-po6.4: "Use as the picture" on the Files tab (the same door as the window: portal.orderDrafts.edit).
+  const [pictureBusy, setPictureBusy] = useState(false)
+  const pictureFromFile = (fileId: string) => {
+    if (!record || pictureBusy) return
+    setPictureBusy(true)
+    orderPictureSaver(api, orderPicturePath('portal', 'order', record.order.id))({ fileId, version: record.order.version })
+      .then(() => {
+        setNotice({ tone: 'success', key: 'picture.saved' })
+        void load()
+      })
+      .catch(() => setNotice({ tone: 'danger', key: 'picture.failed' }))
+      .finally(() => setPictureBusy(false))
+  }
   const reportHref = can('portal.returns.view') && pageBuilt('returns') ? `${frame.prefix}/returns?start=CHOOSE&order=${encodeURIComponent(id)}` : null
 
   // ── owb-po5: the picture of the order and All changes ───────────────────────────────────────────────────────────────
@@ -1240,6 +1252,7 @@ function OrderContainer({ id }: { id: string }) {
         reportHref, // owb-po6.3
         labelBusy,
         labelHeld,
+        pictureBusy, // owb-po6.4
       }}
       actions={{
         priceCheck: priceCheck.actions, // F-CP-143
@@ -1294,6 +1307,7 @@ function OrderContainer({ id }: { id: string }) {
         onNoticeSend: sendNotice,
         onNoticeClose: () => setNoticeWindow((current) => (current?.busy ? current : null)),
         onSendLabel: (shipmentId, file) => void sendLabel(shipmentId, file), // owb-po6.3
+        ...(mayPicture ? { onUsePicture: pictureFromFile } : {}), // owb-po6.4
         // ---- F-PR-12a
         onRetryProduction: () => {
           setProduction({ state: 'loading', read: null })
@@ -1428,8 +1442,7 @@ function OrderContainer({ id }: { id: string }) {
         },
       }}
     >
-      {/* B-TH-275: the order's ONE conversation, docked by the frame beside every tab. */}
-      {record ? <PortalThread type="SalesOrder" id={record.order.id} /> : null}
+      {/* owb-po6.4 (lead decision, design § 5d "the chat left the page"): no docked conversation — the band's Chat opens the panel. */}
     </OrderRecordView>
     {/* owb-po5.3: All changes — the ONE log over the portal's route (its faces: "The factory", "You", "your colleague"). */}
     <AllChangesWindow open={changesOpen} onClose={() => setChangesOpen(false)} name={record ? orderNameOf(record.order, locale, t) : ''} read={changeLog} />
