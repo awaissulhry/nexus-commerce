@@ -123,6 +123,28 @@ export function againFormOf(pages: readonly AgainPage[], cards: readonly SheetCa
   return { pages: new Set(pages.map((page) => page.key)), cards: new Set(cards.map((card) => card.bundleId)), reason: null, note: '' }
 }
 
+/**
+ * owb-ss4b: the pages offered, with the page "Place the scan code" asks for added when the preview did not count it (the server sends no
+ * page count: page 1 of each piece is offered; a placed page 2 of the same file joins after its piece's pages).
+ */
+export function againPagesWith(pages: readonly AgainPage[], pieces: PrintPreview['pages'], only: { readonly salesOrderLineId: string; readonly page: number } | null): AgainPage[] {
+  if (!only || pages.some((page) => page.key === pageKey(only.salesOrderLineId, only.page))) return [...pages]
+  const piece = pieces.find((entry) => entry.salesOrderLineId === only.salesOrderLineId && entry.fileId)
+  if (!piece || only.page < 1) return [...pages]
+  const added: AgainPage = { key: pageKey(only.salesOrderLineId, only.page), salesOrderLineId: only.salesOrderLineId, label: piece.label, page: only.page }
+  const last = pages.map((page) => page.salesOrderLineId).lastIndexOf(only.salesOrderLineId)
+  return last < 0 ? [...pages, added] : [...pages.slice(0, last + 1), added, ...pages.slice(last + 1)]
+}
+
+/**
+ * owb-ss4b: from "Place the scan code" → "Print this page again…": only that page is ticked, no card (design plan § 5zj B "From
+ * 'Place the scan code': only that page"). A page the window does not offer: nothing ticked.
+ */
+export function againFormOnlyOf(pages: readonly AgainPage[], only: { readonly salesOrderLineId: string; readonly page: number }): AgainForm {
+  const key = pageKey(only.salesOrderLineId, only.page)
+  return { pages: new Set(pages.some((page) => page.key === key) ? [key] : []), cards: new Set(), reason: null, note: '' }
+}
+
 /** A tick on one page or one card. */
 export function toggledIn(set: ReadonlySet<string>, key: string): Set<string> {
   const next = new Set(set)
