@@ -46,8 +46,7 @@ export async function requestBand(caller: CommandCaller, requestId: string) {
     const request = row!
     const scope = { companyId: request.companyId, partyId: request.partyId }
     const own = await client.portalOrderRequest.findUnique({ where: { id: request.id }, select: { pictureFileId: true, party: { select: { code: true, legalName: true } } } })
-    const removed = new Set((await client.portalOrderRequestLine.findMany({ where: { requestId: request.id, removedAt: { not: null } }, select: { id: true } })).map((line) => line.id))
-    const lines = (await readLines(client, [request.id])).filter((line) => !removed.has(line.id))
+    const lines = await readLines(client, [request.id]) // the live lines (a line taken out is left out by S1's readLines)
     const people = await readPeople(client, [request.id])
     const files = await readDraftFiles(client, [request.id], lines.map((line) => line.id))
     const addresses = await client.partyAddress.findMany({ where: { partyId: request.partyId }, select: { id: true, status: true, isDefaultShipTo: true } })

@@ -475,9 +475,8 @@ async function requestFactsOf(client: Reader, actor: Actor, rows: readonly Reque
   const firstStyle = new Map<string, string>()
   if (rows.length === 0) return { of, firstStyle }
   const ids = rows.map((row) => row.id)
-  // The lines in the draft (a line taken out — owb-b1 removedAt — is not counted, shown or sent), their people and files.
-  const removed = new Set((await client.portalOrderRequestLine.findMany({ where: { requestId: { in: ids }, removedAt: { not: null } }, select: { id: true } })).map((line) => line.id))
-  const lineRows: LineRow[] = (await readLines(client, ids)).filter((line) => !removed.has(line.id))
+  // The live lines of the drafts (S1's readLines leaves a line taken out — removedAt — out), their people and files.
+  const lineRows: LineRow[] = await readLines(client, ids)
   const people: PersonRow[] = await readPeople(client, ids)
   const files = await readDraftFiles(client, ids, lineRows.map((line) => line.id))
   const sheetLines = sheetLinesOf(files)
