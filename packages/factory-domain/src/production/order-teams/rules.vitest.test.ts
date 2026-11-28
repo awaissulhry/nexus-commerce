@@ -60,7 +60,7 @@ describe('evenShares', () => {
 
 describe('teamMarks', () => {
   it('over its limit, takes no new order, missing today, late — and nothing from an unknown figure', () => {
-    expect(teamMarks({ inWork: 9, maxBaskets: 8, takesNewOrders: false, missingToday: 2, late: 1 })).toEqual(['OVER_LIMIT', 'TAKES_NO_NEW_ORDER', 'MISSING_TODAY', 'LATE'])
+    expect(teamMarks({ inWork: 9, maxBaskets: 8, takesNewOrders: false, missingToday: 2, late: 1 })).toEqual(['OVER_LIMIT', 'NO_NEW_ORDERS', 'MISSING_TODAY:2', 'LATE:1'])
     expect(teamMarks({ inWork: 8, maxBaskets: 8, takesNewOrders: true, missingToday: 0, late: 0 })).toEqual([])
     // A team smaller than the smallest group: its figures are null, so it carries no figure mark.
     expect(teamMarks({ inWork: null, maxBaskets: 1, takesNewOrders: true, missingToday: null, late: null })).toEqual([])

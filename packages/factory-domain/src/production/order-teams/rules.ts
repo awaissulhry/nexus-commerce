@@ -10,16 +10,16 @@
  *             one of them is still in charge. At the FIRST print the baskets are shared out, so from then on the shares stay:
  *             only TOGETHER rows (no share) may still be added or taken off.
  *
- * Marks on the board (codes; the web has the words): over its limit (more baskets in work than its most), takes no new order,
- * missing today (a number of its people), late (a number of its orders). A figure of a team smaller than its company's
- * `minimumGroupSize` is never shown (null): the marks read null as nothing to say.
+ * Marks on the board (codes; the web has the words, web B's reads #2046/#2068): OVER_LIMIT (more baskets in work than its most),
+ * NO_NEW_ORDERS (it takes no new order), MISSING_TODAY:<n> (n of its people), LATE:<n> (n of its orders). A figure of a team
+ * smaller than its company's `minimumGroupSize` is never shown (null): the marks read null as nothing to say.
  */
 
 export const ORDER_TEAM_MODES = ['NONE', 'ONE', 'TOGETHER', 'SPLIT'] as const
 export type OrderTeamMode = (typeof ORDER_TEAM_MODES)[number]
 
-export const TEAM_MARKS = ['OVER_LIMIT', 'TAKES_NO_NEW_ORDER', 'MISSING_TODAY', 'LATE'] as const
-export type TeamMark = (typeof TEAM_MARKS)[number]
+/** A board mark; MISSING_TODAY and LATE carry their number after a colon ("LATE:2"). */
+export type TeamMark = 'OVER_LIMIT' | 'NO_NEW_ORDERS' | `MISSING_TODAY:${number}` | `LATE:${number}`
 
 /** The refusals of a PUT of an order's teams, each with its words (EN; the web shows its own words by code). */
 export const ORDER_TEAM_REFUSALS = {
@@ -104,9 +104,9 @@ export const isOverLimit = (facts: Pick<TeamMarkFacts, 'inWork' | 'maxBaskets'>)
 export function teamMarks(facts: TeamMarkFacts): TeamMark[] {
   const marks: TeamMark[] = []
   if (isOverLimit(facts)) marks.push('OVER_LIMIT')
-  if (!facts.takesNewOrders) marks.push('TAKES_NO_NEW_ORDER')
-  if (facts.missingToday !== null && facts.missingToday > 0) marks.push('MISSING_TODAY')
-  if (facts.late !== null && facts.late > 0) marks.push('LATE')
+  if (!facts.takesNewOrders) marks.push('NO_NEW_ORDERS')
+  if (facts.missingToday !== null && facts.missingToday > 0) marks.push(`MISSING_TODAY:${facts.missingToday}`)
+  if (facts.late !== null && facts.late > 0) marks.push(`LATE:${facts.late}`)
   return marks
 }
 
