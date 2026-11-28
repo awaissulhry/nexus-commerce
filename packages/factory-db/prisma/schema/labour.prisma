@@ -80,6 +80,11 @@ model OperationChecklistResult {
   deviceTime           DateTime?        @db.Timestamptz(3)
   serverTime           DateTime         @default(now()) @db.Timestamptz(3)
   createdById          String?          @db.Uuid
+  /// owb-fl0 (order workflow build, schema wave "floor baskets 2"; LF _owb-fl-common.md § 3 fl1 "QC photo"): the photo of
+  /// this step, written with the tick (the row never changes, so the file is uploaded first): an image of the tenant this
+  /// session can open, of the work order's company or the whole factory; never a fiscal archive, a voice note, body data
+  /// or a priced file, nor one deleted or quarantined (the …_production_floor_baskets_2_guards trigger). Null: no photo.
+  fileId               String?          @db.Uuid
 
   operation WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   bundle    Bundle             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -88,6 +93,9 @@ model OperationChecklistResult {
   employee  Employee?          @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   station   Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device    Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // owb-fl0: the step's photo (Restrict, not Prisma's SetNull default for an optional relation: that would also clear
+  // tenantId).
+  file      StoredFile?        @relation("OperationChecklistResultFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientEventId])
   @@index([tenantId, bundleId, workOrderOperationId])
