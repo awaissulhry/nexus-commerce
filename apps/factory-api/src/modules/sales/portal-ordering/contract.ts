@@ -20,6 +20,8 @@ import { styleDraftBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 // od-s s.4 (order start; addendum R1–R3): a row's sizing and open choices; Still open (information only).
 import { CHOICE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/choices'
 import { DRAFT_SIZINGS, STILL_OPEN_KINDS, STILL_OPEN_STATES } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+// owb- po1.4 (order workflow): the customer's own columns on the draft (the shared answer shapes).
+import { recordOwnColumns } from '../own-columns/schemas'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -106,7 +108,7 @@ const customLine = output({
   /** A described line's own private-label style, or the style a made-to-measure line is made from (null: none named). */
   style: named.nullable(),
   colourway: named.nullable(),
-  /** MADE_TO_MEASURE: the garment type (a measurement template's code) and its name. */
+  /** The garment type (a measurement template's code) and its name: MADE_TO_MEASURE, or (owb- po1.3) a DESCRIBED "A new design: <kind>". */
   garmentType: output({ code: z.string(), words }).nullable(),
   /** DESCRIBED: the pieces in all (the split by size may follow after Send). */
   quantity: z.number().int().nullable(),
@@ -124,6 +126,8 @@ const customLine = output({
   sizing: sizing.nullable(),
   /** od-s s.4: the row's open choices (null: none). */
   choices: z.array(choiceView).nullable(),
+  /** owb- po1.3 (settle 4): the line's material in words — its "Material" choice's pick, else the colourway it names; null: none. */
+  material: z.string().nullable(),
 })
 // ---- end B-CP-075
 
@@ -219,7 +223,12 @@ const line = output({
   sizing: sizing.nullable(),
   /** od-s s.4: the row's open choices (null: none). */
   choices: z.array(choiceView).nullable(),
+  /** owb- po1.3 (settle 4): the line's material in words — its "Material" choice's pick, else the colourway's name; null: none. */
+  material: z.string().nullable(),
 })
+
+/** owb- po1.3: a line taken out of a draft ("Put it back"): its place, what it was (style, words or garment type), when it went. */
+const removedLine = output({ id: id(), seq: z.number().int(), words: z.string(), removedAt: at })
 
 const requestBody = output({
   id: id(),
@@ -257,11 +266,18 @@ const requestBody = output({
    * B-CP-070 (D11): what the reader may do now beside filling the draft — send it and withdraw it once sent (who may order: the
    * Buyer, the Admin), discard the draft (who may order, or the colleague who started it). False: held, with the page's words.
    */
-  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }),
+  // owb- po1.2: + take it back (a SENT request the factory has not answered or started work on; who may order; the portal only).
+  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean(), takeBack: z.boolean() }),
   /** B-CP-072: its logos, references and measurement sheets (the draft's own and its lines'). */
   files: draftFiles,
   /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
   uploads: output({ open: z.boolean(), words: z.string().nullable() }),
+  /** owb- po1.3: a DRAFT's lines taken out, the last first (they count nowhere until put back); [] once sent. */
+  removedLines: z.array(removedLine),
+  /** owb- po1.4: the customer's own columns ON this draft (in order) and their values on its live lines (lineId → columnId → value). */
+  ownColumns: recordOwnColumns,
+  /** owb- po1.5: the order's chosen picture (fileId null: none — the first line's design), when, and the file's type when the reader opens it. */
+  picture: output({ fileId: id().nullable(), setAt: at.nullable(), contentType: z.string().nullable() }),
   // ---- B-CP-075: the lines in the customer's own words (described, made to measure; with `lines`, one draft by seq), the parts it
   // sends later, who of the customer saved it last (a display name, never an id or an e-mail), and made to measure for it.
   customLines: z.array(customLine),
@@ -361,6 +377,9 @@ export const changeLineContract = defineContract({
   response: { 200: record },
 })
 export const removeLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+// owb- po1.3 (order workflow, the ONE lines table): a line copied whole; a line taken out put back (DELETE …/lines/:lineId is the soft take out).
+export const copyLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
+export const putBackLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
 export const pricesContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 export const discardContract = defineContract({ params: requestParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ discarded: z.literal(true) }) } })
 export const sendContract = defineContract({
@@ -370,6 +389,8 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+// owb- po1.2 (order workflow, "Take it back"): a SENT request back to its DRAFT, its number kept (409 in words when answered or started).
+export const takeBackContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 
 // ---- B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line -----
 const customLineFields = {
