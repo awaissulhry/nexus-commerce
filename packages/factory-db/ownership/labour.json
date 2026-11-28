@@ -15,7 +15,7 @@
       }
     },
     "OperationChecklistResult": {
-      "about": "The steps ticked inside an operation: the tablet inserts them; both read them (Finish waits for the required ones). Never changed or removed. Personal: see \"personal\" (the person = employeeId).",
+      "about": "The steps ticked inside an operation: the tablet inserts them; both read them (Finish waits for the required ones). owb-fl0: a quality step's photo (fileId) is written with its tick. Never changed or removed. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

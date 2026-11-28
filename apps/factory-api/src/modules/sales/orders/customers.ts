@@ -1,12 +1,13 @@
 import type { Prisma } from '@nexus/factory-db'
-import { grantsFor } from '@nexus/factory-domain/core/permissions'
-import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { grantsFor, holds } from '@nexus/factory-domain/core/permissions'
+import { ORDERS_VIEW, ORDERS_VIEW_OWN } from '@nexus/factory-domain/sales/orders/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officeContextOf } from './access'
+import { ownOrdersOf } from './on-the-order' // owb-of1a (R20)
 import { lateWhere, whereOf } from './orders'
 
 /**
@@ -46,7 +47,8 @@ export async function orderCustomers(caller: CommandCaller, query: CustomersQuer
           })
         ).map((party) => party.id)
       : null
-    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, { companyId: query.companyId, kind: query.kind /* B-SA-020 */ }, today), matching ? { partyId: { in: matching } } : {}] }
+    // owb-of1a (R20): + the orders a designer is on (orders.view.own), as the list counts them.
+    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, { companyId: query.companyId, kind: query.kind /* B-SA-020 */ }, today, await ownOrdersOf(client, context)), matching ? { partyId: { in: matching } } : {}] }
     const all = await client.salesOrder.groupBy({ by: ['partyId'], where: base, _count: { _all: true }, _max: { orderDate: true, createdAt: true } })
     const open = await client.salesOrder.groupBy({ by: ['partyId'], where: { AND: [base, { status: { in: [...OPEN_STATUSES] } }] }, _count: { _all: true } })
     const late = await client.salesOrder.groupBy({ by: ['partyId'], where: { AND: [base, lateWhere(today)] }, _count: { _all: true } })
@@ -91,8 +93,10 @@ export async function orderCustomers(caller: CommandCaller, query: CustomersQuer
 // ── B-TH-226 ──
 /** The reader's orders.view reaches only some customers: every grant that holds it names its parties. */
 // B-TH-058: exported for the overall view's "Your customers" (./summary).
+// owb-of1a (R20): a reader with orders.view.own only (the designer) is limited too — it reads the orders it is on.
 export function limitedToSomeCustomers(context: ReturnType<typeof officeContextOf>): boolean {
   const grants = grantsFor(actorOf(context), ORDERS_VIEW)
-  return grants.length > 0 && grants.every((grant) => grant.parties !== 'all')
+  if (grants.length === 0) return holds(actorOf(context), ORDERS_VIEW_OWN)
+  return grants.every((grant) => grant.parties !== 'all')
 }
 // ── end B-TH-226 ──

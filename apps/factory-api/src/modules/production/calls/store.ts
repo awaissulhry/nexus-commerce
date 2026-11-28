@@ -43,6 +43,8 @@ export const CALL_COLUMNS = {
   cancelledAt: true,
   cancelledById: true,
   escalatedAt: true,
+  // owb-fl3: where on the basket picture the problem is (0–8; HelpCall.spot, owb-fl0); never in a list's answer.
+  spot: true,
   outcomeRecordType: true,
   outcomeRecordId: true,
   deviceId: true,
@@ -102,6 +104,45 @@ export async function devicePlaceOf(db: Reader, deviceId: string): Promise<{ rea
   return { stationId: device?.stationId ?? null, lineId: device?.lineId ?? device?.station?.lineId ?? null }
 }
 
+// ── owb-fl3 (S5 server B; `_owb-fl-common.md` settle 2): a phone's "where am I" is its department pick ──
+/** Where a call from this device goes: the session's picked station first (a phone), else the device's own station (a tablet). */
+export interface CallPlace {
+  /** The station a call goes to (null: none, the refusal says what to do). */
+  readonly stationId: string | null
+  readonly lineId: string | null
+  /** The device's own station: a fixed tablet's (the station's waiting books only there). */
+  readonly deviceStationId: string | null
+  /** The session's department pick (FloorSession.departmentId); null: none. */
+  readonly departmentId: string | null
+  /** The device is a PHONE (its words when no station is known). */
+  readonly phone: boolean
+}
+
+/**
+ * The device's current session's department pick (FloorSession.departmentId, .stationId; set by POST /floor/session/department,
+ * cleared with the session). Only the session of the worker signed in now counts; none → nulls.
+ */
+export async function sessionPlaceOf(db: Reader, context: { readonly deviceId: string; readonly actorId: string }): Promise<{ readonly departmentId: string | null; readonly stationId: string | null; readonly phone: boolean }> {
+  const device = await db.device.findUnique({ where: { id: context.deviceId }, select: { mode: true, currentSessionId: true } })
+  const phone = device?.mode === 'PHONE'
+  if (!device?.currentSessionId) return { departmentId: null, stationId: null, phone }
+  const session = await db.floorSession.findUnique({ where: { id: device.currentSessionId }, select: { workerId: true, endedAt: true, departmentId: true, stationId: true } })
+  if (!session || session.workerId !== context.actorId || session.endedAt !== null) return { departmentId: null, stationId: null, phone }
+  return { departmentId: session.departmentId ?? null, stationId: session.stationId ?? null, phone }
+}
+
+/** The place a call of this device goes to: `session.stationId ?? the device's station` (fixed tablets unchanged). */
+export async function callPlaceOf(db: Reader, context: { readonly deviceId: string; readonly actorId: string }): Promise<CallPlace> {
+  const device = await devicePlaceOf(db, context.deviceId)
+  const session = await sessionPlaceOf(db, context)
+  if (session.stationId) {
+    const station = await db.station.findUnique({ where: { id: session.stationId }, select: { lineId: true } })
+    return { stationId: session.stationId, lineId: station?.lineId ?? null, deviceStationId: device.stationId, departmentId: session.departmentId, phone: session.phone }
+  }
+  return { stationId: device.stationId, lineId: device.lineId, deviceStationId: device.stationId, departmentId: session.departmentId, phone: session.phone }
+}
+// ── end owb-fl3 ──
+
 // ---- types --------------------------------------------------------------------------------------------------------------
 
 export const TYPE_COLUMNS = {
@@ -151,7 +192,8 @@ export async function codeWordsOf(db: Reader, codes: readonly string[]): Promise
   return new Map(rows.map((row) => [row.code, { labelIt: row.labelIt, labelEn: row.labelEn, labelI18n: (row.labelI18n ?? {}) as Record<string, string>, icon: row.icon, colour: row.colour, active: row.active }]))
 }
 
-const wordsOf = (code: string, words: ReadonlyMap<string, CodeWords>) => {
+/** A code's words, icon and colour (the code itself when the list lacks it). owb-fl3: exported for the floor's tiles. */
+export const wordsOf = (code: string, words: ReadonlyMap<string, CodeWords>) => {
   const found = words.get(code)
   return { labelIt: found?.labelIt ?? code, labelEn: found?.labelEn ?? code, labelI18n: found?.labelI18n ?? {}, icon: found?.icon ?? null, colour: found?.colour ?? null }
 }
