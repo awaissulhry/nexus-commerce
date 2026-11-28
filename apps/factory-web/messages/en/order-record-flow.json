@@ -144,5 +144,12 @@
   },
   "money": {
     "paidTooMuch": "{amount} is paid too much: the order’s total went below what is paid."
+  },
+  "zip": {
+    "all": "Download all",
+    "busy": "Making the zip…",
+    "failed": "The zip could not be made. Try again.",
+    "leftOut_one": "{count} file was left out of the zip: you cannot open it.",
+    "leftOut_other": "{count} files were left out of the zip: you cannot open them."
   }
 }

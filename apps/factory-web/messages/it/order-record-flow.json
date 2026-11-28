@@ -144,5 +144,12 @@
   },
   "money": {
     "paidTooMuch": "{amount} pagati in più: il totale dell’ordine è sceso sotto quanto pagato."
+  },
+  "zip": {
+    "all": "Scarica tutto",
+    "busy": "Preparazione dello zip…",
+    "failed": "Non è stato possibile preparare lo zip. Riprova.",
+    "leftOut_one": "{count} file è rimasto fuori dallo zip: non puoi aprirlo.",
+    "leftOut_other": "{count} file sono rimasti fuori dallo zip: non puoi aprirli."
   }
 }
