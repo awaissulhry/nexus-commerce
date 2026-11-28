@@ -1,6 +1,6 @@
 import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { joinProblems, joinVerdict } from '@nexus/factory-domain/shipping/shipments'
 import {
   garmentsLeft,
@@ -23,7 +23,7 @@ import { lockCells, tenantOf } from '../cells'
 import { carryHoldsOntoInCommand, lockShipmentRow, readHolds, releaseHoldInCommand } from '../holds/store'
 import { syncSystemHoldsInCommand } from '../holds/system'
 import { joinOrderOf, joinOrdersOf, joinShipmentFacts, orderRefsOfShipments, ordersChanged, ordersOfShipment } from '../shipments/orders-of'
-import { officeShipment, packingChanged, shipmentDetail, unpackSerialsOf } from '../shipments/shipments'
+import { officeShipment, packingChanged, shipmentDetail, shipmentToPlan, unpackSerialsOf } from '../shipments/shipments'
 import { readSplitLines, type SplitLineFacts } from '../split/split'
 import { readShipment, type ShipmentHeader } from '../store'
 
@@ -66,9 +66,9 @@ export interface TakeOffBody {
   readonly reason: string
 }
 
-/** POST /shipping/shipments/:shipmentId/orders/:salesOrderId/take-off (shipping.manage). */
+/** POST /shipping/shipments/:shipmentId/orders/:salesOrderId/take-off (shipping.plan or shipping.manage, owb-). */
 export async function takeOrderOff(caller: CommandCaller, shipmentId: string, salesOrderId: string, body: TakeOffBody, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   // The order: of this shipment's own customer only (another customer's, or an unknown id: not found — the brand wall).
   const order = isUuid(salesOrderId) ? await caller.withClient((client) => client.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true, number: true, partyId: true } })) : null
   if (!order || order.partyId !== shipment.partyId) throw new NotFoundError('Sales order not found.')
@@ -181,11 +181,11 @@ export interface MergeBody {
 }
 
 /**
- * The target the office may move onto: shipping.manage over it, and of the source's own customer — another customer's shipment
+ * The target the office may move onto: shipping.plan or shipping.manage (owb-) over it, and of the source's own customer — another customer's shipment
  * (whatever the caller sees) is answered as an unknown one ("Shipment not found.").
  */
 async function targetOf(caller: CommandCaller, source: ShipmentHeader, targetId: string): Promise<ShipmentHeader> {
-  const target = await officeShipment(caller, targetId, SHIPPING_MANAGE)
+  const target = await shipmentToPlan(caller, targetId) // owb- (S3 ss1): plan OR manage
   if (target.partyId !== source.partyId) throw new NotFoundError('Shipment not found.')
   if (target.id === source.id) refusedMove('SAME', { number: source.number })
   return target
@@ -312,9 +312,9 @@ async function moveInCommand(tools: CommandTools, sourceId: string, targetId: st
   }
 }
 
-/** POST /shipping/shipments/:shipmentId/move (shipping.manage over both): garments onto another DRAFT of the same customer. */
+/** POST /shipping/shipments/:shipmentId/move (shipping.plan or shipping.manage over both, owb-): garments onto another DRAFT of the same customer. */
 export async function moveGarments(caller: CommandCaller, shipmentId: string, body: MoveBody, idempotencyKey?: string) {
-  const source = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const source = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   const target = await targetOf(caller, source, body.toShipmentId)
   const words = body.words?.trim() ? body.words.trim() : null
   const { result } = await command(caller, { name: 'shipping.moveLines', idempotencyKey, input: { shipmentId, ...body } }, async (tools) => {
@@ -333,9 +333,9 @@ export async function moveGarments(caller: CommandCaller, shipmentId: string, bo
   return result
 }
 
-/** POST /shipping/shipments/:shipmentId/merge (shipping.manage over both): every garment onto another DRAFT; this one CANCELLED. */
+/** POST /shipping/shipments/:shipmentId/merge (shipping.plan or shipping.manage over both, owb-): every garment onto another DRAFT; this one CANCELLED. */
 export async function mergeShipment(caller: CommandCaller, shipmentId: string, body: MergeBody, idempotencyKey?: string) {
-  const source = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const source = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   const target = await targetOf(caller, source, body.intoShipmentId)
   const words = body.words?.trim() ? body.words.trim() : null
   const { result } = await command(caller, { name: 'shipping.merge', idempotencyKey, input: { shipmentId, ...body } }, async (tools) => {

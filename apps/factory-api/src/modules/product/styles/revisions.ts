@@ -1,11 +1,11 @@
 import { ConflictError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { CreateRevisionBody, RevisionView } from '@nexus/factory-domain/product/styles/contracts'
-import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
 import { newRevisionRefusal, nextRevisionNumber } from '@nexus/factory-domain/product/styles/revisions'
 import { command, type CommandCaller } from '../../../core/command'
-import { assertMayWrite, contextOf, isUniqueViolation, lockStyle, readStyle, REVISION_COLUMNS, revisionViewOf } from './store'
+import { contextOf, isUniqueViolation, lockStyle, readStyle, REVISION_COLUMNS, revisionViewOf } from './store'
 import { requireEditRule } from '../lifecycle/edit-rule'
+import { assertMayEditDraft } from '../drafts/may-edit' // owb-pd1 1.4
 
 /**
  * A style's revisions (plan A1 §2.5): the list, and the DRAFT shell of the next one (number and change note), which the
@@ -24,7 +24,8 @@ export async function listRevisions(caller: CommandCaller, styleId: string): Pro
 export async function createRevision(caller: CommandCaller, styleId: string, body: CreateRevisionBody, idempotencyKey?: string): Promise<RevisionView> {
   const context = contextOf(caller)
   const seen = await readStyle(caller, styleId)
-  assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId)
+  // owb-pd1 1.4: "Start revision n" — product.styles.manage, or the designer (the revision written is a new DRAFT).
+  assertMayEditDraft(context, seen.companyId, 'DRAFT')
 
   const { result } = await command(caller, { name: 'product.styles.createRevision', idempotencyKey, input: { styleId, ...body } }, async (tools) => {
     const { tx, now } = tools

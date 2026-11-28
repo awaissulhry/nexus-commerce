@@ -287,15 +287,22 @@ describe('B-CP-072: a draft order’s files', { timeout: SLOW_TEST_TIMEOUT_MS },
     expect(late.status).toBe(409)
   })
 
-  it('a line taken out takes its files; a discarded draft takes all of its files (a sheet is personal data)', async () => {
+  // owb- po1.3 (pin moved): "Take out" is a soft remove — the line keeps its files (hidden while it is out, back with "Put it back");
+  // a discarded draft still takes all of its files, a taken-out line's too (a sheet is personal data).
+  it('a line taken out keeps its files until it is put back; a discarded draft takes all of its files, a taken-out line’s too', async () => {
     const draft = await draftWithLine()
     const sheet = await upload('aBuyer', draft.id, 'SHEET', 'made-up-alpha-team.pdf', 'application/pdf', pdf('team sizes'), draft.lineId)
     const logo = await upload('aBuyer', draft.id, 'LOGO', 'made-up-alpha-badge.png', 'image/png', png('badge'))
     const read = await ok('aBuyer', 'GET', `/portal/order-requests/${draft.id}`)
     const out = await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}/lines/${draft.lineId}?version=${read.request.version}`)
     expect(out.request.files.sheets).toEqual([])
+    expect(out.request.removedLines.map((line: Json) => line.id)).toEqual([draft.lineId])
+    expect((await admin<{ status: string }>('SELECT status::text AS status FROM "StoredFile" WHERE id = $1', [sheet.id]))[0]!.status).toBe('AVAILABLE')
+    const back = await ok('aBuyer', 'POST', `/portal/order-requests/${draft.id}/lines/${draft.lineId}/put-back`, { version: out.request.version })
+    expect(back.request.files.sheets.map((file: Json) => file.id)).toEqual([sheet.id])
+    const again = await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}/lines/${draft.lineId}?version=${back.request.version}`)
+    expect(await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}?version=${again.request.version}`)).toEqual({ discarded: true })
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "StoredFile" WHERE id = $1', [sheet.id]))[0]!.status).toBe('DELETED')
-    expect(await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}?version=${out.request.version}`)).toEqual({ discarded: true })
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "StoredFile" WHERE id = $1', [logo.id]))[0]!.status).toBe('DELETED')
   })
 })

@@ -104,6 +104,10 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   // party from the payload (the office rule keeps it out of its fields), never another customer's session.
   'portal_order_request.draft_changed': { permission: PORTAL_ORDER_DRAFTS_EDIT, party: 'partyId', partyFrom: 'payload', fields: ['requestId'] },
   // ── end od-s s.3
+  // ── owb- po1.2 (order workflow, "Take it back"): a sent order taken back to its draft reaches the SAME customer's sessions that keep
+  // drafts (its sheet row and its page read again); the request's id only, the party from the payload, never another customer's.
+  'portal_order_request.taken_back': { permission: PORTAL_ORDER_DRAFTS_EDIT, party: 'partyId', partyFrom: 'payload', fields: ['requestId'] },
+  // ── end owb- po1.2
 })
 
 /**

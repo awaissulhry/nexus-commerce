@@ -76,6 +76,15 @@ export interface DepartmentAnswer {
   readonly tone: string
   readonly icon: string
   readonly status?: 'ACTIVE' | 'CLOSED' | null
+  // ---- owb-pd6 (S4, the route builder): read by the builder only, never drawn by a chip (a chip never takes a kind).
+  /** The kind of work centre it runs at: the builder's live rules ask "is the last step Packing?" and "is there a quality check?". */
+  readonly workCentreKind?: string
+  /** It has screens on the floor: its name stays and it cannot be closed (design § 5x). */
+  readonly floorReady?: boolean
+  /** Its place in the factory's ONE order of departments. */
+  readonly seq?: number
+  /** Sent back with a rename, a close or an open (production.departments.manage). */
+  readonly version?: number
 }
 
 /**
