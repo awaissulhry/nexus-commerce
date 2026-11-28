@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -37,8 +37,8 @@ export interface OfficeWorld {
   readonly tenant: string
   readonly people: Readonly<Record<OfficeKey, string>>
   readonly ids: { readonly so1: string; readonly so2: string; readonly so3: string; readonly rq1: string; readonly rq2: string; readonly rq3: string; readonly company: string; readonly p1: string; readonly p4: string }
-  get(who: OfficeKey, url: string): ReturnType<FastifyInstance['inject']>
-  post(who: OfficeKey, url: string, payload?: unknown): ReturnType<FastifyInstance['inject']>
+  get(who: OfficeKey, url: string): Promise<LightMyRequestResponse>
+  post(who: OfficeKey, url: string, payload?: unknown): Promise<LightMyRequestResponse>
   admin<T = Json>(sql: string, values?: unknown[]): Promise<T[]>
   /** Rows written with the database's rules off (replica). */
   planted(rows: readonly { readonly sql: string; readonly values: unknown[] }[]): Promise<void>
