@@ -510,6 +510,22 @@
     "sendNotYours": "A colleague who may order sends it: the draft stays as it is.",
     "failed": "That did not work. Try again.",
     "refusedConflict": "The factory has already answered this order, or someone changed it meanwhile.",
-    "refusedAccess": "Your access does not allow this: ask your admin."
+    "refusedAccess": "Your access does not allow this: ask your admin.",
+    "view": {
+      "aria": "View",
+      "sheet": "Sheet",
+      "list": "List"
+    },
+    "filter": {
+      "ALL": "All",
+      "OPEN": "In work",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered"
+    },
+    "export": "Export",
+    "showMore": "Show more",
+    "typeDraftOnly": "Only a draft is typed here: after Send, open the order (after Confirm, ask for a change).",
+    "typeInWindow": "Change this in the draft's window: open it with its subject.",
+    "typePieces": "Pieces: type a whole number from 1, or leave it empty."
   }
 }
