@@ -19,6 +19,8 @@ import { accountConversationHref } from '../../shell/record/model'
 import { askStyleHeld, askStyleHref } from './model'
 // ---- end B-TH-276
 import { CatalogueView } from './view/CatalogueView'
+// owb-pd4 (step 4.5): the product page.
+import { productHref } from './product/product-model'
 import type { StyleDetailModel } from './view/StyleDetailDialog'
 
 /**
@@ -31,7 +33,7 @@ import type { StyleDetailModel } from './view/StyleDetailDialog'
  */
 export function CustomerCataloguePage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', /* owb-pd4: the product page link */ 'portal-product']}>
       <CatalogueContainer />
     </WithMessages>
   )
@@ -192,6 +194,8 @@ function CatalogueContainer() {
               // B-TH-276: "Ask about this style" — New order with the style carried in.
               askHref: askStyleHref(frame.prefix, detail.id),
               askHeld: askStyleHeld({ mayOrder, preview: frame.me.preview, offline }),
+              // owb-pd4 (step 4.5): the product's own page.
+              productHref: productHref(frame.prefix, detail.id),
             }
           : null,
         // B-TH-276: "Ask us" (nothing open yet) — the account conversation's page.
@@ -203,7 +207,8 @@ function CatalogueContainer() {
         onClear: () => go(NO_FILTERS),
         onView: (next) => go(filters, { view: next }),
         onToggleFilters: () => setFiltersOpen((open) => !open),
-        onOpen: (id) => go(filters, { style: id }),
+        // owb-pd4 (step 4.5): a product opens its page (Overview, Sizes); `style=` still opens the quick look (J / K, Add to order).
+        onOpen: (id) => router.push(productHref(frame.prefix, id)),
         onAdd: add,
         onSelect: setSelected,
         onRetry: retry,

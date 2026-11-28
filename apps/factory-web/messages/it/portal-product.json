@@ -1,0 +1,81 @@
+{
+  "open": "Aprite la pagina del prodotto",
+  "tab": {
+    "overview": "Panoramica",
+    "sizes": "Taglie",
+    "label": "Parti del prodotto"
+  },
+  "band": {
+    "order": "Ordinatelo…"
+  },
+  "state": {
+    "missing": "Questo prodotto non è nel vostro catalogo.",
+    "failed": "Non siamo riusciti a leggere questo prodotto."
+  },
+  "overview": {
+    "sheet": "Scheda prodotto",
+    "answer": {
+      "own": "Il vostro design.",
+      "range": "Dalla gamma della fabbrica, con un prezzo per voi.",
+      "orders_one": "È in {count} dei vostri ordini.",
+      "orders_other": "È in {count} dei vostri ordini."
+    },
+    "facts": {
+      "title": "Dati del prodotto",
+      "info": "Cos'è questo prodotto. La fabbrica tiene questi dati; chiedete una modifica qui sotto.",
+      "type": "Tipo",
+      "family": "Famiglia",
+      "own": "Il vostro design",
+      "range": "La gamma della fabbrica",
+      "sizes": "Taglie",
+      "protection": "Protezione"
+    },
+    "price": {
+      "title": "Il vostro prezzo",
+      "from": "Da {price} per un pezzo.",
+      "none": "Ancora nessun prezzo concordato: chiedeteci.",
+      "notInRole": "I prezzi non fanno parte del vostro accesso.",
+      "info": "Il prezzo concordato con la fabbrica, per colore. Lo legge solo chi vede i prezzi.",
+      "colour": "Colore",
+      "each": "Per un pezzo",
+      "ask": "Chiedeteci"
+    },
+    "orders": {
+      "title": "I vostri ordini con questo prodotto",
+      "answer_one": "{count} ordine o richiesta lo nomina.",
+      "answer_other": "{count} ordini e richieste lo nominano.",
+      "info": "I vostri ordini e richieste che nominano questo prodotto, dai più recenti (al massimo sei).",
+      "none": "Nessuno dei vostri ordini lo nomina ancora.",
+      "col": {
+        "order": "Ordine",
+        "state": "Stato",
+        "pieces": "Pezzi"
+      }
+    },
+    "change": {
+      "title": "Chiedete una modifica alla fabbrica",
+      "answer": "Dite alla fabbrica cosa cambiare in questo prodotto.",
+      "ask": "Chiedete una modifica",
+      "info": "La vostra domanda va alla fabbrica come richiesta con questo prodotto. La fabbrica risponde con una nuova revisione.",
+      "how": "Per esempio: un collo più largo, un altro colore, una manica più lunga."
+    }
+  },
+  "sizes": {
+    "title": "Taglie e colori",
+    "answer_one": "{count} taglia.",
+    "answer_other": "{count} taglie.",
+    "noRange": "Ancora nessuna taglia",
+    "base": "Taglia base {size}",
+    "info": "Le taglie della gamma e quale colore c'è in quale taglia. Qui non c'è niente da scrivere.",
+    "colour": "Colore",
+    "baseColumn": "{size} (base)",
+    "offered": "Sì",
+    "notOffered": "No",
+    "measure": {
+      "title": "Tabella taglie e come misurare",
+      "answer": "Non ancora mostrate nel portale.",
+      "info": "Le misure finite di ogni taglia, come misurare e le protezioni.",
+      "later": "La tabella taglie, come misurare, le vostre schede misure e le protezioni non sono ancora nel portale: chiedeteci e ve le mandiamo."
+    }
+  }
+}

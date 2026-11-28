@@ -1,0 +1,128 @@
+/*
+ * owb-fl9 step 3 — Production › Chains: layout only. Semantic `--nds-*` roles, the console's sizes; logical properties only. The table
+ * scrolls inside its frame (a narrow window), never the page; on a wide one the columns share the width (no dead space).
+ */
+.fw-ch-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-ch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12);
+}
+.fw-ch-bar > .nds-field {
+  min-width: min(100%, 16rem);
+}
+.fw-ch-muted {
+  display: block;
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-ch-frame {
+  overflow-x: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.fw-ch-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.fw-ch-caption {
+  padding: var(--nds-space-10) var(--nds-space-12);
+  font-weight: var(--nds-font-weight-semibold);
+  text-align: start;
+}
+.fw-ch-table th,
+.fw-ch-table td {
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-block-start: 1px solid var(--nds-border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+.fw-ch-table thead th {
+  background: var(--nds-surface-sunken);
+}
+.fw-ch-table [data-slowest] {
+  background: var(--nds-danger-soft);
+}
+.fw-ch-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-ch-no {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-ch-total,
+.fw-ch-wait,
+.fw-ch-of {
+  display: block;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+.fw-ch-of {
+  display: inline;
+}
+.fw-ch-slow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-block-start: var(--nds-space-4);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-ch-slow > svg,
+.fw-ch-tick {
+  width: 1em;
+  height: 1em;
+}
+.fw-ch-tick {
+  color: var(--nds-success);
+}
+.fw-ch-lot {
+  min-width: 10rem;
+}
+.fw-ch-model {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-ch-size {
+  padding-inline: var(--nds-space-6);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+.fw-ch-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+}
+.fw-ch-bar-track {
+  display: block;
+  height: 4px;
+  margin-block-start: var(--nds-space-4);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  overflow: hidden;
+}
+.fw-ch-bar-track > i {
+  display: block;
+  height: 100%;
+  background: var(--nds-success);
+}

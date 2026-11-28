@@ -462,5 +462,54 @@
     "line": {
       "removed": "Line {seq} removed."
     }
+  },
+  "ordersSheet": {
+    "noSubject": "No subject",
+    "deleteOne": "Delete the draft “{title}”? It was not sent. The factory never saw it.",
+    "deleteAll_one": "Delete {count} draft? It was not sent. The factory never saw it.",
+    "deleteAll_other": "Delete {count} drafts? They were not sent. The factory never saw them.",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "drafts_one": "{count} draft of a new order",
+    "drafts_other": "{count} drafts of a new order",
+    "openDraft": "Open this draft",
+    "deleteThis": "Delete the draft “{title}”",
+    "more": "and {count} more in the New order window",
+    "notSent": "Not sent. The factory does not see a draft.",
+    "deleteDrafts": "Delete the drafts",
+    "busy": "Working on it…",
+    "send": "Send…",
+    "sentOne": "Sent: Your order · {title}.",
+    "sentMany_one": "Sent: {count} order.",
+    "sentMany_other": "Sent: {count} orders.",
+    "sentBody": "The factory has it. You can take it back until the factory confirms it.",
+    "takeBack": "Take it back",
+    "takeBackAll": "Take them back",
+    "ok": "OK",
+    "withdrawn": "Withdrawn {count}",
+    "withdrawnHint": "Withdrawn orders are kept, but hidden",
+    "picture": "The picture of the order: change it",
+    "takenBack_one": "{count} order is a draft again. The factory does not have it any more.",
+    "takenBack_other": "{count} orders are drafts again. The factory does not have them any more.",
+    "col": {
+      "waits": "Waits · news",
+      "details": "Details"
+    },
+    "waits": {
+      "NEW_MESSAGES_one": "{count} new",
+      "NEW_MESSAGES_other": "{count} new",
+      "DESIGN_APPROVAL": "Design: your yes?",
+      "SEND_LABEL": "Send the shipping label",
+      "ASKED_one": "{count} asked",
+      "ASKED_other": "{count} asked",
+      "OPEN_DETAILS_one": "{count} open",
+      "OPEN_DETAILS_other": "{count} open",
+      "LATE": "Late"
+    },
+    "yourOrder": "Your order",
+    "sendNotYours": "A colleague who may order sends it: the draft stays as it is.",
+    "failed": "That did not work. Try again.",
+    "refusedConflict": "The factory has already answered this order, or someone changed it meanwhile.",
+    "refusedAccess": "Your access does not allow this: ask your admin."
   }
 }

@@ -2,7 +2,7 @@
   "switch": {
     "label": "Librerie di Taglie e misure",
     "scales": "Scale taglie",
-    "templates": "Modelli di misure",
+    "templates": "Prodotti di misure",
     "poms": "Punti di misura",
     "rules": "Regole di sviluppo taglie",
     "key": "Tasto {key}"
@@ -106,7 +106,7 @@
     }
   },
   "poms": {
-    "intro": "I punti in cui si misurano ogni scheda misure e ogni regola di sviluppo: un codice che vale lo stesso su ogni modello, come misurarlo, la sua unità e la tolleranza che una scheda prende in automatico.",
+    "intro": "I punti in cui si misurano ogni scheda misure e ogni regola di sviluppo: un codice che vale lo stesso su ogni prodotto, come misurarlo, la sua unità e la tolleranza che una scheda prende in automatico.",
     "new": "Nuovo punto",
     "search": "Cerca punti",
     "table": "Punti di misura",
@@ -495,13 +495,13 @@
       "obsolete": "La revisione {revision} è obsoleta e congelata: la sua scheda è in sola lettura."
     },
     "held": {
-      "archived": "Il modello è archiviato: la sua scheda non cambia.",
+      "archived": "Il prodotto è archiviato: la sua scheda non cambia.",
       "frozen": "Questa revisione è congelata: la scheda cambia solo in una nuova revisione.",
       "approved": "La scheda è approvata: riaprila per cambiarla.",
       "archivedSpec": "Questa scheda è archiviata: non cambia più.",
       "noManage": "Per cambiare la scheda serve il permesso di modificare una distinta base in bozza (il ruolo di chi sviluppa il prodotto).",
-      "rule": "La regola di modifica del modello blocca i cambi in questo stato del ciclo di vita (Impostazioni prodotto).",
-      "noRange": "Il modello non ha ancora una gamma taglie: impostala prima in Panoramica e varianti.",
+      "rule": "La regola di modifica del prodotto blocca i cambi in questo stato del ciclo di vita (Impostazioni prodotto).",
+      "noRange": "Il prodotto non ha ancora una gamma taglie: impostala prima in Panoramica e varianti.",
       "noRelease": "Per approvare o riaprire serve il permesso di rilasciare una revisione.",
       "notDraft": "Si approva solo una scheda in bozza.",
       "noPoints": "Prima aggiungi i punti.",
@@ -509,11 +509,11 @@
       "missing_other": "Mancano ancora {count} valori."
     },
     "banner": {
-      "archived": "Il modello è archiviato: la sua scheda misure è in sola lettura.",
+      "archived": "Il prodotto è archiviato: la sua scheda misure è in sola lettura.",
       "approved": "La scheda è approvata: i suoi valori sono in sola lettura. Riaprila per cambiarli.",
       "archivedSpec": "Questa scheda misure è archiviata: è in sola lettura.",
       "noManage": "Puoi leggere la scheda; per cambiarla serve il permesso di modificare una distinta base in bozza.",
-      "rule": "La regola di modifica del modello blocca i cambi nel suo stato del ciclo di vita: la scheda è in sola lettura (Prodotti › Impostazioni)."
+      "rule": "La regola di modifica del prodotto blocca i cambi nel suo stato del ciclo di vita: la scheda è in sola lettura (Prodotti › Impostazioni)."
     },
     "offline_one": "Offline: {count} valore aspetta su questa pagina e parte quando torna la connessione.",
     "offline_other": "Offline: {count} valori aspettano su questa pagina e partono quando torna la connessione.",
@@ -521,7 +521,7 @@
       "title": "Ancora nessun punto di misura",
       "body": "Avvia la scheda della revisione {revision}: la taglia base e la regola di sviluppo, o una copia di una scheda precedente.",
       "held": "Questa revisione non ha una scheda misure.",
-      "points": "Aggiungi i punti in cui si misura questo modello, ciascuno col suo valore nella taglia base.",
+      "points": "Aggiungi i punti in cui si misura questo prodotto, ciascuno col suo valore nella taglia base.",
       "frozen": "Questa scheda non ha punti."
     },
     "notice": {
@@ -564,9 +564,9 @@
     },
     "field": {
       "base": "Taglia base",
-      "baseHint": "La taglia in cui si scrivono i valori (la taglia base del modello).",
+      "baseHint": "La taglia in cui si scrivono i valori (la taglia base del prodotto).",
       "rule": "Regola di sviluppo",
-      "ruleHint": "Una regola della scala taglie del modello; nessuna: ogni taglia scritta a mano."
+      "ruleHint": "Una regola della scala taglie del prodotto; nessuna: ogni taglia scritta a mano."
     },
     "settings": {
       "title": "Taglia base e regola di sviluppo",
@@ -591,7 +591,7 @@
     "grade": {
       "title": "Applica regola di sviluppo",
       "intro": "Gli incrementi della regola dalla taglia base {base}: vedi cosa cambia prima che si scriva qualcosa.",
-      "ruleHint": "Le regole della scala taglie del modello.",
+      "ruleHint": "Le regole della scala taglie del prodotto.",
       "pick": "Scegli una regola",
       "pickFirst": "Scegli una regola per vedere cosa cambia.",
       "overrides": "Valori scritti a mano",

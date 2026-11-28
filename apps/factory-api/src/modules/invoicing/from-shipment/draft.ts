@@ -20,6 +20,8 @@ import { assertMay, invoiceDetail, officeContextOf, readInvoice, type InvoiceDet
 import { orderTermsSource } from '../terms'
 import { lockInvoicing } from './locks'
 import { depositInvoicesOf, freightBilledOf, freightOf, invoicedOf, orderPrices, presetsOf, readDdts, shippedOf, type DdtRow } from './store'
+// owb- (order workflow, S3 ss1): what invoicing may bill of a shipment through our warehouse.
+import { BILLABLE_DDT } from '../../shipping/warehouse-leg/invoice-filter'
 // B-W2b-330 (SAL-181): the orders' fees, invoiced once.
 import { feeLinesFor } from '../../sales/price-waterfall/fee-invoicing'
 // B-W2b-396: the orders' currency (FIN-063); priced changes' fees invoiced once, fees on a DDT (VI1:01, VI1:02).
@@ -137,12 +139,18 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
   await lockInvoicing(tx, tools.context, 'ddt', ids)
   // 1. The DDTs, under their locks.
   const ddts = await readDdts(tx, { id: { in: [...ids] } })
+  // owb- (order workflow, S3 ss1; settle L5, S3 lead yes 09:05): never the TRANSFER DDT of goods sent to our own warehouse, nothing of a
+  // shipment whose leg through our warehouse was not sent on yet (the sale DDT of Send on bills them once they went on).
+  const unbillable = new Map((await tx.ddt.findMany({ where: { AND: [{ id: { in: [...ids] } }, { NOT: BILLABLE_DDT }] }, select: { id: true, reason: true } })).map((row) => [row.id, row.reason]))
   const problems: Issue[] = []
   ddts.forEach((ddt) => {
     const at = `body/ddtIds/${ids.indexOf(ddt.id)}`
     if (ddt.companyId !== scope.companyId || ddt.partyId !== scope.partyId) problems.push({ path: at, message: `DDT ${ddt.number} is of another customer or company.` })
     else if (ddt.cancelled) problems.push({ path: at, message: `DDT ${ddt.number} was cancelled: invoice the DDT that replaced it.` })
     else if (!isShippedState(ddt.shipmentStatus)) problems.push({ path: at, message: `The goods of DDT ${ddt.number} have not left yet (shipment ${ddt.shipmentNumber} is ${ddt.shipmentStatus}).` })
+    // owb- (S3 ss1): the transfer to our warehouse sells nothing; goods still at our warehouse are billed once sent on.
+    else if (unbillable.get(ddt.id) === 'TRANSFER') problems.push({ path: at, message: `DDT ${ddt.number} took the goods to our own warehouse (a transfer): nothing is sold with it. Invoice the sale DDT they are sent on with.` })
+    else if (unbillable.has(ddt.id)) problems.push({ path: at, message: `The goods of DDT ${ddt.number} are still at our warehouse (shipment ${ddt.shipmentNumber}): invoice them once they are sent on to the customer.` })
   })
   if (problems.length > 0) throw new ConflictError(words(problems, 'These DDTs cannot be invoiced now.'))
 

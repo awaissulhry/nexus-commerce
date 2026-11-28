@@ -9,6 +9,7 @@ import { PRODUCT_STYLES_MANAGE, PRODUCT_STYLES_VIEW } from '@nexus/factory-domai
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { afterCursor, decodeCursor, encodeCursor } from '../styles/cursor'
+import { draftRefusal, mayDesign, mayManage } from '../drafts/may-edit' // owb-pd1 1.4
 import { assertMayWrite, bodyPointsOf, contextOf, invalid, isUniqueViolation, POM_COLUMNS, POM_SCOPE, pomFieldsOf, pomRowOf, pomUses, prefixed, readPomFor, type PomRowData } from './store'
 
 /**
@@ -158,7 +159,13 @@ async function clearWords(tx: CommandTx, pomId: string, field: 'nameI18n' | 'how
 export async function updatePom(caller: CommandCaller, pomId: string, body: UpdatePomBody, idempotencyKey?: string): Promise<PomView> {
   const context = contextOf(caller)
   const seen = await readPomFor(caller, pomId)
-  assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId, NOUN)
+  // owb-pd1 1.4 (S4 settle 6 "how to measure"): the designer (product.drafts.edit) changes a point's how-to words only — the point
+  // is the library's, read by every product that measures it; everything else stays product.styles.manage's.
+  if (!mayManage(context, seen.companyId)) {
+    if (!mayDesign(context, seen.companyId)) assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId, NOUN)
+    const touched = Object.entries(body).filter(([key, value]) => key !== 'version' && value !== undefined).map(([key]) => key)
+    if (touched.some((key) => key !== 'howTo' && key !== 'howToI18n')) throw draftRefusal('HOW_TO_ONLY')
+  }
   const { version, status, ...patch } = body
 
   const { result } = await command(
