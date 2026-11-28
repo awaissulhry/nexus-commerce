@@ -68,7 +68,10 @@
   .fw-psheet-paper { width: 100%; height: auto; aspect-ratio: 210 / 297; }
 }
 
-/* A design page: the mockup page whole (an upright page keeps its shape), the code on top of it at its place. */
+/* A design page: the mockup page whole (an upright page keeps its shape), the code on top of it at its place. owb-ss4b: the frame is
+   the design page's own box, centred on the paper (its per cents come from sheet/model.ts frameOf); the code sits in it in per cent of
+   the page's own millimetres (codeBoxOf), the same place "Place the scan code" saved. */
+.fw-psheet-frame { position: absolute; }
 .fw-psheet-mockup {
   position: absolute;
   inset: 0;

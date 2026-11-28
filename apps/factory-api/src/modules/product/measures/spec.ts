@@ -20,7 +20,7 @@ import {
 } from '@nexus/factory-domain/product/measures/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { findRevision, lockStyleRow, readRevisionFor, STYLE_COLUMNS } from '../bom/store'
+import { findRevision, lockStyleRow, readRevisionFor, readRevisionForSizes, STYLE_COLUMNS } from '../bom/store'
 import { assertMayEditDraft } from '../drafts/may-edit' // owb-pd1 1.4
 import { requireEditRule } from '../lifecycle/edit-rule'
 import {
@@ -86,7 +86,8 @@ const sizeTable = (caller: CommandCaller, styleId: string, revisionId: string) =
 
 /** GET …/measurement-spec: the revision's live spec as the grid shows it. */
 export async function getSpec(caller: CommandCaller, styleId: string, revisionId: string): Promise<MeasurementSpecView> {
-  const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
+  // owb-pd4s s.2: product.bom.view or product.styles.view (Sales reads the size table and how to measure).
+  const { style, revision } = await readRevisionForSizes(caller, styleId, revisionId)
   return caller.withClient(async (client) => specViewOf(await loadSpec(client, style, revision)))
 }
 

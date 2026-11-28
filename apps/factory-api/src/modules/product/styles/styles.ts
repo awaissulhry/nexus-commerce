@@ -102,6 +102,8 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
     query.ppeCategory ? { ppeCategory: { in: query.ppeCategory } } : {},
     query.season ? { season: { equals: query.season, mode: 'insensitive' } } : {},
     query.brandPartyId ? { brandPartyId: query.brandPartyId } : {},
+    // owb-pd4s s.1: our own range (no customer) or made for a customer.
+    query.family === 'OUR_RANGE' ? { brandPartyId: null } : query.family === 'FOR_CUSTOMER' ? { brandPartyId: { not: null } } : {},
     query.sizeScaleId ? { sizeScaleId: query.sizeScaleId } : {},
     query.mtmAllowed === undefined ? {} : { mtmAllowed: query.mtmAllowed },
     query.draftRevision === undefined ? {} : query.draftRevision ? { revisions: { some: { status: 'DRAFT' } } } : { revisions: { none: { status: 'DRAFT' } } },
