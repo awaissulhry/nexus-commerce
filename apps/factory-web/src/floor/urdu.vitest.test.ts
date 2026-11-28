@@ -114,7 +114,7 @@ describe('the design system\'s floor parts, right to left (packages/ui is frozen
 
   it('FloorActionBar and FloorListRow draw inside a right-to-left page with no direction of their own', () => {
     const html = renderToString(
-      createElement('div', { dir: 'rtl' }, createElement(FloorActionBar, { actions: [{ label: 'شروع کریں', onPress: () => undefined }] }), createElement(FloorList, { label: 'ٹوکریاں' }, createElement(FloorListRow, { icon: null, title: 'B-0431' }))),
+      createElement('div', { dir: 'rtl' }, createElement(FloorActionBar, { actions: [{ label: 'شروع کریں', onPress: () => undefined }] }), createElement(FloorList, { label: 'ٹوکریاں', children: createElement(FloorListRow, { icon: null, title: 'B-0431' }) })),
     )
     expect(html).not.toMatch(/dir="ltr"/)
     expect(html).toContain('nds-floor-actionbar')

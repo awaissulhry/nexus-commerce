@@ -71,7 +71,7 @@ export function FloorChainPage() {
       return setProblem(answer.problem.kind === 'refused' ? answer.problem.message || t('chain.failed') : answer.problem.kind === 'offline' ? t('chain.offline') : t('chain.failed'))
     }
     feedback('success')
-    setLast({ workOrderSizeId, operationId: step, scanId: answer.value.scan.id, quantity: answer.value.bundle.quantity, bundleCode: answer.value.bundle.code, at: Date.now() })
+    setLast(answer.value.scan ? { workOrderSizeId, operationId: step, scanId: answer.value.scan.id, quantity: answer.value.bundle.quantity, bundleCode: answer.value.bundle.code, at: Date.now() } : null)
     setNow(Date.now())
     void read()
   }
