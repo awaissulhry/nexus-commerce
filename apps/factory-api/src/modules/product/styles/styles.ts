@@ -115,7 +115,7 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
     const revisions = await client.styleRevision.findMany({ where: { styleId: { in: ids } }, select: { styleId: true, revision: true, status: true } })
     const skuCount = new Map(skus.map((entry) => [entry.styleId, entry._count._all]))
     // W2b (B-W2b-25): thumbnail, certificate coverage and cost per garment, each as far as the caller may see it.
-    const extras = await rowExtras(client, actorOf(context), page, query.companyId ?? null)
+    const extras = await rowExtras(client, context, page, query.companyId ?? null) // owb-pd1 1.2: the context (own orders)
     const colourways = forOrder ? await forOrder.colourwaysOf(client, ids) : null // B-OL-033
     const last = page.at(-1)
     return {
