@@ -64,7 +64,7 @@ export function BasketRows({ baskets }: { readonly baskets: readonly { readonly 
         const state = basketStateKeyOf(card.state)
         const step = stepWordsOf(card.progress)
         return (
-          <li key={card.id} className="fw-flow-basket">
+          <li key={card.bundleId} className="fw-flow-basket">
             <span className="fw-flow-basket-code">{card.code ?? card.label ?? '—'}</span>
             <span className="fw-flow-basket-where">{dept ? <DeptChip dept={dept} /> : <Tag tone="success">{f('baskets.ready')}</Tag>}</span>
             <span className="fw-flow-basket-state">{state ? f(state) : (card.state ?? '')}</span>

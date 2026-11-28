@@ -50,7 +50,7 @@ describe('owb-of6 step 1: the four parts still mounted once each, in the design 
 describe('owb-of6 step 1: the Baskets rows (S5\'s board read, L8)', () => {
   const dept = { no: 3, tone: 'pink' as const, icon: 'shirt', name: 'Stitching', shortName: 'Stitching', id: 'dept-3' }
   it('one row per basket: its code, where, its state, "Step k of n", late; the ready ones say Ready to ship', () => {
-    const drawn = html(createElement(BasketRows, { baskets: [{ card: { id: 'b-1', code: 'BN-0001', state: 'WORKING', progress: { done: 2, total: 6 }, late: { days: 2 }, worker: null }, dept }, { card: { id: 'b-2', code: 'BN-0002', state: 'READY', progress: null, late: null }, dept: null }] }))
+    const drawn = html(createElement(BasketRows, { baskets: [{ card: { bundleId: 'b-1', code: 'BN-0001', state: 'WORKING', progress: { done: 2, total: 6 }, late: { days: 2 }, worker: null }, dept }, { card: { bundleId: 'b-2', code: 'BN-0002', state: 'READY', progress: null, late: null }, dept: null }] }))
     expect(drawn).toContain('BN-0001')
     expect(drawn).toContain('Step 2 of 6')
     expect(drawn).toContain('Late · 2 days')
