@@ -51,6 +51,7 @@
     "rework": "Qualità · rilavorazione",
     "hold": "Qualità · in blocco",
     "cutting": "Taglio",
+    "waiting": "In attesa della prima fase",
     "finished": "Finito",
     "void": "Annullato",
     "next": "Prossima: {seq} {code}"

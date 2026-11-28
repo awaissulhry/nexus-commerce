@@ -1,4 +1,5 @@
-import { scannedOperations, standingKey, type ScanFact, type ScanOperation } from '../scans/rules'
+import { standingKey, type ScanFact } from '../scans/rules'
+import { scannedSteps, type RouteOperation } from './route'
 
 /**
  * Where a basket is (owb- order workflow, S5 fl1; build/briefs/owb-fl2.md step 1 is the spec; LF _owb-fl-common.md § 1 "the
@@ -49,8 +50,8 @@ export function lastMove<Move extends MoveFact>(moves: readonly Move[]): Move | 
 }
 
 /** Where the basket is (see the file's head). */
-export function basketPlace(route: readonly ScanOperation[], standing: ReadonlyMap<string, Pick<ScanFact, 'serverTime'>>, bundleId: string, moves: readonly MoveFact[]): BasketPlace {
-  const scanned = scannedOperations(route)
+export function basketPlace(route: readonly RouteOperation[], standing: ReadonlyMap<string, Pick<ScanFact, 'serverTime'>>, bundleId: string, moves: readonly MoveFact[]): BasketPlace {
+  const scanned = scannedSteps(route)
   const move = lastMove(moves)
   if (!move) {
     const open = scanned.find((operation) => !standing.has(standingKey(bundleId, operation.id)))

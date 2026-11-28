@@ -45,6 +45,8 @@ export interface GuardWork {
   readonly stationId: string | null
   readonly components?: readonly ComponentInput[] | undefined
   readonly override?: VerifiedOverride | undefined
+  /** owb-fl2: the basket came into this step by a hand move (factory-domain guards/rules GuardFacts.movedInto). */
+  readonly movedInto?: boolean | undefined
 }
 
 export interface GuardOutcome {
@@ -73,6 +75,7 @@ export async function guardReport(tx: CommandTx, work: GuardWork): Promise<Guard
     counts: work.counts,
     settings,
     lines,
+    movedInto: work.movedInto === true,
   })
   const held = heldBy(result.findings)
   if (held && !work.override) refuse(held)
