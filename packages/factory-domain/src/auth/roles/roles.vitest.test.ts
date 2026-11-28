@@ -354,7 +354,11 @@ describe('owb-: the order workflow rights — who holds each, the designer, the 
   it('gives each right to exactly the templates of plan.md § 5 D (the Owner from every permission)', () => {
     expect(holders('production.departments.manage')).toEqual(['owner', 'production_manager'])
     // R24: sales starts the work; the designer only by the offer an administrator assigns.
-    expect(holders('production.print.start')).toEqual(['owner', 'sales', 'extra_print_and_start'])
+    // owb-b6 (the Owner's yes of 2026-11-28): the production manager and the planner start the work too.
+    expect(holders('production.print.start')).toEqual(['owner', 'sales', 'planner', 'production_manager', 'extra_print_and_start'])
+    // owb-b6: Sales reads certificates (the product's Compliance tab), never manages them.
+    expect(holders('compliance.certificates.view')).toContain('sales')
+    expect(holders('compliance.certificates.manage')).not.toContain('sales')
     expect(holders('production.teams.assign')).toEqual(['owner', 'planner', 'production_manager', 'floor_supervisor'])
     // R56 / D3: a worker moves forward only; back and the steps: the team leader (and the office's production manager, floor supervisor).
     expect(holders('production.baskets.move')).toEqual(['owner', 'production_manager', 'floor_supervisor', 'operator', 'cutting_operator', 'floor_inspector', 'team_leader'])

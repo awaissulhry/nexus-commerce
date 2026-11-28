@@ -1,0 +1,37 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/structures.prisma (rules: src/ownership.ts; roles: src/roles.ts). owb-ssw (order workflow build, S3 schema wave \"structures + units\"; _owb-ss-common L9, L10): the office (factory_runtime) keeps the order structures (production.structures.manage) and the rules that pick them, one order's structure by hand (production.structures.rules), and what each order line kept at its order's first print (production.print.start), through apps/factory-api's modules/production/structures and print-start, always with command(). Nothing is deleted: structures and rules are closed, an order's structure by hand is ended (the …_order_structures_guards triggers refuse DELETE and TRUNCATE for every login), and a kept line is append-only (`@append-only`). The floor and the partner and link sessions read nothing here: the customer never reads a team, a structure or a rule, and the floor sees its team on the order through OrderTeam. No personal or money column. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OrderStructure": {
+      "about": "owb-ssw: the office makes, changes, closes and reopens a company's order structures (the teams that own the work, the office people put on the order, a note) and reads them; nobody deletes one (closed instead).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "OrderStructureRule": {
+      "about": "owb-ssw: the office places, changes, moves, closes and reopens the rules that give an order line its structure (a customer or any, a kind of product or any) and reads them; nobody deletes one (closed instead).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "OrderStructureOverride": {
+      "about": "owb-ssw: the office gives one order its structure by hand (a structure or the normal way, with why) before its first print, ends it, and reads them; an ended row never changes; nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "OrderLineStructureKept": {
+      "about": "owb-ssw: the office writes, inside the first print of an order, what each of its lines kept (the structure, the rule, where it came from, a snapshot of its steps, teams and people) and reads it; nobody changes or removes one (append-only).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}
