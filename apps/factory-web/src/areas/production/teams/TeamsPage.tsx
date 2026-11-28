@@ -126,7 +126,7 @@ function TeamsContainer() {
     sites: scope.sites.map((site) => ({ id: site.id, name: site.name })),
     filter,
     notice,
-    newTeamHref: `${prefix}/people/structure`,
+    newTeamHref: `${prefix}/people/structure?new=team`,
   }
 
   const homeName = lend.draft?.homeTeamId ? (board.value?.teams.find((team) => team.id === lend.draft!.homeTeamId)?.name ?? null) : null

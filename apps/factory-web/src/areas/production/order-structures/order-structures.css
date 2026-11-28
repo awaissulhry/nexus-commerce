@@ -1,0 +1,253 @@
+/*
+ * owb-ss8 — Production › Order structures (fw-os-), its windows and the order's and the customer's parts. Layout and DS tokens only (no
+ * raw colour). A rule is one row: its number, its sentence, its mark, its arrows; it wraps on a narrow screen and in a narrow room.
+ */
+.fw-os {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-os-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+.fw-os-sum {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-os-acts,
+.fw-os-rule-acts,
+.fw-os-chips,
+.fw-os-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-os-info {
+  margin: 0;
+  max-width: 340px;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-os-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-os-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+.fw-os-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-os-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-os-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-os-how {
+  margin: 0;
+  padding-inline-start: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The rules: one row a rule, the fixed last line. */
+.fw-os-rules,
+.fw-os-cards,
+.fw-os-list,
+.fw-os-lines,
+.fw-os-trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-os-rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.fw-os-rule.is-dead {
+  border-color: var(--nds-warning-border);
+}
+.fw-os-rule.is-off {
+  background: var(--nds-surface-sunken);
+}
+.fw-os-rule.is-last {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-style: dashed;
+  background: var(--nds-surface-sunken);
+}
+.fw-os-rule-note {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+@media (max-width: 719px) {
+  .fw-os-rule {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .fw-os-rule-m,
+  .fw-os-rule-acts {
+    grid-column: 2;
+  }
+}
+@container fwroom (max-width: 719px) {
+  .fw-os-rule {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .fw-os-rule-m,
+  .fw-os-rule-acts {
+    grid-column: 2;
+  }
+}
+.fw-os-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--nds-space-24);
+  height: var(--nds-space-24);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-os-rule-t {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.fw-os-sent {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-os-sent-w {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-os-sent-s {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* Try an order. */
+.fw-os-try,
+.fw-os-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-10);
+}
+.fw-os-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-os-try-res {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-os-trace li,
+.fw-os-list li,
+.fw-os-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-os-line-l {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* The structures: one card each. */
+.fw-os-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-10);
+}
+.fw-os-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  width: 100%;
+  height: 100%;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.fw-os-card:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-os-card:focus-visible {
+  outline: 2px solid var(--nds-text-link);
+  outline-offset: 2px;
+}
+.fw-os-card-name {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-os-closed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* The windows. */
+.fw-os-part,
+.fw-os-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-os-preview {
+  padding: var(--nds-space-10);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+.fw-os-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
