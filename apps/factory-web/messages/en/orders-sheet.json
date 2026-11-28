@@ -584,5 +584,132 @@
   "receipt": {
     "showThread": "Show the thread of {number}"
   },
-  "searchShort": "Search orders"
+  "searchShort": "Search orders",
+  "part": {
+    "head": {
+      "order": "Order",
+      "yours": "Your order"
+    },
+    "group": {
+      "orders": "Orders",
+      "yours": "Your orders",
+      "order": "Order",
+      "production": "Production",
+      "news": "Waits for you · news",
+      "product": "Product"
+    },
+    "col": {
+      "what": "Subject · product",
+      "customer": "Customer",
+      "wanted": "Wanted for",
+      "promised": "Promised",
+      "where": "Where it is",
+      "news": "Waits · news",
+      "material": "Leather",
+      "sizes": "Sizes",
+      "pieces": "Pieces",
+      "details": "Details"
+    },
+    "totals": {
+      "all_one": "Totals of {count} order",
+      "all_other": "Totals of {count} orders",
+      "selected_one": "Totals of {count} selected order",
+      "selected_other": "Totals of {count} selected orders"
+    },
+    "newRow": {
+      "words": "New order",
+      "hint": "a typed row is a draft",
+      "tip": "Start a new order: it is a draft until it is sent",
+      "customer": "Pick a customer…",
+      "subject": "Type a subject…",
+      "type": "Type to start an order…"
+    },
+    "line": {
+      "of": "Piece {seq} of {count}"
+    },
+    "noNumber": "Draft",
+    "lines": {
+      "show": "Show the pieces of {number}",
+      "hide": "Hide the pieces of {number}"
+    },
+    "open": "Open {number}",
+    "addLine": "Add a piece to {number}",
+    "deleteDraft": "Delete this draft ({number}): it was never sent",
+    "picture": {
+      "choose": "The picture of {number}: choose another"
+    },
+    "ask": {
+      "asked": "Asked: {to}",
+      "tip": "Asked: {to}. It changes only after a yes."
+    },
+    "more": "+ {count}",
+    "yes": "Yes",
+    "no": "No",
+    "act": {
+      "open": "Open",
+      "confirm": "Confirm",
+      "send": "Send…",
+      "withdraw": "Withdraw this order. It is kept under “Withdrawn”.",
+      "askCancel": "Ask the factory to cancel this order"
+    },
+    "held": {
+      "confirmFirst": "Confirm it first",
+      "readOnly": "This order can no longer be changed here"
+    },
+    "noSubject": "No subject yet",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "promisedLater": "The factory promises a day when it confirms the order",
+    "onHold": "On hold",
+    "notDecided": "Not decided yet",
+    "pickProduct": "Pick the product first",
+    "asText": "As text",
+    "sizeFile": "Size file",
+    "comeLater": "Come later",
+    "empty": "No order here.",
+    "cards": {
+      "label": "Orders",
+      "select": "Select {number}",
+      "pieces_one": "{pieces} piece",
+      "pieces_other": "{pieces} pieces",
+      "promised": "Promised {day}"
+    },
+    "filters": "Show",
+    "refused": {
+      "pieces": "Type the number of pieces: a whole number, 1 or more (a sum like =4+2 works).",
+      "day": "Type a day, for example 2027-01-31 or 31/01/2027.",
+      "failed": "It could not be saved. Try again."
+    },
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "clear": "Clear",
+    "countOrders_one": "{count} order",
+    "countOrders_other": "{count} orders",
+    "countLines_one": "{count} piece line",
+    "countLines_other": "{count} piece lines",
+    "foot": {
+      "rows_one": "{count} row",
+      "rows_other": "{count} rows",
+      "live": "Live",
+      "liveAt": "Live · last change {time}"
+    },
+    "lock": {
+      "office": "A draft can be deleted. After Confirm the customer’s changes wait for your yes.",
+      "portal": "A draft can be deleted. A sent order cannot: after Confirm a change is an ask to the factory."
+    },
+    "keys": {
+      "arrows": "Move from cell to cell",
+      "enter": "Type in the cell, or open what it names",
+      "tab": "Save and go to the next cell",
+      "esc": "Leave the cell without saving",
+      "select": "Select the order of the row",
+      "range": "Select every order between two boxes"
+    },
+    "save": {
+      "idle": "Autosave on",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "asked": "Asked: it changes after the factory’s yes"
+    }
+  }
 }

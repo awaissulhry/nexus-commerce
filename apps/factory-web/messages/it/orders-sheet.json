@@ -584,5 +584,132 @@
   "receipt": {
     "showThread": "Mostra la conversazione di {number}"
   },
-  "searchShort": "Cerca ordini"
+  "searchShort": "Cerca ordini",
+  "part": {
+    "head": {
+      "order": "Ordine",
+      "yours": "Il vostro ordine"
+    },
+    "group": {
+      "orders": "Ordini",
+      "yours": "I vostri ordini",
+      "order": "Ordine",
+      "production": "Produzione",
+      "news": "Aspetta voi · novità",
+      "product": "Prodotto"
+    },
+    "col": {
+      "what": "Oggetto · prodotto",
+      "customer": "Cliente",
+      "wanted": "Voluto per",
+      "promised": "Promesso",
+      "where": "Dove si trova",
+      "news": "Attese · novità",
+      "material": "Pelle",
+      "sizes": "Taglie",
+      "pieces": "Pezzi",
+      "details": "Dettagli"
+    },
+    "totals": {
+      "all_one": "Totali di {count} ordine",
+      "all_other": "Totali di {count} ordini",
+      "selected_one": "Totali di {count} ordine selezionato",
+      "selected_other": "Totali di {count} ordini selezionati"
+    },
+    "newRow": {
+      "words": "Nuovo ordine",
+      "hint": "una riga scritta è una bozza",
+      "tip": "Inizia un nuovo ordine: è una bozza finché non viene inviato",
+      "customer": "Scegli un cliente…",
+      "subject": "Scrivi un oggetto…",
+      "type": "Scrivete per iniziare un ordine…"
+    },
+    "line": {
+      "of": "Pezzo {seq} di {count}"
+    },
+    "noNumber": "Bozza",
+    "lines": {
+      "show": "Mostra i pezzi di {number}",
+      "hide": "Nascondi i pezzi di {number}"
+    },
+    "open": "Apri {number}",
+    "addLine": "Aggiungi un pezzo a {number}",
+    "deleteDraft": "Elimina questa bozza ({number}): non è mai stata inviata",
+    "picture": {
+      "choose": "L’immagine di {number}: scegline un’altra"
+    },
+    "ask": {
+      "asked": "Chiesto: {to}",
+      "tip": "Chiesto: {to}. Cambia solo dopo un sì."
+    },
+    "more": "+ {count}",
+    "yes": "Sì",
+    "no": "No",
+    "act": {
+      "open": "Apri",
+      "confirm": "Conferma",
+      "send": "Invia…",
+      "withdraw": "Ritirate questo ordine. Resta sotto “Ritirati”.",
+      "askCancel": "Chiedete alla fabbrica di annullare questo ordine"
+    },
+    "held": {
+      "confirmFirst": "Prima confermalo",
+      "readOnly": "Questo ordine non si può più cambiare qui"
+    },
+    "noSubject": "Ancora nessun oggetto",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo",
+    "promisedLater": "La fabbrica promette un giorno quando conferma l’ordine",
+    "onHold": "In sospeso",
+    "notDecided": "Non ancora deciso",
+    "pickProduct": "Prima scegli il prodotto",
+    "asText": "Come testo",
+    "sizeFile": "File delle taglie",
+    "comeLater": "Arrivano dopo",
+    "empty": "Nessun ordine qui.",
+    "cards": {
+      "label": "Ordini",
+      "select": "Seleziona {number}",
+      "pieces_one": "{pieces} pezzo",
+      "pieces_other": "{pieces} pezzi",
+      "promised": "Promesso il {day}"
+    },
+    "filters": "Mostra",
+    "refused": {
+      "pieces": "Scrivi il numero di pezzi: un numero intero, 1 o più (va bene anche una somma come =4+2).",
+      "day": "Scrivi un giorno, per esempio 2027-01-31 o 31/01/2027.",
+      "failed": "Non è stato possibile salvare. Riprova."
+    },
+    "selected_one": "{count} selezionato",
+    "selected_other": "{count} selezionati",
+    "clear": "Deseleziona",
+    "countOrders_one": "{count} ordine",
+    "countOrders_other": "{count} ordini",
+    "countLines_one": "{count} riga di pezzi",
+    "countLines_other": "{count} righe di pezzi",
+    "foot": {
+      "rows_one": "{count} riga",
+      "rows_other": "{count} righe",
+      "live": "In diretta",
+      "liveAt": "In diretta · ultima modifica {time}"
+    },
+    "lock": {
+      "office": "Una bozza si può eliminare. Dopo la conferma le modifiche del cliente aspettano il tuo sì.",
+      "portal": "Una bozza si può eliminare. Un ordine inviato no: dopo la conferma una modifica è una richiesta alla fabbrica."
+    },
+    "keys": {
+      "arrows": "Spostati da una cella all’altra",
+      "enter": "Scrivi nella cella, o apri ciò che nomina",
+      "tab": "Salva e vai alla cella dopo",
+      "esc": "Esci dalla cella senza salvare",
+      "select": "Seleziona l’ordine della riga",
+      "range": "Seleziona tutti gli ordini tra due caselle"
+    },
+    "save": {
+      "idle": "Salvataggio automatico attivo",
+      "saving": "Salvataggio…",
+      "saved": "Salvato",
+      "asked": "Chiesto: cambia dopo il sì della fabbrica"
+    }
+  }
 }
