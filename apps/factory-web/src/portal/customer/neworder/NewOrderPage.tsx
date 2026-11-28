@@ -1146,7 +1146,12 @@ function NewOrderContainer() {
   const banner: DraftWindowModel['banner'] = offlineSince
     ? { tone: 'warning', title: t('offline.title', { time: words.time(offlineSince) }) }
     : stale
-      ? { tone: 'warning', title: dw.t('draft.stale'), action: { words: dw.t('draft.reload'), run: 'reload' } }
+      ? {
+          tone: 'warning',
+          // F-CP-150: who changed it meanwhile — a colleague by name; any office save is "the factory" (never a worker's name).
+          title: staleBy ? `${dw.t('draft.stale')} ${staleBy.who === 'FACTORY' ? dw.t('save.changedByFactory') : dw.t('draftPage.changedBy', { name: staleBy.name ?? '' })}` : dw.t('draft.stale'),
+          action: { words: dw.t('draft.reload'), run: 'reload' },
+        }
       : problem
         ? { tone: 'danger', title: t(problem) }
         : notice
