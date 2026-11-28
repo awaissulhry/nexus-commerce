@@ -819,7 +819,10 @@
       "restricted_other": "{count} orders restricted",
       "skippedNotOrder_one": "{count} skipped: not confirmed yet, or already restricted",
       "skippedNotOrder_other": "{count} skipped: not confirmed yet, or already restricted",
-      "noDrafts": "No draft is selected. A sent order is never deleted."
+      "noDrafts": "No draft is selected. A sent order is never deleted.",
+      "designer": "Give to the designer…",
+      "left_one": "{count} left: confirm it later",
+      "left_other": "{count} left: confirm them later"
     },
     "asks": {
       "title_one": "The customer asks {count} change",
@@ -875,6 +878,47 @@
       "go_other": "Delete {count} drafts",
       "done_one": "{count} draft deleted",
       "done_other": "{count} drafts deleted"
+    },
+    "designer": {
+      "title_one": "Give {count} order to the designer",
+      "title_other": "Give {count} orders to the designer",
+      "subtitle": "Pick the person. They join each order and its chat.",
+      "skippedBefore_one": "{count} selected order is left out: not confirmed yet, or with the designer already.",
+      "skippedBefore_other": "{count} selected orders are left out: not confirmed yet, or with the designer already.",
+      "go_one": "Give the order",
+      "go_other": "Give {count} orders",
+      "done_one": "{name} is on {count} order now",
+      "done_other": "{name} is on {count} orders now",
+      "skipped_one": "{count} skipped",
+      "skipped_other": "{count} skipped",
+      "tooMany": "At most {max} orders at once.",
+      "none": "No selected order can be given: pick confirmed orders.",
+      "who": "Who works on the graphics",
+      "me": "you"
     }
+  },
+  "incoming": {
+    "sentAsText": "Sent as text · product not picked",
+    "openDetails_one": "{count} detail still open",
+    "openDetails_other": "{count} details still open",
+    "onHold": "Customer on hold",
+    "onHoldHint": "The customer is on hold: confirm only when the hold is lifted",
+    "confirm": "Confirm the order…",
+    "bulkConfirm": "Confirm {count}…",
+    "bulkNone": "No ticked order can be confirmed together: open each one",
+    "bulkSkips": "Skipped: {text} sent as text · {held} that hold",
+    "confirmed_one": "{count} order confirmed",
+    "confirmed_other": "{count} orders confirmed",
+    "skippedText_one": "{count} text order skipped: pick its product first",
+    "skippedText_other": "{count} text orders skipped: pick their product first",
+    "skippedHeld_one": "{count} skipped: a line has no product or the customer is on hold",
+    "skippedHeld_other": "{count} skipped: a line has no product or the customer is on hold",
+    "skippedOther_one": "{count} skipped: not a sent order",
+    "skippedOther_other": "{count} skipped: not sent orders",
+    "refused_one": "{count} refused",
+    "refused_other": "{count} refused",
+    "dismiss": "Dismiss",
+    "left_one": "{count} left: confirm it later",
+    "left_other": "{count} left: confirm them later"
   }
 }

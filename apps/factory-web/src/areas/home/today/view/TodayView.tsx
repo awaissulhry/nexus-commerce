@@ -140,15 +140,16 @@ const SEVERITY_TONE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'neutral' } as c
  * acknowledged, a decision in flight). "Handled today: N · Show" closes the list; "Arrange this page" (band ⋯) orders and
  * hides the sections and lists, sets each list's width and the main lens.
  */
-export function TodayView({ model, actions }: { model: TodayViewModel; actions?: TodayActions }) {
+/** owb-of4 step 2: `top` — the orders on Today (the six tiles, The factory now, Last changes), drawn under the band, above Needs you. */
+export function TodayView({ model, actions, top = null }: { model: TodayViewModel; actions?: TodayActions; top?: ReactNode }) {
   return (
     <WithMessages namespaces={['home', 'lists']}>
-      <Today model={model} actions={actions} />
+      <Today model={model} actions={actions} top={top} />
     </WithMessages>
   )
 }
 
-function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActions }) {
+function Today({ model, actions, top }: { model: TodayViewModel; actions?: TodayActions; top: ReactNode }) {
   const t = useT('home')
   const locale = useLocale()
   // Without a container (the design index) the view keeps its own filter, open row and lens, so every key works.
@@ -555,6 +556,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
           action={actions?.onDismissNotice ? <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>{t('today.dismiss')}</Button> : undefined}
         />
       )}
+      {top /* owb-of4: the orders on Today */}
 
       {head}
 

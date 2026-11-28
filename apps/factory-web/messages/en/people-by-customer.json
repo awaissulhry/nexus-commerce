@@ -1,0 +1,79 @@
+{
+  "title": "People by customer",
+  "intro": {
+    "title": "You decide which factory people work for which customer.",
+    "body": "The customer and sales then pick only from these people, for a group or an order. A customer reads the name of a factory person only when you gave that person to that customer. Floor people are not here."
+  },
+  "readOnly": "Only the owner and an admin change this page. You can read it.",
+  "dismiss": "Dismiss",
+  "retry": "Try again",
+  "reading": "Reading…",
+  "cancel": "Cancel",
+  "empty": "No office person yet.",
+  "count": "People: {people} · customers: {customers}",
+  "foot": "A person you take out leaves the groups and the orders of that customer. The history keeps it.",
+  "col": {
+    "person": "Name · role",
+    "extra": "Extra rights"
+  },
+  "group": {
+    "person": "Person",
+    "customers": "Works for this customer"
+  },
+  "extra": {
+    "ALLOW_PRODUCTION": "Allow production",
+    "PACK_AND_SEND": "Pack and send",
+    "PRINT_AND_START": "Print and start",
+    "aria": "{right} for {name}"
+  },
+  "extraHint": {
+    "ALLOW_PRODUCTION": "Sees the baskets board, the chains and an order’s Production tab",
+    "PACK_AND_SEND": "Packs and sends shipments",
+    "PRINT_AND_START": "Prints and starts the work of an order"
+  },
+  "tick": {
+    "on": "{name} works for {customer}: take out",
+    "off": "{name} does not work for {customer}: give",
+    "given": "Works for it",
+    "notGiven": "Not given"
+  },
+  "bulk": {
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "give": "Give to every customer",
+    "takeOut": "Take out for every customer…",
+    "clear": "Clear",
+    "gaveDone_one": "{count} person given to every customer",
+    "gaveDone_other": "{count} people given to every customer",
+    "tookDone_one": "{count} person taken out for every customer",
+    "tookDone_other": "{count} people taken out for every customer",
+    "refused_one": "{count} refused",
+    "refused_other": "{count} refused"
+  },
+  "ask": {
+    "title_one": "Take {count} person out for every customer?",
+    "title_other": "Take {count} people out for every customer?",
+    "subtitle": "{rows} customer links end. The people leave those customers’ groups and orders; the history keeps it.",
+    "go_one": "Take the person out",
+    "go_other": "Take {count} people out",
+    "customers_one": "works for {count} customer",
+    "customers_other": "works for {count} customers"
+  },
+  "cards": {
+    "label": "People",
+    "select": "Select {name}",
+    "none": "No customer yet"
+  },
+  "keys": {
+    "arrows": "Move from cell to cell",
+    "tick": "Tick the box of the cell",
+    "range": "Select every person between two boxes"
+  },
+  "refused": {
+    "forbidden": "Only the owner and an admin change this.",
+    "stale": "Someone changed this meanwhile. Read the page again.",
+    "gone": "This person or customer is no longer here.",
+    "offline": "The factory could not be reached. Try again.",
+    "failed": "It could not be saved. Try again."
+  }
+}

@@ -103,3 +103,15 @@ export function restrictOrder(api: ApiClient, orderId: string, body: { readonly 
 export function discardDraft(api: ApiClient, requestId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<{ discarded: true }> {
   return api.request('DELETE', `/sales/order-requests/${encodeURIComponent(requestId)}`, { query: { version }, schema: z.object({ discarded: z.literal(true) }), idempotencyKey })
 }
+
+/** The most orders one "Give to the designer" takes (the route's own limit). */
+export const DESIGNER_ORDERS_MAX = 100
+
+/**
+ * owb-of4 extra step — Give to the designer (lead S2's Shape for the server: `POST /sales/orders/designer`, orders.manage): puts the
+ * chosen office person on each order through the server's ONE people writer (`putPeopleOnOrder`); a person already on an order is
+ * kept, not doubled; the answer counts the orders the person joined.
+ */
+export function giveToDesigner(api: ApiClient, body: { readonly orderIds: readonly string[]; readonly userId: string }, idempotencyKey: string = newIdempotencyKey()): Promise<{ added: number }> {
+  return api.post('/sales/orders/designer', { body: { orderIds: [...body.orderIds], userId: body.userId }, schema: z.object({ added: z.number() }), idempotencyKey })
+}
