@@ -1,4 +1,7 @@
 {
+  "kit": {
+    "goOn": "Go on"
+  },
   "common": {
     "retry": "Try again",
     "dismiss": "Dismiss",
