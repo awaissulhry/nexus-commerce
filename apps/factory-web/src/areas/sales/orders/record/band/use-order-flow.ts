@@ -9,10 +9,14 @@ import { pictureKindOf, type PictureChoice } from '../../../../../lib/record-pic
 import { orderFilesOf, type OrderFilesRead } from '../../../../../lib/record-thread/files-view/model'
 import { basketsOf, departmentTilesOf, readOrderBaskets } from '../../../../../lib/production/baskets-board'
 import { orderLogPath, orderLogReader } from '../../../../../lib/change-log/api'
+import { askApproval, readRecordRequests } from '../../../../../record-panels/approvals/api' // owb-of7: the design's approval
+import type { Locale } from '../../../../../lib/i18n/locales'
+import { flowWordsFor } from '../flow-words'
+import { romeToday } from '../../model'
 import { officeDraftPort } from '../../draft/api'
 import type { Order } from '../../api'
 import { answerPaymentNotice, downloadOrderZip, readPaymentNotices, readWarehouseLegs, restrictOrder, type PaymentNotice } from './api'
-import { mayRestrict, textCardOf, type LegFacts, type OrderFlowActions, type OrderFlowModel } from './model'
+import { designDueOf, designStateOf, maySendDesign, mayRestrict, textCardOf, type DesignState, type LegFacts, type OrderFlowActions, type OrderFlowModel } from './model'
 
 /** The statuses whose orders may have a leg at our warehouse (S3's warehouse way): the legs are read only then. */
 const LEG_STATUSES = new Set<string>(['SHIPPED', 'PARTLY_SHIPPED', 'CLOSED'])
@@ -47,6 +51,7 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
   const [noticeAct, setNoticeAct] = useState<{ busy: string | null; problem: string | null }>({ busy: null, problem: null })
   const [zip, setZip] = useState<OrderFlowModel['zip']>({ busy: false, leftOut: null, problem: null })
   const [restrict, setRestrict] = useState<{ busy: boolean; problem: string | null }>({ busy: false, problem: null })
+  const [design, setDesign] = useState<{ state: DesignState | null; busy: boolean; problem: string | null }>({ state: null, busy: false, problem: null }) // owb-of7
 
   // S3's legs: only for a reader with shipping.view and an order that left (never asked for a draft or one in production).
   const seesShipping = permissions.includes('shipping.view')
@@ -137,6 +142,37 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
   const log = useMemo(() => (orderId ? orderLogReader(api, orderLogPath('office', 'order', orderId)) : null), [api, orderId])
   // ---- end owb-of6
 
+  // ---- owb-of7 step 2: the design's approval — its state (the order's ARTWORK / PROOF requests, partners.approvals.view) and the send ----
+  const seesApprovals = permissions.includes('partners.approvals.view')
+  const readDesign = useCallback(
+    (id: string, signal?: AbortSignal) =>
+      readRecordRequests(api, { type: 'SalesOrder', id }, signal)
+        .then((answer) => setDesign((now) => ({ ...now, state: designStateOf(answer.requests) })))
+        .catch(() => undefined),
+    [api],
+  )
+  useEffect(() => {
+    if (!orderId || !seesApprovals) return
+    const abort = new AbortController()
+    void readDesign(orderId, abort.signal)
+    return () => abort.abort()
+  }, [orderId, seesApprovals, readDesign])
+  const mayDesign = maySendDesign(permissions)
+  const pictureFileId = order?.pictureFileId ?? null
+  const language = order?.language === 'en' ? 'en' : 'it'
+  const onSendDesign = useCallback(() => {
+    if (!orderId || !pictureFileId || design.busy || !mayDesign) return
+    setDesign((now) => ({ ...now, busy: true, problem: null }))
+    const say = flowWordsFor(language as Locale, 'outside')
+    askApproval(api, { kind: 'ARTWORK', recordType: 'SalesOrder', recordId: orderId, question: say('design.question', { number: number ?? '' }), dueAt: designDueOf(romeToday()), fileIds: [pictureFileId], send: true, language })
+      .then(() => {
+        setDesign((now) => ({ ...now, busy: false, state: 'WAITS' }))
+        void readDesign(orderId)
+      })
+      .catch((error: unknown) => setDesign((now) => ({ ...now, busy: false, problem: isApiError(error) && error.message ? error.message : 'design.failed' })))
+  }, [api, orderId, pictureFileId, design.busy, mayDesign, language, number, readDesign])
+  // ---- end owb-of7
+
   const manages = permissions.includes('orders.manage')
   const read = useMemo(() => pictureReader(api), [api])
   const save = useMemo(() => (orderId && manages ? orderPictureSaver(api, orderPicturePath('office', 'order', orderId)) : null), [api, orderId, manages])
@@ -169,7 +205,8 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
       log,
       notices: { rows: notices, busy: noticeAct.busy, problem: noticeAct.problem, may: permissions.includes('payments.record') },
       zip,
+      design: { state: design.state, may: mayDesign, held: !pictureFileId ? 'design.noPicture' : design.state === 'WAITS' ? 'design.waits' : null, busy: design.busy, problem: design.problem },
     },
-    actions: { onPictureSaved: onReload, onRestrict, onNotice, onZip },
+    actions: { onPictureSaved: onReload, onRestrict, onNotice, onZip, onSendDesign },
   }
 }

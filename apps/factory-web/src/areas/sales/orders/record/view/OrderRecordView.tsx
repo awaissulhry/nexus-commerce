@@ -220,7 +220,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
   const primaryLabel = step.kind === 'confirmYes' ? t('approval.confirm') : step.kind === 'askYes' ? d(yesRequest ? 'wait.withdraw' : 'wait.ask') : isBandAct(step.kind) ? f(`act.${step.kind}`) : step.kind ? t(`step.${step.kind}`) : ''
   // ---- owb-of5 step 1: the band's life (L9: the base's orderLifeOf through the band's rule), its tags, Back's place ----
   const life = lifeOfOrder(order, model.flow?.legs ?? null)
-  const tags = bandTagsOf({ life: life.life, restricted: !!model.flow?.restrict.now, problems: openProblemsOf(model.asks?.value?.issues) })
+  const tags = bandTagsOf({ life: life.life, restricted: !!model.flow?.restrict.now, problems: openProblemsOf(model.asks?.value?.issues), design: model.flow?.design.state ?? null /* owb-of7 step 2 */ })
   const backPlace = useBackPlace({ prefix: model.prefix, here: recordHref, customer: order.party ? { id: order.partyId, name: order.party.legalName } : null })
   const backWords = useBackWords()
   const subject = model.flow?.subject ?? null

@@ -1,0 +1,74 @@
+{
+  "intro": "Your work: renderings, graphics and the talk about them. New orders come to sales first. You see no price.",
+  "tiles": "Go to a part of the page",
+  "tile": {
+    "asked": "Asked for graphics help",
+    "approvals": "Waits for approval",
+    "codes": "Place the scan code",
+    "floor": "The floor asks you"
+  },
+  "retry": "Try again",
+  "failed": "The design desk could not be read. Try again.",
+  "busy": "Working on it…",
+  "open": "Open ›",
+  "since": "since {date}",
+  "sent": "sent {date}",
+  "asked": {
+    "title": "Asked",
+    "count_one": "{count} order asks for you",
+    "count_other": "{count} orders ask for you",
+    "info": "Orders and sent orders where help with the graphics is asked of you, the graphics were given to you, or you are on them.",
+    "none": "Nobody asks for help now.",
+    "newOrder": "New order",
+    "noSubject": "no subject"
+  },
+  "why": {
+    "HELP_ASKED": "help is asked",
+    "GIVEN": "the graphics were given to you",
+    "ON_IT": "you are on it",
+    "CONFIRMED": "confirmed"
+  },
+  "approvals": {
+    "title": "Waits for approval",
+    "count_one": "{count} design waits for the customer",
+    "count_other": "{count} designs wait for the customer",
+    "info": "The customer is asked to approve the design. The work goes on meanwhile.",
+    "none": "No design waits for approval."
+  },
+  "kind": {
+    "PROOF": "Design proof",
+    "ARTWORK": "Artwork"
+  },
+  "state": {
+    "OPEN": "Waits",
+    "APPROVED": "Approved",
+    "APPROVED_WITH_CHANGES": "Approved with changes",
+    "REFUSED": "A change is asked",
+    "OTHER": "Closed"
+  },
+  "codes": {
+    "title": "Scan codes",
+    "info": "Confirmed orders before the print: where the scan code sits on each design page. A page without a place gets the usual one (top right, 20 mm).",
+    "notYet": "The scan code places come with the print part. Nothing to place here yet.",
+    "none": "No confirmed order waits for the print.",
+    "placed": "{placed} of {pages} placed",
+    "place": "Place the scan code…"
+  },
+  "floor": {
+    "title": "From the floor",
+    "count_one": "{count} ask from the floor",
+    "count_other": "{count} asks from the floor",
+    "info": "A worker asked you with one tap. Take it, do it, tell the worker.",
+    "none": "No worker waits for you.",
+    "state": {
+      "ASKED": "Asked",
+      "TAKEN": "You took it"
+    },
+    "take": "I take it",
+    "done": "Done — tell the worker…",
+    "window": "Done — tell the worker",
+    "send": "Done — tell the worker",
+    "words": "An answer for the worker",
+    "wordsHint": "One line, if you want. The worker reads it on the basket."
+  }
+}
