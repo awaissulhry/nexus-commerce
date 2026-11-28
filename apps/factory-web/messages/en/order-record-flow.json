@@ -1,0 +1,36 @@
+{
+  "back": {
+    "orders": "Orders",
+    "customer": "Customer",
+    "customers": "Customers",
+    "designDesk": "Design desk",
+    "incoming": "Incoming",
+    "readyToShip": "Ready to ship",
+    "today": "Today",
+    "order": "Order",
+    "page": "Back"
+  },
+  "act": {
+    "confirm": "Confirm the order…",
+    "printStart": "Print and start the work…",
+    "ship": "Ship…",
+    "arrived": "It arrived at the warehouse",
+    "sendOn": "Send on to the customer"
+  },
+  "tag": {
+    "CUSTOMER_ON_HOLD": "Customer on hold",
+    "DESIGN_WAITS": "Design: waits for approval",
+    "DESIGN_APPROVED": "Design approved",
+    "DESIGN_CHANGE": "Design: a change is asked",
+    "RESTRICTED": "Restricted",
+    "PROBLEMS_one": "{count} problem",
+    "PROBLEMS_other": "{count} problems",
+    "REMAKE": "Remake"
+  },
+  "people": {
+    "button": "People",
+    "count_one": "People · {count}",
+    "count_other": "People · {count}",
+    "window": "People on {number}"
+  }
+}

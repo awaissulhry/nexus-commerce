@@ -6,7 +6,7 @@ import { CheckCircle2, Info, PencilLine, Plus, Shirt } from 'lucide-react'
 import { Banner, Card, Field, SummaryTable } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
-import { Button, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Button, Input, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { Combobox, Modal, useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { draftTitleOf, draftViewOf, productRowsOf, rowLabelOf, rowProductOf, type HeaderDraft, type HeaderField, type ProductRow } from '../../../../../lib/order-draft/model'
@@ -28,6 +28,18 @@ import type { ConfirmAnswer, OfficeRead } from '../api'
 import { cardAsksOf, cellsOf, confirmAsOf, confirmHeldOf, missingOf, sizesTextOf, type ConfirmEntry } from '../confirm-model'
 import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
+// ---- owb-of5 step 1 (L3; design § 5i): the order band on the Draft / Sent page — Back that says where it goes, the picture, "number ·
+// subject", ONE state chip (the base's StateChip, L9), ONE main button Confirm the order… ----
+import { orderLifeOf } from '@nexus/factory-domain/sales/order-life'
+import { StateChip } from '../../../../../lib/order-cells/view/StateChip'
+import { useBackPlace } from '../../../../../lib/record-frame/use-back'
+import type { ReadPictures } from '../../../../../lib/record-picture/cache'
+import type { SaveOrderPicture } from '../../../../../lib/record-picture/api'
+import type { PictureChoice } from '../../../../../lib/record-picture/order-picture'
+import type { RequestBand } from '../../record/band/api'
+import { BandPicture, useBackWords } from '../../record/band/view/BandParts'
+import { useFlowWords } from '../../record/flow-words'
+// ---- end owb-of5
 import './office-draft.css'
 
 /**
@@ -69,6 +81,10 @@ export interface OfficeDraftModel {
   done: ConfirmAnswer['made'] | null
   mayStyles: boolean
   mayConfirm: boolean
+  /** owb-of5: the band of a Draft or Sent order (owb-of1's read; null: not read, or before of1 — the band reads the draft itself). */
+  band?: RequestBand | null
+  /** owb-of5: the band's picture — the batch read, the save door (null: this reader may not change it), the draft's files that may be it. */
+  picture?: { read: ReadPictures | null; save: SaveOrderPicture | null; choices: readonly PictureChoice[] } | null
 }
 
 export interface OfficeDraftActions {
@@ -80,6 +96,8 @@ export interface OfficeDraftActions {
   onRetry?: () => void
   onRetrySave?: () => void
   onDismissNotice?: () => void
+  /** owb-of5: the band's picture saved (the band reads it again). */
+  onPictureSaved?: () => void
   files?: FilesBoxActions
   table?: ProductsTableActions
   pieces?: PiecesWindowActions
@@ -99,13 +117,17 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
   const ds = useDsWords()
   const continueLine = useContinueLine()
   const record = model.record
+  // owb-of5 step 1: Back's place (read before any early return: a hook), its words, the flow's words.
+  const backPlace = useBackPlace({ prefix: model.prefix, here: `${model.prefix}/sales/orders/new`, customer: model.customer ? { id: model.customer.id, name: model.customer.name } : null })
+  const backWords = useBackWords()
+  const f = useFlowWords()
   if (model.load === 'loading') return <Skeleton height={96} />
   if (model.load === 'missing' || model.load === 'error' || (model.load === 'ready' && !record && !model.start)) {
     return (
       <EndState tone="neutral" title={t('refusal.other')} actions={[{ label: to('record.back'), href: `${model.prefix}/sales/orders`, variant: 'primary' as const }]} labels={ds.endState} focusOnMount={false} />
     )
   }
-  const back = <Link href={`${model.prefix}/sales/orders`}>{to('record.back')}</Link>
+  const back = <Link href={backPlace?.href ?? `${model.prefix}/sales/orders`}>{backWords(backPlace, to('record.back'))}</Link>
   const title = record ? draftTitleOf(record.request, t, words.locale, words.day) : null
   const writeHeld = model.writeHeld ?? (record || model.start?.partyId ? null : t('start.customerHeld'))
   const start = model.start
@@ -206,6 +228,15 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
       }}
     />
   )
+  // ---- owb-of5 step 1: the band's facts — its number (Sent), its life (the band read's, else the draft's own status), its main button
+  const number = model.band?.number ?? record?.request.number ?? null
+  const life = model.band ? { life: model.band.life, note: null } : orderLifeOf({ request: { status: record?.request.status ?? 'DRAFT' } })
+  const rowCount = record ? productRowsOf(record.request).length : 0
+  // A button this reader may not use is not drawn (orders.manage: the band read's may.confirm, else the office read's); held while no row.
+  const mayConfirmRight = model.band ? model.band.may.confirm : (model.office?.may.confirm ?? model.writeHeld === null)
+  const confirmable = !!record && (record.request.status === 'DRAFT' || record.request.status === 'SENT') && mayConfirmRight
+  const confirmHeld = model.writeHeld ?? (rowCount === 0 ? t('cf.noRows') : null)
+  // ---- end owb-of5
   // od-fx8 W-20: the start has its own band, "‹ Orders · New order" (no thread before the first save).
   if (!record)
     return (
@@ -221,9 +252,35 @@ export function OfficeDraftView({ model, actions, thread = null }: { model: Offi
       thread={thread}
       band={{
         back,
-        title: t('head.title', { title: title ?? '' }),
+        // owb-of5: "number · subject" once the order has its number (Sent); a draft keeps its title.
+        title: number ? `${number} · ${title ?? ''}` : t('head.title', { title: title ?? '' }),
         meta: model.customer ? <span className="fw-od-quiet">{model.customer.name}</span> : undefined,
-        status: <Pill tone="neutral">{record.request.status === 'DRAFT' ? t('st.draft') : t('send.sent')}</Pill>,
+        // owb-of5 (L9): ONE state chip — the order's life (Draft · Sent …) through the base's orderLifeOf and StateChip.
+        status: <StateChip life={life.life} note={life.note} />,
+        ...(model.picture
+          ? {
+              picture: (
+                <BandPicture
+                  source="portalOrder"
+                  recordId={record.request.id}
+                  number={number ?? title ?? ''}
+                  subject={title}
+                  version={model.band?.version ?? record.request.version}
+                  fileId={model.band?.picture?.fileId ?? null}
+                  read={model.picture.read}
+                  save={model.picture.save}
+                  choices={model.picture.choices}
+                  onSaved={actions?.onPictureSaved}
+                />
+              ),
+            }
+          : {}),
+        // owb-of5: the ONE main button — Confirm the order… (the window below; held in words while it cannot confirm).
+        primary: confirmable ? (
+          <Button size="sm" variant="primary" heldReason={confirmHeld} onClick={() => actions?.confirm?.onOpen?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {f('act.confirm')}
+          </Button>
+        ) : undefined,
       }}
     >
       {page}
@@ -269,7 +326,7 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
           <p className="fw-od-quiet">
             <Info size={14} aria-hidden /> {t('cf.choices')}
           </p>
-          <ConfirmButton model={model} actions={actions} rows={rows.length} className="fw-od-hostgo" />
+          <ConfirmButton model={model} actions={actions} rows={rows.length} className="fw-od-hostgo" variant="secondary" />
         </section>
       </Card>
       <Card padded>
@@ -304,10 +361,11 @@ function HostCards({ model, actions, record }: { model: OfficeDraftModel; action
 
 /** The ONE "Confirm order…" button (it opens the window; od-fx8 W-26: the window's final button says "as a quote"): in its card, and
  * (od-w2.6) in the page's sticky bar on a phone. */
-function ConfirmButton({ model, actions, rows, className }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; className?: string }) {
+// owb-of5: the band holds the page's ONE filled button (Confirm the order…); the host card's own door is a plain button now.
+function ConfirmButton({ model, actions, rows, className, variant = 'primary' }: { model: OfficeDraftModel; actions?: OfficeDraftActions; rows: number; className?: string; variant?: 'primary' | 'secondary' }) {
   const { t } = useDraftWords()
   return (
-    <Button variant="primary" heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
+    <Button variant={variant} heldReason={model.writeHeld ?? (rows === 0 ? t('cf.noRows') : !model.mayConfirm ? t('save.readonly') : null)} onClick={() => actions?.confirm?.onOpen?.()} {...(className ? { className } : {})}>
       {t('cf.go')}
     </Button>
   )

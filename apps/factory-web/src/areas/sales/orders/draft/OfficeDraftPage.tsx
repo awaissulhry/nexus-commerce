@@ -30,6 +30,11 @@ import { confirmDraft, createOfficeDraft, makeDraftStyle, officeDraftPort, readO
 import { confirmBodyOf, confirmHeldOf, confirmRowsOf, type ConfirmEntry } from './confirm-model'
 import { OfficeDraftView } from './view/OfficeDraftView'
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+// ---- owb-of5 step 1 (L3: Draft and Sent keep this page; of5 puts the order band on it): the band's read (owb-of1 Shape) and the picture's ports
+import { readRequestBand, type RequestBand } from '../record/band/api'
+import { orderPicturePath, orderPictureSaver, pictureReader } from '../../../../lib/record-picture/api'
+import { pictureKindOf, type PictureChoice } from '../../../../lib/record-picture/order-picture'
+// ---- end owb-of5
 
 /**
  * `/w/<co>/sales/orders/new` (no `?party=`) — the office's door to the ONE draft order (THE SIMPLE ORDER START, od-w2.1; R1–R3): the
@@ -132,6 +137,7 @@ function OfficeDraftContainer() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null)
   const [styleWin, setStyleWin] = useState<StyleState | null>(null)
   const [done, setDone] = useState<ConfirmAnswer['made'] | null>(null)
+  const [band, setBand] = useState<RequestBand | null>(null) // owb-of5: the band of a Draft or Sent order (null: not read, or before of1)
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -192,6 +198,10 @@ function OfficeDraftContainer() {
 
   // ── reads ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
   const readOffice = useCallback((id: string) => {
+    // owb-of5: the band's own read beside the office read (its number, subject, picture, life, open details, what this reader may do).
+    readRequestBand(api, id)
+      .then(setBand)
+      .catch(() => setBand(null))
     readOfficeRequest(api, id)
       .then((read) => {
         setOffice(read)
@@ -580,6 +590,18 @@ function OfficeDraftContainer() {
   )
 
   const rows = record ? productRowsOf(record.request, locale) : []
+  // ---- owb-of5 step 1: the band's picture — the batch read of a portal order's picture; Save for who may (the band's may.picture,
+  // else orders.manage: sales and the owner, never the designer); the draft's references and logos that may be its picture.
+  const pictureRead = useMemo(() => pictureReader(api), [api])
+  const requestId = record?.request.id ?? null
+  const mayPicture = band ? band.may.picture : manages
+  const pictureSave = useMemo(() => (requestId && mayPicture ? orderPictureSaver(api, orderPicturePath('office', 'request', requestId)) : null), [api, requestId, mayPicture])
+  const pictureChoices: PictureChoice[] = record
+    ? [...draftFilesOf(record.request).references, ...draftFilesOf(record.request).logos]
+        .filter((file) => file.originalName !== null && (file.contentType.startsWith('image/') || file.contentType === 'application/pdf'))
+        .map((file) => ({ fileId: file.id, name: file.originalName!, kind: pictureKindOf({ type: file.contentType, name: file.originalName! }), small: null }))
+    : []
+  // ---- end owb-of5
   const piecesRow = piecesWin ? rows.find((row) => row.id === piecesWin.rowId) : undefined
   const optionsRow = optionsWin ? rows.find((row) => row.id === optionsWin.rowId) : undefined
   const filesRow = rowFilesId ? rows.find((row) => row.id === rowFilesId) : undefined
@@ -619,6 +641,8 @@ function OfficeDraftContainer() {
         details,
         styleWin: styleWin ? { ...styleWin, held: styleHeld(styleWin.draft) } : null,
         done,
+        band, // owb-of5
+        picture: record ? { read: pictureRead, save: pictureSave, choices: pictureChoices } : null, // owb-of5
         mayStyles: office?.may.styleDraft ?? may('product.styles.manage'),
         mayConfirm: (office?.may.confirm ?? manages) && rows.length > 0,
       }}
@@ -646,6 +670,7 @@ function OfficeDraftContainer() {
         },
         onRetrySave: () => void saveHeader(),
         onDismissNotice: () => setNotice(null),
+        onPictureSaved: () => (recordRef.current ? readOffice(recordRef.current.request.id) : undefined), // owb-of5: the band reads its picture again
         files: { onFiles: (list) => void addFiles('REFERENCE', list, null), onRemove: removeFile, onLogo: markLogo },
         table: {
           onProduct: (rowId, value) => void writeRow(rowId, 'styleId' in value ? { styleId: value.styleId } : { description: value.words === '' ? null : value.words }),

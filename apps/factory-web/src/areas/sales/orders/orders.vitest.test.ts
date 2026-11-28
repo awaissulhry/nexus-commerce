@@ -1723,12 +1723,13 @@ describe('F-OP-311: Read-only sees no next step and no move in the band; everyon
     expect(readOnlyOnPage(readOnly)).toBe(true)
     for (const status of ORDER_STATUSES) {
       expect(bandStepOf(order(status), readOnly, true), status).toEqual({ kind: null, held: null })
-      expect(bandStepOf(order(status), canOf('manager'), false), status).toEqual(nextStep(order(status), canOf('manager')))
+      // owb-of5 step 1: the waiting yes keeps today's door; every other state asks the design band's ONE act (record/band).
+      if (status === 'PENDING_APPROVAL') expect(bandStepOf(order(status), canOf('manager'), false), status).toEqual(nextStep(order(status), canOf('manager')))
     }
-    // The walk's four: Make work orders (Confirmed), Change promise date… (In production), Close order… (Shipped) — held for the
-    // production manager with their words, never hidden from a reader who may act on the page.
-    expect(bandStepOf(order('CONFIRMED'), canOf('manager'), false).kind).toBe('makeWorkOrders')
-    expect(bandStepOf(order('IN_PRODUCTION'), canOf('manager'), false)).toMatchObject({ kind: 'changePromise', held: { key: 'held.noManage' } })
+    // owb-of5 (design § 5i): Confirmed → Print and start the work… only for production.print.start (not drawn otherwise); In
+    // production → no main act; Shipped → Close order… stays, held for the production manager with its words.
+    expect(bandStepOf(order('CONFIRMED'), canOf('manager'), false).kind).toBe(canOf('manager').printStart ? 'printStart' : null)
+    expect(bandStepOf(order('IN_PRODUCTION'), canOf('manager'), false)).toEqual({ kind: null, held: null })
     expect(bandStepOf(order('SHIPPED', { settled: true }), canOf('manager'), false)).toMatchObject({ kind: 'close', held: { key: 'held.noClose' } })
   })
   it('the ⋯ for Read-only keeps only the open doors and the copy that change nothing; no held move, no Cancel', () => {

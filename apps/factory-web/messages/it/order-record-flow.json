@@ -1,0 +1,36 @@
+{
+  "back": {
+    "orders": "Ordini",
+    "customer": "Cliente",
+    "customers": "Clienti",
+    "designDesk": "Scrivania design",
+    "incoming": "In arrivo",
+    "readyToShip": "Pronto da spedire",
+    "today": "Oggi",
+    "order": "Ordine",
+    "page": "Indietro"
+  },
+  "act": {
+    "confirm": "Conferma l’ordine…",
+    "printStart": "Stampa e avvia il lavoro…",
+    "ship": "Spedisci…",
+    "arrived": "È arrivato in magazzino",
+    "sendOn": "Invia al cliente"
+  },
+  "tag": {
+    "CUSTOMER_ON_HOLD": "Cliente in sospeso",
+    "DESIGN_WAITS": "Grafica: attende l’approvazione",
+    "DESIGN_APPROVED": "Grafica approvata",
+    "DESIGN_CHANGE": "Grafica: chiesta una modifica",
+    "RESTRICTED": "Riservato",
+    "PROBLEMS_one": "{count} problema",
+    "PROBLEMS_other": "{count} problemi",
+    "REMAKE": "Rifacimento"
+  },
+  "people": {
+    "button": "Persone",
+    "count_one": "Persone · {count}",
+    "count_other": "Persone · {count}",
+    "window": "Persone su {number}"
+  }
+}
