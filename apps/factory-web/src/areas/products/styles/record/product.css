@@ -1,0 +1,6 @@
+/*
+ * owb-pd4 (steps 4.2–4.4; design § 5q, § 5r, § 5y) — the product page's own rules: the band's picture, the answer line, the design
+ * pictures, the closed "Variants and markets", the Sizes tab's rows. Every part chooses by the room it has (the section kit's size
+ * containers), never the screen; DS tokens only (no raw colour), so light and dark follow the theme.
+ */
+.fw-pd-bandpic { display: block; width: 28px; height: 28px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-border-subtle); object-fit: cover; background: var(--nds-surface-sunken); }

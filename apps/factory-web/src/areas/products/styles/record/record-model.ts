@@ -14,9 +14,12 @@ import type {
   MaterialRow,
   MaterialView,
   OperationRow,
+  ProductRow,
+  RouteSummaryStep,
   RoutingView,
   ScaleRow,
   StyleComplianceView,
+  StyleOrders,
   StyleTypeChanges,
   StepPatch,
   StylePatch,
@@ -178,6 +181,16 @@ export interface StyleRecordViewModel {
   rangeDraft?: { sizeScaleId: string; sizes: string[]; baseSize: string | null }
   /** Design cases: a BOM line already chosen in the add dialog. */
   lineDraft?: { material: MaterialView }
+  // ---- owb-pd4 (steps 4.2–4.4; owb-pd-server § Shape pd1) ----
+  /** "How it is made": the route of the revision as departments, no minutes (GET style's routeSummary); null: none yet, or an API before pd1. */
+  routeSummary?: RouteSummaryStep[] | null
+  /** The open order lines of the product (Where it is used, the riders' sheets); absent: no orders read in the person's role. */
+  orders?: Part<StyleOrders>
+  /** The product's own list row (its agreed price range: price grain); absent: not read (no price grain). */
+  agreed?: Part<ProductRow | null>
+  /** The person may open the orders (orders.view, or the designer's own orders): the order links are drawn. */
+  ordersOpen?: boolean
+  // ---- end owb-pd4
 }
 
 export interface StyleRecordActions {
@@ -255,4 +268,6 @@ export interface StyleRecordActions {
   /** B-W2b-245: the Versions & changes tab and the Release modal on the gate. */
   versions?: VersionsActions
   release?: ReleaseActions
+  /** owb-pd4: read the open orders (Where it is used, the riders' sheets) again after a failed read. */
+  onRetryOrders?: () => void
 }

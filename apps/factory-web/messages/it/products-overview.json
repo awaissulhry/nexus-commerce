@@ -1,0 +1,55 @@
+{
+  "band": {
+    "sheet": "Scheda prodotto",
+    "takeBack": "Riprendilo",
+    "picture": "L'immagine principale di {code}"
+  },
+  "held": {
+    "compliance": {
+      "title": "Conformità",
+      "answer": "Il tuo ruolo non legge ancora i certificati.",
+      "info": "Il titolare dà questo permesso insieme agli altri permessi durante il giro. Fino ad allora questa scheda dice solo il perché.",
+      "body": "La classe CE e l'etichetta sono nei Dati del prodotto della Panoramica."
+    }
+  },
+  "revisions": {
+    "title": "Revisioni",
+    "answer_one": "{count} revisione. Una revisione rilasciata è bloccata: una modifica va nella successiva.",
+    "answer_other": "{count} revisioni. Una revisione rilasciata è bloccata: una modifica va nella successiva.",
+    "none": "Ancora nessuna revisione.",
+    "info": "Ogni revisione di questo prodotto. Gli ordini usano quella rilasciata.",
+    "col": {
+      "revision": "Revisione",
+      "state": "Stato",
+      "when": "Dal"
+    },
+    "rev": "Revisione {revision}",
+    "held": "Confrontare due revisioni e le loro modifiche richiede il permesso sui materiali."
+  },
+  "sheet": {
+    "subtitle": "{code} · scheda prodotto",
+    "revision": "Revisione {revision} · {status}",
+    "type": "Tipo",
+    "family": "Famiglia",
+    "season": "Stagione",
+    "sizes": "Taglie",
+    "protection": "Protezione",
+    "sizesBase": "{sizes} (base {base})",
+    "sizesOnly": "{sizes}",
+    "mtm": "Su misura",
+    "noSizes": "Non ancora scelte",
+    "notPpe": "Non è abbigliamento protettivo",
+    "noPicture": "Ancora nessuna immagine del design.",
+    "front": "Davanti",
+    "back": "Dietro",
+    "sizeTable": "Tabella taglie",
+    "point": "Punto",
+    "baseColumn": "{size} (base)",
+    "tolerance": "±",
+    "inMm": "Misure finite di ogni taglia, in millimetri.",
+    "howTo": "Come misurare",
+    "noHowTo": "Ancora nessuna parola per questo punto.",
+    "protectors": "Protezioni",
+    "noPrice": "Questa scheda non mostra mai un prezzo."
+  }
+}

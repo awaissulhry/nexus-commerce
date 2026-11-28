@@ -1,0 +1,55 @@
+{
+  "band": {
+    "sheet": "Product sheet",
+    "takeBack": "Take it back",
+    "picture": "The main picture of {code}"
+  },
+  "held": {
+    "compliance": {
+      "title": "Compliance",
+      "answer": "Your role does not read the certificates yet.",
+      "info": "The Owner gives this right with the other rights at the walk. Until then this tab only says why.",
+      "body": "The CE class and the label are on the Overview's Product facts."
+    }
+  },
+  "revisions": {
+    "title": "Revisions",
+    "answer_one": "{count} revision. A released revision is frozen: a change goes into the next one.",
+    "answer_other": "{count} revisions. A released revision is frozen: a change goes into the next one.",
+    "none": "No revision yet.",
+    "info": "Every revision of this product. Orders use the released one.",
+    "col": {
+      "revision": "Revision",
+      "state": "State",
+      "when": "Since"
+    },
+    "rev": "Revision {revision}",
+    "held": "Comparing two revisions and their changes needs the materials right."
+  },
+  "sheet": {
+    "subtitle": "{code} · product sheet",
+    "revision": "Revision {revision} · {status}",
+    "type": "Type",
+    "family": "Family",
+    "season": "Season",
+    "sizes": "Sizes",
+    "protection": "Protection",
+    "sizesBase": "{sizes} (base {base})",
+    "sizesOnly": "{sizes}",
+    "mtm": "Made to measure",
+    "noSizes": "Not chosen yet",
+    "notPpe": "Not protective clothing",
+    "noPicture": "No design picture yet.",
+    "front": "Front",
+    "back": "Back",
+    "sizeTable": "Size table",
+    "point": "Point",
+    "baseColumn": "{size} (base)",
+    "tolerance": "±",
+    "inMm": "Finished measurements of each size, in millimetres.",
+    "howTo": "How to measure",
+    "noHowTo": "No words for this point yet.",
+    "protectors": "Protectors",
+    "noPrice": "This sheet never shows a price."
+  }
+}

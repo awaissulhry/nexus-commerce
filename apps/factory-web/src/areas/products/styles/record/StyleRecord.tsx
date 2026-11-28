@@ -38,6 +38,8 @@ import {
   getMaterial,
   getRouting,
   getStyle,
+  listStyleOrders,
+  productRowOf,
   styleSource,
   listBrands,
   listColours,
@@ -65,14 +67,22 @@ import {
   type CostDiffView,
   type CostSheetView,
   type MaterialView,
+  type ProductRow,
+  type RouteSummaryStep,
   type RoutingView,
   type StyleComplianceView,
+  type StyleOrders,
   type StyleTypeChanges,
   type StyleView,
 } from '../api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { EVERY_COMPANY, useSheetImport } from '../import/sheet-import'
-import { abilitiesOf, grainsOf, releasedOf, revisionInView, sha256Of, tabOf, type StyleTab } from '../model'
+import { abilitiesOf, grainsOf, mayEditDraftParts, mayEditFacts, releasedOf, revisionInView, sha256Of, tabOf, type StyleTab } from '../model'
+// ---- owb-pd4 (steps 4.2–4.4): the Product sheet (`?sheet=1`), How it is made, Where it is used, the agreed prices ----
+import { isSheet, routeSummaryOf } from './product-model'
+import { productSheetOf } from '../sheet/sheet-model'
+import { ProductSheetView } from '../sheet/view/ProductSheetView'
+// ---- end owb-pd4
 import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
@@ -130,6 +140,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const params = useSearchParams()
   const tab = tabOf(params?.get('tab'))
   const askedRevision = params?.get('rev') ?? null
+  // owb-pd4 (step 4.2): the Product sheet — this page for paper (`sheet=1`, opened in the Office's print view).
+  const sheet = isSheet(params)
   const prefix = pathname.replace(/\/products\/styles\/[^/]+\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
@@ -138,6 +150,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const t = useT('products')
 
   const [style, setStyle] = useState<Loaded<StyleView>>({ status: 'loading' })
+  // owb-pd4 (step 4.3): How it is made — the route summary that GET style carries (kept across a write's answer, which has none).
+  const [routeSummary, setRouteSummary] = useState<RouteSummaryStep[] | null>(null)
+  // owb-pd4 (steps 4.3, 4.4): the open order lines of the product; the product's own list row (its agreed price range).
+  const [orders, setOrders] = useState<Part<StyleOrders>>({ status: 'idle' })
+  const [agreed, setAgreed] = useState<Part<ProductRow | null>>({ status: 'idle' })
   const styleRef = useRef<StyleView | null>(null)
   const [bom, setBom] = useState<Part<BomView>>({ status: 'idle' })
   const bomRef = useRef<BomView | null>(null)
@@ -187,7 +204,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
 
   const loadStyle = useCallback(async () => {
     try {
-      setStyleValue(await getStyle(api, styleId))
+      const next = await getStyle(api, styleId)
+      setStyleValue(next)
+      setRouteSummary(routeSummaryOf(next))
       setChanged(null)
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setStyle({ status: 'not_found' })
@@ -408,8 +427,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   piecesReload.current = pieces.reload
 
   // B-W2b-233: the Sizes & measurements tab's prepacks (the style's read) and protector placement (the BOM's), read while the tab is open.
-  const prepacks = usePrepacks({ api, styleId, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'sizes' && can.view, canManage: session.permissions.includes('product.prepacks.manage'), write: run })
-  const protectors = useProtectors({ api, styleId, revisionId, loadKey: versionKey, enabled: tab === 'sizes' && can.bomView, write: run })
+  const prepacks = usePrepacks({ api, styleId, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'sizes' && can.view && !sheet, canManage: session.permissions.includes('product.prepacks.manage'), write: run })
+  // owb-pd4: the protectors are on the Product sheet too.
+  const protectors = useProtectors({ api, styleId, revisionId, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.bomView, write: run })
   sizesReload.current = () => {
     prepacks.reload()
     protectors.reload()
@@ -417,7 +437,10 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // B-W2b-236: the pictures (the style's read; changes with product.styles.manage, uploads also files.upload) and the
   // revision's pattern files (the BOM's read; changes with product.bom.manage), each read while its tab is open.
   const pictureStyle = useMemo(() => (value ? { id: value.id, companyId: value.companyId } : null), [value?.id, value?.companyId])
-  const gallery = useGallery({ api, style: pictureStyle, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'overview' && can.view, canManage: can.manage && session.permissions.includes('files.upload'), canArrange: can.manage, write: run })
+  // owb-pd4 (step 4.2): read on every tab — the band's picture and the Product sheet's design pictures; the designer changes them on a
+  // draft too (S4 settle 6: the server checks the draft).
+  const mayPictures = value ? mayEditFacts(value, can) : can.manage
+  const gallery = useGallery({ api, style: pictureStyle, loadKey: value ? `${value.id}:${value.version}` : null, enabled: can.view, canManage: mayPictures && session.permissions.includes('files.upload'), canArrange: mayPictures, write: run })
   const patternFiles = usePatternFiles({ api, style: pictureStyle, revisionId, loadKey: versionKey, enabled: tab === 'patterns' && can.bomView, canManage: can.bomManage && session.permissions.includes('files.upload'), canEdit: can.bomManage, write: run })
 
   // B-W2b-235: the Operations tab's routing in depth (read while the tab is open; writes through the one queue above, each
@@ -439,8 +462,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   routingDepthReload.current = routingDepth.reload
   // B-W2b-240: the Sizes & measurements tab's Measurement spec (the BOM's read; written through the one queue above at the
   // spec's own version, so a BOM edit of the same draft never clashes with it).
-  const specCan = useMemo(() => ({ manage: can.bomManage, release: session.permissions.includes('product.bom.release'), library: can.view }), [can.bomManage, can.view, session.permissions])
-  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: tab === 'sizes' && can.bomView, can: specCan, write: run })
+  // owb-pd4 (S4 settle 6): the designer changes the size table and how to measure of a DRAFT (the spec's own rule holds a released one).
+  const specCan = useMemo(() => ({ manage: mayEditDraftParts(can), release: session.permissions.includes('product.bom.release'), library: can.view }), [can, session.permissions])
+  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.bomView, can: specCan, write: run })
   specReload.current = spec.reload
 
   // B-W2b-241: the BOM in depth — the structure and its check with the BOM's read (the tab's mark), the lines in depth and
@@ -594,6 +618,37 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       .catch(() => setLibraries((current) => ({ ...current, workshops: [] })))
   }
 
+  // ---- owb-pd4 (steps 4.3, 4.4): the open order lines (orders.view, or the designer's own: orders.view.own) while Overview or Sizes
+  // shows; the product's own list row (its agreed price range) while Overview shows, with the price grain. Each fails alone.
+  const readsOrders = session.permissions.includes('orders.view') || session.permissions.includes('orders.view.own')
+  const ordersWanted = readsOrders && !sheet && (tab === 'overview' || tab === 'sizes')
+  const [ordersTick, setOrdersTick] = useState(0)
+  useEffect(() => {
+    if (!ordersWanted) return
+    const controller = new AbortController()
+    setOrders((current) => (current.status === 'ready' ? current : { status: 'loading' }))
+    listStyleOrders(api, styleId, controller.signal)
+      .then((next) => setOrders({ status: 'ready', value: next }))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setOrders({ status: 'error', problem: readProblem(error) })
+      })
+    return () => controller.abort()
+  }, [api, styleId, ordersWanted, ordersTick])
+  const agreedWanted = grains.price && !sheet && tab === 'overview' && value !== null
+  const valueCode = value?.code ?? null
+  useEffect(() => {
+    if (!agreedWanted || !valueCode) return
+    const controller = new AbortController()
+    setAgreed((current) => (current.status === 'ready' ? current : { status: 'loading' }))
+    productRowOf(api, { id: styleId, code: valueCode }, controller.signal)
+      .then((row) => setAgreed({ status: 'ready', value: row }))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setAgreed({ status: 'error', problem: readProblem(error) })
+      })
+    return () => controller.abort()
+  }, [api, styleId, agreedWanted, valueCode])
+  // ---- end owb-pd4
+
   const model: StyleRecordViewModel = {
     prefix,
     tab,
@@ -648,6 +703,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     // B-W2b-245
     versions: versions.model,
     release: releaseGate.model,
+    // owb-pd4
+    routeSummary,
+    ...(readsOrders ? { orders } : {}),
+    ...(grains.price ? { agreed } : {}),
+    ordersOpen: readsOrders,
   }
 
   // B-W2b-237: read while Overview & variants shows (B-TH-261: the GTINs' matrix is on it too); writes through the one queue above.
@@ -668,6 +728,26 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // ---- B-TH-280: the style's custom fields at the end of its first tab (Overview & variants), as the old panels drew them above theirs.
   const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'Style', id: value.id }} title={value.code} /> : null
   // ---- end B-TH-280
+
+  // owb-pd4 (step 4.2): the Product sheet — the product for paper, no price (sheet-model.ts); the shell's print view draws its frame.
+  if (sheet) {
+    return (
+      <ProductSheetView
+        model={
+          value
+            ? productSheetOf({
+                style: value,
+                revisionId,
+                gallery: gallery.model.part.status === 'ready' ? gallery.model.part.value : null,
+                spec: spec.model.part.status === 'ready' ? spec.model.part.value : null,
+                protectors: protectors.model.part.status === 'ready' ? protectors.model.part.value : null,
+                locale,
+              })
+            : null
+        }
+      />
+    )
+  }
 
   return (
     <StyleRecordView
@@ -699,6 +779,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         bomDepth: bomDepth.actions,
         // B-W2b-240
         spec: spec.actions,
+        // owb-pd4
+        onRetryOrders: () => setOrdersTick((tick) => tick + 1),
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDialog: (next) => {

@@ -88,10 +88,12 @@ describe('who may do what: permissions and grains', () => {
     expect(grainsOf(['money.price', 'money.margin'])).toEqual({ cost: false, price: true, margin: true })
   })
 
-  it('draws only the tabs a role reads (sales: no BOM, routing, compliance)', () => {
+  it('draws only the tabs a role reads (sales: no BOM, routing; owb-pd4: Compliance shown, held with why)', () => {
     const sales = abilitiesOf(['product.styles.view', 'costing.view', 'threads.read'])
     expect(tabsFor(OWNER)).toEqual([...STYLE_TABS])
-    expect(tabsFor(sales).filter((tab) => ['bom', 'routing', 'compliance'].includes(tab))).toEqual([])
+    // owb-pd4 (step 4.2): Compliance and Versions show to every reader of the product; without the right the tab says why.
+    expect(tabsFor(sales, { cost: false }).filter((tab) => ['bom', 'routing', 'cost'].includes(tab))).toEqual([])
+    expect(tabsFor(sales, { cost: false })).toContain('compliance')
     // B-TH-261: Activity is gone for everyone (the thread docks beside every tab).
     expect(tabsFor(OWNER)).not.toContain('activity' as never)
   })
