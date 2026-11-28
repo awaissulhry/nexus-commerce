@@ -15,6 +15,7 @@ import type { TimelineEntryView } from './contract'
 import { afterCursor, contextOf, cursorOf, officeRecord, type RecordRef } from './threads'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from './records'
+import { orderWallHolds } from './order-wall' // owb- po2.4: the designer wall on an order's thread
 // B-W2b-399: the field lines of a change.
 import { fieldLinesOf } from './timeline/field-lines'
 // B-TH-072: a project's linked news.
@@ -73,6 +74,7 @@ export async function readTimeline(
   return caller.withClient(async (client) => {
     const { thread, scope } = await officeRecord(client, record)
     if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+    if (!(await orderWallHolds(client, context, record, scope))) throw new NotFoundError('Record not found.') // owb- po2.4 (R20)
     const sources: Positioned<TimelineEntryView>[][] = []
 
     const messages =

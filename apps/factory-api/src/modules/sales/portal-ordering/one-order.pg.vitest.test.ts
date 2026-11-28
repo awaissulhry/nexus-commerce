@@ -13,7 +13,11 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { acceptRequest, confirmRequest, listOfficeRequests, refuseRequest } from './office'
-import { officeCopyLine, officePutBackLine } from './office-drafts' // po1.3: the office's twins
+import { officeCopyLine, officeDraftView, officePutBackLine } from './office-drafts' // po1.3: the office's twins; po2.4: the draft read
+import { officeRequestView } from './office' // po2.4: the designer wall on the office reads
+import { ordersReader } from '../orders/access'
+import { readThread } from '../../../platform/threads/threads'
+import { unreadCounts } from '../../../platform/threads/reads'
 
 /**
  * The order as one thing (owb- order workflow, S1 PR po1): "Take it back" (po1.2; design § 5zi; build plan.md § 4 G1) and the ONE
@@ -360,5 +364,30 @@ describe('many drafts at once (owb- po2.1)', { timeout: SLOW_TEST_TIMEOUT_MS }, 
     expect((await one('SELECT status::text AS status FROM "PortalOrderRequest" WHERE id = $1', [a.request.id])).status).toBe('SENT')
     expect((await call(browsers.designer, 'POST', '/portal/order-requests/bulk-send', { items: [{ id: b.request.id, version: b.request.version }] })).status).toBe(403)
     expect((await call(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [] })).status).toBe(400)
+  })
+})
+
+describe('the designer wall: the office Draft/Sent reads and the order threads; factory people (owb- po2.4)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const designerId = newId()
+  const otherOfficeId = newId()
+  const designer = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: designerId, requestId: newId(), grants: [{ permissions: ['orders.view.own', 'threads.read'], companies: 'all', sites: 'all', parties: 'all' }] })
+  const noRight = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: newId(), requestId: newId(), grants: [{ permissions: ['threads.read'], companies: 'all', sites: 'all', parties: 'all' }] })
+
+  beforeAll(async () => {
+    await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => {
+      await client.user.create({ data: { id: designerId, email: 'dea.designer@owb-wall.example.com', displayName: 'Made-up Dea Designer', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
+      await client.user.create({ data: { id: otherOfficeId, email: 'otto.office@owb-wall.example.com', displayName: 'Made-up Otto Office', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
+    })
+  })
+
+  it('factory people: the office people of THIS customer’s pool only — names, role words, letters; never an e-mail', async () => {
+    await admin(`INSERT INTO "PartyOfficePerson" (id, "tenantId", "companyId", "partyId", "userId", version, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, 1, now(), now()), ($6, $2, $3, $7, $8, 1, now(), now())`, [newId(), T, companyA, P1, designerId, newId(), world.partyId, otherOfficeId])
+    const mine = await ok(browsers.buyer, 'GET', '/portal/factory-people')
+    expect(mine.people.map((person: Json) => person.name)).toEqual(['Made-up Dea Designer'])
+    expect(mine.people[0].picture).toEqual({ kind: 'LETTERS', icon: null, colour: null })
+    const text = JSON.stringify(mine)
+    for (const word of ['owb-wall.example.com', 'Made-up Otto Office']) expect(text, word).not.toContain(word)
+    const theirs = await ok(browsers.other, 'GET', '/portal/factory-people')
+    expect(theirs.people.map((person: Json) => person.name)).toEqual(['Made-up Otto Office'])
   })
 })

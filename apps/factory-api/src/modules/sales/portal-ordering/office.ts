@@ -1,10 +1,10 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { anyOf, can, NO_ROWS, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney, type Money } from '@nexus/factory-domain/money/marked'
-import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_MANAGE, ORDERS_VIEW, ORDERS_VIEW_OWN } from '@nexus/factory-domain/sales/orders/permissions'
 // od-s s.3: Make style draft on a draft or a sent request (the style library's right; at most 50 per request).
 import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
 import { STYLE_DRAFTS_MAX } from '@nexus/factory-domain/sales/inquiries/rules'
@@ -13,10 +13,12 @@ import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, p
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
-import { actorOf } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock, type Clock } from '../../../core/time'
 import { makeManualOrderInCommand, type ManualOrderBody } from '../orders/manual'
-import { assertMay, officeContextOf } from '../orders/access'
+import { assertMay, assertSees, officeContextOf } from '../orders/access'
+// owb- po2.4 (S2's ask; plan.md § 5 D R20): the designer reads the Draft and Sent orders it is on — S2's ONE rule, imported.
+import { ownOrdersOf } from '../orders/on-the-order'
 import { duplicateInto, type Dropped } from '../quotes/duplicate'
 import { approveWaitingInCommand } from './address-check'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
@@ -105,6 +107,20 @@ import { carryOwnColumns } from '../own-columns/carry'
 
 const LIST_MAX = 200
 const SCOPE = { company: 'companyId', party: 'partyId' } as const
+
+/**
+ * owb- po2.4 (R20): the requests a list shows — orders.view's scope, OR, for a reader with an own-orders-only grant (the Factory
+ * designer), the requests it is on within orders.view.own's scope — IN SQL, before the list is cut (S2's `ownOrdersOf`).
+ */
+async function seenRequestsWhere(caller: CommandCaller, context: OfficeContext): Promise<Prisma.PortalOrderRequestWhereInput> {
+  const actor = actorOf(context)
+  const viewed = scopeWhere(actor, ORDERS_VIEW, SCOPE)
+  const own = await caller.withClient((client) => ownOrdersOf(client, context))
+  if (!own) return viewed as Prisma.PortalOrderRequestWhereInput
+  const ownScope = scopeWhere(actor, ORDERS_VIEW_OWN, SCOPE)
+  const mine = ownScope === NO_ROWS || own.requestIds.length === 0 ? NO_ROWS : { AND: [ownScope, { id: { in: [...own.requestIds] } }] }
+  return anyOf([viewed, mine]) as Prisma.PortalOrderRequestWhereInput
+}
 /** od-fx9 (walk W-25): the customer's name as office record bands show it — its trade name, else its legal name. */
 const nameOfParty = (party: { readonly legalName: string; readonly tradeName: string | null } | null | undefined): string => party?.tradeName ?? party?.legalName ?? ''
 
@@ -116,8 +132,8 @@ async function namesOf(caller: CommandCaller, userIds: readonly (string | null)[
 
 export async function listOfficeRequests(caller: CommandCaller, query: { readonly status: RequestStatus | 'OPEN' | 'ALL'; readonly partyId?: string | undefined; readonly q?: string | undefined }) {
   const context = officeContextOf(caller)
-  if (query.status === 'DRAFT') return listDrafts(caller, actorOf(context), query.partyId, query.q) // B-CP-071
-  const scope = scopeWhere(actorOf(context), ORDERS_VIEW, SCOPE) as Prisma.PortalOrderRequestWhereInput
+  if (query.status === 'DRAFT') return listDrafts(caller, context, query.partyId, query.q) // B-CP-071
+  const scope = await seenRequestsWhere(caller, context) // owb- po2.4 (R20)
   const q = query.q?.trim()
   const status: Prisma.PortalOrderRequestWhereInput = query.status === 'OPEN' ? { status: 'SENT' } : query.status === 'ALL' ? { status: { not: 'DRAFT' } } : { status: query.status }
   const rows = await caller.withClient((client) =>
@@ -319,11 +335,13 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
  * the list is refused. B-CQ-033: counted only as the customer's writing (the before-order group WRITING = these rows), never as
  * waiting on us.
  */
-async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string | undefined, typed: string | undefined) {
+async function listDrafts(caller: CommandCaller, context: OfficeContext, partyId: string | undefined, typed: string | undefined) {
+  const actor = actorOf(context)
   if (!partyId) throw new ValidationError('Drafts are listed per customer.', [{ path: 'querystring/partyId', message: 'Drafts are listed per customer.' }])
   const party = isUuid(partyId) ? await caller.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true, tradeName: true } })) : null
-  if (!party || !can(actor, ORDERS_VIEW, { partyId })) throw new NotFoundError('Customer not found.')
-  const scope = scopeWhere(actor, ORDERS_VIEW, SCOPE) as Prisma.PortalOrderRequestWhereInput
+  // owb- po2.4 (R20): orders.view over the customer, or orders.view.own (then only the drafts the reader is on: the scope below).
+  if (!party || !(can(actor, ORDERS_VIEW, { partyId }) || can(actor, ORDERS_VIEW_OWN, { partyId }))) throw new NotFoundError('Customer not found.')
+  const scope = await seenRequestsWhere(caller, context)
   const q = typed?.trim()
   const rows = await caller.withClient((client) =>
     client.portalOrderRequest.findMany({
@@ -370,7 +388,8 @@ async function officeRequest(caller: CommandCaller, requestId: string) {
   const row = isUuid(requestId) ? await caller.withClient((client) => client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { ...REQUEST_COLUMNS, decidedById: true, styleIds: true } })) : null
   // B-CP-071 (D10): a draft is read too (read-only: a decision on it is held by decisionProblem); out of reach is not found.
   if (!row) throw new NotFoundError('Order request not found.')
-  assertMay(context, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId }, 'Order request')
+  // owb- po2.4 (R20): orders.view over it, or orders.view.own while the reader is on it (S2's ONE rule) — else not found.
+  await caller.withClient((client) => assertSees(client, context, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId }, { requestId: row.id }, 'Order request'))
   return { context, row }
 }
 

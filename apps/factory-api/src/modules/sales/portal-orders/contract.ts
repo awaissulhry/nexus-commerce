@@ -411,6 +411,17 @@ export const paymentNoticeContract = defineContract({
 })
 // ---- end owb- po2.2
 
+// ---- owb- po2.4 (order workflow): factory people for your brand — the office people of THIS customer's pool (never a worker, a team,
+// a phone or an e-mail); a picture of letters (no photo yet).
+export const factoryPeopleContract = defineContract({
+  response: {
+    200: output({
+      people: z.array(output({ id: id(), name: z.string(), role: words, picture: output({ kind: z.enum(['LETTERS', 'ICON']), icon: z.string().nullable(), colour: z.string().nullable() }) })),
+    }),
+  },
+})
+// ---- end owb- po2.4
+
 // ---- pg-s2 S2.1 (portal grid D4, Z12, H6): the small pictures of the customer's own orders (the list's picture column) -----------
 /**
  * POST /portal/sales-orders/pictures {orderIds 1–200, each once}: the office's batch answer shape (product/images/small-pictures

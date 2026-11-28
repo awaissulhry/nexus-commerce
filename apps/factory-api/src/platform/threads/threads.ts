@@ -68,6 +68,7 @@ import { contentWalledFor, walledForOutside } from '../files/content-wall'
 import { aboutOf, aboutProblems, aboutShapeProblems, aboutsHeldBack, NONE_HELD, OFFICE_ONLY_ABOUT_KINDS, ABOUT_THREAD_TYPE, type About } from './about'
 // owb- po2.3 (order workflow): quiet lines in the feed — their event, grouped at read time.
 import { feedEventOf, groupQuietLines } from '@nexus/factory-domain/threads/quiet-lines'
+import { orderWallHolds } from './order-wall' // owb- po2.4: the designer wall on an order's thread
 const NO_QUIET: ReadonlyMap<string, number> = new Map()
 
 /**
@@ -589,6 +590,8 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     if (office) {
       const found = await officeRecord(client, record)
       if (!mayOnThread(actor, THREADS_READ, record.type, found.scope)) throw new NotFoundError('Record not found.')
+      // owb- po2.4 (R20): an order's thread also needs orders.view, or orders.view.own while the reader is on the order.
+      if (!(await orderWallHolds(client, context, record, found.scope))) throw new NotFoundError('Record not found.')
       thread = found.thread
       // ---- B-TH-028: a record without a message yet still has who answers it and what waits (a request by its state).
       if (!thread) return { ...EMPTY, reading: null, head: await headOf(client, record, null, serverClock.now()) }

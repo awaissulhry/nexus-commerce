@@ -33,4 +33,6 @@ export const manifest = defineManifest({
   // the Admin: portal.payments.notify; the price grain too).
   'GET /portal/sales-orders/:orderId/money': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'POST /portal/sales-orders/:orderId/payment-notices': { audiences: ['partner'], permission: 'portal.payments.notify', scope: 'party' },
+  // owb- po2.4 (order workflow): factory people for your brand (Your people: every customer person who sees its colleagues).
+  'GET /portal/factory-people': { audiences: ['partner'], permission: 'portal.colleagues.view', scope: 'party' },
 })

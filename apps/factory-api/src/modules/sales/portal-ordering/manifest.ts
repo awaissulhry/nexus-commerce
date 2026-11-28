@@ -1,4 +1,4 @@
-import { defineManifest } from '../../../core/manifest'
+import { defineManifest, SIGNED_IN } from '../../../core/manifest'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079). The customer's routes: partner sessions only,
@@ -56,15 +56,17 @@ export const manifest = defineManifest({
   'POST /portal/addresses/:addressId/archive': { audiences: ['partner'], permission: 'portal.addresses.manage', scope: 'party' },
   'POST /portal/addresses/:addressId/default': { audiences: ['partner'], permission: 'portal.addresses.manage', scope: 'party' },
   // The office decides (home.approvals; the sales orders' permissions).
-  'GET /sales/order-requests': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
-  'GET /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // owb- po2.4 (S2's ask; plan.md § 5 D R20): the Draft/Sent reads take orders.view OR orders.view.own (one manifest permission
+  // cannot say both): signed-in here, `ordersReader` refuses who holds neither (403), the record by `assertSees`, the list in SQL.
+  'GET /sales/order-requests': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  'GET /sales/order-requests/:requestId': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
   'POST /sales/order-requests/:requestId/accept': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/refuse': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   // od-s s.3 (order start, Owner yes 1a): the office fills a customer's draft through the SAME commands — orders.manage (orders.view
   // to read) over the draft's company and customer, checked by the handler (the office writer); files also ask files.upload; Make
   // style draft asks product.styles.manage over the company (the style library's check). No Incoming route (Owner yes 3a).
   'POST /sales/order-requests': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
-  'GET /sales/order-requests/:requestId/draft': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'GET /sales/order-requests/:requestId/draft': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' }, // owb- po2.4
   'PATCH /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'DELETE /sales/order-requests/:requestId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/custom-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
