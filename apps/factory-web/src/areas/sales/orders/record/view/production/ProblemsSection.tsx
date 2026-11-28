@@ -21,6 +21,8 @@ import { CREDIT_NS, StripRow } from '../overview/StripRow'
 import { GateRows } from '../../links/view/OrderLinks' // F-SC-W4: the compliance gates that stop the order, the notice's own rows
 import { gatesOf } from '../../links/model' // F-SC-W4
 import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
+import { isFinal } from '../../../model' // owb-of6
+import { FloorFact } from '../overview/FlowParts' // owb-of6 step 1: Restrict on the floor (design § 5k Problems & holds)
 
 const NCR_NS = 'ncr'
 
@@ -207,6 +209,8 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
   return (
     <Section id="holds" title={t('productionTab.problems.title')} answer={answer} info={<p>{t('productionTab.problems.infoBody')}</p>}>
       {body}
+      {/* owb-of6 step 1: Restrict on the floor, as on Overview's Order facts (orders.manage; never the designer). */}
+      {model.flow ? <FloorFact restricted={model.flow.restrict.now} may={model.flow.restrict.may && !readOnly && !isFinal(order)} busy={model.flow.restrict.busy} problem={model.flow.restrict.problem} onRestrict={actions?.flow?.onRestrict} /> : null}
     </Section>
   )
 }

@@ -89,5 +89,24 @@
     "noProduct": "No product yet",
     "failed": "The order could not be confirmed. Try again.",
     "readFailed": "This order could not be read. Close and try again."
+  },
+  "production": {
+    "rush": "Rush…",
+    "printAgain": "Print again…",
+    "placeCode": "Place the scan code…"
+  },
+  "baskets": {
+    "label": "The baskets of this order",
+    "ready": "Ready to ship",
+    "step": "Step {done} of {total}",
+    "late_one": "Late · {days} day",
+    "late_other": "Late · {days} days",
+    "byHand": "Set by hand",
+    "state": {
+      "WORKING": "Working",
+      "PAUSED": "Paused",
+      "WAITING": "Waiting",
+      "READY": "Ready"
+    }
   }
 }

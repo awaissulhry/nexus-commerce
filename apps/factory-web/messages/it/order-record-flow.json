@@ -89,5 +89,24 @@
     "noProduct": "Ancora nessun prodotto",
     "failed": "Non è stato possibile confermare l’ordine. Riprova.",
     "readFailed": "Non è stato possibile leggere questo ordine. Chiudi e riprova."
+  },
+  "production": {
+    "rush": "Urgente…",
+    "printAgain": "Stampa di nuovo…",
+    "placeCode": "Posiziona il codice…"
+  },
+  "baskets": {
+    "label": "I cesti di questo ordine",
+    "ready": "Pronto da spedire",
+    "step": "Passo {done} di {total}",
+    "late_one": "In ritardo · {days} giorno",
+    "late_other": "In ritardo · {days} giorni",
+    "byHand": "Impostato a mano",
+    "state": {
+      "WORKING": "In lavorazione",
+      "PAUSED": "In pausa",
+      "WAITING": "In attesa",
+      "READY": "Pronto"
+    }
   }
 }
