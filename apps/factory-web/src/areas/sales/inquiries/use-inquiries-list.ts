@@ -75,6 +75,10 @@ import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
 import type { BulkDialog, InquiriesActions, InquiriesModel, ListSlots } from './view/InquiriesView'
 import { pictureReader } from '../../../lib/record-picture/api' // F-SA-212: the one picture part's batch read
+// ---- owb-of4 step 1: the Sent orders' facts (the office sheet's read) and bulk Confirm (today's office confirm, at the version read)
+import { catalogueConfirmPlan, useCatalogueFacts, type CatalogueConfirmed } from './catalogue-facts'
+import { confirmDraft } from '../orders/draft/api'
+// ---- end owb-of4
 import type { ListScope } from '../_shared/scoped-list-tools/ScopedListTools' // F-SA-277
 
 /**
@@ -251,6 +255,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [confirmed, setConfirmed] = useState<CatalogueConfirmed | null>(null) // owb-of4
   const [customers, setCustomers] = useState<PartyOption[] | null>(null)
   const [dismissed, setDismissed] = useState<string[]>([])
   useEffect(() => setDismissed(readDismissed()), [])
@@ -610,6 +615,25 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     }
   }
 
+  // ---- owb-of4 step 1: the Sent orders' facts, read again with the list; bulk Confirm skips text orders and the ones that hold ----
+  const catalogueFacts = useCatalogueFacts(api, can.ordersView, lock, asOf)
+  const runConfirm = async (picked: readonly IncomingRow[]) => {
+    const plan = catalogueConfirmPlan(picked, catalogueFacts)
+    let done = 0
+    let refused = 0
+    for (const row of plan.go) {
+      try {
+        await confirmDraft(api, row.id, { version: row.version, as: 'ORDER' })
+        done++
+      } catch {
+        refused++
+      }
+    }
+    setConfirmed({ done, text: plan.text, held: plan.held, other: plan.other, refused })
+    void load()
+  }
+  // ---- end owb-of4
+
   const model: InquiriesModel = {
     prefix,
     me,
@@ -646,7 +670,9 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     locked: !!lock,
     // ---- end F-SA-277
     // ---- F-CQ-201 / 204: the bar's rights, the windows open now (the loop, Add task, a row's own window in place)
-    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage'), threads: session.permissions.includes('threads.post') /* F-CQ-304 */ },
+    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage'), threads: session.permissions.includes('threads.post') /* F-CQ-304 */, orders: can.orders /* owb-of4 */ },
+    catalogueFacts, // owb-of4
+    catalogueConfirmed: confirmed, // owb-of4
     many: many.model,
     tasks: tasks.model,
     reply: reply.model, // F-CQ-304
@@ -723,6 +749,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
       if (kind === 'assign' || kind === 'decline') return actions.onBulk?.(kind, open.map((row) => row.id), preview)
       if (kind === 'addTask') return openTasks(picked)
       if (kind === 'reply') return onReply(picked) // F-CQ-304
+      if (kind === 'confirm') return void runConfirm(picked) // owb-of4
       const records = picked.map(recordOf)
       many.open(incomingActOf(kind, api, records), records)
     },
@@ -761,6 +788,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
         .catch(() => undefined)
     },
     onDismissNotice: () => setNotice(null),
+    onDismissConfirmed: () => setConfirmed(null), // owb-of4
     onDismissPageNotice: (key) =>
       setDismissed((now) => {
         const next = [...now.filter((one) => one !== key), key]

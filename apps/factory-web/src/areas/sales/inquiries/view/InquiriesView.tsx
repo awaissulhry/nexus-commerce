@@ -7,6 +7,8 @@ import { DetailPopover, EmptyState, Menu, MetricStrip, type MenuItemDef } from '
 import { useCardList } from '@nexus/ui/grid/card-list/index' // cq fx5 W-09: the phone (the list's cards) folds Kind and How it came
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
+import { Banner } from '@nexus/ui/components' // owb-of4: what bulk Confirm did
+import { factsWordsOf, offersConfirm, type CatalogueConfirmed, type CatalogueFacts } from '../catalogue-facts' // owb-of4
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 // F-SA-224: the one customer filter of the Sales lists.
@@ -225,6 +227,9 @@ export interface InquiriesModel {
   /** cq fx2 W-14: what the host left out, in the list's foot (the customer's tab: the closed groups as doors). */
   foot?: ReactNode
   // ---- end F-CQ-201 / 203 / 204
+  // ---- owb-of4 step 1: the Sent orders' facts (the office sheet's read) and what bulk Confirm did
+  catalogueFacts?: ReadonlyMap<string, CatalogueFacts>
+  catalogueConfirmed?: CatalogueConfirmed | null
 }
 
 export interface InquiriesActions {
@@ -267,6 +272,8 @@ export interface InquiriesActions {
   record?: InquiryRecordActions
   onCopy?: (numbers: readonly string[]) => void
   onDismissNotice?: () => void
+  /** owb-of4: the receipt of bulk Confirm, dismissed. */
+  onDismissConfirmed?: () => void
   onDismissPageNotice?: (key: string) => void
   /** F-SA-212: the page's pictures in ONE batch read (the container reads it; the view fetches nothing). */
   readPictures?: ReadPictures
@@ -283,7 +290,7 @@ export function InquiriesView({ model, actions, slots }: { model: InquiriesModel
   return (
     <InquiriesMessages>
       {/* B-TH-230: the New messages column's words */}
-      <WithMessages namespaces={[LAST_MESSAGE_NS]}>
+      <WithMessages namespaces={[LAST_MESSAGE_NS, 'orders-sheet' /* owb-of4 */]}>
         <List model={model} actions={actions} slots={slots} />
       </WithMessages>
     </InquiriesMessages>
@@ -346,6 +353,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const { t, say, locale, day, when } = useWords()
   const phone = useCardList() // cq fx5 W-09
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
+  const so = useT('orders-sheet') // owb-of4: the Sent orders' words (incoming.*)
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
   const search = useListSearch(model.address.q, (q) => actions?.onAddress?.({ q }))
@@ -509,11 +517,29 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     const SubjectCell = ({ data }: ICellRendererParams<IncomingRow>) => {
       if (!data) return null
       const facts = say(kindFacts(data))
+      // owb-of4 step 1: a Sent order's own facts (the office sheet's read) and its ONE door, Confirm the order… (today's Accept as order window).
+      const sent = data.kind === 'CATALOGUE_ORDER' && data.catalogueOrder?.status === 'SENT' ? (m.catalogueFacts?.get(data.id) ?? null) : null
+      const sentWords = sent ? factsWordsOf(sent, so) : null
       return (
         <span className="fw-inq-subject">
           {kindMark(data)}
           {openLink(data, data.summary || t('peek.open'), true)}
           {facts && <span className="fw-inq-hint">{facts}</span>}
+          {sent && (
+            <span className="fw-inq-sent">
+              {sentWords && <span className={sent.sentAsText ? 'fw-inq-sent-text' : 'fw-inq-hint'}>{sentWords}</span>}
+              {sent.customerOnHold && (
+                <Tag tone="warning" title={so('incoming.onHoldHint')}>
+                  {so('incoming.onHold')}
+                </Tag>
+              )}
+              {offersConfirm(data, sent, m.can.orders) && (
+                <Button size="sm" variant="primary" className="fw-inq-confirm" heldReason={offline ? t('held.offline') : null} onClick={() => act()?.onCatalogueVerb?.(data, 'order')}>
+                  {so('incoming.confirm')}
+                </Button>
+              )}
+            </span>
+          )}
         </span>
       )
     }
@@ -805,7 +831,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */, today /* B-TH-290 */, model.paneMode /* F-SA-277 */, model.columns, tier, hostFold, model.customerName /* F-CQ-103 */])
+  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, !!model.catalogue, wide, l, model.unread /* B-TH-230 */, today /* B-TH-290 */, model.paneMode /* F-SA-277 */, model.columns, tier, hostFold, model.customerName /* F-CQ-103 */, model.catalogueFacts, so /* owb-of4 */])
 
   // ---- B-TH-233 (list-F14): "Customer replies" — the one office inbox of conversations waiting on us, each opening its record at the message ----
   const replyColumns = useMemo<ColDef<WaitingRow>[]>(() => {
@@ -1110,7 +1136,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               exportSelected: true,
               // F-CQ-201 (10-design §6.2): the bar — 3 + More ▾ with words, each act only with its right; a portal order ticked: one line.
               actions: model.barRights ? (
-                <ManyBar bar={incomingBarOf(model.barRights, (rows ?? []).filter((row) => selected.includes(row.key)), model.customerName ?? null, model.replyPortal /* cq fx5 W3-2 */)} onAct={(id) => actions?.onBarAct?.(id as IncomingActKind, (rows ?? []).filter((row) => selected.includes(row.key)))} />
+                <ManyBar bar={incomingBarOf(model.barRights, (rows ?? []).filter((row) => selected.includes(row.key)), model.customerName ?? null, model.replyPortal /* cq fx5 W3-2 */, model.catalogueFacts /* owb-of4 */)} onAct={(id) => actions?.onBarAct?.(id as IncomingActKind, (rows ?? []).filter((row) => selected.includes(row.key)))} />
               ) : (
                 <>
                   {/* B-TH-233 (list-F11): Assign and Decline act on requests only; the other kinds of the selection are left out and said.
@@ -1197,6 +1223,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       </div>
       )}
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
+      {model.catalogueConfirmed && <ConfirmedLine confirmed={model.catalogueConfirmed} say={so} onDismiss={actions?.onDismissConfirmed} />}
       {/* B-TH-217 (PL2): the list ~35 % and the request ~65 % beside it; nothing but the band sits above the pane.
           F-SA-277: pane 'host' — no SplitPane, the page's dock is the reading pane: the list alone. */}
       {hostPane ? listColumn : (
@@ -1291,6 +1318,32 @@ function ViewerFor({ row, model, actions, onClose }: { row: InquiryRow; model: I
       prefix={model.prefix}
       recordHref={recordHref(model.prefix, row.id)}
       onClose={onClose}
+    />
+  )
+}
+
+/** owb-of4 step 1: what bulk Confirm did — confirmed, and each skip counted (text orders, the ones that hold, the rest), the refused. */
+export function confirmedWordsOf(confirmed: CatalogueConfirmed, say: (key: string, params?: Readonly<Record<string, string | number>>) => string): string {
+  const parts = [say('incoming.confirmed', { count: confirmed.done })]
+  if (confirmed.text > 0) parts.push(say('incoming.skippedText', { count: confirmed.text }))
+  if (confirmed.held > 0) parts.push(say('incoming.skippedHeld', { count: confirmed.held }))
+  if (confirmed.other > 0) parts.push(say('incoming.skippedOther', { count: confirmed.other }))
+  if (confirmed.refused > 0) parts.push(say('incoming.refused', { count: confirmed.refused }))
+  return parts.join(' · ')
+}
+
+function ConfirmedLine({ confirmed, say, onDismiss }: { confirmed: CatalogueConfirmed; say: (key: string, params?: Readonly<Record<string, string | number>>) => string; onDismiss?: () => void }) {
+  return (
+    <Banner
+      tone={confirmed.refused > 0 || confirmed.done === 0 ? 'warning' : 'success'}
+      title={confirmedWordsOf(confirmed, say)}
+      action={
+        onDismiss ? (
+          <Button size="sm" variant="quiet" onClick={onDismiss}>
+            {say('incoming.dismiss')}
+          </Button>
+        ) : undefined
+      }
     />
   )
 }
