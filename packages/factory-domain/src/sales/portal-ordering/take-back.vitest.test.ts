@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REQUEST_STATUSES } from './rules'
-import { SENT_ONCE_WORDS, takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS } from './take-back'
+import { takeBackCodeOf, takeBackProblem, TAKE_BACK_WORDS } from './take-back'
 
 /** owb- po1.2 "Take it back": the pure rule and its words (EN + IT, the portal's "voi"). */
 describe('take it back (owb- po1.2)', () => {
@@ -23,7 +23,7 @@ describe('take it back (owb- po1.2)', () => {
   })
 
   it('says every refusal in English and Italian ("voi"), and never names a person', () => {
-    for (const words of [...Object.values(TAKE_BACK_WORDS), SENT_ONCE_WORDS]) {
+    for (const words of Object.values(TAKE_BACK_WORDS)) {
       expect(words.en.length).toBeGreaterThan(10)
       expect(words.it.length).toBeGreaterThan(10)
     }

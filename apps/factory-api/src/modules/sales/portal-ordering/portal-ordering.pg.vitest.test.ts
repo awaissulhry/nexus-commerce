@@ -346,7 +346,7 @@ describe('withdraw and discard', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(withdrawn.request.status).toBe('WITHDRAWN')
     await expect(acceptRequest(office(), draft.request.id, { version: withdrawn.request.version, as: 'ORDER' })).rejects.toThrow(/withdrew/)
     const other = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
-    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${other.request.id}?version=${other.request.version}`)).toEqual({ discarded: true })
+    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${other.request.id}?version=${other.request.version}`)).toEqual({ discarded: true, withdrawn: false })
     expect((await call(browsers.buyer, 'GET', `/portal/order-requests/${other.request.id}`)).status).toBe(404)
     // B-CP-071 (D10, K9 reversed): the office READS a draft from its first save; accept and refuse wait for the Send. od-s s.3 (Owner
     // yes 2a): its door on a draft is Confirm (send + accept in one command), never accept.
@@ -562,15 +562,15 @@ describe('B-CP-070: the Designer starts, fills and discards its own drafts; neve
 
   it('discards a draft it started; never a colleague\'s; a Buyer discards any draft of the party', async () => {
     const own = await ok(browsers.designer, 'POST', '/portal/order-requests', {}, 201)
-    expect(await ok(browsers.designer, 'DELETE', `/portal/order-requests/${own.request.id}?version=${own.request.version}`)).toEqual({ discarded: true })
+    expect(await ok(browsers.designer, 'DELETE', `/portal/order-requests/${own.request.id}?version=${own.request.version}`)).toEqual({ discarded: true, withdrawn: false })
     const buyers = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
     expect((await ok(browsers.designer, 'GET', `/portal/order-requests/${buyers.request.id}`)).request.may.discard).toBe(false)
     const held = await call(browsers.designer, 'DELETE', `/portal/order-requests/${buyers.request.id}?version=${buyers.request.version}`)
     expect(held.status).toBe(403)
     expect(held.body.error.message).toBe('Only the colleague who started this draft, or one who may send orders, discards it.')
     const theirs = await ok(browsers.designer, 'POST', '/portal/order-requests', {}, 201)
-    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${theirs.request.id}?version=${theirs.request.version}`)).toEqual({ discarded: true })
-    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${buyers.request.id}?version=${buyers.request.version}`)).toEqual({ discarded: true })
+    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${theirs.request.id}?version=${theirs.request.version}`)).toEqual({ discarded: true, withdrawn: false })
+    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${buyers.request.id}?version=${buyers.request.version}`)).toEqual({ discarded: true, withdrawn: false })
   })
 
   it('W-CP-1: another customer lists, reads, edits and discards none of these drafts (404, as if absent); a Viewer keeps none (403)', async () => {

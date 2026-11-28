@@ -29,6 +29,8 @@ import { partnerOrder, portalReader } from '../portal-orders/access'
 import { onDraft, ownDraft, requestView } from '../portal-ordering/requests'
 import { officeDraftWriter, portalWriter, type DraftWriter } from '../portal-ordering/writer'
 import { NO_OWN_COLUMNS, ownColumnsOf, type RecordOwnColumns } from './read'
+// owb- po2.3: a new own column on an ORDER speaks in its chat (a quiet line; a draft's never does).
+import { writeQuietLineAfter } from '../../../platform/threads/quiet-lines'
 import { columnView, COLUMN_SELECT, fieldsOf, lockParty, readPartyColumns, readRecordUses, recordLineIds, valueView, VALUE_SELECT, type OwnColumnView, type OwnValueView } from './store'
 
 /**
@@ -63,6 +65,7 @@ interface ColumnsDoor {
   readonly app: FastifyInstance
   readonly request: FastifyRequest
   readonly partyId: string
+  readonly tenantId: string
   /** The audit row's company (the portal's; the office: the record's, else the customer's own or none). */
   readonly companyId: string | null
   readonly userId: string
@@ -73,7 +76,7 @@ interface ColumnsDoor {
 function portalDoor(app: FastifyInstance, request: FastifyRequest, write: boolean): ColumnsDoor & { readonly actor: ReturnType<typeof portalReader>['actor'] } {
   const reader = portalReader(app, request)
   if (write && reader.session.preview) throw new ForbiddenError('A preview of the portal changes nothing.')
-  return { door: 'portal', app, request, partyId: reader.session.partyId, companyId: reader.session.company.id, userId: reader.session.userId, locale: partnerLocaleOf(reader.session.person.locale), actor: reader.actor, scoped: (work) => request.withClient(work) }
+  return { door: 'portal', app, request, partyId: reader.session.partyId, tenantId: reader.session.tenantId, companyId: reader.session.company.id, userId: reader.session.userId, locale: partnerLocaleOf(reader.session.person.locale), actor: reader.actor, scoped: (work) => request.withClient(work) }
 }
 
 /** The office over ONE customer (and a record's company): orders.view to see it (else 404), `permission` to act (else 403). */
@@ -83,7 +86,7 @@ function officeDoor(app: FastifyInstance, request: FastifyRequest, scope: { read
   const record = { partyId: scope.partyId, ...(scope.companyId ? { companyId: scope.companyId } : {}) }
   if (!can(actor, ORDERS_VIEW, record)) throw new NotFoundError(`${what} not found.`)
   if (!can(actor, permission, record)) throw new ForbiddenError()
-  return { door: 'office', app, request, partyId: scope.partyId, companyId: scope.companyId, userId: context.actorId, locale: 'en', scoped: (work) => request.withClient(work) }
+  return { door: 'office', app, request, partyId: scope.partyId, tenantId: context.tenantId, companyId: scope.companyId, userId: context.actorId, locale: 'en', scoped: (work) => request.withClient(work) }
 }
 
 /** The office's customer: one of the tenant's customers (else 404), with its own company (null: every company). */
@@ -95,7 +98,7 @@ async function officeCustomerDoor(app: FastifyInstance, request: FastifyRequest,
 }
 
 /** A DraftWriter's own door (the draft's customer and company, the writer's person and words). */
-const writerDoor = (writer: DraftWriter): ColumnsDoor => ({ door: writer.door, app: writer.app, request: writer.request, partyId: writer.partyId, companyId: writer.companyId, userId: writer.userId, locale: writer.locale, scoped: writer.scoped })
+const writerDoor = (writer: DraftWriter): ColumnsDoor => ({ door: writer.door, app: writer.app, request: writer.request, partyId: writer.partyId, tenantId: writer.tenantId, companyId: writer.companyId, userId: writer.userId, locale: writer.locale, scoped: writer.scoped })
 
 const columnRefused = (refusal: ColumnRefusal, locale: Locale): DomainError => (refusal.key === 'NAME' ? new ValidationError(refusal.words[locale], [{ path: 'body/name', message: refusal.words[locale] }]) : new DomainError('conflict', refusal.words[locale], [{ path: `refusal/${refusal.key}`, message: refusal.words[locale] }]))
 function useRefused(refusal: UseRefusal, locale: Locale): DomainError {
@@ -157,7 +160,7 @@ export interface UseBody {
  * back; one switched off keeps its row at a place from USE_OFF_FROM on (no delete grant: see the rules), its values cleared only with
  * `dropValues` (refused in words otherwise). The audit row is on the record's own history (ownColumns.use: before → after).
  */
-async function useColumnsInCommand(tools: CommandTools, door: ColumnsDoor, record: { readonly requestId?: string; readonly orderId?: string; readonly companyId: string }, body: UseBody): Promise<void> {
+async function useColumnsInCommand(tools: CommandTools, door: ColumnsDoor, record: { readonly requestId?: string; readonly orderId?: string; readonly companyId: string }, body: UseBody): Promise<{ readonly added: string[] }> {
   const { tx, now } = tools
   await lockParty(tx, door.partyId)
   const columns = await readPartyColumns(tx, door.partyId)
@@ -182,21 +185,27 @@ async function useColumnsInCommand(tools: CommandTools, door: ColumnsDoor, recor
   for (const [index, use] of off.entries()) await tx.orderLineColumnUse.update({ where: { id: use.id }, data: { seq: USE_OFF_FROM + index, version: { increment: 1 } }, select: { id: true } })
   const dropped = off.map((use) => use.columnId).filter((columnId) => withValues.has(columnId))
   if (dropped.length > 0) await tx.orderLineOwnValue.updateMany({ where: { AND: [linesWhere(record, lineIds), { columnId: { in: dropped } }] }, data: { valueText: null, valueNumber: null, valueDate: null, valueBool: null, version: { increment: 1 } } })
-  tools.audit({ action: 'ownColumns.use', recordType: record.requestId ? 'PortalOrderRequest' : 'SalesOrder', recordId: record.requestId ?? record.orderId!, companyId: record.companyId, before: { columnIds: onNow }, after: { columnIds: [...body.columnIds], added: body.columnIds.filter((columnId) => !onNow.includes(columnId)), droppedValuesOf: dropped } })
+  const added = body.columnIds.filter((columnId) => !onNow.includes(columnId))
+  tools.audit({ action: 'ownColumns.use', recordType: record.requestId ? 'PortalOrderRequest' : 'SalesOrder', recordId: record.requestId ?? record.orderId!, companyId: record.companyId, before: { columnIds: onNow }, after: { columnIds: [...body.columnIds], added, droppedValuesOf: dropped } })
+  return { added }
 }
 
 /** A DRAFT's columns (the draft's version moves, as every draft write; a sent draft's are frozen: ownDraft's words). */
 async function useOnRequest(writer: DraftWriter, requestId: string, body: UseBody & { readonly version: number }, idempotencyKey?: string) {
   const row = await ownDraft(writer, requestId)
   const door = writerDoor(writer)
-  await onDraft(writer, 'ownColumns.use', row, body.version, { requestId, ...body }, idempotencyKey, (tools) => useColumnsInCommand(tools, door, { requestId: row.id, companyId: row.companyId }, body))
+  await onDraft(writer, 'ownColumns.use', row, body.version, { requestId, ...body }, idempotencyKey, async (tools) => {
+    await useColumnsInCommand(tools, door, { requestId: row.id, companyId: row.companyId }, body)
+  })
   return requestView(writer, await ownDraft(writer, requestId))
 }
 
 /** An order's columns (no version: the order is the factory's; its columns are the customer's, they apply at once). */
 async function useOnOrder(door: ColumnsDoor, order: { readonly id: string; readonly companyId: string; readonly status: string }, body: UseBody, idempotencyKey?: string): Promise<{ ownColumns: RecordOwnColumns }> {
   if (order.status === 'CLOSED' || order.status === 'CANCELLED') throw new InvalidStateError(said(OWN_COLUMN_WORDS.ORDER_CLOSED, door.locale))
-  await commandOn(door.app, door.request, { name: 'ownColumns.use', idempotencyKey, input: { orderId: order.id, ...body } }, (tools) => useColumnsInCommand(tools, door, { orderId: order.id, companyId: order.companyId }, body))
+  const { result } = await commandOn(door.app, door.request, { name: 'ownColumns.use', idempotencyKey, input: { orderId: order.id, ...body } }, (tools) => useColumnsInCommand(tools, door, { orderId: order.id, companyId: order.companyId }, body))
+  // owb- po2.3: each column switched on speaks in the order's chat (a quiet line, written as the tenant's system right after).
+  for (const columnId of result.added) await writeQuietLineAfter(door.request, door.tenantId, { record: { type: 'SalesOrder', id: order.id }, by: door.door === 'portal' ? 'CUSTOMER' : 'FACTORY', eventKey: 'quiet.ownColumnAdded', eventArgs: { columnId } })
   return { ownColumns: (await door.scoped((client) => ownColumnsOf(client, { orderIds: [order.id] }))).get(order.id) ?? NO_OWN_COLUMNS }
 }
 

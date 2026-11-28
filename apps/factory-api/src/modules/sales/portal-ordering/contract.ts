@@ -20,6 +20,7 @@ import { styleDraftBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 // od-s s.4 (order start; addendum R1–R3): a row's sizing and open choices; Still open (information only).
 import { CHOICE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/choices'
 import { DRAFT_SIZINGS, STILL_OPEN_KINDS, STILL_OPEN_STATES } from '@nexus/factory-domain/sales/portal-ordering/still-open'
+import { BULK_MAX } from '@nexus/factory-domain/sales/portal-ordering/bulk' // owb- po2.1
 // owb- po1.4 (order workflow): the customer's own columns on the draft (the shared answer shapes).
 import { recordOwnColumns } from '../own-columns/schemas'
 
@@ -381,7 +382,8 @@ export const removeLineContract = defineContract({ params: input({ requestId: id
 export const copyLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
 export const putBackLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
 export const pricesContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
-export const discardContract = defineContract({ params: requestParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ discarded: z.literal(true) }) } })
+// owb- po2.1: `withdrawn` true — the draft was taken back once (it keeps its number): withdrawn, not discarded.
+export const discardContract = defineContract({ params: requestParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ discarded: z.literal(true), withdrawn: z.boolean() }) } })
 export const sendContract = defineContract({
   params: requestParams,
   body: input({ version }),
@@ -389,6 +391,12 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+// owb- po2.1 (order workflow): many drafts at once — each item the single DELETE (discarded, or withdrawn when taken back) or Send; an
+// answer per item in the order asked (refused: its words in English and Italian).
+const bulkBody = input({ items: z.array(input({ id: id(), version })).min(1).max(BULK_MAX) })
+const bulkAnswer = output({ results: z.array(output({ id: id(), ok: z.boolean(), words: words.nullable() })) })
+export const bulkDeleteContract = defineContract({ body: bulkBody, response: { 200: bulkAnswer } })
+export const bulkSendContract = defineContract({ body: bulkBody, response: { 200: bulkAnswer } })
 // owb- po1.2 (order workflow, "Take it back"): a SENT request back to its DRAFT, its number kept (409 in words when answered or started).
 export const takeBackContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 
