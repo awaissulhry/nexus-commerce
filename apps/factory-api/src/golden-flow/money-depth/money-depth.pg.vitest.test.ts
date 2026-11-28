@@ -24,9 +24,10 @@ import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../da
  *   M  an order on terms with a balance before shipping; its work order made on the floor (the leather and protectors bought,
  *      received and released, cut per hide, bundles, scans tracing the protectors' lot), each garment numbered by serial at the
  *      final operation, inspected and released.
- *   S  the shipment held by the system for the balance (a scan refused), split in two; the balance paid by a bank line matched
+ *   S  the shipment split in two (owb- S3 ss1, R39 (a): no longer held by the system for the balance — a payment due is a warning
+ *      when the goods leave); the balance paid by a bank line matched
  *      to its request with its reasons (the statement imported twice: the duplicate refused), its deposit invoice issued by the
- *      worker (B-W2b-F48), the holds lifted by the system; packed by scanning serials into cartons with marks, labelled in test
+ *      worker (B-W2b-F48), both shipments free; packed by scanning serials into cartons with marks, labelled in test
  *      mode, a label reprinted with a reason, a pickup booked, shipped; the site taken live, the rest shipped with the carrier's
  *      label, the day's manifest closed; delivered with proof (typed with its signer, and by the carrier): the order DELIVERED.
  *   I  the month's invoice run (one TD24 of both DDTs, the balance's deposit invoice deducted) in the order's currency; a return
@@ -519,7 +520,11 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
 
   // ---- S: held, paid, packed, shipped, delivered --------------------------------------------------------------------------------
 
-  it('S01 the warehouse ships the eight released jackets: the system holds the shipment for the balance before shipping (the queue reads it held), and a scan into its carton is refused in words', async () => {
+  // owb- (order workflow, S3 ss1 step 1.4; settle L2, R39 (a)): flipped, same strictness — the balance before shipping is no longer a
+  // hold: the system places none (the shipment is free, the holds queue does not list it); the payment due becomes a warning in words
+  // at the moment the goods leave (modules/shipping/warehouse-leg/warehouse-leg.pg 1.4). The carton scan is left to S04 (a scan here
+  // would now pack the jacket that S04 scans first).
+  it('S01 the warehouse plans the eight released jackets: the system places no hold for the balance before shipping (R39 (a): a warning when the goods leave)', async () => {
     const ready = await ok(P.warehouse, 'GET', `/shipping/ready?salesOrderId=${G.order.id}`)
     const cells = (ready.orders as Json[]).flatMap((order) => order.cells as Json[])
     expect(cells.reduce((sum, cell) => sum + cell.shippable, 0)).toBe(PIECES)
@@ -529,17 +534,15 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     G.shipA = shipment
     await settle()
     const holds = await ok(P.warehouse, 'GET', `/shipping/shipments/${shipment.id}/holds`)
-    expect(holds.holds.reasons).toEqual(['BALANCE_UNPAID'])
-    const hold = (holds.holds.holds as Json[]).find((row) => row.inForce)!
-    expect(hold).toMatchObject({ bySystem: true, mayRelease: false })
+    expect(holds.holds.reasons).toEqual([])
+    expect(holds.holds.held).toBe(false)
+    expect((holds.holds.holds as Json[]).find((row) => row.reason === 'BALANCE_UNPAID')).toBeUndefined()
     const queue = await ok(P.warehouse, 'GET', `/shipping/holds?siteId=${siteA1()}`)
-    expect(JSON.stringify(queue)).toContain(shipment.id)
-    const cell52 = (G.wo.cells as Json[]).find((cell) => cell.size === '52')!
-    const refused = await ok(P.warehouse, 'POST', `/shipping/packing/${shipment.id}/scan`, { code: G.serials[cell52.id][0].serial }, 409)
-    expect(refusalOf(refused)).toBe('refusal/ON_HOLD')
+    expect(JSON.stringify(queue)).not.toContain(shipment.id)
   })
 
-  it('S02 the customer wants the 54s apart: the shipment is split (its hold comes along), something stays on the first', async () => {
+  // owb- (S3 ss1): flipped — no balance hold to come along; the split child is free too.
+  it('S02 the customer wants the 54s apart: the shipment is split (no balance hold on either), something stays on the first', async () => {
     const preview = await ok(P.warehouse, 'GET', `/shipping/shipments/${G.shipA.id}/split`)
     const line54 = (preview.lines as Json[]).find((row) => row.size === '54')!
     expect(line54.movable).toBe(SIZES['54'])
@@ -549,10 +552,11 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     G.shipB = split.shipment
     keep(split.shipment.id)
     await settle()
-    expect((await ok(P.warehouse, 'GET', `/shipping/shipments/${G.shipB.id}/holds`)).holds.reasons).toEqual(['BALANCE_UNPAID'])
+    expect((await ok(P.warehouse, 'GET', `/shipping/shipments/${G.shipB.id}/holds`)).holds.reasons).toEqual([])
   })
 
-  it('S03 the balance comes in: finance imports the bank statement (dry run, then import); the same lines again are refused; the line’s suggestion names the balance’s request with how sure and why; accepted: the request is paid, its deposit invoice made by itself, and the system lifts both holds', async () => {
+  // owb- (S3 ss1): flipped — the shipments were never held for the balance, so there is no hold to lift: both stay free.
+  it('S03 the balance comes in: finance imports the bank statement (dry run, then import); the same lines again are refused; the line’s suggestion names the balance’s request with how sure and why; accepted: the request is paid, its deposit invoice made by itself; both shipments stay free (no balance hold, R39 (a))', async () => {
     const accounts = (await ok(P.finance, 'GET', `/payments/bank/accounts?companyId=${companyA()}`)).accounts as Json[]
     G.bankAccount = accounts.find((account) => account.active !== false)!
     const schedule = await ok(P.finance, 'GET', `/sales/orders/${G.order.id}/schedule`)
@@ -598,7 +602,7 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     for (const shipment of [G.shipA, G.shipB]) {
       const holds = (await ok(P.warehouse, 'GET', `/shipping/shipments/${shipment.id}/holds`)).holds
       expect(holds.held, JSON.stringify(holds)).toBe(false)
-      expect((holds.holds as Json[]).find((row) => row.reason === 'BALANCE_UNPAID')).toMatchObject({ inForce: false, releasedBySystem: true })
+      expect((holds.holds as Json[]).find((row) => row.reason === 'BALANCE_UNPAID')).toBeUndefined()
     }
   })
 

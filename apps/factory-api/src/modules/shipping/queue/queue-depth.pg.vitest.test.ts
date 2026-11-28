@@ -207,37 +207,41 @@ describe('hold and release a shipment (LOG-017)', () => {
   })
 })
 
-describe("the system's holds: the balance before shipping (FIN-079) and the account on hold (LQ1:01)", () => {
-  it('holds while the balance before shipping is open and lifts itself once it is paid', async () => {
+describe("the system's holds: the balance before shipping (FIN-079; owb-: no longer a hold) and the account on hold (LQ1:01)", () => {
+  // owb- (order workflow, S3 ss1 step 1.4; settle L2, R39 (a)): flipped, same strictness — the balance before shipping is no longer a
+  // hold: the system places none while it is open (a payment due is a warning when the goods leave: ../warehouse-leg/warehouse-leg.pg),
+  // and lifts an old system BALANCE_UNPAID hold with its words; a person's own balance hold stays until a person releases it.
+  it('places no hold while the balance before shipping is open, and lifts an old system balance hold with its words', async () => {
     ids.milestone = newId()
     await asOwner(() =>
       admin(`INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, status, "createdAt") SELECT $1, o."tenantId", o."companyId", o.id, o."partyId", 990, 'BEFORE_SHIPPING', 10000, 'OPEN', now() - interval '1 day' FROM "SalesOrder" o WHERE o.id = $2`, [ids.milestone, shippingA.quality.production.salesOrderId]),
     )
-    // The handler's work, as the worker runs it on the order's schedule event.
+    // The handler's work, as the worker runs it on the order's schedule event: nothing to place.
     await systemHoldsHandler().handle({ eventId: newId(), type: 'sales_order.schedule_changed', payload: { orderId: shippingA.quality.production.salesOrderId } } as never, { caller: system() } as never)
-    const held = await holdsOf(ids.s1)
-    expect(held.reasons).toEqual(['BALANCE_UNPAID'])
-    const balance = held.holds.find((row: Json) => row.inForce)
-    expect(balance).toMatchObject({ bySystem: true, placedBy: null, mayRelease: false })
-    expect(balance.words).toMatch(/balance before shipping of order .* is not paid/)
-    await refusedFor('warehouse', 'POST', `/shipping/shipments/${ids.s1}/holds/${balance.id}/release`, { words: 'Ship it.' }, 'MAY_NOT_RELEASE')
-    // Nothing more to do: a second run writes nothing.
+    const free = await holdsOf(ids.s1)
+    expect(free.reasons).toEqual([])
+    expect(free.held).toBe(false)
     expect(await syncSystemHolds(system(), [ids.s1])).toEqual({ placed: 0, lifted: 0 })
-    await asOwner(() => admin(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [ids.milestone]))
+    // An old balance hold the system placed before the change (made-up fact, past the API): the sync lifts it, in its words.
+    const old = newId()
+    await asOwner(() => admin(`INSERT INTO "ShipmentHold" (id, "tenantId", "siteId", "partyId", "shipmentId", reason, words, "placedAt") SELECT $1, s."tenantId", s."siteId", s."partyId", s.id, 'BALANCE_UNPAID', 'Seed: an old balance hold.', now() - interval '1 hour' FROM "Shipment" s WHERE s.id = $2`, [old, ids.s1]))
     expect(await syncSystemHolds(system(), [ids.s1])).toEqual({ placed: 0, lifted: 1 })
-    const lifted = (await holdsOf(ids.s1)).holds.find((row: Json) => row.id === balance.id)
-    expect(lifted).toMatchObject({ inForce: false, releasedBySystem: true, releaseWords: 'The balance before shipping is paid or no longer due.' })
+    const lifted = (await holdsOf(ids.s1)).holds.find((row: Json) => row.id === old)
+    expect(lifted).toMatchObject({ inForce: false, releasedBySystem: true, releaseWords: 'A payment due before shipping no longer holds the shipment: whoever sends the goods sees it as a warning.' })
+    await asOwner(() => admin(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [ids.milestone]))
   })
 
-  it('does not hold again for a cause finance let go', async () => {
+  it("a person's own balance hold stays: the system never lifts it, and places none of its own", async () => {
     ids.milestone2 = newId()
     await asOwner(() =>
       admin(`INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, status, "createdAt") SELECT $1, o."tenantId", o."companyId", o.id, o."partyId", 991, 'BEFORE_SHIPPING', 5000, 'OPEN', now() - interval '1 hour' FROM "SalesOrder" o WHERE o.id = $2`, [ids.milestone2, shippingA.quality.production.salesOrderId]),
     )
-    expect(await syncSystemHolds(system(), [ids.s1])).toEqual({ placed: 1, lifted: 0 })
-    const balance = (await holdsOf(ids.s1)).holds.find((row: Json) => row.inForce)
-    await ok('finance', 'POST', `/shipping/shipments/${ids.s1}/holds/${balance.id}/release`, { words: 'The customer sent the bank receipt.' })
     expect(await syncSystemHolds(system(), [ids.s1])).toEqual({ placed: 0, lifted: 0 })
+    const placed = await ok('finance', 'POST', `/shipping/shipments/${ids.s1}/holds`, { reason: 'BALANCE_UNPAID', words: 'Finance holds it by hand.' }, 201)
+    expect(await syncSystemHolds(system(), [ids.s1])).toEqual({ placed: 0, lifted: 0 })
+    expect((await holdsOf(ids.s1)).reasons).toEqual(['BALANCE_UNPAID'])
+    await ok('finance', 'POST', `/shipping/shipments/${ids.s1}/holds/${placed.holdId}/release`, { words: 'The customer sent the bank receipt.' })
+    expect((await holdsOf(ids.s1)).held).toBe(false)
     await asOwner(() => admin(`UPDATE "SalesOrderMilestone" SET status = 'WAIVED', "statusNote" = 'Test' WHERE id = $1`, [ids.milestone2]))
   })
 

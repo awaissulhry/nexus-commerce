@@ -7,10 +7,11 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { orderPicturePath, orderPictureSaver, pictureReader } from '../../../../../lib/record-picture/api'
 import { pictureKindOf, type PictureChoice } from '../../../../../lib/record-picture/order-picture'
 import { orderFilesOf, type OrderFilesRead } from '../../../../../lib/record-thread/files-view/model'
-import { departmentTilesOf, readOrderBaskets } from '../../../../../lib/production/baskets-board'
+import { basketsOf, departmentTilesOf, readOrderBaskets } from '../../../../../lib/production/baskets-board'
+import { orderLogPath, orderLogReader } from '../../../../../lib/change-log/api'
 import { officeDraftPort } from '../../draft/api'
 import type { Order } from '../../api'
-import { readWarehouseLegs, restrictOrder } from './api'
+import { answerPaymentNotice, downloadOrderZip, readPaymentNotices, readWarehouseLegs, restrictOrder, type PaymentNotice } from './api'
 import { mayRestrict, textCardOf, type LegFacts, type OrderFlowActions, type OrderFlowModel } from './model'
 
 /** The statuses whose orders may have a leg at our warehouse (S3's warehouse way): the legs are read only then. */
@@ -41,6 +42,10 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
   const [legs, setLegs] = useState<LegFacts[] | null>(null)
   const [request, setRequest] = useState<{ subject: string | null; text: OrderFlowModel['text'] } | null>(null)
   const [departments, setDepartments] = useState<OrderFlowModel['departments']>(null)
+  const [baskets, setBaskets] = useState<OrderFlowModel['baskets']>(null) // owb-of6
+  const [notices, setNotices] = useState<PaymentNotice[] | null>(null) // owb-of6
+  const [noticeAct, setNoticeAct] = useState<{ busy: string | null; problem: string | null }>({ busy: null, problem: null })
+  const [zip, setZip] = useState<OrderFlowModel['zip']>({ busy: false, leftOut: null, problem: null })
   const [restrict, setRestrict] = useState<{ busy: boolean; problem: string | null }>({ busy: false, problem: null })
 
   // S3's legs: only for a reader with shipping.view and an order that left (never asked for a draft or one in production).
@@ -70,10 +75,67 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
     if (!orderId || !status || !FLOOR_STATUSES.has(status)) return setDepartments(null)
     const abort = new AbortController()
     readOrderBaskets(api, orderId, abort.signal)
-      .then((board) => setDepartments(departmentTilesOf(board, locale)))
-      .catch(() => setDepartments(null))
+      .then((board) => {
+        setDepartments(departmentTilesOf(board, locale))
+        setBaskets(basketsOf(board, locale)) // owb-of6 (L8): the Baskets rows switch to S5's read once it answers
+      })
+      .catch(() => {
+        setDepartments(null)
+        setBaskets(null)
+      })
     return () => abort.abort()
   }, [api, orderId, status, locale])
+
+  // ---- owb-of6 step 3: the customer's "I paid" notices (of1; before it lands the read fails and nothing is shown) ----
+  const readNotices = useCallback(
+    (id: string, signal?: AbortSignal) =>
+      readPaymentNotices(api, id, signal)
+        .then(setNotices)
+        .catch(() => setNotices(null)),
+    [api],
+  )
+  useEffect(() => {
+    if (!orderId) return setNotices(null)
+    const abort = new AbortController()
+    void readNotices(orderId, abort.signal)
+    return () => abort.abort()
+  }, [orderId, readNotices])
+  const onNotice = useCallback(
+    (noticeId: string, state: 'RECORDED' | 'DISMISSED') => {
+      const notice = notices?.find((row) => row.id === noticeId)
+      if (!orderId || !notice || noticeAct.busy) return
+      setNoticeAct({ busy: noticeId, problem: null })
+      answerPaymentNotice(api, orderId, noticeId, { version: notice.version, state })
+        .then(() => {
+          setNoticeAct({ busy: null, problem: null })
+          void readNotices(orderId)
+        })
+        .catch((error: unknown) => setNoticeAct({ busy: null, problem: isApiError(error) && error.message ? error.message : 'notices.failed' }))
+    },
+    [api, orderId, notices, noticeAct.busy, readNotices],
+  )
+
+  // ---- owb-of6 step 4: Download all — ONE zip (of1 step 5), saved as "<number> files.zip"; the left-out count said under it ----
+  const number = order?.number ?? null
+  const onZip = useCallback(() => {
+    if (!orderId || zip.busy) return
+    setZip({ busy: true, leftOut: null, problem: null })
+    downloadOrderZip(api, orderId)
+      .then(({ bytes, leftOut }) => {
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/zip' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${number ?? 'order'} files.zip`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+        setZip({ busy: false, leftOut, problem: null })
+      })
+      .catch((error: unknown) => setZip({ busy: false, leftOut: null, problem: isApiError(error) && error.message ? error.message : 'zip.failed' }))
+  }, [api, orderId, number, zip.busy])
+  const log = useMemo(() => (orderId ? orderLogReader(api, orderLogPath('office', 'order', orderId)) : null), [api, orderId])
+  // ---- end owb-of6
 
   const manages = permissions.includes('orders.manage')
   const read = useMemo(() => pictureReader(api), [api])
@@ -103,7 +165,11 @@ export function useOrderFlow(input: { api: ApiClient; order: Order | null; permi
       subject: request?.subject ?? null,
       text: request?.text ?? null,
       departments,
+      baskets,
+      log,
+      notices: { rows: notices, busy: noticeAct.busy, problem: noticeAct.problem, may: permissions.includes('payments.record') },
+      zip,
     },
-    actions: { onPictureSaved: onReload, onRestrict },
+    actions: { onPictureSaved: onReload, onRestrict, onNotice, onZip },
   }
 }

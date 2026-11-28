@@ -5,6 +5,12 @@ import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissi
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { composeDocument, documentProblems } from '@nexus/factory-domain/documents/compose'
 import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, invoicesOfDdt, issueStateProblems, type DdtDraft, type DdtFacts, type DdtRequest, type InvoiceOfDdt } from '@nexus/factory-domain/shipping/ddt'
+// owb- (order workflow, S3 ss1 steps 1.3 + 1.4): our warehouse first (the sale DDT of Send on); a payment due is a warning when goods leave.
+import { ddtReasonOf, type SendOnState } from '@nexus/factory-domain/shipping/ddt'
+import type { OrderWarningKind } from '@nexus/factory-domain/sales/warnings/kinds'
+import { checkWarnings, passedWarningsAfter } from '../../../platform/audit/passed-warnings'
+import { leavingWarningsOf } from '../warehouse-leg/payment'
+import { legOf } from '../warehouse-leg/store'
 // B-OS-014, B-OS-017 (order shipments tab): the goods handed over at a typed time; "this shipment travels without a DDT".
 import { ddtNotNeededWords, ddtRequiredRefusal } from '@nexus/factory-domain/shipping/ddt'
 import { handOverTimeProblems } from '@nexus/factory-domain/shipping/shipments'
@@ -74,7 +80,13 @@ export interface IssueBody extends DdtRequest {
   readonly transportMode?: TransportMode | null | undefined
   /** B-W2a-F8 with B-W2b-19: with `ship`, the reason the garments' SHIPMENT moves go into a SOFT-locked month. */
   readonly periodLockOverride?: PeriodLockOverride | undefined
+  /** owb- (S3 ss1 step 1.4): with `ship`, the warnings the person saw and goes on with (PAYMENT_DUE_AT_SHIP). */
+  readonly overrides?: readonly OrderWarningKind[] | undefined
 }
+
+/** owb- (S3 ss1 step 1.3): the shipment's leg as issueStateProblems reads it (null: straight to the customer). */
+const sendOnOf = (facts: DdtFacts, body: Pick<DdtRequest, 'reason'>): SendOnState | null =>
+  facts.warehouseLeg ? { legArrived: facts.warehouseLeg.arrived, liveDdtReason: facts.liveDdtReason ?? null, reason: ddtReasonOf(facts, body) } : null
 
 const issues = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The DDT cannot be issued as it stands.', problems)
 
@@ -119,7 +131,7 @@ export async function previewDdt(caller: CommandCaller, shipmentId: string, body
   const elsewhere = await caller.withClient((client) => madeElsewhereWords(client, shipment.id))
   const all: Issue[] = [
     ...(elsewhere ? [{ path: elsewhereRefusalPath('NEXUS_DDT'), message: elsewhere }] : []),
-    ...issueStateProblems(shipment.status, facts.liveDdtNumber, body.ship === true).map((message) => ({ path: 'state', message })),
+    ...issueStateProblems(shipment.status, facts.liveDdtNumber, body.ship === true, sendOnOf(facts, body)).map((message) => ({ path: 'state', message })),
     ...problems,
     ...(expectedNumber === null ? [{ path: 'company/numbering', message: 'The company has no single active DDT series: an administrator sets it up under numbering.' }] : []),
   ]
@@ -214,9 +226,12 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       const notNeeded = ddtNotNeededWords(current.ddtRequired)
       if (notNeeded) throw new DomainError('conflict', notNeeded, [{ path: 'refusal/DDT_NOT_NEEDED', message: notNeeded }])
       const facts = await readDdtFacts(tools.tx, current, company)
-      const state = issueStateProblems(current.status, facts.liveDdtNumber, body.ship === true)
+      const state = issueStateProblems(current.status, facts.liveDdtNumber, body.ship === true, sendOnOf(facts, body))
       if (state.length > 0) throw new InvalidStateError(state.join(' '))
       if (body.ship === true) await assertDocumentsTravel(tools, current.id)
+      // owb- (S3 ss1 step 1.4; settle L2): the goods leave now — to the customer, a payment due is a warning passed on (409 until then);
+      // to our own warehouse first, none (the goods stay ours).
+      const passed = body.ship === true ? checkWarnings(await leavingWarningsOf(tools.tx, current, { toOurWarehouse: Boolean(facts.warehouseLeg) }), body.overrides) : []
       const { draft, problems } = draftDdt(facts, body, tools.now)
       if (problems.length > 0) throw issues(problems)
       const layout = layoutProblems(draft, facts)
@@ -262,7 +277,8 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
         },
         select: { id: true },
       })
-      const replacement = current.status === 'SHIPPED'
+      // owb- (S3 ss1): a SHIPPED shipment's DDT is a replacement only when none is live (else it is the sale DDT of Send on).
+      const replacement = current.status === 'SHIPPED' && facts.liveDdtNumber === null
       const shipped = body.ship === true ? await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride }) : null
       tools.audit({
         recordType: 'Ddt',
@@ -272,7 +288,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
         after: { number: number.formatted, documentDate: number.documentDate, shipmentId: current.id, reason: draft.reason, transportBy: draft.transportBy, startAt: draft.startAt, packages: draft.packages, grossWeightKg: draft.grossWeightKg, replacement },
       })
       if (shipped !== null) {
-        tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: number.formatted, serials: shipped } })
+        tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: number.formatted, serials: shipped, /* owb- */ ...passedWarningsAfter(passed) } })
       }
       tools.emit({ type: 'ddt.issued', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { ddtId: id, shipmentId: current.id, number: number.formatted, documentDate: number.documentDate, replacement, shipped: shipped !== null } })
       return { ddt: ddtView((await readDdt(tools.tx, id))!, null), shipment: await shipmentState(tools, current.id) }
@@ -469,7 +485,7 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
 export async function shipShipment(
   caller: CommandCaller,
   shipmentId: string,
-  body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined; /* B-OS-014 */ shippedAt?: string | undefined; reason?: string | null | undefined },
+  body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined; /* B-OS-014 */ shippedAt?: string | undefined; reason?: string | null | undefined; /* owb- */ overrides?: readonly OrderWarningKind[] | undefined },
   idempotencyKey?: string,
 ) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
@@ -489,6 +505,9 @@ export async function shipShipment(
       if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
     }
     // ── end B-OS-014 ──
+    // owb- (S3 ss1 step 1.4; settle L2, R39 (a)): to the customer, an open before-shipping payment step is a warning passed on (409
+    // in words until the body's `overrides` names it; then this row keeps `passedWarnings`); to our own warehouse first, none.
+    const passed = checkWarnings(await leavingWarningsOf(tools.tx, current, { toOurWarehouse: (await legOf(tools.tx, current.id)) !== null }), body.overrides)
     const serials = await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride, ...(shippedAt ? { shippedAt } : {}) /* B-OS-014 */ })
     tools.audit({
       recordType: 'Shipment',
@@ -496,7 +515,7 @@ export async function shipShipment(
       companyId: current.companyId,
       siteId: current.siteId,
       before: { status: 'PACKED' },
-      after: { status: 'SHIPPED', ddt: live?.number ?? null, serials, /* B-OS-014 */ ...(shippedAt ? { shippedAt: shippedAt.toISOString(), byHand: true } : {}) },
+      after: { status: 'SHIPPED', ddt: live?.number ?? null, serials, /* B-OS-014 */ ...(shippedAt ? { shippedAt: shippedAt.toISOString(), byHand: true } : {}), /* owb- */ ...passedWarningsAfter(passed) },
       ...(reason ? { reason } : {}), // B-OS-014
     })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }

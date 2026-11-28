@@ -19,6 +19,8 @@ import { STEPS_READY } from '../steps'
 import type { DockAction } from '../dock/BasketDock'
 import type { QcAction } from '../dock/QcCard'
 import { BasketPageView, type BasketPageAction } from './view/BasketPageView'
+import { undoStore } from '../undo/store'
+import { useUndoChanges } from '../undo/use-undo'
 
 /**
  * owb-fl5 steps 2–4 — the basket page's container (`/floor/basket/<code>`). It reads `GET /production/baskets/:code` (with `via=scan`
@@ -56,6 +58,7 @@ export function BasketPage({ code }: { readonly code: string }) {
   const [gotIt, setGotIt] = useState<readonly string[]>(() => gotItHere())
   const taken = useRef(false)
   const { departments } = useDepartments(api)
+  const undone = useUndoChanges()
 
   const read = useCallback(
     async (asScan: boolean) => {
@@ -87,6 +90,14 @@ export function BasketPage({ code }: { readonly code: string }) {
   useEffect(() => {
     if (online && load.state === 'offline') void read(scanned)
   }, [online, load.state, read, scanned])
+
+  // owb-fl6: an Undo went through (the bar at the foot): read again.
+  const undoneSeen = useRef(undone)
+  useEffect(() => {
+    if (undoneSeen.current === undone) return
+    undoneSeen.current = undone
+    void read(scanned)
+  }, [undone, read, scanned])
 
   const view = load.state === 'ready' ? viewOf(load.read) : null
   const gate = useOrderChangeGate({ api, online, workOrderIds: view ? [view.basket.workOrderId] : [], enabled: view !== null })
@@ -170,6 +181,9 @@ export function BasketPage({ code }: { readonly code: string }) {
       if (!answer.ok) return answer.problem
       if (answer.value.moved === 0) return { kind: 'refused', code: 'STAY', message: answer.value.stayWords[0] ?? tb('dock.failed'), fix: null }
       feedback('success')
+      // owb-fl6: the Undo bar offers it back (from where it was to where it went).
+      const bar = stepBarOf(view, locale)
+      undoStore.put(me.worker.id, { kind: 'move', groupIds: [answer.value.groupId], code: view.basket.code, count: 1, from: bar.now?.dept ?? null, to: kind === 'BACK' && back ? deptOf(back.department, locale) : hereDept, toReady: false })
       if (kind === 'BACK' && back) {
         putFlash({ code: view.basket.code, to: deptOf(back.department, locale), moved: false, saved: false })
         goHome()
@@ -250,7 +264,9 @@ export function BasketPage({ code }: { readonly code: string }) {
         const shot = photo
         if (!view || !shot) return
         return void act(async () => {
-          const sent = await uploadQualityPhoto(api, view.basket.id, shot.code, action.photo)
+          const operationId = hereOperationOf(view)
+          if (!operationId) return { kind: 'unavailable' }
+          const sent = await uploadQualityPhoto(api, view.basket.id, shot.code, operationId, action.photo)
           if (!sent.ok) return sent.problem.kind === 'offline' ? { kind: 'refused', code: 'PHOTO', message: tb('qc.photoOffline'), fix: null } : { kind: 'refused', code: 'PHOTO', message: tb('qc.photoFailed'), fix: null }
           setSteps((now) => stepDone(now, shot.code))
           setPhoto(null)

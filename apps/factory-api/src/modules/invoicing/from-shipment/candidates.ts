@@ -17,6 +17,8 @@ import type { CANDIDATE_HELD_REASONS } from './contract'
 import { invoicedOf, orderPrices, presetsOf, readDdts, shippedOf, type DdtRow } from './store'
 // B-OP-045 (order page N6, lines-derived): an order's shipments through their lines.
 import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
+// owb- (order workflow, S3 ss1 step 1.3): our warehouse first — never the transfer DDT, nothing not sent on from our warehouse.
+import { BILLABLE_DDT } from '../../shipping/warehouse-leg/invoice-filter'
 
 /**
  * B-TH-062 (threads plan TH-4, N21; features SHEET.overall-F07 "Invoice shipped goods (finance)", O-SAL-ORD-REC.body-F08):
@@ -70,7 +72,7 @@ export async function fromDdtsCandidates(caller: CommandCaller, orderIds: readon
     const ddts =
       visible.length === 0
         ? []
-        : await readDdts(client, { AND: [scope as Prisma.DdtWhereInput, { cancellations: { none: {} }, shipment: { status: { in: [...LEFT] }, ...shipmentsOfOrdersWhere(visible) } }] }, 500)
+        : await readDdts(client, { AND: [scope as Prisma.DdtWhereInput, { cancellations: { none: {} }, shipment: { status: { in: [...LEFT] }, ...shipmentsOfOrdersWhere(visible) } }, /* owb- (S3 ss1) */ BILLABLE_DDT] }, 500)
     // B-OP-045: the chosen orders' lines only.
     const rows = notInvoiced(await shippedOf(client, ddts, visible), await invoicedOf(client, ddts.map((ddt) => ddt.id)))
     const ddtOf = new Map(ddts.map((ddt) => [ddt.id, ddt]))

@@ -57,6 +57,42 @@ const NOT_FOR_A_SHIPMENT: Readonly<Partial<Record<DdtReason, string>>> = {
   RETURN: "Goods sent back to a supplier travel with the return's DDT, not a shipment to a customer.",
 }
 
+// ── owb- (order workflow, S3 ss1 step 1.3; settle L5, PL-review § 5, law F-42): a shipment through OUR warehouse first ────────────
+/**
+ * A shipment that goes to one of our warehouses first (factory-db ShipmentWarehouseLeg) travels there with a TRANSFER DDT: the goods
+ * stay ours, so its recipient is the company itself at the warehouse (a transfer has no buyer). TRANSFER is a shipment's reason
+ * ONLY then, and only until the goods arrived. Once they arrived, "Send on to the customer" takes a SALE DDT to the customer's
+ * delivery address: a second live DDT of the shipment, allowed only while the live one is the TRANSFER (issueStateProblems). The
+ * sale DDT's transport starts when it is issued (it is a new transport), a replacement of it when the goods were sent on.
+ */
+export interface DdtLegFacts {
+  /** The goods arrived at our warehouse (ShipmentWarehouseLeg.arrivedAt set). */
+  readonly arrived: boolean
+  /** When they were sent on to the customer (ShipmentWarehouseLeg.forwardedAt); null: not yet. */
+  readonly forwardedAt: Date | null
+  /** Where Send on takes them: the customer's delivery address (the first order's ship-to snapshot, SalesOrder.shipTo's shape). */
+  readonly customerShipTo: unknown
+}
+
+const LEG_DDT_WORDS = Object.freeze({
+  transferFirst: 'Goods going to our own warehouse travel with a transfer DDT (TRANSFER): the sale DDT follows when they are sent on to the customer.',
+  transferAfterArrival: 'The goods are at our warehouse: they are sent on to the customer with a sale DDT (SALE).',
+})
+
+/** The DDT's reason: the one asked, else TRANSFER while the goods go to our warehouse (not arrived yet), else SALE. */
+export const ddtReasonOf = (facts: Pick<DdtFacts, 'warehouseLeg'>, request: Pick<DdtRequest, 'reason'>): DdtReason =>
+  request.reason ?? (facts.warehouseLeg && !facts.warehouseLeg.arrived ? 'TRANSFER' : 'SALE')
+
+/** The second live DDT a shipment may take: the sale DDT of Send on, while the live one is the transfer and the goods arrived. */
+export interface SendOnState {
+  readonly legArrived: boolean
+  /** The reason of the shipment's newest live DDT (null: none live). */
+  readonly liveDdtReason: DdtReason | null
+  /** The reason of the DDT asked (ddtReasonOf). */
+  readonly reason: DdtReason
+}
+// ── end owb- ──
+
 // ---- the shapes the Ddt row keeps (as printed) --------------------------------------------------------------------
 
 /** A party as printed: the sender (the company) or the recipient (the order's buyer). */
@@ -180,6 +216,10 @@ export interface DdtFacts {
    * DDT's remarks when the office does not type its own (null: none applies).
    */
   readonly requirementRemarks?: string | null
+  /** owb- (S3 ss1): the shipment goes through our warehouse first (its leg); null or absent: straight to the customer. */
+  readonly warehouseLeg?: DdtLegFacts | null
+  /** owb- (S3 ss1): the reason of the shipment's newest live DDT (null or absent: none live). */
+  readonly liveDdtReason?: DdtReason | null
 }
 
 /** What the office says when it issues (or previews) a DDT; everything else comes from the shipment. */
@@ -232,11 +272,14 @@ export const ddtNotNeededWords = (ddtRequired: boolean): string | null =>
   ddtRequired ? null : 'This shipment travels without a DDT: put the DDT back on it first (Put back the DDT), then issue it.'
 // ── end B-OS-017 ──
 
-export function issueStateProblems(status: ShipmentStatus, liveDdtNumber: string | null, ship: boolean): string[] {
+// owb- (S3 ss1 step 1.3): `sendOn` — a shipment through our warehouse takes the sale DDT of Send on as a SECOND live DDT, only while
+// it left (SHIPPED), the goods arrived, the live one (the newest) is the TRANSFER and the one asked is a SALE. Without it, as before.
+export function issueStateProblems(status: ShipmentStatus, liveDdtNumber: string | null, ship: boolean, sendOn: SendOnState | null = null): string[] {
   if (status === 'DRAFT') return ['The shipment is a DRAFT: pack it first (a DDT is issued for packed goods).']
   if (status !== 'PACKED' && status !== 'SHIPPED') return [`The shipment is ${status}: no DDT is issued for it.`]
   const problems: string[] = []
-  if (liveDdtNumber !== null) problems.push(`DDT ${liveDdtNumber} is live for this shipment: cancel it first (a shipment has one live DDT).`)
+  const saleAfterTransfer = status === 'SHIPPED' && sendOn !== null && sendOn.legArrived && sendOn.liveDdtReason === 'TRANSFER' && sendOn.reason === 'SALE'
+  if (liveDdtNumber !== null && !saleAfterTransfer) problems.push(`DDT ${liveDdtNumber} is live for this shipment: cancel it first (a shipment has one live DDT).`)
   if (status === 'SHIPPED' && ship) problems.push('The goods left already: a replacement DDT does not ship them again.')
   return problems
 }
@@ -362,9 +405,13 @@ function startOf(facts: DdtFacts, request: DdtRequest, now: Date, problems: Issu
     return now
   }
   const grace = DDT_START_GRACE_MINUTES * 60_000
-  if (facts.shipment.status === 'SHIPPED') {
-    // A replacement: the transport started when the goods left.
-    const start = given ?? facts.shipment.shippedAt ?? now
+  // owb- (S3 ss1): the sale DDT of Send on is a new transport (from our warehouse to the customer): it starts when it is issued,
+  // as a packed shipment's DDT does; a replacement of it once the goods were sent on keeps the time they were sent on.
+  const leg = facts.warehouseLeg ?? null
+  const sendOn = leg !== null && leg.arrived && ddtReasonOf(facts, request) !== 'TRANSFER'
+  if (facts.shipment.status === 'SHIPPED' && !(sendOn && leg.forwardedAt === null)) {
+    // A replacement: the transport started when the goods left (owb-: or, for the sale DDT of Send on, when they were sent on).
+    const start = given ?? (sendOn ? leg.forwardedAt : null) ?? facts.shipment.shippedAt ?? now
     if (start.getTime() > now.getTime() + grace) problems.push({ path: at, message: 'The goods left already: the transport started before now.' })
     return start
   }
@@ -394,8 +441,15 @@ const positiveKg = (value: string): boolean => fitsDecimal(value, 18, 4) && (par
  */
 export function draftDdt(facts: DdtFacts, request: DdtRequest, now: Date): { readonly draft: DdtDraft; readonly problems: readonly Issue[] } {
   const problems: Issue[] = []
-  const reason = request.reason ?? 'SALE'
+  // owb- (S3 ss1): TRANSFER by default while the goods go to our warehouse (ddtReasonOf); before, SALE always.
+  const reason = ddtReasonOf(facts, request)
+  const leg = facts.warehouseLeg ?? null
   if (!(DDT_REASONS as readonly string[]).includes(reason)) problems.push({ path: 'body/reason', message: 'Give the reason for the transport (causale).' })
+  // ── owb- (S3 ss1 step 1.3): TRANSFER only for a shipment to our warehouse, until it arrived; until then no other reason ──
+  else if (reason === 'TRANSFER' && leg !== null) {
+    if (leg.arrived) problems.push({ path: 'body/reason', message: LEG_DDT_WORDS.transferAfterArrival })
+  } else if (leg !== null && !leg.arrived && SHIPMENT_DDT_REASONS.includes(reason)) problems.push({ path: 'body/reason', message: LEG_DDT_WORDS.transferFirst })
+  // ── end owb- ──
   else if (!SHIPMENT_DDT_REASONS.includes(reason)) problems.push({ path: 'body/reason', message: NOT_FOR_A_SHIPMENT[reason] ?? 'Not a reason a shipment to a customer travels for.' })
   const reasonText = trimmed(request.reasonText)
   if (reason === 'OTHER' && reasonText === null) problems.push({ path: 'body/reasonText', message: 'Say the reason for the transport in words.' })
@@ -435,12 +489,18 @@ export function draftDdt(facts: DdtFacts, request: DdtRequest, now: Date): { rea
   problems.push(...legalProblems(facts.company))
   const sender: DdtPartySnapshot = { name: facts.company.legalName, address: facts.company.address, vatNumber: facts.company.vatNumber, fiscalCode: facts.company.fiscalCode }
   const buyer = (facts.billTo ?? {}) as Record<string, unknown>
-  const recipient: DdtPartySnapshot = { name: string(buyer.legalName) ?? '', address: postalAddressOf(buyer.address), vatNumber: string(buyer.vatNumber), fiscalCode: string(buyer.fiscalCode) }
+  // owb- (S3 ss1): the transfer to our warehouse names the company itself, at the warehouse (the shipment's ship-to), as its
+  // recipient; the sale DDT of Send on goes to the customer's delivery address (the leg's), not to the warehouse.
+  const transfer = reason === 'TRANSFER' && leg !== null
+  const deliverTo = leg !== null && leg.arrived && !transfer ? leg.customerShipTo : facts.shipment.shipTo
+  const recipient: DdtPartySnapshot = transfer
+    ? { name: facts.company.legalName, address: postalAddressOf(facts.shipment.shipTo) ?? facts.company.address, vatNumber: facts.company.vatNumber, fiscalCode: facts.company.fiscalCode }
+    : { name: string(buyer.legalName) ?? '', address: postalAddressOf(buyer.address), vatNumber: string(buyer.vatNumber), fiscalCode: string(buyer.fiscalCode) }
   if (recipient.name === '') problems.push({ path: 'shipment/recipient', message: "The order's buyer has no name: the DDT names the recipient (DPR 472/1996)." })
   if (recipient.address === null) problems.push({ path: 'shipment/recipient/address', message: "The order's buyer has no complete address (street, postal code, city, country): the DDT prints it (DPR 472/1996)." })
-  const shipTo = postalAddressOf(facts.shipment.shipTo)
+  const shipTo = postalAddressOf(deliverTo)
   if (shipTo === null) problems.push({ path: 'shipment/shipTo', message: 'The delivery address is not complete (street, postal code, city, country).' })
-  const destinationName = string((facts.shipment.shipTo as Record<string, unknown> | null)?.name)
+  const destinationName = string((deliverTo as Record<string, unknown> | null)?.name)
   const destination: DdtDestination | null = shipTo && !(recipient.address && sameAddress(shipTo, recipient.address)) ? { ...(destinationName ? { name: destinationName } : {}), ...shipTo } : null
 
   // B-OP-042 (order page N6, lines-derived): every order the shipment carries, the first first; one recipient (the first
