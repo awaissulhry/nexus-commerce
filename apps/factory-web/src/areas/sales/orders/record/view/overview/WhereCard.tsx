@@ -36,6 +36,8 @@ import { formatDateTime } from '../../../../../../lib/i18n/format'
 import type { PlainStage } from '../../../../../../lib/production/model'
 import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overview/where'
 // ---- end F-MS-102
+import { WhereHero } from './FlowParts' // owb-of5 step 2: the mockup, the next box, the departments strip
+import { lifeOfOrder } from '../../band/model' // owb-of5: the order's life (L9)
 import { useSayHand } from './StageByHandDialog' // F-MS-103: the door's words (F-SC-W2: the dialogs are the page's, OrderDialogs)
 import { stagePicksOf } from '../../overview/where' // F-SC-W3: the steps of the stages open the stage dialog
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
@@ -95,6 +97,9 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   return (
     <OverviewCard lead title={t('overview.where')} aside={<FreshnessLine mode={model.liveState === 'live' ? 'live' : model.liveState === 'offline' ? 'offline' : 'connecting'} asOf={read?.asOf ?? null} />}>
       <Headline sentence={loading ? null : sentence} quiet={quiet} />
+      {/* owb-of5 step 2 (design § 5i; prototype mockViewer + nextBox + deptStrip): the mockup (the whole A4 page, never cut) beside the next
+          step in plain words and, in production, the departments with their baskets (S5's board read). */}
+      {model.flow ? <WhereHero orderId={order.id} number={order.number} read={model.flow.picture.read} life={lifeOfOrder(order, model.flow.legs).life} departments={model.flow.departments} /> : null}
       {/* ---- F-OO-103: the strips slot — one strip per hold or wait, most blocking first, each with its real door (F-OO-104, F-OO-105) ---- */}
       {/* F-OO-106: the credit strip names what its check found in the Finance page's own words (sales-credit finding.*). */}
       <WithMessages namespaces={CREDIT_NS}>

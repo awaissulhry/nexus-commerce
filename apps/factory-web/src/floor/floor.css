@@ -490,3 +490,8 @@
 .fw-floor-card-words .nds-floor-card-code {
   font-family: inherit;
 }
+
+/* ── owb-fl8: Large words (a setting of this phone only, Floor › Me): every screen's body a size larger, still no sideways scroll ── */
+.fw-floor-large .nds-floor-frame-main {
+  zoom: 1.2;
+}
