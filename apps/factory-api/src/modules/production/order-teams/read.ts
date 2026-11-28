@@ -63,7 +63,8 @@ const isLate = (order: Pick<OrderRow, 'status' | 'promiseDate'>, today: Business
 export async function basketsOfOrders(client: Client, orderIds: readonly string[]): Promise<Map<string, { readonly inWork: readonly { readonly id: string; readonly siteId: string }[]; readonly planned: number }>> {
   const result = new Map<string, { inWork: { id: string; siteId: string }[]; planned: number }>()
   if (orderIds.length === 0) return result
-  const lines = await client.salesOrderLine.findMany({ where: { orderId: { in: [...orderIds] } }, select: { id: true, orderId: true, quantity: true } })
+  // A fee line (tooling, set-up, freight) makes nothing: only the lines that make garments count.
+  const lines = await client.salesOrderLine.findMany({ where: { orderId: { in: [...orderIds] }, kind: { not: 'FEE' } }, select: { id: true, orderId: true, quantity: true } })
   const sizes = lines.length === 0 ? [] : await client.workOrderSize.findMany({ where: { salesOrderLineId: { in: lines.map((line) => line.id) } }, select: { workOrderId: true, salesOrderLineId: true, quantity: true } })
   const workOrderIds = [...new Set(sizes.map((size) => size.workOrderId))]
   const workOrders = workOrderIds.length === 0 ? [] : await client.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, status: true, styleId: true } })
