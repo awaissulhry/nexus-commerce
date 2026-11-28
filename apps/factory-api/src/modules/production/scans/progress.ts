@@ -12,6 +12,11 @@ import { officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
 import { dayOrNull } from '../work-orders/store'
 import { readCells, readLines, readOperations, readStations, readWorkOrderScans, SCAN_HEADER, type Reader, type ScanHeader } from './store'
+// owb-fl2 (S5): a basket moved INTO a step by hand waits there (factory-domain wipOf `moved`).
+import { basketPlace } from '@nexus/factory-domain/production/baskets/place'
+import { basketRoute } from '@nexus/factory-domain/production/baskets/route'
+import { standingScans as standingOfScans } from '@nexus/factory-domain/production/scans/rules'
+import { readEdits, readMoves } from '../baskets/store'
 
 /**
  * Work in progress from the floor's scans (B-W1-42; MES-167, MES-079; A2 SCR-072 "Bundles & progress", SCR-073 "Work in
@@ -51,7 +56,18 @@ export async function wipFor(db: Reader, workOrder: Pick<ScanHeader, 'id' | 'sit
   const scans = await readWorkOrderScans(db, workOrder.id)
   const reworks = await wipReworks(db, workOrder.id)
   const stations = await readStations(db, scans.map((scan) => scan.stationId))
-  return wipOf({ operations, cells, bundles, scans, reworks, lineOf: (stationId) => stations.get(stationId)?.lineId ?? null })
+  // owb-fl2: each basket placed by a hand move, at the step the move put it (its own route; with no move: none, today's WIP).
+  const movesOf = await readMoves(db, bundles.map((bundle) => bundle.id))
+  const moved = new Map<string, string | null>()
+  if (movesOf.size > 0) {
+    const editsOf = await readEdits(db, [...movesOf.keys()])
+    const standing = standingOfScans(scans)
+    for (const [bundleId, moves] of movesOf) {
+      const place = basketPlace(basketRoute(operations, editsOf.get(bundleId) ?? []), standing, bundleId, moves)
+      if (place.how === 'MOVE') moved.set(bundleId, place.operationId)
+    }
+  }
+  return wipOf({ operations, cells, bundles, scans, reworks, lineOf: (stationId) => stations.get(stationId)?.lineId ?? null, ...(moved.size > 0 ? { moved } : {}) })
 }
 
 /** The work order's rework at a glance (B-W2b-10): open rework orders and their garments, and what DONE ones gave back. */
