@@ -17,6 +17,7 @@ import { releaseInCommand } from '../work-orders/release'
 import { readWorkOrder } from '../work-orders/store'
 import { createWorkOrderInCommand, todayOfCommand, type ChangeWorkOrderSource } from '../work-orders/work-orders'
 import { basketsAtPrintBySite, designFilesOf, draftGroupsOf, goodsLinesOf, orderNow, printOrder, printsOf, workOrdersOf } from './store'
+import { keepStructuresInCommand } from '../structures/keep' // owb-ss6 6.4 (b)
 
 /**
  * POST /production/orders/:orderId/print-and-start (production.print.start; owb- order workflow, S3 ss2 step 2.2; settles L1, L6,
@@ -129,6 +130,9 @@ export async function printAndStart(caller: CommandCaller, orderId: string, body
           if (!taken || taken.length === 0) continue
           await tx.orderTeam.update({ where: { id: team.id }, data: { bundleIds: [...team.bundleIds, ...taken], version: { increment: 1 } }, select: { id: true } })
         }
+
+        // owb-ss6 6.4 (b): the order keeps each line's structure (OrderLineStructureKept): a later rule change changes nothing on it.
+        await keepStructuresInCommand(tx, current, context.actorId, tools.now)
 
         // 9. One audit row, one event.
         const workOrders = drafts.map((draft) => ({ id: draft.id, number: draft.number }))

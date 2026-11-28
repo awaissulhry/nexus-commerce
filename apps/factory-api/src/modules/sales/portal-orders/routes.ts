@@ -23,6 +23,12 @@ import { orderPictureContract, portalOrderLogContract, portalRequestLogContract,
 import { setPortalOrderPicture, setRequestPicture } from '../orders/picture-set'
 import { portalWriter } from '../portal-ordering/writer'
 import { portalOrderLog, portalRequestLog } from './log'
+// owb- po2.2 (order workflow): the customer's Money tab and "I paid".
+import { moneyContract, paymentNoticeContract } from './contract'
+import { orderMoney, sendPaymentNotice } from './money'
+// owb- po2.4 (order workflow): factory people for your brand.
+import { factoryPeopleContract } from './contract'
+import { factoryPeople } from './factory-people'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075 status in customer words, SAL-076 production progress per customer
@@ -64,4 +70,10 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   app.post('/portal/order-requests/:requestId/picture', { schema: requestPictureContract }, async (request) => setRequestPicture(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.post('/portal/sales-orders/:orderId/picture', { schema: orderPictureContract }, async (request) => setPortalOrderPicture(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
   // ---- end owb-
+
+  // ---- owb- po2.2: the Money tab (price grain) and "I paid: tell the factory…" (a notice).
+  app.get('/portal/sales-orders/:orderId/money', { schema: moneyContract }, async (request) => orderMoney(app, request, request.params.orderId, appClock(app).now()))
+  app.post('/portal/sales-orders/:orderId/payment-notices', { schema: paymentNoticeContract }, async (request) => sendPaymentNotice(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  // ---- owb- po2.4: the office people the factory gave this customer.
+  app.get('/portal/factory-people', { schema: factoryPeopleContract }, async (request) => factoryPeople(app, request))
 })

@@ -301,7 +301,7 @@ describe('B-CP-072: a draft order’s files', { timeout: SLOW_TEST_TIMEOUT_MS },
     const back = await ok('aBuyer', 'POST', `/portal/order-requests/${draft.id}/lines/${draft.lineId}/put-back`, { version: out.request.version })
     expect(back.request.files.sheets.map((file: Json) => file.id)).toEqual([sheet.id])
     const again = await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}/lines/${draft.lineId}?version=${back.request.version}`)
-    expect(await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}?version=${again.request.version}`)).toEqual({ discarded: true })
+    expect(await ok('aBuyer', 'DELETE', `/portal/order-requests/${draft.id}?version=${again.request.version}`)).toEqual({ discarded: true, withdrawn: false })
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "StoredFile" WHERE id = $1', [sheet.id]))[0]!.status).toBe('DELETED')
     expect((await admin<{ status: string }>('SELECT status::text AS status FROM "StoredFile" WHERE id = $1', [logo.id]))[0]!.status).toBe('DELETED')
   })

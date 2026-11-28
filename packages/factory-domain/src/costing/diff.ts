@@ -78,9 +78,15 @@ export function diffCostCells(fromCells: readonly ExactCell[], toCells: readonly
 
     const kinds = [...new Set([...(to?.labour ?? []), ...(from?.labour ?? [])].map((part) => part.workCentreKind))]
     const labour = kinds.flatMap((workCentreKind) => {
-      const side = (part: ExactCell['labour'][number] | undefined) => (part ? { minutes: minutesText(part.minutes), labourCost: cost(part.amount) } : null)
-      const left = side(from?.labour.find((part) => part.workCentreKind === workCentreKind))
-      const right = side(to?.labour.find((part) => part.workCentreKind === workCentreKind))
+      // owb-pd2 2.5: a kind may have several parts (a department with its own rate): their minutes and costs are summed.
+      const side = (parts: readonly ExactCell['labour'][number][]) => {
+        if (parts.length === 0) return null
+        const minutes = parts.slice(1).reduce((sum, part) => sum.plus(part.minutes), parts[0]!.minutes)
+        const amount = parts.some((part) => part.amount === null) ? null : parts.slice(1).reduce((sum, part) => sum.plus(part.amount!), parts[0]!.amount!)
+        return { minutes: minutesText(minutes), labourCost: cost(amount) }
+      }
+      const left = side(from?.labour.filter((part) => part.workCentreKind === workCentreKind) ?? [])
+      const right = side(to?.labour.filter((part) => part.workCentreKind === workCentreKind) ?? [])
       if (left && right && left.minutes === right.minutes && left.labourCost === right.labourCost) return []
       return [{ workCentreKind, from: left, to: right }]
     })

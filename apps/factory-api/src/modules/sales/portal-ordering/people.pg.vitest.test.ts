@@ -389,7 +389,7 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     const out = await ok('aBuyer', 'DELETE', `${base(draft.id)}/lines/${draft.lineId}?version=${both.request.version}`)
     expect(await count()).toBe(3)
     expect(out.request.customLines.map((line: Json) => line.id)).toEqual([secondLine])
-    expect(await ok('aBuyer', 'DELETE', `${base(draft.id)}?version=${out.request.version}`)).toEqual({ discarded: true })
+    expect(await ok('aBuyer', 'DELETE', `${base(draft.id)}?version=${out.request.version}`)).toEqual({ discarded: true, withdrawn: false })
     expect(await count()).toBe(0)
   })
 

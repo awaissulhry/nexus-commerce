@@ -18,6 +18,7 @@ import { MAIL_VERDICTS } from '@nexus/factory-domain/email-in/rules' // tw-s S.5
 import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
 // ---- B-SA-061: what a message is about (a part of its order).
 import { ABOUT_KINDS } from './about'
+import { QUIET_LINE_KEYS } from '@nexus/factory-domain/threads/quiet-lines' // owb- po2.3
 /** Office only: a file of an inbound mail that was not kept, with why (a signature logo is never listed). */
 export const skippedAttachmentView = output({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.enum(SKIP_REASONS) })
 /** Office only: the mails for this conversation that wait for a person (HELD with why, TRIAGE: Mail to sort). */
@@ -127,8 +128,15 @@ export const aboutInput = input({ kind: z.enum(ABOUT_KINDS), id: id() })
 export const aboutView = output({ kind: z.enum(ABOUT_KINDS), id: id() })
 // ---- end B-SA-061
 
+// owb- po2.3 (order workflow; design § 5zi F): a quiet line's event — its key (factory-domain threads/quiet-lines QUIET_LINE_KEYS), its
+// arguments (ids and short values; `by`: CUSTOMER or FACTORY, never a person) and how many lines of one side and key inside 10 minutes
+// it stands for (grouped at read time). null: an ordinary message.
+export const quietEventView = output({ key: z.enum(QUIET_LINE_KEYS), args: z.record(z.string(), z.union([z.string(), z.number()])), count: z.number().int().min(1) })
+
 export const messageView = output({
   id: id(),
+  /** owb- po2.3: a quiet line's event; null: an ordinary message. */
+  event: quietEventView.nullable().optional(),
   threadId: id(),
   direction: z.enum(MESSAGE_DIRECTIONS),
   audience: z.enum(MESSAGE_AUDIENCES),

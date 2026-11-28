@@ -8,7 +8,7 @@ import { REVISION_STATUSES } from '../styles/revisions'
 import { STYLE_STATUSES } from '../styles/rules'
 import { MAX_INSTRUCTIONS, MINUTES_INPUT_SCALE, MINUTES_PRECISION, MINUTES_SCALE, OPERATION_CODE, OPERATION_CODE_RULE, OPERATION_STATUSES, WORK_CENTRE_KINDS } from './operations'
 import { MAX_PARALLEL_GROUP } from './parallel'
-import { MAX_ROUTING_STEPS, ROUTING_ISSUE_CODES } from './rules'
+import { MAX_ROUTING_STEPS, ROUTE_ERRORS, ROUTE_WARNINGS, ROUTING_ISSUE_CODES } from './rules'
 import { MAX_TRANSIT_DAYS } from './subcontract'
 
 /**
@@ -192,6 +192,41 @@ export type RemoveStepQuery = z.output<typeof removeStepQuery>
 export const reorderStepsBody = input({ version: version(), stepIds: z.array(id()).min(1).max(MAX_ROUTING_STEPS) })
 export type ReorderStepsBody = z.output<typeof reorderStepsBody>
 
+// ---- owb-pd2 (S4 products, step 2.2): the route builder's ONE save of a product route --------------------------------------
+/**
+ * PUT …/revisions/:revisionId/routing/steps: the whole route in its new order, under the revision's version (DRAFT only). A step
+ * with `stepId` keeps its row (its depth — cells, checkpoint, settings, size times — stays; only its place, minutes and department
+ * change); a step without one is new: the department's default library operation; a step of the routing not named is removed.
+ * `minutes` left out: a kept step keeps its own, a new one takes its operation's. Refused (400, `refusal/<code>`) on a route rule
+ * error (./rules routeProblems).
+ */
+export const routeStepInput = input({ stepId: id().optional(), departmentId: id(), minutes: minutes().optional() })
+export const saveRouteStepsBody = input({ version: version(), steps: z.array(routeStepInput).max(MAX_ROUTING_STEPS) })
+export type SaveRouteStepsBody = z.output<typeof saveRouteStepsBody>
+
+/** What a route breaks (errors: a save is refused) and points out (warnings): ./rules routeProblems. */
+export const routeRulesView = output({ errors: z.array(z.enum(ROUTE_ERRORS)), warnings: z.array(z.enum(ROUTE_WARNINGS)) })
+export type RouteRulesView = z.infer<typeof routeRulesView>
+
+/** One step of a route as the builder reads it (a product route's step: `stepId` = the RoutingOperation's id). */
+export const routeStepView = output({ stepId: id().optional(), departmentId: id(), number: z.number().int(), minutes: z.string().nullable() })
+export type RouteStepView = z.infer<typeof routeStepView>
+
+/** owb-pd2 2.3: a model or customer route of a revision (StyleRoute; see the 2.3 block below). */
+export const STYLE_ROUTE_KINDS = ['MODEL', 'CUSTOMER'] as const
+export type StyleRouteKind = (typeof STYLE_ROUTE_KINDS)[number]
+export const styleRouteView = output({
+  id: id(),
+  name: z.string(),
+  kind: z.enum(STYLE_ROUTE_KINDS),
+  party: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  steps: z.array(routeStepView),
+  rules: routeRulesView,
+  version: z.number().int(),
+})
+export type StyleRouteView = z.infer<typeof styleRouteView>
+// ---- end owb-pd2 2.2
+
 /** The steps of a style's RELEASED routing copied into this draft: after its steps, or instead of them. */
 export const copyStepsBody = input({
   version: version(),
@@ -244,6 +279,11 @@ export const stepView = output({
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
+  /**
+   * owb-pd2 2.2: the step's department — its own (RoutingOperation.departmentId), else its kind's (an old released routing:
+   * production/departments/kinds departmentOfKind); null: done outside (a subcontracted step) or none of that number.
+   */
+  department: output({ id: id(), number: z.number().int() }).nullable(),
 })
 export type StepView = z.infer<typeof stepView>
 
@@ -272,6 +312,10 @@ export const routingView = output({
   warnings: z.array(issue),
   /** A DRAFT revision of a style that is not archived: its routing may be changed. */
   editable: z.boolean(),
+  /** owb-pd2 2.2: the route rules on the steps as they are (./rules routeProblems; nothing is "added new" here). */
+  rules: routeRulesView,
+  /** owb-pd2 2.3: the revision's model and customer routes (StyleRoute), in their order. */
+  routes: z.array(styleRouteView),
 })
 export type RoutingView = z.infer<typeof routingView>
 
@@ -290,3 +334,53 @@ export const routingDiffView = output({
   minutes: output({ from: z.string(), to: z.string() }),
 })
 export type RoutingDiffView = z.infer<typeof routingDiffView>
+
+// ---- owb-pd2 (S4 products, step 2.3): model and customer routes, ready-made routes, the routes of other products ----------------
+/**
+ * A route that is not the revision's routing: a MODEL route (sales picks it on an order line; it may be "only for" one customer) or
+ * a CUSTOMER route (one customer's, used by itself on that customer's orders) of one style revision, frozen with it (StyleRoute);
+ * a ready-made route of the factory (RouteTemplate: closed = gone from "Start from a copy", kept, never deleted). A step is a
+ * department (and, on a style route, that department's default library operation) with minutes per garment or none. The route
+ * rules of ./rules routeProblems hold for every one (errors refuse a save: 400 `refusal/<code>`).
+ */
+export const ROUTE_TEMPLATE_STATUSES = ['OPEN', 'CLOSED'] as const
+export const ROUTE_NAME_MAX = 80
+
+const routeName = () => z.string().trim().min(1).max(ROUTE_NAME_MAX)
+/** A route's steps as the builder sends them: a department and, when typed, minutes per garment. */
+export const routeStepsInput = () => z.array(input({ departmentId: id(), minutes: minutes().optional() })).max(MAX_ROUTING_STEPS)
+
+export const styleRouteBody = input({
+  name: routeName(),
+  kind: z.enum(STYLE_ROUTE_KINDS),
+  /** CUSTOMER: the customer (required); MODEL: "only for" this customer, or null: any customer. */
+  partyId: id().nullable(),
+  steps: routeStepsInput(),
+})
+export type StyleRouteBody = z.output<typeof styleRouteBody>
+export const updateStyleRouteBody = styleRouteBody.extend({ version: version() })
+export type UpdateStyleRouteBody = z.output<typeof updateStyleRouteBody>
+export const deleteStyleRouteQuery = input({ version: z.coerce.number().int().min(1) })
+
+
+export const listRouteTemplatesQuery = input({ status: z.enum([...ROUTE_TEMPLATE_STATUSES, 'ALL']).default('OPEN') })
+export const routeTemplateBody = input({ name: routeName(), steps: routeStepsInput() })
+export type RouteTemplateBody = z.output<typeof routeTemplateBody>
+export const updateRouteTemplateBody = input({ version: version(), name: routeName().optional(), steps: routeStepsInput().optional() })
+export type UpdateRouteTemplateBody = z.output<typeof updateRouteTemplateBody>
+export const routeTemplateMoveBody = input({ version: version() })
+export const routeTemplateView = output({ id: id(), name: z.string(), steps: z.array(routeStepView), status: z.enum(ROUTE_TEMPLATE_STATUSES), version: z.number().int() })
+export type RouteTemplateView = z.infer<typeof routeTemplateView>
+
+export const routeSourcesQuery = input({ q: z.string().trim().max(100).optional() })
+export const routeSourceView = output({
+  styleId: id(),
+  code: z.string(),
+  name: z.string(),
+  revision: z.number().int(),
+  /** The product's route: its current revision's routing (its RELEASED one, else its newest draft). */
+  product: z.array(routeStepView),
+  routes: z.array(output({ id: id(), name: z.string(), kind: z.enum(STYLE_ROUTE_KINDS), steps: z.array(routeStepView) })),
+})
+export type RouteSourceView = z.infer<typeof routeSourceView>
+// ---- end owb-pd2 2.3

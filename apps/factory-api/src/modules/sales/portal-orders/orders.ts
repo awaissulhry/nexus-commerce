@@ -325,7 +325,9 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     const sent = (await requestSends(client, [order.id])).get(order.id) ?? null
     // owb- po1.4: its own columns and their values (the partner scope: the party's rows only).
     const ownColumns = (await ownColumnsOf(client, { orderIds: [order.id] })).get(order.id) ?? NO_OWN_COLUMNS
-    return { lines, shipments, shipped, deposits, profiles, sent, ownColumns }
+    // owb- po2 (S1 lead add): the subject of the request it was confirmed from (partner-readable; none: null).
+    const fromRequest = await client.portalOrderRequest.findFirst({ where: { salesOrderId: order.id }, select: { subject: true }, orderBy: [{ decidedAt: 'desc' }, { id: 'asc' }] })
+    return { lines, shipments, shipped, deposits, profiles, sent, ownColumns, subject: fromRequest?.subject ?? null }
   })
   // owb- po1.5: its chosen picture (a file shared with the party: its type; none chosen: the first line's design).
   const picture = await pictureOf((work) => request.withClient(work), order.pictureFileId, order.pictureSetAt)
@@ -401,6 +403,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     order: {
       id: order.id,
       customerRef: order.customerRef,
+      subject: read.subject, // owb- po2 (S1 lead add)
       // pp-s s.1 (O3-W1, plan §0.5 "counts do not leak"): no office series — the customer reads its own number only.
       yourNumber: customerNumberOf('ORDER', order.customerSeq),
       status,

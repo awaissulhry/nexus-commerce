@@ -39,7 +39,9 @@
     "MATERIAL": "Material",
     "PURCHASE_ORDER": "Purchase order",
     "LOT": "Lot",
-    "WORK_ORDER": "Work order"
+    "WORK_ORDER": "Work order",
+    "TEAM": "Team or unit",
+    "EMPLOYEE": "Employee"
   },
   "shared": {
     "title": "{record} shares its fields with {other}",

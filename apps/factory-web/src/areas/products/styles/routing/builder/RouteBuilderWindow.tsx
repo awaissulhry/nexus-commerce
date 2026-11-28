@@ -180,7 +180,7 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
       setTemplateName('')
       setTemplatesRound((round) => round + 1)
     } catch (error) {
-      setTemplateProblem(refusalOf(error))
+      setTemplateProblem(refusalOf(error, 'template'))
     } finally {
       setTemplateBusy(false)
     }
@@ -195,7 +195,7 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
       await setTemplateOpen(api, entry, reopen)
       setTemplatesRound((round) => round + 1)
     } catch (error) {
-      setTemplateProblem(refusalOf(error))
+      setTemplateProblem(refusalOf(error, 'template'))
     } finally {
       setTemplateBusy(false)
     }

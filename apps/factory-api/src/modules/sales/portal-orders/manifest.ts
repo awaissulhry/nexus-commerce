@@ -29,4 +29,10 @@ export const manifest = defineManifest({
   // written in the tenant's office scope as the person after the party check (the partner holds SELECT only on SalesOrder).
   'POST /portal/order-requests/:requestId/picture': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/sales-orders/:orderId/picture': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // owb- po2.2 (order workflow): the Money tab (who reads orders; the price grain: the handler, 403 without) and "I paid" (the Buyer,
+  // the Admin: portal.payments.notify; the price grain too).
+  'GET /portal/sales-orders/:orderId/money': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
+  'POST /portal/sales-orders/:orderId/payment-notices': { audiences: ['partner'], permission: 'portal.payments.notify', scope: 'party' },
+  // owb- po2.4 (order workflow): factory people for your brand (Your people: every customer person who sees its colleagues).
+  'GET /portal/factory-people': { audiences: ['partner'], permission: 'portal.colleagues.view', scope: 'party' },
 })
