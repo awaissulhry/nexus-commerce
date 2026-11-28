@@ -60,7 +60,7 @@ export function tilesOf<C extends string>(types: readonly CallTypeRow[], codes: 
 // ---- the department pick (settle 2-3) ---------------------------------------------------------------------------------------
 
 /** A phone with no department picked tells nothing yet: the window offers the pick first. */
-export const needsDepartment = (read: Pick<HelpRead, 'here'>, pickedHere = false): boolean => read.here.departmentId === null && !pickedHere
+export const needsDepartment = (read: Pick<HelpRead, 'here'>, pickedHere = false): boolean => (read.here?.departmentId ?? null) === null && !pickedHere
 
 export type PickOutcome = { readonly kind: 'taken' } | { readonly kind: 'choose'; readonly stations: readonly { readonly id: string; readonly name: string }[] } | { readonly kind: 'none' }
 

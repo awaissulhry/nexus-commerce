@@ -44,7 +44,8 @@ export interface CallFlag {
 export interface HelpRead {
   readonly basket: { readonly id: string; readonly code: string; readonly workOrderId: string }
   readonly picture: { readonly src: string } | null
-  readonly here: { readonly departmentId: string | null }
+  /** fl5's read may carry no `here` (null): treated as no department picked. */
+  readonly here: { readonly departmentId: string | null } | null
   readonly flags: {
     readonly problem: CallFlag | null
     readonly ask: CallFlag | null

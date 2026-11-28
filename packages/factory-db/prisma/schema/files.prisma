@@ -280,6 +280,8 @@ model StoredFile {
   // suggestions whose voice note it is.
   checklistPhotos        OperationChecklistResult[] @relation("OperationChecklistResultFile")
   floorSuggestionVoices  FloorSuggestion[]          @relation("FloorSuggestionVoice")
+  // owb-ssw production.prisma (S3 schema wave "structures + units"): the places of the scan code on its pages (a design file).
+  scanCodePlacements     ScanCodePlacement[]        @relation("ScanCodePlacementFile")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
