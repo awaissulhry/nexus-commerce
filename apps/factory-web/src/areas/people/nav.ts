@@ -1,4 +1,6 @@
 import { BarChart3, CalendarCheck, CalendarClock, FileOutput, Gauge, GraduationCap, HandCoins, SlidersHorizontal, UserRound, Users } from 'lucide-react'
+// owb- (order workflow): Factory structure, People by customer.
+import { Network, UsersRound } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -36,6 +38,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'people-attendance', label: 'shell:nav.people.attendance', href: '/people/attendance', icon: CalendarCheck, permission: 'people.attendance.view' },
           // SCR-263 (B-W2b-60): the roster sheet (GET /people/shifts/roster, people.shifts.view).
           { id: 'people-shifts', label: 'shell:nav.people.shifts', href: '/people/shifts', icon: CalendarClock, permission: 'people.shifts.view' },
+          // owb- (order workflow, base settle 7): DECLARED rows — each shows once its page is built (its address in OFFICE_PAGES).
+          // Factory structure (S3 ss8): the units and who leads them (read people.view; keeping it people.structure.manage).
+          { id: 'people-structure', label: 'shell:nav.people.structure', href: '/people/structure', icon: Network, permission: 'people.view' },
+          // People by customer (S2 of4): the factory people given to each customer and their extra rights — role assignments, so
+          // the right Admin › Users assigns roles with (roles.assign: the Owner and the administrator).
+          { id: 'people-by-customer', label: 'shell:nav.people.byCustomer', href: '/people/by-customer', icon: UsersRound, permission: 'roles.assign' },
         ],
       },
       {

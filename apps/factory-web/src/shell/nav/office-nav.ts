@@ -532,6 +532,28 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * owb- (order workflow, base settle 7): the office pages DECLARED before they are built — each has its route stub (a
+ * `page.tsx` that shows shell/office/NotBuiltYet), its nav row and its approved-tree entry (`deferred`), but is NOT in
+ * OFFICE_PAGES, so no row shows it and no entry lands on it. The land of the session that builds a page moves its address
+ * from here to OFFICE_PAGES (and sets the tree entry's `href`): then its row appears by itself.
+ */
+export const DECLARED_PAGES: ReadonlySet<string> = new Set([
+  // S3: Production › Teams (ss7), Production › Settings › Order structures (ss8), People › Factory structure (ss8),
+  // Warehouse › Outbound › Ready to ship and Our warehouses (ss3).
+  '/production/teams',
+  '/production/order-structures',
+  '/people/structure',
+  '/warehouse/ready-to-ship',
+  '/warehouse/our-warehouses',
+  // S5: Production › Baskets board and Chains (fl9).
+  '/production/baskets',
+  '/production/chains',
+  // S2: People › People by customer (of4), Home › Design desk (of7).
+  '/people/by-customer',
+  '/home/design-desk',
+])
+
+/**
  * B-W2b-55: an area declares every page of its tree once (People: all nine), and a row shows only once its page is built
  * (its address in OFFICE_PAGES), so a page step fills its own route and its row appears by itself; never a row that opens
  * nothing. A section left without a row goes with its rows; an area with no section left, too (unless its own address is

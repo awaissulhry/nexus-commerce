@@ -22,6 +22,12 @@ export const SHIPPING_DEFINITIONS = definePermissions('shipping', {
       "Issue a DDT (it takes the next number of the company's DDT series, kept for ever): a shipment's, or one for goods that travel without a sales shipment (a subcontract kit, goods back to a supplier, a repaired garment, returned goods sent back); print its PDF again when it is missing.",
   },
   'ddt.cancel': { risk: 'write', description: 'Cancel an issued DDT (of a shipment or for another reason) with its reason: it keeps its number, and a new DDT replaces it.' },
+  // owb- (order workflow, plan.md § 5 D; PL-split S3 ss1): how an order travels — alone, together with the customer's other
+  // orders, or to our warehouse first — is planned apart from packing and sending it (shipping.manage = pack and send, R38).
+  plan: {
+    risk: 'write',
+    description: "Plan how an order travels: alone, together with the customer's other orders, or to our warehouse first and on when the customer's label comes.",
+  },
 })
 
 export const SHIPPING_VIEW = 'shipping.view' satisfies Permission
@@ -31,8 +37,19 @@ export const SHIPPING_SETTINGS_VIEW = 'shipping.settings.view' satisfies Permiss
 export const SHIPPING_SETTINGS_MANAGE = 'shipping.settings.manage' satisfies Permission
 export const SHIPPING_DDT_ISSUE = 'shipping.ddt.issue' satisfies Permission
 export const SHIPPING_DDT_CANCEL = 'shipping.ddt.cancel' satisfies Permission
+export const SHIPPING_PLAN = 'shipping.plan' satisfies Permission // owb-
 
-export const SHIPPING_PERMISSIONS: readonly Permission[] = Object.freeze([SHIPPING_VIEW, SHIPPING_MANAGE, SHIPPING_PACK, SHIPPING_SETTINGS_VIEW, SHIPPING_SETTINGS_MANAGE, SHIPPING_DDT_ISSUE, SHIPPING_DDT_CANCEL])
+export const SHIPPING_PERMISSIONS: readonly Permission[] = Object.freeze([SHIPPING_VIEW, SHIPPING_MANAGE, SHIPPING_PACK, SHIPPING_SETTINGS_VIEW, SHIPPING_SETTINGS_MANAGE, SHIPPING_DDT_ISSUE, SHIPPING_DDT_CANCEL, SHIPPING_PLAN])
 
 /** What a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): packing at its own site. Never shipping or cancelling. */
 export const SHIPPING_FLOOR_PERMISSIONS: readonly Permission[] = Object.freeze([SHIPPING_PACK])
+
+/**
+ * owb- (order workflow, plan.md § 5 D "sales: structure rules, shipping plan"): who plans how an order travels (roles/templates
+ * addedFor; the Owner from every()). Sales and the production manager. Packing and sending stay shipping.manage (the warehouse;
+ * the Factory designer only by the per-person offer `extra_pack_and_send`, R38). Never a floor role.
+ */
+export const SHIPPING_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  sales: [SHIPPING_PLAN],
+  production_manager: [SHIPPING_PLAN],
+})

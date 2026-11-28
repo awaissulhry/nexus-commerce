@@ -19,7 +19,8 @@
       "dashboards": "Dashboards",
       "reports": "Reports",
       "alerts": "Alerts",
-      "kpis": "KPI library"
+      "kpis": "KPI library",
+      "designDesk": "Design desk"
     },
     "products": {
       "area": "Products",
@@ -89,7 +90,9 @@
       "reportsGroup": "Reports",
       "reports": "People reports",
       "settingsGroup": "Settings",
-      "settings": "People settings"
+      "settings": "People settings",
+      "structure": "Factory structure",
+      "byCustomer": "People by customer"
     },
     "plant": {
       "area": "Plant",
@@ -148,7 +151,11 @@
       "scrap": "Scrap & rework",
       "calls": "Help calls",
       "labour": "Labour & corrections",
-      "instructions": "Work instructions"
+      "instructions": "Work instructions",
+      "baskets": "Baskets board",
+      "chains": "Chains",
+      "teams": "Teams",
+      "orderStructures": "Order structures"
     },
     "quality": {
       "area": "Quality",
@@ -243,7 +250,9 @@
       "reportsGroup": "Reports",
       "reports": "Warehouse reports",
       "transfers": "Transfers",
-      "rules": "Warehouse rules"
+      "rules": "Warehouse rules",
+      "readyToShip": "Ready to ship",
+      "ourWarehouses": "Our warehouses"
     },
     "frame": {
       "topBar": "Top bar"
@@ -488,6 +497,10 @@
       "title": "Nexus Factory is not answering",
       "body": "The service did not answer as it should (code {code}). Try again in a moment.",
       "action": "Try again"
+    },
+    "notBuilt": {
+      "title": "This page is on its way",
+      "body": "It is being built now. Its row in the menu appears when it is ready."
     }
   },
   "live": {

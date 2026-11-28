@@ -3,6 +3,8 @@ import { Activity, BarChart3, BellRing, ClipboardCheck, ClipboardList, Factory, 
 import { BookOpenCheck } from 'lucide-react'
 // F-PR-04: Production › Overview's icon.
 import { LayoutDashboard } from 'lucide-react'
+// owb- (order workflow): Baskets board, Chains, Teams, Order structures.
+import { LayoutGrid, Route, Users, Workflow } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -35,6 +37,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'production-work-orders', label: 'shell:nav.production.workOrders', href: '/production/work-orders', icon: ClipboardList, permission: 'workorders.view' },
           // B-W2b-56: Dispatch (SCR-138, design production.dispatch): load against minutes, lanes by line and station, assign and move.
           { id: 'production-dispatch', label: 'shell:nav.production.dispatch', href: '/production/dispatch', icon: Kanban, permission: 'production.dispatch.view' },
+          // owb- (order workflow, base settle 7): DECLARED rows — each shows once its page is built (its address in OFFICE_PAGES).
+          // Baskets board (S5 fl9): every basket of the floor, by department; Chains (S5 fl9): the production lines of standard
+          // products; Teams (S3 ss7): a column a team, its load, who owns which order's work. Their reads take workorders.view.
+          { id: 'production-baskets', label: 'shell:nav.production.baskets', href: '/production/baskets', icon: LayoutGrid, permission: 'workorders.view' },
+          { id: 'production-chains', label: 'shell:nav.production.chains', href: '/production/chains', icon: Route, permission: 'workorders.view' },
+          { id: 'production-teams', label: 'shell:nav.production.teams', href: '/production/teams', icon: Users, permission: 'workorders.view' },
         ],
       },
       {
@@ -72,7 +80,12 @@ export const officeArea: OfficeAreaNav = {
         id: 'production-settings',
         label: 'shell:nav.production.settings',
         // SCR-074: per site, who floor records name (the monitoring switch with its legal basis) and the floor's codes.
-        items: [{ id: 'production-floor-rules', label: 'shell:nav.production.floorRules', href: '/production/settings', icon: SlidersHorizontal, permission: 'production.settings.view' }],
+        items: [
+          { id: 'production-floor-rules', label: 'shell:nav.production.floorRules', href: '/production/settings', icon: SlidersHorizontal, permission: 'production.settings.view' },
+          // owb- (S3 ss8, base settle 7): Order structures — how an order is handled (steps, team, people) and the rules that pick one.
+          // DECLARED: shows once its page is built. Its read takes workorders.view (keeping them: production.structures.*).
+          { id: 'production-order-structures', label: 'shell:nav.production.orderStructures', href: '/production/order-structures', icon: Workflow, permission: 'workorders.view' },
+        ],
       },
     ],
   },

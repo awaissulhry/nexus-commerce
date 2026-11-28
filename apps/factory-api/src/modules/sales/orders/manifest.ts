@@ -72,4 +72,11 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/told': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // F-SA-244: the told lines of all the order's changes in one read (counts and times; the same wall as above).
   'GET /sales/orders/:orderId/told/changes': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // owb- (order workflow, b3.1): the ONE order log — of a confirmed order, and of a Draft or Sent order (its request); can() on the
+  // record's company AND customer (out of reach: 404), names in the office's face (a worker only behind the site's open gate).
+  'GET /sales/orders/:orderId/log': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'GET /sales/order-requests/:requestId/log': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // owb- (b3.2): the order's picture (orders.picture.set) — the order's own, the request's through the od- writer.
+  'POST /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/order-requests/:requestId/picture': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
 })

@@ -180,7 +180,10 @@
     "safety_officer": "Responsabile sicurezza",
     "company_doctor": "Medico competente",
     "read_only": "Sola lettura",
-    "designer": "Designer della fabbrica"
+    "designer": "Designer della fabbrica",
+    "extra_allow_production": "Consenti produzione",
+    "extra_pack_and_send": "Imballa e spedisci",
+    "extra_print_and_start": "Stampa e avvia il lavoro"
   },
   "owner": {
     "unknown": "Un ruolo d’ufficio"

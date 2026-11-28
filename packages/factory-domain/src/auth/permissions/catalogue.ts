@@ -422,6 +422,18 @@ import { PORTAL_PRODUCTION_DEFINITIONS, PORTAL_PRODUCTION_PERMISSIONS, PRODUCTIO
 // ---- B-TH-066: projects (projects.manage, the office's; portal.projects.view, partner).
 import { PORTAL_PROJECTS_DEFINITIONS, PORTAL_PROJECTS_PERMISSIONS, PROJECTS_DEFINITIONS, PROJECTS_PERMISSIONS } from '../../projects/permissions'
 // ---- end B-TH-066
+// ---- owb- order workflow (plan.md § 5 D; PL-schema § 5A "Rights"): departments, print and start, teams own the work, baskets
+// moved by hand (shared with the floor), order structures, the product draft (R40), the factory structure, "I paid" (partner).
+// shipping.plan and orders.view.own are declared in their modules' files (SHIPPING_DEFINITIONS, ORDERS_DEFINITIONS).
+import { PRODUCTION_DEPARTMENTS_DEFINITIONS, PRODUCTION_DEPARTMENTS_PERMISSIONS } from '../../production/departments/permissions'
+import { PRODUCTION_PRINT_START_DEFINITIONS, PRODUCTION_PRINT_START_PERMISSIONS } from '../../production/print-start/permissions'
+import { PRODUCTION_ORDER_TEAMS_DEFINITIONS, PRODUCTION_ORDER_TEAMS_PERMISSIONS } from '../../production/order-teams/permissions'
+import { PRODUCTION_BASKETS_DEFINITIONS, PRODUCTION_BASKETS_FLOOR_PERMISSIONS, PRODUCTION_BASKETS_PERMISSIONS } from '../../production/baskets/permissions'
+import { PRODUCTION_STRUCTURES_DEFINITIONS, PRODUCTION_STRUCTURES_PERMISSIONS } from '../../production/structures/permissions'
+import { PRODUCT_DRAFTS_DEFINITIONS, PRODUCT_DRAFTS_PERMISSIONS } from '../../product/drafts/permissions'
+import { PEOPLE_STRUCTURE_DEFINITIONS, PEOPLE_STRUCTURE_PERMISSIONS } from '../../people/structure/permissions'
+import { PORTAL_PAYMENT_NOTICES_DEFINITIONS, PORTAL_PAYMENT_NOTICES_PERMISSIONS } from '../../sales/portal-orders/permissions'
+// ---- end owb-
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1158,6 +1170,16 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PROJECTS_DEFINITIONS,
   PORTAL_PROJECTS_DEFINITIONS,
   // ---- end B-TH-066
+  // ---- owb- order workflow (areas `production`, `product`, `people`; the portal's in `portal`, flagged partner; all declared above).
+  PRODUCTION_DEPARTMENTS_DEFINITIONS,
+  PRODUCTION_PRINT_START_DEFINITIONS,
+  PRODUCTION_ORDER_TEAMS_DEFINITIONS,
+  PRODUCTION_BASKETS_DEFINITIONS,
+  PRODUCTION_STRUCTURES_DEFINITIONS,
+  PRODUCT_DRAFTS_DEFINITIONS,
+  PEOPLE_STRUCTURE_DEFINITIONS,
+  PORTAL_PAYMENT_NOTICES_DEFINITIONS,
+  // ---- end owb-
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1202,7 +1224,9 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2b-117: recuts asked at sewing or quality, secondary processes moved and trolleys loaded, sent and received.
   ...PRODUCTION_CUTISSUE_FLOOR_PERMISSIONS,
   // B-W2b-299: a running count counted by scanning every unit at the device's site (never a cost).
-  ...INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS])
+  ...INVENTORY_COUNTS_DEPTH_FLOOR_PERMISSIONS,
+  // owb- (D3, R56): a basket moved forward by hand on a phone; back and the steps by the team leader (never a scan or pay).
+  ...PRODUCTION_BASKETS_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -1583,6 +1607,10 @@ for (const name of PORTAL_PRODUCTION_PERMISSIONS) if (FACTORY_PERMISSIONS.get(na
 for (const name of PROJECTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PORTAL_PROJECTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 // ---- end B-TH-066
+// ---- owb- order workflow; "I paid" flagged partner.
+for (const name of [...PRODUCTION_DEPARTMENTS_PERMISSIONS, ...PRODUCTION_PRINT_START_PERMISSIONS, ...PRODUCTION_ORDER_TEAMS_PERMISSIONS, ...PRODUCTION_BASKETS_PERMISSIONS, ...PRODUCTION_STRUCTURES_PERMISSIONS, ...PRODUCT_DRAFTS_PERMISSIONS, ...PEOPLE_STRUCTURE_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PAYMENT_NOTICES_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// ---- end owb-
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

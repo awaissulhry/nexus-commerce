@@ -101,6 +101,12 @@ model ProductionSettings {
   /// above 0 and at most 10 m². The default 10 dm² is what every site used before.
   minimumRemnantArea     Decimal            @default(10) @db.Decimal(18, 4)
   minimumRemnantUom      Uom                @default(DM2)
+  /// owb-b1 (order workflow build, schema wave "order workflow 1/1"; LF plan.md § 4, PL-review § 4 guard 5): the site
+  /// makes its baskets (bundles, one per garment; one per line for small parts) at "Print and start the work", before
+  /// cutting (Bundle.madeAtPrint; the bundle guard, G10). Off by default: a site without it keeps today's bundles made at
+  /// cutting. The office sets it; the floor reads it. The default is the database's (dbgenerated, as StoredFile.legalHold's),
+  /// so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as written.
+  basketsAtPrint         Boolean            @default(dbgenerated("('false'::text)::boolean"))
   version                Int                @default(1)
   createdAt              DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -289,6 +295,11 @@ model WorkOrder {
   orderChanges        WorkOrderChange[]    @relation("WorkOrderChangeWorkOrder")
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked to land on it.
   fileAsks            FileAsk[]            @relation("FileAskWorkOrder")
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): its baskets' moves by hand and route
+  // edits, and the floor's "Will be late" about it.
+  basketMoves         BasketMove[]         @relation("BasketMoveWorkOrder")
+  basketRouteEdits    BasketRouteEdit[]    @relation("BasketRouteEditWorkOrder")
+  floorLateWarnings   FloorLateWarning[]   @relation("FloorLateWarningWorkOrder")
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -544,6 +555,11 @@ model WorkOrderOperation {
   scheduleSlots ScheduleSlot[]
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of whoever works it.
   fileAsks      FileAsk[]      @relation("FileAskStep")
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): the baskets moved by hand from and to
+  // it, the route edits of it.
+  basketMovesFrom  BasketMove[]      @relation("BasketMoveFrom")
+  basketMovesTo    BasketMove[]      @relation("BasketMoveTo")
+  basketRouteEdits BasketRouteEdit[] @relation("BasketRouteEditOperation")
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.
@@ -721,6 +737,12 @@ model Bundle {
   /// The device's id for the event that made it (A1 §3.8; the offline floor queue), unique in the tenant: a bundle sent
   /// twice under the same id is made once (the second answer is the first bundle). Null: made online without one.
   clientEventId   String?
+  /// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 1, LF plan.md § 4 G10): a basket made at
+  /// Print and start the work; its cut logs are attached later and only grow (G10). Made so only where the site's
+  /// ProductionSettings.basketsAtPrint is on, with no cut log yet (G10); set at insert only, never changed (the bundle
+  /// guard's whole-row rule). False: a bundle made from a cut, as before. The default is the database's (dbgenerated, as
+  /// StoredFile.legalHold's), so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as written.
+  madeAtPrint     Boolean      @default(dbgenerated("('false'::text)::boolean"))
   version         Int          @default(1)
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -761,6 +783,11 @@ model Bundle {
   subcontractProgressReports SubcontractProgressReport[]
   // W2b inspection-plans.prisma (wave 10/16): the in-process checks of it.
   inProcessChecks         InProcessCheck[]
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): its moves by hand, its route edits, the
+  // floor's "Will be late" about it.
+  basketMoves             BasketMove[]       @relation("BasketMoveBundle")
+  basketRouteEdits        BasketRouteEdit[]  @relation("BasketRouteEditBundle")
+  floorLateWarnings       FloorLateWarning[] @relation("FloorLateWarningBundle")
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])
@@ -811,6 +838,54 @@ model BundleReprint {
   // A bundle's reprints; a work order's.
   @@index([tenantId, bundleId])
   @@index([tenantId, workOrderId])
+}
+
+/// One print of an order's work papers (owb-b1, schema wave "order workflow 1/1"; PL-schema § 1, § 5A row 11; design
+/// order-workflow-2026-11-25 "Print and start the work", "Print again"): FIRST — the print that starts the work (the work
+/// orders released, the baskets made where the site makes them at print) — or AGAIN, which prints the SAME basket codes
+/// again (a lost or damaged page, a small change, one more copy) and never touches a Bundle row. The pages printed per
+/// order line and the basket cards printed. A SMALL_CHANGE reaches the floor as today's "for the floor" note per work order
+/// (no floor grant here). Written by the office (production.print.start) before anything else of the print; never changed
+/// or removed (the triggers, for every login: G5). The tablet's old reprint (a new code, BundleReprint) stays as it is.
+/// @append-only
+model OrderPrint {
+  id           String            @id @db.Uuid
+  tenantId     String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the foreign key).
+  companyId    String            @db.Uuid
+  partyId      String            @db.Uuid
+  salesOrderId String            @db.Uuid
+  kind         OrderPrintKind
+  /// Why it was printed again: required on AGAIN, null on FIRST (G5).
+  reason       OrderPrintReason?
+  /// The office's words: required on a SMALL_CHANGE (G5), else optional.
+  note         String?
+  /// The pages printed: [{ salesOrderLineId, page }].
+  pages        Json
+  /// The basket cards printed: [{ bundleId }] (empty: none).
+  cards        Json
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  /// The office person who printed.
+  createdById  String?           @db.Uuid
+
+  salesOrder SalesOrder @relation("OrderPrintOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's prints, newest last (the "Printed" line, Print again).
+  @@index([tenantId, salesOrderId, createdAt])
+}
+
+/// FIRST: the print that starts the work. AGAIN: the same codes printed again (owb-b1).
+enum OrderPrintKind {
+  FIRST
+  AGAIN
+}
+
+/// Why an order's papers were printed again (owb-b1): a page lost, a page damaged, a small change (with words), one more copy.
+enum OrderPrintReason {
+  LOST
+  DAMAGED
+  SMALL_CHANGE
+  ONE_MORE_COPY
 }
 
 /// One operation scan (MES-069, MES-090, MES-095, MES-096; A1 §2.5 "Operation scan", §3.8): a bundle reported done at an
