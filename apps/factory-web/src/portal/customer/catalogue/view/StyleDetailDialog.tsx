@@ -6,6 +6,7 @@ import { Button, Pill } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../lib/i18n/ds-parts'
 import type { StyleDetail } from '../api'
 import { isPpe, ppeKey, sizeMatrix, styleName, typeKey } from '../model'
+import { useT } from '../../../../lib/i18n/provider'
 import { useOrderingWords } from '../../neworder/words'
 import '../catalogue.css'
 
@@ -32,6 +33,8 @@ export interface StyleDetailModel {
   askHref?: string | null
   askHeld?: string | null
   // ---- end B-TH-276
+  /** owb-pd4 (step 4.5): the product's own page (Overview, Sizes); absent: none offered. */
+  productHref?: string | null
 }
 
 export interface StyleDetailActions {
@@ -44,6 +47,8 @@ export interface StyleDetailActions {
 export function StyleDetailDialog({ model, actions }: { model: StyleDetailModel; actions?: StyleDetailActions }) {
   const words = useOrderingWords()
   const { t, locale } = words
+  // owb-pd4: the product page's own words (`portal-product`).
+  const tProduct = useT('portal-product')
   const style = model.detail?.style ?? null
   const seesPrices = model.detail?.seesPrices ?? false
   const currency = model.detail?.currency ?? 'EUR'
@@ -100,6 +105,13 @@ export function StyleDetailDialog({ model, actions }: { model: StyleDetailModel;
             if (event.key === 'Enter' && !addHeld && target.tagName !== 'BUTTON' && target.tagName !== 'A') actions?.onAdd?.(style.id)
           }}
         >
+          {model.productHref ? (
+            <p className="fw-pcat-quiet">
+              <a className="fw-pt-link" href={model.productHref}>
+                {tProduct('open')}
+              </a>
+            </p>
+          ) : null}
           <div className="fw-pcat-detail-grid">
             <section className="fw-pcat-section" aria-labelledby="style-facts">
               <h3 id="style-facts" className="fw-pcat-h3">

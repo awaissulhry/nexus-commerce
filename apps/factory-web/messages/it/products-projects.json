@@ -14,7 +14,7 @@
     "today": "Scade oggi"
   },
   "group": {
-    "STYLES": "Modelli",
+    "STYLES": "Prodotti",
     "SAMPLES": "Campionature",
     "QUOTES": "Preventivi",
     "ORDERS": "Ordini",
@@ -34,7 +34,7 @@
     "NOT_OUTSIDE": "Un progetto si condivide con un cliente, un marchio, un fornitore o un terzista, oppure con nessuno.",
     "LEAD": "Il responsabile di un progetto è una persona attiva dell’ufficio che può leggerlo.",
     "SEASON": "Questa stagione non è una stagione della società del progetto.",
-    "LINK_TYPE": "Un progetto collega modelli, giri campione, preventivi, ordini, ordini d’acquisto e di lavorazione, modifiche, certificati, richieste, spedizioni e profili di misura.",
+    "LINK_TYPE": "Un progetto collega prodotti, giri campione, preventivi, ordini, ordini d’acquisto e di lavorazione, modifiche, certificati, richieste, spedizioni e profili di misura.",
     "LINK_COMPANY": "Questo record è di un’altra società: un progetto collega solo record della propria società.",
     "LINK_PARTY": "Questo record è di un’altra azienda esterna: non può entrare in questo progetto. Un progetto collega solo record della propria azienda esterna, o di nessuna.",
     "LINK_OFFICE_ONLY": "Questo progetto è solo interno: collega solo record che non sono di un’azienda esterna.",
@@ -99,7 +99,7 @@
     "openToOffice": "Chi in azienda legge i thread può aprire questo progetto."
   },
   "list": {
-    "intro": "Un progetto raccoglie il lavoro su più modelli, campionature e ordini, o un lavoro che non ha ancora un record. Su un solo record si scrive nel suo thread.",
+    "intro": "Un progetto raccoglie il lavoro su più prodotti, campionature e ordini, o un lavoro che non ha ancora un record. Su un solo record si scrive nel suo thread.",
     "new": "Nuovo progetto",
     "tableLabel": "Progetti",
     "search": "Cerca per numero o nome",
@@ -114,7 +114,7 @@
     "hiddenBy": "Nascosti da: {filters}.",
     "clearFilters": "Togli i filtri",
     "empty": "Ancora nessun progetto",
-    "emptyBody": "Un progetto raccoglie il lavoro su più modelli, campionature e ordini, o un lavoro che non ha ancora un record.",
+    "emptyBody": "Un progetto raccoglie il lavoro su più prodotti, campionature e ordini, o un lavoro che non ha ancora un record.",
     "updated": "Aggiornato alle {time}",
     "notYet": "Non ancora letto",
     "foot": "Un progetto chiuso esce da I miei progetti ma resta in Chiusi e nella ricerca.",
@@ -251,7 +251,7 @@
   "new": {
     "title": "Nuovo progetto",
     "submit": "Crea il progetto",
-    "rule": "Un progetto è per il lavoro su più modelli, campionature o ordini, o per un lavoro che non ha ancora un record. Su un solo ordine? Scrivi su quell’ordine.",
+    "rule": "Un progetto è per il lavoro su più prodotti, campionature o ordini, o per un lavoro che non ha ancora un record. Su un solo ordine? Scrivi su quell’ordine.",
     "willLink": "Verrà collegato: {record}",
     "namePlaceholder": "Per esempio: Linea giacche airbag FW27",
     "nameHint": "Una riga: come lo chiamate in ufficio.",
@@ -283,7 +283,7 @@
     "similarOpen": "Apri {project} (nuova scheda)"
   },
   "linkType": {
-    "Style": "questo modello",
+    "Style": "questo prodotto",
     "SampleRound": "questo giro campione",
     "Quote": "questo preventivo",
     "SalesOrder": "questo ordine",

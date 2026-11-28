@@ -771,6 +771,9 @@ model SalesOrder {
   structureOverrides  OrderStructureOverride[] @relation("OrderStructureOverrideOrder")
   structuresKept      OrderLineStructureKept[] @relation("OrderLineStructureKeptOrder")
   scanCodePlacements  ScanCodePlacement[]      @relation("ScanCodePlacementOrder")
+  // owb-pd2w (S4 schema wave "routes"): the route choices of its lines (product.prisma SalesOrderLineRoute). No column of its
+  // own (S4 settle 2).
+  lineRoutes          SalesOrderLineRoute[]    @relation("SalesOrderLineRouteOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
@@ -936,6 +939,9 @@ model SalesOrderLine {
   // of the scan code on its design pages. No column of its own (L9).
   structureKept      OrderLineStructureKept[] @relation("OrderLineStructureKeptLine")
   scanCodePlacements ScanCodePlacement[]      @relation("ScanCodePlacementLine")
+  // owb-pd2w (S4 schema wave "routes"): its route choice (product.prisma SalesOrderLineRoute; one row at most: its unique
+  // key). No column of its own (S4 settle 2).
+  routes             SalesOrderLineRoute[]    @relation("SalesOrderLineRouteLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

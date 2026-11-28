@@ -8,13 +8,14 @@ import { FloorActionBar, useIdleSignOut } from '@nexus/ui/floor'
 import type { ApiClient } from '../lib/api/client'
 import { browserApi } from '../lib/api/browser'
 import { readCookie, writeCookie } from '../lib/cookies'
-import { LOCALE_COOKIE, isLocale, type Locale } from '../lib/i18n/locales'
+import { LOCALE_COOKIE, baseLocaleOf, dirOf, isFloorLocale, type FloorLocale, type Locale } from '../lib/i18n/locales'
+import { FloorWordsProvider } from '../lib/floor-words/provider'
 import type { LocaleMessages } from '../lib/i18n/messages'
 import { I18nProvider, useT } from '../lib/i18n/provider'
 import { endCrew, fetchFloorState, leaveCrew, signIn, signOut as apiSignOut, type CrewView, type DeviceInfo, type FloorMe, type FloorProblem } from './api'
 import { FloorFrameView, type FrameAction, type FrameModel } from './frame/view/FloorFrameView'
 import { FloorState } from './frame/view/FloorState'
-import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
+import { floorLocale, floorLocalesOf, IDLE_WARN_MS, idleWarnAfterMs } from './model'
 import { FLOOR_PAGES, FloorMoves, PREFETCH_EVERY_MS, serverAnswers } from './moves'
 import { numberKindsOf } from './queue/actions'
 import { FloorQueue, type QueueSnapshot } from './queue/queue'
@@ -30,6 +31,10 @@ import { browserKeptStorage, KeptClocks, type KeptSnapshot } from './tasks/clock
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
 import { leaveSignIn } from './gate' // W1-BGF
+// owb-fl6: the Undo bar of every floor page (design § 5zg): this person's last move or give, undone here.
+import { newIdempotencyKey } from '../lib/api/client'
+import { giveBack, undoMove } from './basket/api'
+import { undoStore } from './basket/undo/store'
 
 /**
  * The floor app (SCR-020 … 025): one client root under `/floor` that knows the device and the signed-in operator,
@@ -58,7 +63,10 @@ export interface FloorStore {
   api: ApiClient
   device: DeviceInfo | null
   me: FloorMe | null
+  /** The words' base language (Urdu reads Urdu over English: its base is English, for plurals, numbers and dates). */
   locale: Locale
+  /** owb-fl7: the floor's own language (Urdu where the site offers it): direction, names, voices. */
+  floorLocale: FloorLocale
   online: boolean
   /** Re-read the device and the operator (after a 401, an enrolment, a sign-in). */
   reload: () => Promise<void>
@@ -192,7 +200,7 @@ async function storageState(): Promise<{ persisted: boolean | null; freeMb: numb
   }
 }
 
-export function FloorApp({ appVersion, catalogues, children }: { appVersion: string; catalogues: Readonly<Record<Locale, LocaleMessages>>; children: ReactNode }) {
+export function FloorApp({ appVersion, catalogues, urduFont, children }: { appVersion: string; catalogues: Readonly<Record<FloorLocale, LocaleMessages>>; /** owb-fl7: the Urdu font's family (next/font, the floor layout). */ urduFont?: string; children: ReactNode }) {
   const api = useMemo(() => browserApi(), [])
   const nextRouter = useRouter()
   const [moveHeld, setMoveHeld] = useState(false)
@@ -203,8 +211,8 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   const pathname = usePathname()
   const online = useOnline()
   const [load, setLoad] = useState<Load>({ status: 'loading' })
-  const [picked, setPicked] = useState<Locale | null>(null)
-  const [sessionLocale, setSessionLocale] = useState<Locale | null>(null)
+  const [picked, setPicked] = useState<FloorLocale | null>(null)
+  const [sessionLocale, setSessionLocale] = useState<FloorLocale | null>(null)
   const [signedOut, setSignedOut] = useState<SignedOutWhy>(null)
   const [ui, setUi] = useState<{ menu: boolean; help: boolean; language: boolean }>({ menu: false, help: false, language: false })
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null)
@@ -227,6 +235,10 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
 
   const device = load.status === 'ready' ? load.device : null
   const me = load.status === 'ready' ? load.me : null
+  const undo = useSyncExternalStore(undoStore.subscribe, undoStore.getSnapshot, undoStore.getSnapshot)
+  const undoPerson = me?.worker.id ?? null
+  // owb-fl6: another person on the device sees nothing of the one before.
+  useEffect(() => undoStore.forget(undoPerson), [undoPerson])
   const numberKinds = useMemo(() => numberKindsOf(me?.permissions ?? []), [me?.permissions])
   const shellQueue = shellQueueOf(queueSnapshot, { workerId: me?.worker.id ?? null, numberKinds }, { now: new Date(), timeZone: DEFAULT_TIME_ZONE })
 
@@ -238,7 +250,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   }, [api])
 
   useEffect(() => {
-    setPicked(((value) => (isLocale(value) ? value : null))(readCookie(LOCALE_COOKIE)))
+    setPicked(((value) => (isFloorLocale(value) ? value : null))(readCookie(LOCALE_COOKIE)))
     void reload()
     const keep = (event: Event) => {
       event.preventDefault()
@@ -419,14 +431,24 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   useEffect(() => router.arrived(), [router, pathname])
 
   // The screen's language: the operator's (or the one they chose for this session), else the one picked here, else the tenant's.
-  const locale = me ? (sessionLocale ?? floorLocale({ person: me.worker.locale, tenant: device?.defaultLocale })) : floorLocale({ picked, tenant: device?.defaultLocale })
+  // owb-fl7 (pick J): Urdu only where the site's floor languages list it; its words are Urdu over English (`locale` = the base).
+  const siteLocales = me?.site.floorLocales ?? device?.site.floorLocales ?? null
+  const spoken = me ? (sessionLocale ?? floorLocale({ person: me.worker.locale, tenant: device?.defaultLocale, site: siteLocales })) : floorLocale({ picked, tenant: device?.defaultLocale, site: siteLocales })
+  const locale = baseLocaleOf(spoken)
   useEffect(() => {
     const html = document.documentElement
-    html.lang = locale
+    html.lang = spoken
+    // owb-fl7: Urdu reads right to left — the floor's root only (this app; the office never sets it). Pop-ups portalled to <body>
+    // follow, as they follow the density. The Urdu font is applied by `:lang(ur)` (floor.css).
+    html.dir = dirOf(spoken)
+    if (urduFont) html.style.setProperty('--fw-font-urdu', urduFont)
     // Pop-ups portalled to <body> follow the floor's density (DS densityAttrs).
     html.setAttribute('data-density', 'floor')
-    return () => html.removeAttribute('data-density')
-  }, [locale])
+    return () => {
+      html.removeAttribute('data-density')
+      html.removeAttribute('dir')
+    }
+  }, [spoken, urduFont])
 
   // Where each state belongs.
   useEffect(() => {
@@ -482,6 +504,9 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     (titleKey: string, options: { showHome?: boolean; queue?: boolean; crew?: boolean } = {}) => {
       const station = device ? { name: device.device.station?.name ?? null, site: device.site.name } : null
       const model: FrameModel = {
+        // owb-fl7: the picker offers the site's floor languages, the one spoken pressed.
+        locale: spoken,
+        locales: floorLocalesOf(siteLocales),
         operator: me ? { name: me.worker.displayName } : null,
         station,
         titleKey,
@@ -501,6 +526,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         crew: (options.crew ?? !options.showHome) ? (me?.crew ?? crewLeft) : null,
         menu: me ? { clock: me.permissions.includes('floor.work'), myday: me.permissions.includes('floor.work'), addPerson: Boolean(me.rules?.crew), crew: Boolean(me.crew), full: me.crew ? (me.crew.members.length >= me.crew.max ? me.crew.max : null) : null } : undefined,
         idle: me ? { warning: idle.warning, secondsLeft: idle.secondsLeft } : undefined,
+        undo: me && ((undo.entry && undo.entry.personId === me.worker.id) || undo.said) ? { entry: undo.entry, busy: undo.busy, said: undo.said } : null,
       }
       const onFrame = (action: FrameAction) => {
         switch (action.type) {
@@ -539,11 +565,15 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
             return idle.stay()
           case 'queue':
             return router.push(SYNC)
+          case 'undo':
+            return void runUndo(api)
+          case 'undo-close':
+            return undoStore.close()
         }
       }
       return { frame: model, onFrame }
     },
-    [device, me, online, moveHeld, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
+    [device, me, online, moveHeld, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt, undo, spoken, siteLocales],
   )
 
   const store: FloorStore = {
@@ -551,6 +581,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     device,
     me,
     locale,
+    floorLocale: spoken,
     online,
     reload,
     setDevice,
@@ -620,10 +651,35 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   }
 
   return (
-    <I18nProvider locale={locale} messages={catalogues[locale]}>
-      <FloorContext.Provider value={store}>{load.status === 'ready' ? children : <Starting status={load.status} onRetry={() => void reload()} frame={frame('start.title')} />}</FloorContext.Provider>
+    <I18nProvider locale={locale} messages={catalogues[spoken]}>
+      <FloorWordsProvider locale={spoken}>
+        <FloorContext.Provider value={store}>{load.status === 'ready' ? children : <Starting status={load.status} onRetry={() => void reload()} frame={frame('start.title')} />}</FloorContext.Provider>
+      </FloorWordsProvider>
     </I18nProvider>
   )
+}
+
+/**
+ * owb-fl6: Undo of this person's last change. A move: each of its groups (`POST /production/baskets/moves/:groupId/undo`; the server
+ * takes back only what nobody moved since). A give: today's reassign back to who held it. The bar then goes, or says why it stays.
+ */
+async function runUndo(api: ApiClient): Promise<void> {
+  const { entry, busy } = undoStore.getSnapshot()
+  if (!entry || busy) return
+  undoStore.start()
+  if (entry.kind === 'move') {
+    let undone = 0
+    let failed = false
+    for (const groupId of entry.groupIds) {
+      const answer = await undoMove(api, groupId, newIdempotencyKey())
+      if (answer.ok) undone += answer.value.undone
+      else failed = true
+    }
+    return undoStore.finish(undone > 0 ? 'undone' : failed ? 'failed' : 'moved')
+  }
+  if (!entry.backTo) return undoStore.finish('failed')
+  const answer = await giveBack(api, entry.assignment, entry.backTo)
+  undoStore.finish(answer.ok ? 'undone' : answer.problem.kind === 'conflict' || answer.problem.kind === 'refused' ? 'moved' : 'failed')
 }
 
 /** Before the device is known: opening, or the server does not answer (with Try again). */

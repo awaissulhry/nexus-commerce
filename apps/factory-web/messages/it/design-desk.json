@@ -1,0 +1,74 @@
+{
+  "intro": "Il tuo lavoro: render, grafica e il dialogo su di essi. I nuovi ordini arrivano prima alle vendite. Non vedi prezzi.",
+  "tiles": "Vai a una parte della pagina",
+  "tile": {
+    "asked": "Chiesto aiuto grafico",
+    "approvals": "Attende l’approvazione",
+    "codes": "Posiziona il codice",
+    "floor": "Il reparto ti chiede"
+  },
+  "retry": "Riprova",
+  "failed": "Non è stato possibile leggere la scrivania design. Riprova.",
+  "busy": "In corso…",
+  "open": "Apri ›",
+  "since": "dal {date}",
+  "sent": "inviato il {date}",
+  "asked": {
+    "title": "Richieste",
+    "count_one": "{count} ordine ti chiede aiuto",
+    "count_other": "{count} ordini ti chiedono aiuto",
+    "info": "Ordini e ordini inviati in cui ti si chiede aiuto per la grafica, ti è stata affidata la grafica o ci sei sopra.",
+    "none": "Nessuno chiede aiuto ora.",
+    "newOrder": "Nuovo ordine",
+    "noSubject": "senza oggetto"
+  },
+  "why": {
+    "HELP_ASKED": "è chiesto aiuto",
+    "GIVEN": "ti è stata affidata la grafica",
+    "ON_IT": "ci sei sopra",
+    "CONFIRMED": "confermato"
+  },
+  "approvals": {
+    "title": "Attende l’approvazione",
+    "count_one": "{count} grafica attende il cliente",
+    "count_other": "{count} grafiche attendono il cliente",
+    "info": "Al cliente è chiesto di approvare la grafica. Intanto il lavoro va avanti.",
+    "none": "Nessuna grafica attende l’approvazione."
+  },
+  "kind": {
+    "PROOF": "Bozza del design",
+    "ARTWORK": "Grafica"
+  },
+  "state": {
+    "OPEN": "In attesa",
+    "APPROVED": "Approvata",
+    "APPROVED_WITH_CHANGES": "Approvata con modifiche",
+    "REFUSED": "Chiesta una modifica",
+    "OTHER": "Chiusa"
+  },
+  "codes": {
+    "title": "Codici di scansione",
+    "info": "Ordini confermati prima della stampa: dove sta il codice su ogni pagina del design. Una pagina senza posizione riceve quella solita (in alto a destra, 20 mm).",
+    "notYet": "Le posizioni dei codici arrivano con la parte di stampa. Ancora nulla da posizionare qui.",
+    "none": "Nessun ordine confermato attende la stampa.",
+    "placed": "{placed} di {pages} posizionati",
+    "place": "Posiziona il codice…"
+  },
+  "floor": {
+    "title": "Dal reparto",
+    "count_one": "{count} richiesta dal reparto",
+    "count_other": "{count} richieste dal reparto",
+    "info": "Un operaio ti ha chiesto con un tocco. Prendila, falla, avvisa l’operaio.",
+    "none": "Nessun operaio ti aspetta.",
+    "state": {
+      "ASKED": "Chiesta",
+      "TAKEN": "L’hai presa"
+    },
+    "take": "La prendo io",
+    "done": "Fatto — avvisa l’operaio…",
+    "window": "Fatto — avvisa l’operaio",
+    "send": "Fatto — avvisa l’operaio",
+    "words": "Una risposta per l’operaio",
+    "wordsHint": "Una riga, se vuoi. L’operaio la legge sul cesto."
+  }
+}

@@ -102,6 +102,14 @@ import { COMPOSE_NS } from '../../../lib/request-compose/model'
 import { useT } from '../../../lib/i18n/provider'
 // ---- end F-SA-246
 import { useOrderWords } from './words'
+// ---- owb-po5: the picture of the order (the band's button), All changes (the ONE log), the order page's own words
+import { orderLogPath, orderLogReader } from '../../../lib/change-log/api'
+import { orderPicturePath, orderPictureSaver, pictureReader } from '../../../lib/record-picture/api'
+import { OrderPictureWindow } from '../../../lib/record-picture/OrderPictureWindow'
+import { ORDER_PAGE_NS } from './page-words'
+import { pictureChoicesOf } from './picture'
+import { AllChangesWindow } from './view/AllChangesWindow'
+// ---- end owb-po5
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
 import { usePortalPriceCheck } from './use-price-check' // F-CP-143: the customer's own price check (a price holder's)
@@ -123,7 +131,7 @@ import { useProductionPageWords } from '../production/words'
  */
 export function CustomerOrderPage({ id }: { id: string }) {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists', PRODUCTION_NS /* F-PR-24: Report a problem */, COMPOSE_NS /* F-SA-246: a design change's files */]}>
+    <WithMessages namespaces={[NS, ORDER_PAGE_NS /* owb-po5 */, 'ds-words', 'lists', PRODUCTION_NS /* F-PR-24: Report a problem */, COMPOSE_NS /* F-SA-246: a design change's files */]}>
       <Suspense fallback={null}>
         <OrderRoute id={id} />
       </Suspense>
@@ -173,7 +181,7 @@ function OrderContainer({ id }: { id: string }) {
   const words = useOrderWords()
   const { t, locale } = words
   const offline = useOffline()
-  const tab = tabOf(search?.get('tab'))
+  const askedTab = tabOf(search?.get('tab'))
   const lineParam = search?.get('line') ?? null
   const can = (permission: string) => frame.me.permissions.includes(permission)
   const preview = frame.me.preview
@@ -187,6 +195,8 @@ function OrderContainer({ id }: { id: string }) {
   const seesPrices = frame.access?.role?.seesPrices ?? false // F-PR-13: a cancel's fee in the impact, only with prices
 
   const [record, setRecord] = useState<OrderRecord | null>(null)
+  // owb-po5.2: Money only for a person who sees prices (the record's own grain); the customer's Designer lands on Overview.
+  const tab = askedTab === 'money' && record && !record.seesPrices ? 'overview' : askedTab
   const [state, setState] = useState<OrderRecordViewModel['state'] | 'forbidden'>('loading')
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
   const [revision, setRevision] = useState<OrderRecordViewModel['revision']>({ state: 'loading', page: null })
@@ -937,6 +947,13 @@ function OrderContainer({ id }: { id: string }) {
       .catch((error: unknown) => setNotice({ tone: 'danger', key: isApiError(error) && error.kind === 'conflict' ? 'shipments.copyLinkTooMany' : 'shipments.copyLinkFailed' }))
   }
 
+  // ── owb-po5: the picture of the order and All changes ───────────────────────────────────────────────────────────────
+  const [pictureOpen, setPictureOpen] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
+  const pictures = useMemo(() => pictureReader(api), [api])
+  const changeLog = useMemo(() => orderLogReader(api, orderLogPath('portal', 'order', id)), [api, id])
+  const mayPicture = can('portal.orderDrafts.edit') && !preview && record !== null && record.order.status !== 'CANCELLED' && record.order.status !== 'DELIVERED'
+
   // ── the band ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const ready = state === 'ready' && record
   usePortalBand(
@@ -964,6 +981,9 @@ function OrderContainer({ id }: { id: string }) {
           onConfirmation: () => void openConfirmation(),
           onPay: () => (firstPay ? openPay(firstPay[0]) : undefined),
           onProblem: openProblem, // F-PR-24
+          // owb-po5.1: the picture button — the window for who may change it (portal.orderDrafts.edit: ONE right for every portal
+          // picture route), a plain picture for anyone else; never in a preview or on a closed order.
+          picture: { onOpen: mayPicture ? () => setPictureOpen(true) : null },
         })
       : { title: state === 'missing' ? t('record.missing') : t('list.title'), back: { href: `${frame.prefix}/orders`, label: t('list.title') } },
   )
@@ -1069,6 +1089,7 @@ function OrderContainer({ id }: { id: string }) {
                 : { kind: 'preview', model: { title: dialog.title, state: dialog.state, bytes: dialog.bytes } }
 
   return (
+    <>
     <OrderRecordView
       model={{
         state,
@@ -1148,6 +1169,7 @@ function OrderContainer({ id }: { id: string }) {
         // ---- end F-SA-238
         onDownload: download,
         onDismissNotice: () => setNotice(null),
+        onChanges: () => setChangesOpen(true), // owb-po5.3: Asks & changes › All changes
         // ---- F-PR-12a
         onRetryProduction: () => {
           setProduction({ state: 'loading', read: null })
@@ -1285,5 +1307,22 @@ function OrderContainer({ id }: { id: string }) {
       {/* B-TH-275: the order's ONE conversation, docked by the frame beside every tab. */}
       {record ? <PortalThread type="SalesOrder" id={record.order.id} /> : null}
     </OrderRecordView>
+    {/* owb-po5.3: All changes — the ONE log over the portal's route (its faces: "The factory", "You", "your colleague"). */}
+    <AllChangesWindow open={changesOpen} onClose={() => setChangesOpen(false)} name={record ? orderNameOf(record.order, locale, t) : ''} read={changeLog} />
+    {/* owb-po5.1: "The picture of the order" — the order's own files the customer can open, or back to the first line's design. */}
+    {record ? (
+      <OrderPictureWindow
+        open={pictureOpen}
+        onClose={() => setPictureOpen(false)}
+        number={orderNameOf(record.order, locale, t)}
+        subject={record.order.subject ?? null}
+        record={{ source: 'customerOrder', recordId: record.order.id, read: pictures }}
+        now={{ fileId: record.picture?.fileId ?? null, version: record.order.version }}
+        choices={pictureChoicesOf(orderFiles.model.read)}
+        save={orderPictureSaver(api, orderPicturePath('portal', 'order', record.order.id))}
+        onSaved={() => void load()}
+      />
+    ) : null}
+    </>
   )
 }

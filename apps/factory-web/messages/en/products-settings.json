@@ -1,6 +1,6 @@
 {
   "head": {
-    "intro": "What every style follows: its product type with the fields it must have and the defaults it starts with, what may change in each state of its life, and how far the fabric used may differ from the estimate.",
+    "intro": "What every product follows: its product type with the fields it must have and the defaults it starts with, what may change in each state of its life, and how far the fabric used may differ from the estimate.",
     "reload": "Read again",
     "more": "More"
   },
@@ -23,7 +23,7 @@
   },
   "noAccess": {
     "title": "Product settings are not in your role",
-    "body": "Reading them needs the right to see styles. An administrator gives it in Admin › Roles & permissions."
+    "body": "Reading them needs the right to see products. An administrator gives it in Admin › Roles & permissions."
   },
   "card": {
     "neverChanged": "Never changed here: it follows what is in force above.",
@@ -46,7 +46,7 @@
   },
   "loosen": {
     "title": "Confirm a looser rule",
-    "intro": "From the moment you save, more may change in styles in these states:",
+    "intro": "From the moment you save, more may change in products in these states:",
     "line": "{state}: from “{from}” to “{to}”",
     "reason": "Why",
     "reasonHint": "Kept with the change in the audit trail.",
@@ -77,7 +77,7 @@
   },
   "rules": {
     "title": "Edit rules per lifecycle state",
-    "description": "What may change in a style in each state of its life. Every product write asks the rule of its style’s state.",
+    "description": "What may change in a product in each state of its life. Every product write asks the rule of its product’s state.",
     "table": "Edit rule per state",
     "unknown": "Not known yet",
     "failed": "Couldn’t load the edit rules",
@@ -121,7 +121,7 @@
   },
   "kindHint": {
     "DETAILS": "Name, names in other languages, description, season",
-    "SPEC": "Every other field of the style, its colourways and its type",
+    "SPEC": "Every other field of the product, its colourways and its type",
     "NEW_REVISION": "Start a revision or copy one into a new draft",
     "DRAFT": "The BOM, routing and pieces of an open draft",
     "RELEASE": "Release a draft revision"
@@ -210,7 +210,7 @@
   },
   "types": {
     "title": "Product types",
-    "description": "Jacket, trousers, suit, gloves, vest: the fields a style of each must have before release and the defaults a new style starts with. A child type inherits its parent’s.",
+    "description": "Jacket, trousers, suit, gloves, vest: the fields a product of each must have before release and the defaults a new product starts with. A child type inherits its parent’s.",
     "table": "Product types",
     "failed": "Couldn’t load the product types",
     "add": "New product type",
@@ -232,7 +232,7 @@
       "required": "Required before release",
       "scale": "Size scale",
       "ppe": "PPE",
-      "styles": "Styles",
+      "styles": "Products",
       "actions": "Actions"
     },
     "status": {
@@ -243,19 +243,19 @@
     },
     "empty": {
       "title": "No product type yet",
-      "body": "A type says what a style of it must have and what it starts with. Styles work without one."
+      "body": "A type says what a product of it must have and what it starts with. Products work without one."
     },
     "emptyArchived": {
       "title": "No archived type",
-      "body": "An archived type stays on the styles that have it; a new style no longer takes it."
+      "body": "An archived type stays on the products that have it; a new product no longer takes it."
     },
-    "how": "A new style takes its type’s defaults where it leaves a field empty; the release check asks the required fields."
+    "how": "A new product takes its type’s defaults where it leaves a field empty; the release check asks the required fields."
   },
   "row": {
     "edit": "Open and change",
     "view": "Open",
     "archive": "Archive",
-    "archiveHint": "Its styles keep it; a new style no longer takes it.",
+    "archiveHint": "Its products keep it; a new product no longer takes it.",
     "restore": "Restore",
     "menu": "Actions for {code}"
   },
@@ -315,17 +315,17 @@
     "kindHint": "A parent type is of the same kind.",
     "whose": "Whose",
     "whoseFixed": "Stays as made.",
-    "whoseHint": "A type of every company may be taken by every company’s styles.",
+    "whoseHint": "A type of every company may be taken by every company’s products.",
     "whoseCompany": "Only {company}",
     "parent": "Parent type",
     "parentHint": "It inherits the parent’s required fields and every default it does not set.",
     "noParent": "No parent (a top type)",
     "required": "Required before release",
-    "requiredHint": "The style fields a style of this type must have filled before it is released. A parent’s come on top.",
+    "requiredHint": "The product fields a product of this type must have filled before it is released. A parent’s come on top.",
     "requiredFrom": "{field} (from {code})",
     "requiredInherited": "Required by the parent type {code}",
-    "defaults": "What a new style starts with",
-    "defaultsHint": "A new style of this type takes these where it leaves the field empty. Empty here: the parent’s.",
+    "defaults": "What a new product starts with",
+    "defaultsHint": "A new product of this type takes these where it leaves the field empty. Empty here: the parent’s.",
     "scale": "Size scale",
     "label": "Garment label template",
     "labelNoRight": "Picking a label template needs the right to read certificates and labels.",
@@ -344,13 +344,13 @@
     "save": "Save type",
     "add": "Add type",
     "archivedTitle": "This type is archived",
-    "archivedBody": "Its styles keep it; a new style no longer takes it. Restore it to change it.",
-    "styles": "Styles with this type",
-    "stylesCount_one": "1 style",
-    "stylesCount_other": "{count} styles",
+    "archivedBody": "Its products keep it; a new product no longer takes it. Restore it to change it.",
+    "styles": "Products with this type",
+    "stylesCount_one": "1 product",
+    "stylesCount_other": "{count} products",
     "children": "Child types",
     "held": {
-      "kindInUse": "The kind of garment stays while styles or child types use this type: another kind is a new type.",
+      "kindInUse": "The kind of garment stays while products or child types use this type: another kind is a new type.",
       "archived": "Archived: restore it to change it.",
       "nothing": "Nothing changed yet."
     },
@@ -362,7 +362,7 @@
       "ppeClass": "A class is at most 10 characters.",
       "ppeCategory": "Pick the PPE category the standard and class go with (here or on the parent).",
       "ppe": "This PPE category, standard and class do not go together for this kind of garment (EN 17092 never on gloves; protective gear is at least Category II).",
-      "kindInUse": "Styles or child types use this type: its kind of garment stays.",
+      "kindInUse": "Products or child types use this type: its kind of garment stays.",
       "parent": "This parent cannot be taken: it must be active, of the same kind of garment, of this type’s company or every company, and not one of its children.",
       "required": "One of the required fields cannot be required.",
       "scale": "This size scale cannot be taken: it must be active and of this type’s company or every company.",
@@ -383,7 +383,7 @@
     "write": {
       "moved": "Someone changed this meanwhile: read again, then make your change again.",
       "codeTaken": "This code is taken by another type.",
-      "kindInUse": "Styles or child types use this type: its kind of garment stays.",
+      "kindInUse": "Products or child types use this type: its kind of garment stays.",
       "state": "This is not possible in its present state: read again.",
       "archived": "Archived: restore it first (a type under an archived parent: restore the parent first).",
       "invalid": "Something is not right: see the fields.",
@@ -403,8 +403,8 @@
     "tolerance": "Consumption tolerance saved.",
     "typeSaved": "Product type {code} saved.",
     "typeAdded": "Product type {code} added.",
-    "archived_one": "1 type archived. Its styles keep it.",
-    "archived_other": "{count} types archived. Their styles keep them.",
+    "archived_one": "1 type archived. Its products keep it.",
+    "archived_other": "{count} types archived. Their products keep them.",
     "restored_one": "1 type restored.",
     "restored_other": "{count} types restored.",
     "archivedSome": "{count} of {total} types archived; the others were refused (read the list again).",

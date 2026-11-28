@@ -1,0 +1,88 @@
+/*
+ * owb-ss4 — the windows "Print and start the work" and "Print again" (print/view/*). DS tokens only (no raw colour): light and dark come
+ * from the tokens. The window body is a room (lib/window-shell `fwroom`): what is inside follows the window's width.
+ */
+.fw-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-print-what,
+.fw-print-list,
+.fw-print-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.fw-print-what li,
+.fw-print-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  min-width: 0;
+}
+.fw-print-list li {
+  padding: var(--nds-space-6) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.fw-print-list li:first-child { border-top: 0; }
+.fw-print-problems { gap: var(--nds-space-4); }
+.fw-print-problems li { font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-print-h3 {
+  margin: 0;
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.fw-print-grow { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.fw-print-mono { font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); }
+.fw-print-mu,
+.fw-print-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.fw-print-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.fw-print-chips,
+.fw-print-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+.fw-print-piece {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+@container fwroom (min-width: 520px) {
+  .fw-print-piece { grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr); align-items: center; }
+}
+.fw-print-piece-t { font-size: var(--nds-font-size-sm); color: var(--nds-text); overflow-wrap: anywhere; }
+.fw-print-cards {
+  display: grid;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+@container fwroom (min-width: 560px) {
+  .fw-print-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

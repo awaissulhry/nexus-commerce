@@ -15,6 +15,8 @@ import type { HideCard, LocationCard, WorkOrderCard } from './scan/scan-model'
  */
 
 const named = z.object({ id: z.string(), code: z.string(), name: z.string() })
+/** owb-fl7: the site, with its floor languages (Site.floorLocales; optional: an API that sends none offers no Urdu). */
+const siteRef = named.extend({ floorLocales: z.array(z.string()).optional() })
 const station = z.object({ id: z.string(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS) })
 const workerRef = z.object({ id: z.string(), displayName: z.string(), locale: z.string() })
 const session = z.object({
@@ -37,7 +39,7 @@ export type ModeRules = z.infer<typeof modeRules>
 
 export const deviceInfoSchema = z.object({
   device: z.object({ id: z.string(), name: z.string(), kind: z.string(), station: station.nullable(), mode: z.enum(DEVICE_MODES).optional() }),
-  site: named,
+  site: siteRef,
   defaultLocale: z.string(),
   signIn: z.object({ badgeOnly: z.boolean() }),
   operatorSignedIn: z.boolean(),
@@ -57,7 +59,7 @@ export const floorMeSchema = z.object({
   line: lineRef.nullable().optional(),
   crew: crewView.nullable().optional(),
   speech: z.object({ lang: z.string() }).optional(),
-  site: named,
+  site: siteRef,
   scanTag: z.string(),
   session,
   pinMustChange: z.boolean(),

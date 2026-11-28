@@ -110,6 +110,10 @@ export interface OrderAbilities {
   printStart?: boolean
   planShipping?: boolean
   // ---- end owb-of5
+  // ---- owb-of6 (design plan § 5 D R20, § 5i walls): the designer sees only the orders he is on (orders.view.own, no orders.view):
+  // no Money and no Shipments tab, and Production only with "Allow production" (workorders.view, People by customer › Extra rights).
+  viewOwn?: boolean
+  // ---- end owb-of6
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -144,6 +148,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     complaintsLog: held.has('quality.complaints.log'), // F-OS-303: Log a complaint…
     printStart: held.has('production.print.start'), // owb-of5: Print and start the work… (S3's window)
     planShipping: held.has('shipping.plan'), // owb-of5: Ship… (S3's window)
+    viewOwn: held.has('orders.view.own') && !held.has('orders.view'), // owb-of6: the designer's scope (R20)
   }
 }
 
@@ -584,7 +589,12 @@ export function landingOf(asked: string | null | undefined, can?: Pick<OrderAbil
 export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab => landingOf(asked, can).tab
 
 /** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
-export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
+export function recordTabs(can?: Pick<OrderAbilities, 'margin' | 'viewOwn' | 'viewWorkOrders'>): readonly RecordTab[] {
+  // owb-of6 (design § 5i walls, § 5k "Who"): the designer (orders.view.own only) has no Money and no Shipments tab, and the Production
+  // tab only with "Allow production" (workorders.view); everyone else keeps the seven.
+  if (!can?.viewOwn) return RECORD_TABS
+  return RECORD_TABS.filter((tab) => tab !== 'money' && tab !== 'shipments' && (tab !== 'production' || !!can.viewWorkOrders))
+}
 
 // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the dock's width when the person chose none, per tab.
 // F-OP-301 (walk #5): ONE width per viewport on every tab — the grid rule (a third under 1600 px, where Lines, Production and Shipments

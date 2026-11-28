@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { Noto_Naskh_Arabic } from 'next/font/google'
 import type { ReactNode } from 'react'
 import { color } from '@nexus/ui/tokens/colors'
 import { messagesFor } from '../../lib/i18n/messages'
@@ -28,10 +29,19 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
+/**
+ * owb-fl7 (pick J): the Urdu font, loaded by the floor alone and drawn only where the floor speaks Urdu (`:lang(ur)`, floor/floor.css).
+ * Noto Naskh Arabic, not Noto Nastaliq Urdu: Nastaliq's tall, sloped line needs about twice the line height, which the floor's fixed
+ * 48 / 56 / 64 px controls (and a two-line label: the Urdu word above its small English word) cannot give. Not measured in a browser
+ * (Owner rule: checks at the end): the end run measures it at 360 / 390 / 430 px. Not preloaded: a site without Urdu never fetches it.
+ */
+const urdu = Noto_Naskh_Arabic({ subsets: ['arabic'], display: 'swap', preload: false, fallback: ['serif'] })
+
 export default function FloorLayout({ children }: { children: ReactNode }) {
   // The version this page is served with (B-W2a-42 safe app updates): the tablet runs it until it may take a newer one.
+  // owb-fl7: Urdu's words are its drafts over the English ones, key by key (messagesFor('ur', …)).
   return (
-    <FloorApp appVersion={floorAppVersion()} catalogues={{ it: messagesFor('it', FLOOR_NAMESPACES), en: messagesFor('en', FLOOR_NAMESPACES) }}>
+    <FloorApp appVersion={floorAppVersion()} urduFont={urdu.style.fontFamily} catalogues={{ it: messagesFor('it', FLOOR_NAMESPACES), en: messagesFor('en', FLOOR_NAMESPACES), ur: messagesFor('ur', FLOOR_NAMESPACES) }}>
       {children}
     </FloorApp>
   )

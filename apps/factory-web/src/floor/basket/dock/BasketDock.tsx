@@ -5,6 +5,7 @@ import { ArrowRight, Check, CircleAlert, Image as ImageIcon, MoveDown, Package, 
 import { FloorButton } from '@nexus/ui/floor'
 import type { Department } from '../../../lib/department/model'
 import { DeptChip } from '../../../lib/department/view/DeptChip'
+import { useFloorWords } from '../../../lib/floor-words/FloorWords'
 import { useT } from '../../../lib/i18n/provider'
 import type { Dock } from '../model'
 import { BASKET_NS, StateFlag } from '../parts'
@@ -37,11 +38,12 @@ export interface BasketDockModel {
 
 export function BasketDock({ model, onAction }: { readonly model: BasketDockModel; readonly onAction: (action: DockAction) => void }) {
   const tb = useT(BASKET_NS)
+  const fw = useFloorWords(BASKET_NS)
   const { dock } = model
   const held = model.busy ? tb('homePage.loading') : null
   const ask = model.canAsk ? (
     <FloorButton size="lg" variant="primary" icon={<UserCheck />} heldReason={held} onClick={() => onAction('askLeader')}>
-      {tb('dock.askLeader')}
+      {fw('dock.askLeader')}
     </FloorButton>
   ) : null
   const problem = model.problem ? (
@@ -70,7 +72,7 @@ export function BasketDock({ model, onAction }: { readonly model: BasketDockMode
       note = { words: tb('elsewhere.warned') }
       row = (
         <FloorButton size="lg" variant="primary" className="fw-bk-dock-main" icon={<MoveDown />} heldReason={held} onClick={() => onAction('takeHere')}>
-          {tb('dock.takeHere')}
+          {fw('dock.takeHere')}
           {model.here ? <DeptChip dept={model.here} /> : null}
         </FloorButton>
       )
@@ -78,21 +80,21 @@ export function BasketDock({ model, onAction }: { readonly model: BasketDockMode
     case 'changeStep':
       row = (
         <FloorButton size="lg" variant="primary" icon={<Route />} heldReason={held} onClick={() => onAction('changeStep')}>
-          {tb('dock.changeStep')}
+          {fw('dock.changeStep')}
         </FloorButton>
       )
       break
     case 'sawDesign':
       row = (
         <FloorButton size="lg" variant="warning" icon={<ImageIcon />} heldReason={held} onClick={() => onAction('sawDesign')}>
-          {tb('dock.sawDesign')}
+          {fw('dock.sawDesign')}
         </FloorButton>
       )
       break
     case 'start':
       row = (
         <FloorButton size="lg" variant="primary" icon={<Play />} heldReason={held} onClick={() => onAction('start')}>
-          {tb(dock.resume ? 'dock.resume' : 'dock.start')}
+          {fw(dock.resume ? 'dock.resume' : 'dock.start')}
         </FloorButton>
       )
       break
@@ -104,11 +106,11 @@ export function BasketDock({ model, onAction }: { readonly model: BasketDockMode
         <>
           {dock.pause ? (
             <FloorButton size="lg" variant="secondary" icon={<Pause />} heldReason={held} onClick={() => onAction('pause')}>
-              {tb('dock.pause')}
+              {fw('dock.pause')}
             </FloorButton>
           ) : null}
           <FloorButton size="lg" variant="success" className="fw-bk-dock-main" icon={dock.main === 'passed' ? <ShieldCheck /> : dock.main === 'packed' ? <Package /> : <Check />} heldReason={waits ?? held} onClick={() => onAction('done')}>
-            {tb(`dock.${dock.main}`)}
+            {fw(`dock.${dock.main}`)}
             <ArrowRight className="fw-bk-mirror" aria-hidden="true" />
             {model.next ? <DeptChip dept={model.next} /> : <StateFlag state="READY" />}
           </FloorButton>

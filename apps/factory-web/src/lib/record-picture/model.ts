@@ -18,7 +18,7 @@
  * picture read returns, never a priced, measurement or audio file). No batch route: the host (S5's basket read) gives the picture
  * through its port — `held` (the small address its read answered) or its own `read`.
  */
-export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder' /* F-CQ-103 (B-CQ-030): a portal order's style */ | 'customerOrder' /* pg-w2 (D4): a customer's own order, read by its portal */ | 'basket' /* owb-b4: the floor's basket (its order's picture, site-stamped), through the host's port */
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder' /* F-CQ-103 (B-CQ-030): a portal order's style */ | 'customerOrder' /* pg-w2 (D4): a customer's own order, read by its portal */ | 'customerRequest' /* owb-po7: a customer's draft or sent order (a portal order request), read by its portal */ | 'basket' /* owb-b4: the floor's basket (its order's picture, site-stamped), through the host's port */
 
 /**
  * Where the part is drawn: a list cell, a board card, a phone card, an order line (small or large); owb-b4: a line of the change log

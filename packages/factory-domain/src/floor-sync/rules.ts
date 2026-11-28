@@ -316,6 +316,11 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.reason, 20), ...(Array.isArray(p.bundleIds) ? { quantity: p.bundleIds.length } : {}) }
     case 'floor.suggestion':
       return { code: text(p.kind, 20) }
+    // owb-fl2: how it moved (FORWARD, BACK, TAKEN_HERE) and how many baskets; an undo its move group; never who.
+    case 'production.baskets.move':
+      return { code: text(p.kind, 20), ...(Array.isArray(p.bundleIds) ? { quantity: p.bundleIds.length } : {}) }
+    case 'production.baskets.moveUndo':
+      return { target: text(p.groupId, 40) }
   }
 }
 
