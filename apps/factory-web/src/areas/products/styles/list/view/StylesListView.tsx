@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Archive, CalendarRange, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Archive, CalendarRange, Download, ImageOff, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, RadioCard, Select, Tag, Toggle, TokenChip } from '@nexus/ui/primitives'
@@ -12,12 +12,12 @@ import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import type { StyleRow } from '../../api'
+import type { ProductRow, StyleRow } from '../../api'
 import { PpeFields, RangeFields, settlePpe } from '../../forms'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { CommerceImport, CommerceImportButton } from '../../import/commerce/view/CommerceImport'
-import { completenessOf, decimalText, moneyText, rangeWords, revisionChips, STATUS_TONE, STYLE_TILES, STYLE_VIEWS } from '../../model'
-import { extraFilterCount, NO_FILTERS, START_FROM, type NewStyleModel, type StylesListActions, type StylesListViewModel } from '../list-model'
+import { decimalText, revisionChips, STATUS_TONE, STYLE_TILES, STYLE_VIEWS } from '../../model'
+import { agreedText, extraFilterCount, familyWords, marginHintKey, NO_FILTERS, pictureSrcOf, productColumns, protectionWords, sizesWords, START_FROM, thingsBefore, typeWords, type ListWords, type NewStyleModel, type ProductColumn, type StylesListActions, type StylesListViewModel } from '../list-model'
 // B-W2b-243: the row's ⋯ Tech pack PDF.
 import { windowAddress } from '../../techpack/model'
 import { usePhoneList } from '../use-phone'
@@ -82,7 +82,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey || model.newStyle || model.duplicate || dialog) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
-      if (event.key === 'c' && model.can.manage) {
+      if (event.key === 'c' && (model.can.manage || model.can.draftsEdit)) {
         event.preventDefault()
         actions?.onNewStyle?.(true)
       }
@@ -98,27 +98,60 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const archived = picked.filter((row) => row.status === 'ARCHIVED').length
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
+  // owb-pd4 (S4 settle 6): Duplicate is product.styles.manage's (the designer makes a product, never a copy).
   const duplicateHeld = model.can.manage ? null : t('held.noManage')
-  // List price and margin (W2a): only with pricelists.view and their grain; the column is absent otherwise (S2).
-  const showPrice = model.can.prices && model.grains.price && model.prices.state !== 'hidden'
-  const showMargin = model.can.prices && model.grains.margin && model.prices.state !== 'hidden'
-  const prices = model.prices
+  // owb-pd4 (S4 settle 6): a new product — product.styles.manage, or the designer's right (product.drafts.edit).
+  const mayCreate = model.can.manage || model.can.draftsEdit
   // B-W2b-237
   const gate = model.gate
   const seasonHeld = !model.can.manage ? t('held.noManage') : picked.length > 0 && archived === picked.length ? td('season.held.allArchived') : null
+  const say = (words: ListWords | { text: string }) => ('text' in words ? words.text : t(words.key, words.params))
+  const looks = model.looks
 
-  const columns = useMemo<ColDef<StyleRow>[]>(() => {
-    const CodeCell = ({ data }: ICellRendererParams<StyleRow>) =>
+  // owb-pd4 (step 4.1; design § 5q, prodList): picture · product · type and family · status (+ "n things before release") · revision ·
+  // sizes · protection · orders · agreed price (price grain) · margin (cost grain, where it comes from) · ⋯. Money columns are absent
+  // without their grain (never "0", never a blank column).
+  const columns = useMemo<ColDef<ProductRow>[]>(() => {
+    const PictureCell = ({ data }: ICellRendererParams<ProductRow>) => {
+      if (!data) return null
+      const src = pictureSrcOf(looks, data.id)
+      return src ? (
+        <img className="fw-st-pic" src={src} alt={t('list.pictureOf', { code: data.code })} loading="lazy" decoding="async" />
+      ) : (
+        <span className="fw-st-pic is-none" title={looks?.status === 'loading' ? undefined : t('list.noPicture')}>
+          <ImageOff size={14} aria-hidden />
+          <span className="nds-vh">{t('list.noPicture')}</span>
+        </span>
+      )
+    }
+    const ProductCell = ({ data }: ICellRendererParams<ProductRow>) =>
       data ? (
         <span className="fw-st-cell">
           <Link className="fw-st-rowlink" href={recordHref(data)}>
-            {data.code}
+            {data.name}
           </Link>
-          <span className="fw-st-row-sub">{data.name}</span>
+          <span className="fw-st-row-sub fw-st-mono">{data.code}</span>
         </span>
       ) : null
-    const StatusCell = ({ data }: ICellRendererParams<StyleRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
-    const RevisionCell = ({ data }: ICellRendererParams<StyleRow>) => {
+    const TypeCell = ({ data }: ICellRendererParams<ProductRow>) =>
+      data ? (
+        <span className="fw-st-cell">
+          <span>{say(typeWords(data))}</span>
+          <span className="fw-st-row-sub">{say(familyWords(data))}</span>
+        </span>
+      ) : null
+    const StatusCell = ({ data }: ICellRendererParams<ProductRow>) => {
+      if (!data) return null
+      const things = thingsBefore(data, gate)
+      return (
+        <span className="fw-st-cell">
+          <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
+          {things !== null && things > 0 ? <span className="fw-st-row-sub fw-st-warn">{t('list.things', { count: things })}</span> : null}
+          {things === 0 ? <span className="fw-st-row-sub">{t('list.readyToRelease')}</span> : null}
+        </span>
+      )
+    }
+    const RevisionCell = ({ data }: ICellRendererParams<ProductRow>) => {
       if (!data) return null
       const chips = revisionChips(data)
       return chips.length === 0 ? (
@@ -133,37 +166,43 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
         </span>
       )
     }
-    const RangeCell = ({ data }: ICellRendererParams<StyleRow>) =>
+    const SizesCell = ({ data }: ICellRendererParams<ProductRow>) =>
       data ? (
         <span className="fw-st-cell">
-          <span>{data.sizes.length ? rangeWords(data.sizes) : '—'}</span>
-          <span className="fw-st-row-sub" title={data.sizeScale.name}>{data.baseSize ? t('list.base', { size: data.baseSize }) : data.sizeScale.code}</span>
+          <span>{say(sizesWords(data))}</span>
+          {data.baseSize && data.sizes.length > 1 ? <span className="fw-st-row-sub">{t('list.base', { size: data.baseSize })}</span> : null}
         </span>
       ) : null
-    const PpeCell = ({ data }: ICellRendererParams<StyleRow>) =>
-      data ? (
-        data.ppeCategory === 'NOT_PPE' ? (
-          <span className="fw-st-hint">{t('ppe.short.NOT_PPE')}</span>
-        ) : (
-          <span className="fw-st-cell">
-            <span>{t(`ppe.short.${data.ppeCategory}`)}</span>
-            <span className="fw-st-row-sub">{[data.ppeStandard, data.ppeClass].filter(Boolean).join(' · ') || t('list.noStandard')}</span>
-          </span>
-        )
-      ) : null
-    const ReadyCell = ({ data }: ICellRendererParams<StyleRow>) => {
+    const ProtectionCell = ({ data }: ICellRendererParams<ProductRow>) => {
       if (!data) return null
-      const done = completenessOf(data)
-      const w1 = (
-        <span className="fw-st-cell" title={done.missing.map((key) => t(`completeness.${key}`)).join(' · ')}>
-          <span>{t('list.ready', { done: done.done, of: done.of })}</span>
-          {done.missing[0] && <span className="fw-st-row-sub">{t(`completeness.${done.missing[0]}`)}</span>}
+      const words = protectionWords(data)
+      return words ? <span className={words.key === 'list.protection.noClass' ? 'fw-st-warn' : undefined}>{say(words)}</span> : <span className="fw-st-hint">—</span>
+    }
+    const OrdersCell = ({ data }: ICellRendererParams<ProductRow>) => (data ? <span className="fw-st-right">{data.openOrders ? data.openOrders : '—'}</span> : null)
+    const PriceCell = ({ data }: ICellRendererParams<ProductRow>) => {
+      if (!data) return null
+      const text = agreedText(data.agreedRange ?? null, locale)
+      return text ? (
+        <span className="fw-st-cell fw-st-right">
+          <span>{text}</span>
+          <span className="fw-st-row-sub">{t('list.agreed.count', { count: data.agreedRange?.count ?? 0 })}</span>
+        </span>
+      ) : (
+        <span className="fw-st-hint">{t('list.agreed.none')}</span>
+      )
+    }
+    const MarginCell = ({ data }: ICellRendererParams<ProductRow>) => {
+      if (!data) return null
+      const hint = marginHintKey(data)
+      if (data.marginPct == null || !hint) return <span className="fw-st-hint">—</span>
+      return (
+        <span className="fw-st-cell fw-st-right">
+          <span>{t('list.margin.pct', { pct: decimalText(data.marginPct, locale, 1) })}</span>
+          <span className="fw-st-row-sub">{t(hint)}</span>
         </span>
       )
-      // B-W2b-237: the release gate's completeness when it was read; W1's readiness otherwise.
-      return <ReleaseCell row={data} gate={gate} fallback={w1} />
     }
-    const MoreCell = ({ data }: ICellRendererParams<StyleRow>) =>
+    const MoreCell = ({ data }: ICellRendererParams<ProductRow>) =>
       data ? (
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
@@ -173,67 +212,27 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
             { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=overview#style-variants` /* B-TH-261: Colourways & sizes is part of Overview & variants */ },
-            { id: 'duplicate', label: t('list.duplicate'), disabled: !!duplicateHeld, description: duplicateHeld ?? undefined, onSelect: () => latest.current.actions?.onDuplicate?.(data) },
+            // owb-pd4 (step 4.2): only what the person may do — Duplicate is the manager's.
+            ...(duplicateHeld ? [] : [{ id: 'duplicate', label: t('list.duplicate'), onSelect: () => latest.current.actions?.onDuplicate?.(data) }]),
             ...(techPackHref ? [{ id: 'techpack', label: t('list.techPackPdf'), href: techPackHref(data), target: '_blank' as const }] : []),
           ]}
         />
       ) : null
-    const TypeCell = ({ data }: ICellRendererParams<StyleRow>) =>
-      data ? (
-        <span className="fw-st-cell">
-          <span>{t(`productType.${data.productType}`)}</span>
-          <span className="fw-st-row-sub">{[data.season, data.brand?.name].filter(Boolean).join(' · ') || '—'}</span>
-        </span>
-      ) : null
-    const SkusCell = ({ data }: ICellRendererParams<StyleRow>) =>
-      data ? (
-        <span className="fw-st-cell fw-st-right">
-          <span>{data.skuCount}</span>
-          <span className="fw-st-row-sub">{t('list.colourwaysCount', { count: data.colourwayCount })}</span>
-        </span>
-      ) : null
-    const PriceCell = ({ data }: ICellRendererParams<StyleRow>) => {
-      if (!data) return null
-      if (prices.state === 'loading') return <span className="fw-st-hint">…</span>
-      if (prices.state !== 'ready') return <span className="fw-st-hint">—</span>
-      const price = prices.byStyle[data.id]
-      return price?.price ? (
-        <span className="fw-st-cell fw-st-right">
-          <span>{price.from ? t('list.price.from', { price: moneyText(price.price, prices.list.currency, locale) }) : moneyText(price.price, prices.list.currency, locale)}</span>
-          {price.from && <span className="fw-st-row-sub">{t('list.price.fromShort')}</span>}
-        </span>
-      ) : (
-        <span className="fw-st-hint">{t('list.price.none')}</span>
-      )
+    const DEFS: Record<ProductColumn, ColDef<ProductRow>> = {
+      picture: { colId: 'picture', headerName: t('list.col.picture'), minWidth: 64, maxWidth: 64, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell },
+      product: { colId: 'product', headerName: t('list.col.product'), field: 'name', minWidth: 190, flex: 2, cellRenderer: ProductCell },
+      type: { colId: 'type', headerName: t('list.col.type'), field: 'productType', minWidth: 150, flex: 1.2, cellRenderer: TypeCell },
+      status: { colId: 'status', headerName: t('list.col.status'), field: 'status', minWidth: 150, flex: 1, cellRenderer: StatusCell },
+      revision: { colId: 'revision', headerName: t('list.col.revision'), field: 'revisionState', minWidth: 190, flex: 1.2, cellRenderer: RevisionCell },
+      sizes: { colId: 'sizes', headerName: t('list.col.sizes'), field: 'baseSize', cellDataType: false, minWidth: 110, flex: 0.8, cellRenderer: SizesCell },
+      protection: { colId: 'protection', headerName: t('list.col.protection'), field: 'ppeClass', cellDataType: false, minWidth: 110, flex: 0.8, cellRenderer: ProtectionCell },
+      orders: { colId: 'orders', headerName: t('list.col.orders'), field: 'openOrders', cellDataType: false, minWidth: 90, flex: 0.6, type: 'rightAligned', cellRenderer: OrdersCell },
+      price: { colId: 'price', headerName: t('list.col.agreed'), field: 'id', cellDataType: false, minWidth: 150, flex: 1, type: 'rightAligned', sortable: false, cellRenderer: PriceCell },
+      margin: { colId: 'margin', headerName: t('list.col.margin'), field: 'id', cellDataType: false, minWidth: 150, flex: 0.9, type: 'rightAligned', sortable: false, cellRenderer: MarginCell },
+      more: { colId: 'more', headerName: t('list.col.more'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     }
-    const MarginCell = ({ data }: ICellRendererParams<StyleRow>) => {
-      if (!data) return null
-      if (prices.state !== 'ready') return <span className="fw-st-hint">{prices.state === 'loading' ? '…' : '—'}</span>
-      const price = prices.byStyle[data.id]
-      if (!price?.price) return <span className="fw-st-hint">—</span>
-      if (price.marginPct === null) return <span className="fw-st-hint" title={t('list.margin.unknownHint')}>{t('list.margin.unknown')}</span>
-      return (
-        <span className="fw-st-cell fw-st-right">
-          <span>{t('list.margin.pct', { pct: decimalText(price.marginPct, locale, 1) })}</span>
-          {price.belowFloor && <span className="fw-st-row-sub fw-st-warn">{t('list.margin.belowFloor')}</span>}
-        </span>
-      )
-    }
-    return [
-      { colId: 'code', headerName: t('list.col.style'), field: 'code', minWidth: 180, flex: 2, cellRenderer: CodeCell },
-      { colId: 'type', headerName: t('list.col.typeSeason'), field: 'productType', minWidth: 120, flex: 1, cellRenderer: TypeCell },
-      { colId: 'status', headerName: t('list.col.status'), field: 'status', minWidth: 100, flex: 1, cellRenderer: StatusCell },
-      { colId: 'revision', headerName: t('list.col.revision'), field: 'revisionState', minWidth: 200, flex: 1, cellRenderer: RevisionCell },
-      { colId: 'range', headerName: t('list.col.range'), field: 'baseSize', cellDataType: false, minWidth: 100, flex: 1, cellRenderer: RangeCell },
-      { colId: 'skus', headerName: t('list.col.skus'), field: 'skuCount', minWidth: 125, flex: 1, type: 'rightAligned', cellRenderer: SkusCell },
-      { colId: 'ppe', headerName: t('list.col.ppe'), field: 'ppeCategory', minWidth: 150, flex: 1, cellRenderer: PpeCell },
-      { colId: 'ready', headerName: gate ? td('column.release.column') : t('list.col.ready'), field: 'skuCount', cellDataType: false, minWidth: 140, flex: 1, cellRenderer: ReadyCell },
-      ...(showPrice ? [{ colId: 'price', headerName: t('list.col.price'), field: 'id' as const, cellDataType: false, minWidth: 130, flex: 1, type: 'rightAligned', sortable: false, cellRenderer: PriceCell }] : []),
-      ...(showMargin ? [{ colId: 'margin', headerName: t('list.col.margin'), field: 'id' as const, cellDataType: false, minWidth: 130, flex: 0.8, type: 'rightAligned', sortable: false, cellRenderer: MarginCell }] : []),
-      { colId: 'updated', headerName: t('list.col.updated'), field: 'updatedAt', minWidth: 100, flex: 1, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') },
-      { colId: 'more', headerName: t('list.col.more'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-    ]
-  }, [t, td, locale, recordHref, prices, showPrice, showMargin, duplicateHeld, techPackHref, gate])
+    return productColumns(model.grains).map((column) => DEFS[column])
+  }, [t, locale, recordHref, duplicateHeld, techPackHref, gate, looks, model.grains])
 
   const filtered = model.filters.view !== 'open' || extraFilterCount(model.filters) > 0
   const state = model.rows.problem === 'problem.read.forbidden' ? (
@@ -246,9 +245,9 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
     ) : (
       <EmptyState
         title={t('list.empty.title')}
-        description={t(model.can.manage ? 'list.empty.body' : 'list.empty.bodyView')}
+        description={t(mayCreate ? 'list.empty.body' : 'list.empty.bodyView')}
         action={
-          model.can.manage ? (
+          mayCreate ? (
             <Button size="sm" variant="primary" onClick={() => actions?.onNewStyle?.(true)}>
               {t('list.emptyCreate')}
             </Button>
@@ -328,6 +327,17 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           </option>
         ))}
       </Select>
+      {/* owb-pd4 (step 4.1): the family — "Made for ⟨customer⟩" (the API filters by the customer; "Our range" is the type column's word). */}
+      {model.brands && model.brands.length > 0 && (
+        <Select size="sm" aria-label={t('list.familyFilter')} value={model.filters.brand ?? ''} onChange={(event) => actions?.onFilters?.({ ...model.filters, brand: event.target.value })}>
+          <option value="">{t('list.allFamilies')}</option>
+          {model.brands.map((brand) => (
+            <option key={brand.id} value={brand.id}>
+              {t('family.madeFor', { customer: brand.name })}
+            </option>
+          ))}
+        </Select>
+      )}
     </>
   )
 
@@ -339,14 +349,11 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           <span className="fw-st-hint" role="status">
             {model.asOf ? t('list.updated', { time: formatTime(model.asOf, { locale }) }) : t('list.notYet')}
           </span>
-          {(showPrice || showMargin) && prices.state === 'ready' && <span className="fw-st-hint">{t('list.price.list', { code: prices.list.code, name: prices.list.name })}</span>}
-          {(showPrice || showMargin) && prices.state === 'none' && <span className="fw-st-hint">{t('list.price.noList')}</span>}
-          {(showPrice || showMargin) && prices.state === 'error' && <span className="fw-st-hint">{t('list.price.failed')}</span>}
         </div>
         <span className="fw-cmi-head-actions">
           {/* W2b (B-W2b-209): Import from a Nexus Commerce export (or a sheet in its columns). */}
           <CommerceImportButton held={model.importHeld ?? null} onImport={() => actions?.onImport?.()} />
-          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewStyle?.(true)} aria-keyshortcuts="c">
+          <Button size="sm" variant="primary" heldReason={mayCreate ? null : t('held.noManage')} onClick={() => actions?.onNewStyle?.(true)} aria-keyshortcuts="c">
             <Plus size={14} aria-hidden /> {t('list.new')}
           </Button>
         </span>
@@ -396,6 +403,11 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
               {t(`ppe.short.${model.filters.ppe}`)}
             </TokenChip>
           )}
+          {model.filters.brand && (
+            <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, brand: '' })}>
+              {t('family.madeFor', { customer: model.brands?.find((brand) => brand.id === model.filters.brand)?.name ?? '—' })}
+            </TokenChip>
+          )}
           {model.filters.q.trim() && (
             <TokenChip removeLabel={t('list.removeFilter')} onRemove={() => actions?.onFilters?.({ ...model.filters, q: '' })}>
               {t('list.chipSearch', { q: model.filters.q.trim() })}
@@ -435,13 +447,13 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           state={state}
           count={countWords}
           search={searchField}
-          filterCount={(model.filters.view !== 'open' ? 1 : 0) + (model.filters.type ? 1 : 0) + (model.filters.ppe ? 1 : 0)}
+          filterCount={(model.filters.view !== 'open' ? 1 : 0) + (model.filters.type ? 1 : 0) + (model.filters.ppe ? 1 : 0) + (model.filters.brand ? 1 : 0)}
           onFilters={() => setDialog('filters')}
           selected={selected}
           onSelected={setSelected}
           bulk={bulkActions}
-          prices={prices}
-          showPrice={showPrice}
+          grains={model.grains}
+          looks={looks}
           recordHref={recordHref}
           onDuplicate={(row) => actions?.onDuplicate?.(row)}
           duplicateHeld={duplicateHeld}
@@ -449,9 +461,10 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           more={model.rows.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
           selectMode={model.phoneSelect}
           release={gate ? (row) => <ReleaseCell row={row} gate={gate} fallback={null} /> : undefined /* B-W2b-237 */}
+          things={(row) => thingsBefore(row, gate) /* owb-pd4 */}
         />
       ) : (
-      <ListFrame<StyleRow>
+      <ListFrame<ProductRow>
         label={t('list.tableLabel')}
         rows={state ? [] : items}
         rowId={(row) => row.id}

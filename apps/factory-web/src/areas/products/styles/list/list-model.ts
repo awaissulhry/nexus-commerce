@@ -1,11 +1,13 @@
-import type { BrandRow, PriceEntry, PriceListRow, ScaleRow, StyleRow } from '../api'
+import type { BrandRow, ProductRow, ScaleRow, StyleRow } from '../api'
+import { storeUrl } from '../../../../record-panels/store'
+import type { LooksState } from '../gallery/gallery-model'
 import type { DuplicateModel } from '../duplicate/duplicate-model'
 import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
 import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type { CommerceImportActions } from '../import/commerce/commerce-model'
 import type { CommerceImportState } from '../import/commerce/use-commerce-import'
 import type { PpeValue, RangeValue } from '../forms'
-import type { Grains, StyleAbilities, StyleListView } from '../model'
+import { moneyText, type Grains, type StyleAbilities, type StyleListView } from '../model'
 // B-W2b-236: List · Gallery.
 import type { StylesGalleryModel } from '../gallery/gallery-model'
 // B-W2b-237 (SCR-343): the release column's completeness and Set season.
@@ -20,12 +22,14 @@ export interface StyleFilters {
   type: string
   /** A PPE category or '' for every one. */
   ppe: string
+  /** owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" — the customer's party id, or '' (absent) for every product. */
+  brand?: string
 }
 
-export const NO_FILTERS: StyleFilters = { view: 'open', q: '', type: '', ppe: '' }
+export const NO_FILTERS: StyleFilters = { view: 'open', q: '', type: '', ppe: '', brand: '' }
 
 /** The filters beyond the saved view (the chips in the toolbar). */
-export const extraFilterCount = (filters: StyleFilters): number => (filters.q.trim() ? 1 : 0) + (filters.type ? 1 : 0) + (filters.ppe ? 1 : 0)
+export const extraFilterCount = (filters: StyleFilters): number => (filters.q.trim() ? 1 : 0) + (filters.type ? 1 : 0) + (filters.ppe ? 1 : 0) + (filters.brand ? 1 : 0)
 
 export interface NewStyleDraft {
   companyId: string | null
@@ -55,59 +59,119 @@ export interface NewStyleModel {
 export type StartFrom = 'blank' | 'copy' | 'template' | 'commerce'
 export const START_FROM: readonly StartFrom[] = ['blank', 'copy', 'template', 'commerce']
 
-/** A style's price in the base list in force (W2a, B-W2a-19): its own price, else the lowest of its colourways ("from"). */
-export interface StylePrice {
-  price: string | null
-  /** Only colourways are priced: the lowest, said "from". */
-  from: boolean
-  marginPct: string | null
-  belowFloor: boolean
+// ---- owb-pd4 (step 4.1; design § 5q "Office › Products", prototype prod.js prodList) — the Products list, pure ----------------------
+
+/** The list's columns, in the design's order: the picture first; the agreed price only with the price grain, the margin only with the cost grain. */
+export type ProductColumn = 'picture' | 'product' | 'type' | 'status' | 'revision' | 'sizes' | 'protection' | 'orders' | 'price' | 'margin' | 'more'
+export function productColumns(grains: Pick<Grains, 'price' | 'cost'>): ProductColumn[] {
+  return ['picture', 'product', 'type', 'status', 'revision', 'sizes', 'protection', 'orders', ...(grains.price ? (['price'] as const) : []), ...(grains.cost ? (['margin'] as const) : []), 'more']
 }
 
-/**
- * The list prices beside the styles: hidden without pricelists.view or the price grain (the columns are absent), none
- * when no BASE list is in force for the company, else the list and each style's price.
- */
-export type ListPrices =
-  | { state: 'hidden' }
-  | { state: 'loading' }
-  | { state: 'none' }
-  | { state: 'error'; problem: string }
-  | { state: 'ready'; list: { id: string; code: string; name: string; currency: string }; byStyle: Record<string, StylePrice> }
-
-/** The BASE list a company's styles are priced from: its own first, then every company's; euros first. */
-export function pickBaseList(lists: readonly PriceListRow[], companyId: string | null): PriceListRow | null {
-  const usable = lists.filter((list) => list.kind === 'BASE' && list.state === 'IN_FORCE' && list.shownVersion !== null)
-  const rank = (list: PriceListRow) => (list.companyId !== null && list.companyId === companyId ? 0 : list.companyId === null ? 2 : 4) + (list.currency === 'EUR' ? 0 : 1)
-  return [...usable].sort((a, b) => rank(a) - rank(b) || a.code.localeCompare(b.code))[0] ?? null
+/** A key of the products catalogue and its params. */
+export interface ListWords {
+  key: string
+  params?: Record<string, string | number>
 }
 
-/** Each style's price in a version's entries: the style's own row wins; else the lowest colourway row ("from"). */
-export function pricesByStyle(entries: readonly PriceEntry[]): Record<string, StylePrice> {
-  const out: Record<string, StylePrice> = {}
-  const lowest = new Map<string, PriceEntry>()
-  for (const entry of entries) {
-    if (entry.unitPrice === undefined) continue
-    if (entry.colourwayId === null) out[entry.styleId] = { price: entry.unitPrice, from: false, marginPct: entry.marginPct ?? null, belowFloor: entry.belowFloor ?? false }
-    else {
-      const seen = lowest.get(entry.styleId)
-      if (!seen || Number(entry.unitPrice) < Number(seen.unitPrice)) lowest.set(entry.styleId, entry)
-    }
+/** The family: the row's own word when the API sends it (pd1), else the customer it is made for (empty: our range). */
+export const familyOf = (row: Pick<ProductRow, 'family' | 'brand'>): 'OUR_RANGE' | 'FOR_CUSTOMER' => row.family ?? (row.brand ? 'FOR_CUSTOMER' : 'OUR_RANGE')
+
+/** "Our range" / "Made for ⟨customer⟩". */
+export function familyWords(row: Pick<ProductRow, 'family' | 'brand'>): ListWords {
+  return familyOf(row) === 'FOR_CUSTOMER' ? { key: 'family.madeFor', params: { customer: row.brand?.name ?? '—' } } : { key: 'family.ourRange' }
+}
+
+/** The type: the product type profile's name when set (S4 settle 1: "Hoodie", "Molded part"), else the kind's word. */
+export function typeWords(row: Pick<ProductRow, 'typeName' | 'productType'>): { text: string } | ListWords {
+  return row.typeName?.trim() ? { text: row.typeName.trim() } : { key: `productType.${row.productType}` }
+}
+
+/** The agreed price range (price grain; lowest–highest over every customer's agreed price), or null: none, or not in the role. */
+export function agreedText(range: ProductRow['agreedRange'], locale: 'it' | 'en'): string | null {
+  if (!range) return null
+  const low = moneyText(range.low, range.currency, locale)
+  return Number(range.low) === Number(range.high) ? low : `${low} – ${moneyText(range.high, range.currency, locale)}`
+}
+
+/** Where the margin comes from: the kept standard cost, or a rough standard of its kind (cost grain). Null: no margin. */
+export const marginHintKey = (row: Pick<ProductRow, 'marginPct' | 'marginFrom'>): string | null =>
+  row.marginPct == null ? null : row.marginFrom === 'KIND' ? 'list.margin.fromKind' : 'list.margin.fromKept'
+
+/** "S–XXL" / "Made to measure" / "—". */
+export function sizesWords(row: Pick<ProductRow, 'sizes' | 'mtmAllowed'>): ListWords | { text: string } {
+  if (row.sizes.length > 0) return { text: row.sizes.length === 1 ? row.sizes[0]! : `${row.sizes[0]}–${row.sizes[row.sizes.length - 1]}` }
+  return row.mtmAllowed ? { key: 'list.mtm' } : { text: '—' }
+}
+
+/** Protection: "CE AA" (the class of a PPE product), "No class yet", or none for a product that is not PPE. */
+export function protectionWords(row: Pick<ProductRow, 'ppeCategory' | 'ppeClass'>): ListWords | null {
+  if (row.ppeCategory === 'NOT_PPE') return null
+  return row.ppeClass ? { key: 'list.protection.ce', params: { class: row.ppeClass } } : { key: 'list.protection.noClass' }
+}
+
+/** The main picture of a row from the looks read (the gallery's addresses through this app), or null: none, or not read yet. */
+export function pictureSrcOf(looks: LooksState | undefined, styleId: string): string | null {
+  const url = looks?.status === 'ready' ? looks.byStyle[styleId]?.picture?.look?.url : undefined
+  if (!url) return null
+  if (url.startsWith('data:image/')) return url
+  try {
+    return storeUrl(url)
+  } catch {
+    return null
   }
-  for (const [styleId, entry] of lowest) if (!out[styleId]) out[styleId] = { price: entry.unitPrice ?? null, from: true, marginPct: entry.marginPct ?? null, belowFloor: entry.belowFloor ?? false }
-  return out
 }
+
+/** "n things before release": the blockers of a product's open draft, from the release gate's summary (null: no draft, or not read yet). */
+export function thingsBefore(row: Pick<ProductRow, 'id' | 'draftRevision'>, gate: ListGate | undefined): number | null {
+  const summary = gate?.byStyle[row.id]
+  if (row.draftRevision === null || !summary || !summary.checked || summary.revision?.status !== 'DRAFT') return null
+  return summary.blockers
+}
+
+/** One card of the phone list (under 720 px; 375 px with no sideways scroll): money only with its grain. */
+export interface ProductCard {
+  id: string
+  code: string
+  name: string
+  picture: string | null
+  family: ListWords
+  type: { text: string } | ListWords
+  sizes: ListWords | { text: string }
+  protection: ListWords | null
+  orders: number | null
+  price: string | null
+  margin: { pct: string; hint: string | null } | null
+}
+export function productCardOf(row: ProductRow, options: { grains: Pick<Grains, 'price' | 'cost'>; looks?: LooksState; locale: 'it' | 'en' }): ProductCard {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    picture: pictureSrcOf(options.looks, row.id),
+    family: familyWords(row),
+    type: typeWords(row),
+    sizes: sizesWords(row),
+    protection: protectionWords(row),
+    orders: row.openOrders ?? null,
+    price: options.grains.price ? agreedText(row.agreedRange ?? null, options.locale) : null,
+    margin: options.grains.cost && row.marginPct != null ? { pct: row.marginPct, hint: marginHintKey(row) } : null,
+  }
+}
+// ---- end owb-pd4
 
 export interface StylesListViewModel {
   prefix: string
   can: StyleAbilities
-  /** Money grains: the list price needs `price`, the margin `margin` (A1 §2.6; S2: sales see margin %, never cost). */
+  /** Money grains (A1 §2.6): owb-pd4 — the agreed price needs `price`, the margin (from the kept cost) `cost`. */
   grains: Grains
-  prices: ListPrices
+  /** owb-pd4 (step 4.1): the main picture of each row on screen (the gallery's looks read); absent: no picture column yet. */
+  looks?: LooksState
+  /** owb-pd4: the customers a product can be made for (the family filter "Made for ⟨customer⟩"); absent or null: no filter. */
+  brands?: Array<{ id: string; name: string }> | null
   /** Duplicate style (a row's ⋯, or New style › Start from: Copy of a style). */
   duplicate: DuplicateModel | null
   filters: StyleFilters
-  rows: { items: StyleRow[] | null; more: boolean; count: number | null; problem: string | null }
+  rows: { items: ProductRow[] | null; more: boolean; count: number | null; problem: string | null }
   /** The tiles' counts: null while unknown (drawn "—", never 0). */
   tiles: Partial<Record<StyleListView, number | null>>
   asOf: string | null

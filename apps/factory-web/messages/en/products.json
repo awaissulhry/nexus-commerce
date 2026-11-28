@@ -90,24 +90,24 @@
     "problems_other": "{count} problems before release"
   },
   "record": {
-    "back": "Styles",
-    "backToList": "Back to the styles",
-    "title": "Style",
-    "loading": "Opening the style…",
+    "back": "Products",
+    "backToList": "Back to the products",
+    "title": "Product",
+    "loading": "Opening the product…",
     "state": {
       "not_found": {
-        "title": "This style does not exist",
+        "title": "This product does not exist",
         "body": "It may belong to another company, or the link is wrong."
       },
       "forbidden": {
-        "title": "You do not have access to this style",
-        "body": "Your role does not read styles of this company. The product office or the owner can give access."
+        "title": "You do not have access to this product",
+        "body": "Your role does not read products of this company. The product office or the owner can give access."
       },
       "error": {
-        "title": "The style could not be opened"
+        "title": "The product could not be opened"
       }
     },
-    "tabsLabel": "Parts of the style",
+    "tabsLabel": "Parts of the product",
     "viewing": "Viewing",
     "revisionPicker": "Revision in view",
     "revisionOption": "Rev {revision} · {status}",
@@ -116,9 +116,9 @@
     "thingsBefore_one": "{count} thing before release",
     "thingsBefore_other": "{count} things before release",
     "readyToRelease": "Ready to release",
-    "dockLabel": "Thread of the style",
+    "dockLabel": "Thread of the product",
     "more": "More actions",
-    "changed": "Someone else changed this style at {time}.",
+    "changed": "Someone else changed this product at {time}.",
     "reload": "Reload",
     "archivedBanner": "Archived: read only. Reactivate it (⋯) to change it.",
     "frozenReleased": "Revision {revision} is released and frozen: work orders use it exactly as it is.",
@@ -131,8 +131,8 @@
     "release": "Release revision {revision}",
     "startRevision": "Start revision {revision}",
     "abandon": "Abandon draft revision {revision}…",
-    "archive": "Archive style…",
-    "reactivate": "Reactivate style",
+    "archive": "Archive product…",
+    "reactivate": "Reactivate product",
     "copyCode": "Copy code",
     "duplicate": "Duplicate…",
     "startProject": "Start a project…"
@@ -144,12 +144,12 @@
   },
   "held": {
     "busy": "Wait: the last change is still being saved.",
-    "noManage": "Your role can view this style, not change it.",
+    "noManage": "Your role can view this product, not change it.",
     "noRelease": "Your role does not release revisions.",
-    "archived": "The style is archived: reactivate it first.",
+    "archived": "The product is archived: reactivate it first.",
     "draftOpen": "Revision {revision} is still a draft: release or abandon it first.",
     "notDraft": "Only a draft revision is released.",
-    "noRevision": "The style has no revision yet: start revision 1.",
+    "noRevision": "The product has no revision yet: start revision 1.",
     "checking": "The release check is still being read.",
     "blockers_one": "{count} thing to fix first (r opens the check)",
     "blockers_other": "{count} things to fix first (r opens the check)",
@@ -196,10 +196,10 @@
     "widened": "Revision {revision} is now released for more colourways or sizes: work orders may take them.",
     "revisionStarted": "The new draft revision is open.",
     "abandoned": "The draft revision is abandoned.",
-    "archived": "The style is archived.",
-    "archivedMany_one": "{count} style archived.",
-    "archivedMany_other": "{count} styles archived.",
-    "reactivated": "The style is reactivated.",
+    "archived": "The product is archived.",
+    "archivedMany_one": "{count} product archived.",
+    "archivedMany_other": "{count} products archived.",
+    "reactivated": "The product is reactivated.",
     "lineAdded": "Material added to the BOM.",
     "lineRemoved": "Line removed from the draft BOM.",
     "stepsAdded_one": "{count} operation added.",
@@ -210,22 +210,22 @@
     "labelNamed": "The revision names its garment label.",
     "subcontractSaved": "Subcontract details saved.",
     "inHouse": "The step is done in-house again.",
-    "toldCompliance": "The task for Compliance is made: it shows on the style's Tasks and in their My tasks."
+    "toldCompliance": "The task for Compliance is made: it shows on the product's Tasks and in their My tasks."
   },
   "identity": {
     "title": "Identity",
-    "intro": "What the style is. Save with ⌘S.",
+    "intro": "What the product is. Save with ⌘S.",
     "readOnly": "You can view, not change.",
     "readArchived": "Archived: read only.",
     "code": "Code",
     "codeHint": "1 to 24 capital letters or digits, with . _ - inside. SKUs start with it.",
-    "codeFrozen": "Fixed: the style has SKUs.",
+    "codeFrozen": "Fixed: the product has SKUs.",
     "name": "Name",
     "type": "Product type",
     "season": "Season",
     "seasonHint": "As FW27 or SS28.",
     "brand": "Brand",
-    "brandHint": "A private-label style names the brand it is made for.",
+    "brandHint": "A private-label product names the brand it is made for.",
     "ownCollection": "Our own collection",
     "mtm": "Made-to-measure allowed",
     "mtmHint": "A measurement template is chosen with made-to-measure orders (W2a).",
@@ -242,8 +242,8 @@
     }
   },
   "warning": {
-    "title_one": "{count} thing this style still lacks",
-    "title_other": "{count} things this style still lacks",
+    "title_one": "{count} thing this product still lacks",
+    "title_other": "{count} things this product still lacks",
     "NO_SIZE_RANGE": "Choose the sizes it is made in: the SKUs are built from them.",
     "NO_BASE_SIZE": "Choose the base (sample) size grading works from.",
     "NO_COLOURWAY": "Add a colourway: orders, BOM colours and stock are per colourway.",
@@ -310,7 +310,7 @@
     "intro": "The scale, the sizes it is made in and the base size. The SKUs follow the range.",
     "scale": "Size scale",
     "scaleHint": "Scales are kept in Sizes & measurements.",
-    "scaleLocked": "Fixed: the style has SKUs.",
+    "scaleLocked": "Fixed: the product has SKUs.",
     "chooseScale": "Choose a scale",
     "base": "Base size",
     "baseHint": "The sample size; quantities and grading start from it.",
@@ -381,7 +381,7 @@
     "save": "Save",
     "held": {
       "code": "The code is 1 to 12 capital letters or digits, with . or _ inside.",
-      "taken": "Another colourway of this style is {code}.",
+      "taken": "Another colourway of this product is {code}.",
       "name": "Type a name."
     }
   },
@@ -446,7 +446,7 @@
     "title_one": "Generate {count} SKU",
     "title_other": "Generate {count} SKUs",
     "what": "A SKU for every switched-on colourway and size that has none:",
-    "pattern": "Each SKU is style-colourway-size, as {example}.",
+    "pattern": "Each SKU is product-colourway-size, as {example}.",
     "go_one": "Generate {count} SKU",
     "go_other": "Generate {count} SKUs"
   },
@@ -465,7 +465,7 @@
     "whatHappens": "What happens",
     "becomes": "Revision {revision} becomes the one every new work order uses; its BOM, routing and label are frozen.",
     "obsoletes": "Revision {revision} becomes obsolete: work orders already made from it keep it, quotes costed from it keep their price.",
-    "activates": "The style becomes Active: it can be quoted, ordered and produced.",
+    "activates": "The product becomes Active: it can be quoted, ordered and produced.",
     "frozen": "A later change is a new revision (Start revision).",
     "note": "What changed (optional)",
     "noteHint": "Kept with the revision and in the history."
@@ -497,8 +497,8 @@
   },
   "issue": {
     "NO_LINES": "The BOM has no materials yet.",
-    "NO_SIZE_RANGE": "The style has no size range.",
-    "NO_ACTIVE_COLOURWAY": "The style has no active colourway.",
+    "NO_SIZE_RANGE": "The product has no size range.",
+    "NO_ACTIVE_COLOURWAY": "The product has no active colourway.",
     "MATERIAL_ARCHIVED": "Line {line}: the material is archived.",
     "UNIT_NOT_CONVERTIBLE": "Line {line}: its unit does not convert to the material’s unit.",
     "QUANTITY_NOT_POSITIVE": "Line {line}: the quantity must be above 0.",
@@ -562,12 +562,12 @@
     "NOT_REQUIRED": "Not required"
   },
   "list": {
-    "intro": "Every style with its colourways and sizes, BOM, routing, cost and compliance in one studio.",
+    "intro": "Every product with its colourways and sizes, BOM, routing, cost and compliance in one studio.",
     "updated": "Updated {time} · live",
     "notYet": "Reading…",
-    "new": "New style",
-    "keyNew": "New style",
-    "tableLabel": "Styles",
+    "new": "New product",
+    "keyNew": "New product",
+    "tableLabel": "Products",
     "search": "Search code, name or season",
     "viewFilter": "Saved filter",
     "typeFilter": "Product type",
@@ -598,38 +598,37 @@
     "removeFilter": "Remove this filter",
     "chipSearch": "Search: {q}",
     "clearAll": "Clear filters",
-    "count_one": "{count} style",
-    "count_other": "{count} styles",
+    "count_one": "{count} product",
+    "count_other": "{count} products",
     "countMore": "{count} of {total}",
     "more": "Show more",
-    "failed": "Could not load the styles",
+    "failed": "Could not load the products",
     "noMatch": {
-      "title": "No style matches these filters",
+      "title": "No product matches these filters",
       "body": "Clear a filter or search for something else."
     },
     "forbidden": {
-      "title": "You do not have access to styles",
-      "body": "The product office, production manager and owner roles read styles; ask the owner for one of them."
+      "title": "You do not have access to products",
+      "body": "The product office, production manager and owner roles read products; ask the owner for one of them."
     },
     "empty": {
-      "title": "No styles yet",
-      "body": "Create the first style: its colourways, sizes, BOM and routing follow in its studio.",
-      "bodyView": "The product office creates the styles."
+      "title": "No products yet",
+      "body": "Create the first product: its colourways, sizes, BOM and routing follow in its studio.",
+      "bodyView": "The product office creates the products."
     },
-    "emptyCreate": "Create the first style",
+    "emptyCreate": "Create the first product",
     "col": {
-      "style": "Style",
-      "typeSeason": "Type",
       "status": "Status",
       "revision": "Revision",
-      "range": "Size range",
-      "skus": "SKUs on",
-      "ppe": "PPE",
-      "ready": "Complete",
-      "updated": "Updated",
       "more": "Actions",
-      "price": "List price",
-      "margin": "Margin %"
+      "margin": "Margin",
+      "picture": "Picture",
+      "product": "Product",
+      "type": "Type",
+      "sizes": "Sizes",
+      "protection": "Protection",
+      "orders": "Orders",
+      "agreed": "Agreed price"
     },
     "rev": {
       "released": "Rev {revision} released",
@@ -637,10 +636,6 @@
     },
     "noRevision": "No revision",
     "base": "base {size}",
-    "colourwaysCount_one": "in {count} colourway",
-    "colourwaysCount_other": "in {count} colourways",
-    "noStandard": "standard not named",
-    "ready": "{done} of {of}",
     "rowMenu": "Actions for {code}",
     "open": "Open",
     "openNewTab": "Open in a new tab",
@@ -652,26 +647,33 @@
       "archive_other": "Archive {count}…",
       "archiveHeld_one": "{count} of them is archived already: take it out of the selection.",
       "archiveHeld_other": "{count} of them are archived already: take them out of the selection.",
-      "archiveTitle_one": "Archive {count} style?",
-      "archiveTitle_other": "Archive {count} styles?"
+      "archiveTitle_one": "Archive {count} product?",
+      "archiveTitle_other": "Archive {count} products?"
     },
     "duplicate": "Duplicate…",
     "techPackPdf": "Tech pack PDF (new tab)",
-    "price": {
-      "from": "from {price}",
-      "fromShort": "by colourway",
-      "is": "{price}",
-      "none": "Not priced",
-      "list": "List prices: {code} · {name}",
-      "noList": "No base price list is in force: list prices are blank until one is.",
-      "failed": "The list prices could not be read."
-    },
     "margin": {
       "pct": "{pct} %",
-      "unknown": "Unknown",
-      "unknownHint": "The standard cost of the base size is not known yet.",
-      "belowFloor": "Under the floor"
-    }
+      "fromKept": "from the kept cost",
+      "fromKind": "rough standard of its kind"
+    },
+    "agreed": {
+      "none": "No agreed price",
+      "count_one": "{count} agreed price",
+      "count_other": "{count} agreed prices"
+    },
+    "things_one": "{count} thing before release",
+    "things_other": "{count} things before release",
+    "readyToRelease": "Ready for release",
+    "mtm": "Made to measure",
+    "protection": {
+      "ce": "CE {class}",
+      "noClass": "No class yet"
+    },
+    "noPicture": "No picture yet",
+    "pictureOf": "The main picture of {code}",
+    "familyFilter": "Who it is for",
+    "allFamilies": "Every customer and our range"
   },
   "completeness": {
     "colourways": "Missing: colourways",
@@ -697,12 +699,12 @@
     "class": "Class"
   },
   "newStyle": {
-    "title": "New style",
-    "intro": "A draft style with revision 1: its colourways, BOM and routing follow in its studio.",
+    "title": "New product",
+    "intro": "A draft product with revision 1: its colourways, BOM and routing follow in its studio.",
     "company": "Company",
     "companyHint": "Every company: made by all the companies of the group.",
     "everyCompany": "Every company",
-    "create": "Create draft style",
+    "create": "Create draft product",
     "after": "It opens on its Overview with revision 1 (draft).",
     "noScales": "No size scale yet: a scale is created in Sizes & measurements first.",
     "refused": "The server refused this value.",
@@ -714,7 +716,7 @@
     "startFrom": "Start from",
     "from": {
       "blank": "Blank",
-      "copy": "Copy of a style",
+      "copy": "Copy of a product",
       "template": "Template",
       "commerce": "Nexus Commerce product"
     },
@@ -722,10 +724,10 @@
       "template": "Later"
     },
     "fromHint": {
-      "blank": "Type the style here; colourways, BOM and routing follow in its studio.",
-      "copy": "Pick a style and the parts to copy: BOM, measurements, routing, label.",
-      "template": "Style templates come later.",
-      "commerce": "Upload a Nexus Commerce export: each product family becomes a draft style with its colours, sizes and SKUs."
+      "blank": "Type the product here; colourways, BOM and routing follow in its studio.",
+      "copy": "Pick a product and the parts to copy: BOM, measurements, routing, label.",
+      "template": "Product templates come later.",
+      "commerce": "Upload a Nexus Commerce export: each product family becomes a draft product with its colours, sizes and SKUs."
     }
   },
   "compliance": {
@@ -752,7 +754,7 @@
     "checks": {
       "title": "Checks",
       "intro": "For revision {revision} ({status}): what stops production, labels or shipping.",
-      "noRevision": "The style has no revision yet.",
+      "noRevision": "The product has no revision yet.",
       "allOk": "Nothing stops production, labels or shipping.",
       "other": "Shown for revision {revision}: open it"
     },
@@ -775,13 +777,13 @@
       "expired_other": "{count} expired",
       "suspended_one": "{count} suspended",
       "suspended_other": "{count} suspended",
-      "noColourways": "The style has no colourway: nothing to cover yet.",
+      "noColourways": "The product has no colourway: nothing to cover yet.",
       "cell": "{colourway}, size {size}: {status}, valid until {until}",
       "ok": "Covered",
       "daysLeft_one": "{count} day left",
       "daysLeft_other": "{count} days left",
       "legend": "Green: covered · amber: expires within 60 days · red: not covered (blocks release, labels and shipping of the cell) · grey: switched off.",
-      "certificates": "Certificates of the style",
+      "certificates": "Certificates of the product",
       "certificate": "Certificate",
       "body": "Notified body",
       "valid": "Valid",
@@ -825,20 +827,20 @@
       "languages": "Languages",
       "none": "Revision {revision} names no garment label yet: it blocks production and labels.",
       "name": "Label of the draft revision",
-      "nameHint": "An active template of this style or for every style.",
+      "nameHint": "An active template of this product or for every product.",
       "loading": "Reading the label templates…",
       "noTemplates": "No active label template yet: make one in Compliance › Labels & marking.",
       "noneChosen": "No label",
       "save": "Name this label",
       "where": "Templates are made and approved in Compliance › Labels & marking.",
-      "open": "See the labels of this style",
-      "new": "New label for this style"
+      "open": "See the labels of this product",
+      "new": "New label for this product"
     },
     "tracking": {
       "title": "Garment tracking",
       "numbering": "Number on each garment’s label",
       "save": "Save numbering",
-      "fixed": "It changes until the style’s work orders print a garment label, give a serial or release a garment; then the numbering of the garments that exist is fixed.",
+      "fixed": "It changes until the product’s work orders print a garment label, give a serial or release a garment; then the numbering of the garments that exist is fixed.",
       "none": "Not PPE: no batch number is needed on the label."
     }
   },
@@ -940,13 +942,13 @@
     "NOT_REQUIRED": "Not required"
   },
   "gate": {
-    "no_certificate": "No certificate is registered for this style.",
+    "no_certificate": "No certificate is registered for this product.",
     "certificate_not_valid": "The certificate is not valid (suspended or withdrawn).",
     "certificate_expired": "The certificate has expired.",
     "certificate_not_yet_valid": "The certificate is not valid yet.",
     "colourway_not_covered": "The certificate does not cover this colourway.",
     "size_not_covered": "The certificate does not cover this size.",
-    "style_not_made_to_measure": "The style is not made to measure.",
+    "style_not_made_to_measure": "The product is not made to measure.",
     "made_to_measure_not_allowed": "The certificate does not allow made-to-measure units.",
     "body_measures_missing": "The size has no body measures.",
     "measurement_missing": "A measurement is missing.",
@@ -1151,7 +1153,7 @@
     "warningsTitle_other": "{count} points to note",
     "title_one": "Operations ({count})",
     "title_other": "Operations ({count})",
-    "intro": "In order, from the library, with their minutes for this style (revision {revision}).",
+    "intro": "In order, from the library, with their minutes for this product (revision {revision}).",
     "filtered": "Only {department}: the tile above filters.",
     "showAll": "Show every department",
     "add": "Add operations",
@@ -1198,7 +1200,7 @@
     "addHeld": "Tick at least one operation.",
     "instructionsTitle": "Instructions · {step}",
     "instructions": "Instructions",
-    "instructionsHint": "How it is done for this style: the traveller and the floor screen show it.",
+    "instructionsHint": "How it is done for this product: the traveller and the floor screen show it.",
     "parallel": {
       "none": "In sequence",
       "group": "Group {group}",
@@ -1305,42 +1307,42 @@
     "SERIAL_why": "Each garment gets its own serial at the final operation; recalls and the evidence trail follow each one."
   },
   "phone": {
-    "selectAll": "Select every loaded style",
+    "selectAll": "Select every loaded product",
     "selected_one": "{count} selected",
     "selected_other": "{count} selected",
     "done": "Done",
     "filters": "Filters",
     "filtersN": "Filters ({count})",
     "select": "Select",
-    "nothingToSelect": "There is no style to select.",
+    "nothingToSelect": "There is no product to select.",
     "selectOne": "Select {code}",
-    "skus_one": "{count} SKU",
-    "skus_other": "{count} SKUs",
-    "filtersTitle": "Filter the styles",
-    "showResults": "Show the styles"
+    "filtersTitle": "Filter the products",
+    "showResults": "Show the products",
+    "orders_one": "in {count} order",
+    "orders_other": "in {count} orders"
   },
   "duplicate": {
     "title": "Duplicate {code}",
-    "pickTitle": "New style: copy of a style",
+    "pickTitle": "New product: copy of a product",
     "doneTitle": "{code} is made",
-    "subtitle": "A new draft style with its own code and name.",
+    "subtitle": "A new draft product with its own code and name.",
     "openCopy": "Open {code}",
     "go": "Duplicate",
-    "pickIntro": "Pick the style to copy: its identity, range, PPE, customs data and colourways come with it, and the parts you tick next.",
-    "pickSearch": "Search a style (code, name or season)",
+    "pickIntro": "Pick the product to copy: its identity, range, PPE, customs data and colourways come with it, and the parts you tick next.",
+    "pickSearch": "Search a product (code, name or season)",
     "pickSearching": "Searching…",
-    "pickNone": "No style matches.",
-    "pickList": "Styles to copy",
+    "pickNone": "No product matches.",
+    "pickList": "Products to copy",
     "after": "The copy opens as a draft (revision 1); it is released by its own check.",
     "source": "Copy of",
-    "repick": "Another style",
+    "repick": "Another product",
     "partsFrom": "Parts from",
     "revision": "revision {revision} ({status})",
     "noRevision": "no revision yet",
     "code": "New code",
     "refusedCode": "This code is taken or not valid: choose another.",
     "name": "Name",
-    "seasonHint": "Blank keeps the season of the style copied.",
+    "seasonHint": "Blank keeps the season of the product copied.",
     "parts": "Parts to copy",
     "reading": "Reading what the copy can take…",
     "offerFailed": "What the copy can take could not be read.",
@@ -1352,7 +1354,7 @@
     "skus": "Make its SKUs now",
     "skusHint_one": "One SKU per size of its {count} colourway; else later from Overview & variants.",
     "skusHint_other": "One SKU per size of each of its {count} colourways; else later from Overview & variants.",
-    "done": "{code} is a new draft style, copied from {from}.",
+    "done": "{code} is a new draft product, copied from {from}.",
     "doneRevision": "Its parts came from revision {revision} and are in its revision 1 (draft).",
     "doneNoRevision": "No part needed a revision: start revision 1 in its studio.",
     "copied": {
@@ -1384,11 +1386,11 @@
       "routingHidden": "The routing steps of the revision (your role does not read their count)",
       "label": "The shared garment label of revision {revision}",
       "measurements": "Made to measure allowed, with its measurement template",
-      "pictures_one": "{count} picture of the style, its colourways and the revision, each file copied",
-      "pictures_other": "{count} pictures of the style, its colourways and the revision, each file copied"
+      "pictures_one": "{count} picture of the product, its colourways and the revision, each file copied",
+      "pictures_other": "{count} pictures of the product, its colourways and the revision, each file copied"
     },
     "reason": {
-      "OPTIONS": "Style options are copied once option groups arrive (W2b).",
+      "OPTIONS": "Product options are copied once option groups arrive (W2b).",
       "noRight": {
         "BOM": "Copying the BOM needs the right to change BOMs: not in your role.",
         "ROUTING": "Copying the routing needs the right to change routings: not in your role.",
@@ -1417,7 +1419,7 @@
       "pictures_other": "{count} pictures of another revision or of archived colourways were not copied."
     },
     "held": {
-      "source": "Pick the style to copy first.",
+      "source": "Pick the product to copy first.",
       "reading": "Reading what the copy can take.",
       "offer": "What the copy can take could not be read: try again.",
       "code": "Type a new code: 1 to 24 capital letters or digits, with . _ - inside.",
@@ -1430,7 +1432,7 @@
   },
   "customs": {
     "title": "Customs and origin",
-    "intro": "What export papers and the Intrastat return read for every garment of the style.",
+    "intro": "What export papers and the Intrastat return read for every garment of the product.",
     "hsCode": "Commodity code (HS / CN)",
     "hsCodeHint": "6 digits (HS), 8 (CN, what Intrastat asks) or 10 (TARIC); dots and spaces are fine.",
     "origin": "Country of origin",
@@ -1470,12 +1472,12 @@
       "outHint": "An outside workshop does it; the pieces travel there and back."
     },
     "workshop": "Workshop",
-    "workshopHint": "A subcontractor of this style’s company or of every company.",
-    "workshopHintAll": "This style is made by every company: only a workshop of every company.",
+    "workshopHint": "A subcontractor of this product’s company or of every company.",
+    "workshopHintAll": "This product is made by every company: only a workshop of every company.",
     "noParties": "Choosing another workshop needs the customers and suppliers list: not in your role.",
     "loading": "Reading the workshops…",
     "pick": "Choose a workshop",
-    "noneYet": "No workshop may do this style’s work yet: add a subcontractor in Customers & suppliers.",
+    "noneYet": "No workshop may do this product’s work yet: add a subcontractor in Customers & suppliers.",
     "fee": "Fee per piece",
     "feeHint": "In euros, per piece; blank when it is agreed on each order.",
     "transit": "Transit days",
@@ -1529,7 +1531,7 @@
     "atRelease": "At release Compliance gets a review of it; until its answer this revision prints no class label.",
     "law": "Compliance decides with the notified body; the certificate itself is kept in Compliance › Certificates.",
     "held": {
-      "task": "Your role does not make tasks on a style."
+      "task": "Your role does not make tasks on a product."
     },
     "task": {
       "title": "Check the changes of {code} revision {revision} with the notified body",
@@ -1590,7 +1592,7 @@
       "run": "{from}–{to}",
       "some": "{sizes}",
       "change": "Change",
-      "hint": "Every size follows the style's range, also a size added later. Only these sizes: the piece is cut for the sizes ticked.",
+      "hint": "Every size follows the product's range, also a size added later. Only these sizes: the piece is cut for the sizes ticked.",
       "every": "Every size",
       "only": "Only these sizes",
       "pickOne": "Tick at least one size, or choose every size.",
@@ -1632,7 +1634,7 @@
       "title_other": "{count} things to look at"
     },
     "issue": {
-      "SIZE_NOT_IN_RANGE": "{piece} names {sizes}, no longer in the style's range: a new revision leaves those sizes out.",
+      "SIZE_NOT_IN_RANGE": "{piece} names {sizes}, no longer in the product's range: a new revision leaves those sizes out.",
       "GRADE_NOT_LEATHER": "{piece} has a minimum grade but is not cut from a leather line: the cutting table cannot check it.",
       "GRADE_RETIRED": "{piece}: grade {grade} is retired. It stays here; a new revision copies the piece without it.",
       "LEATHER_LINE_NO_PIECES": "Line {line} is leather and no piece names it: any grade may be cut for it."
@@ -1685,7 +1687,11 @@
     },
     "files": {
       "title": "Documents and files",
-      "where": "Sketches, pictures and customer pages are in the gallery of Overview & variants; the pattern files are above. Other files added to the style are in its thread’s Files view."
+      "where": "Sketches, pictures and customer pages are in the gallery of Overview & variants; the pattern files are above. Other files added to the product are in its thread’s Files view."
     }
+  },
+  "family": {
+    "ourRange": "Our range",
+    "madeFor": "Made for {customer}"
   }
 }
