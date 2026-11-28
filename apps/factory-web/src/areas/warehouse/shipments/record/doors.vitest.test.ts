@@ -7,6 +7,9 @@ import { etaBody, etaDialogOf, etaHeld, etaProblem, overridesLabels, statusBody,
 import { etaMinDayOf, etaReasonNeeded } from '../booking/model' // F-OS-306
 import { DDT_REQUIRED_REFUSAL_CODES, ddtRequiredBody, ddtRequiredHeld, defaultPlaceOf, receiveHeld } from './doors'
 import { HAND_OVER_LIMITS, handOverBody, handOverTimeProblem } from './hand-over'
+import { handOverGoKey, handOverWarningsOf, legDdtReasonOf, withLegReason } from './doors' // owb-ss3
+import { ApiError } from '../../../../lib/api/errors' // owb-ss3
+import { ddtFormFor } from '../model' // owb-ss3
 
 /**
  * F-OS-203 (order SHIPMENTS tab, 10-design §7; 13-backend B-OS-014 … B-OS-017; 18-lead-settles L1, L3, L13) — the new hand windows of a
@@ -216,3 +219,36 @@ describe('os-fx7 (W-18): a record number never breaks inside a dialog title (P0-
   })
 })
 // ── end os-fx7 ──
+
+// ── owb-ss3 step 3.3 (design plan § 7, § 5n R39; settles L2, L5) ──────────────────────────────────────────────────────────────────
+describe('owb-ss3: to our warehouse first on Warehouse\'s record', () => {
+  const form = ddtFormFor({ transportBy: 'CARRIER', carrierName: 'GLS' }, null)
+
+  it('the first leg travels as a TRANSFER (preset, read only) until it arrived or a DDT is live; then the usual SALE', () => {
+    expect(legDdtReasonOf({ arrivedAt: null }, false)).toBe('TRANSFER')
+    expect(legDdtReasonOf({ arrivedAt: null }, true)).toBeNull()
+    expect(legDdtReasonOf({ arrivedAt: '2026-11-20T09:00:00.000Z' }, false)).toBeNull()
+    expect(legDdtReasonOf(null, false)).toBeNull()
+    expect(withLegReason(form, { arrivedAt: null }, false).reason).toBe('TRANSFER')
+    // Only the reason changes: the person's other fields stay.
+    expect(withLegReason({ ...form, remarks: 'Fragile' }, { arrivedAt: null }, false)).toEqual({ ...form, remarks: 'Fragile', reason: 'TRANSFER' })
+    // Arrived (Send on): a transfer left from before goes back to SALE; any other choice of the person stays.
+    expect(withLegReason({ ...form, reason: 'TRANSFER' }, { arrivedAt: '2026-11-20T09:00:00.000Z' }, false).reason).toBe('SALE')
+    expect(withLegReason({ ...form, reason: 'SAMPLE' }, null, false).reason).toBe('SAMPLE')
+    // Nothing to change: the same form (the record reads no new draft).
+    const transfer = withLegReason(form, { arrivedAt: null }, false)
+    expect(withLegReason(transfer, { arrivedAt: null }, false)).toBe(transfer)
+  })
+
+  it('the 409 path: a hand-over refused with the payment warning says it in words; "Ship it anyway" sends it as overrides', () => {
+    const refused = new ApiError('conflict', 409, 'conflict', 'Check before you go on: A payment due before shipping is still open. Go on only if you mean it.', null, [{ path: 'warning/PAYMENT_DUE_AT_SHIP', message: 'A payment due before shipping is still open.' }])
+    expect(handOverWarningsOf(refused)).toEqual(['PAYMENT_DUE_AT_SHIP'])
+    expect(handOverGoKey(handOverWarningsOf(refused))).toEqual({ ns: 'ship-ways', key: 'handOver.anyway' })
+    expect(handOverGoKey(null)).toEqual({ ns: 'shipments', key: 'step.handOver' })
+    // A version that moved, a hold, another state: not a warning (said as today).
+    expect(handOverWarningsOf(new ApiError('conflict', 409, 'conflict', 'Changed.', null, [{ path: 'body/version', message: 'Changed.' }]))).toBeNull()
+    expect(handOverWarningsOf(new ApiError('invalid', 400, 'validation_failed', 'No.'))).toBeNull()
+    // The body: the time (if any) and the warnings read, nothing else.
+    expect({ ...handOverBody(null), overrides: handOverWarningsOf(refused) }).toEqual({ overrides: ['PAYMENT_DUE_AT_SHIP'] })
+  })
+})

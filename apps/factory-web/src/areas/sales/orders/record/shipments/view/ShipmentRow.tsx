@@ -26,6 +26,10 @@ import { copyLinkTo, shipmentHref, shipmentTabHref } from './hrefs'
 import { ParcelsFold } from './ParcelsFold'
 import { useShipSay } from './say'
 import { noBreak } from '../../../../../warehouse/shipments/queue/shared/no-break' // os-fx7 (W-18): numbers whole in titles
+// owb-ss3 step 3.2: the row's leg (to our warehouse first) and its act.
+import type { Leg } from '../legs/api'
+import type { LegAct } from '../legs/model'
+import { LegMarks } from '../legs/view/LegMarks'
 
 /**
  * F-OS-103 (order SHIPMENTS tab, 10-design §5) — one shipment's row: Shipment (its number opens it in Warehouse, its home; Discuss;
@@ -37,7 +41,7 @@ import { noBreak } from '../../../../../warehouse/shipments/queue/shared/no-brea
  * Its anchor `about-Shipment-<id>` (the dock's "Show on the page"). Draws its model (shipments/rows.ts); reads nothing — the Parcels
  * (n) fold asks the container to read the cartons once it opens.
  */
-export function ShipmentRowView({ row, view, delivery, order, model, actions }: { row: ShipmentRow; view: RowModel; /* F-OS-202 */ delivery: DeliveryRow | null; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function ShipmentRowView({ row, view, delivery, order, model, actions, leg = null, legActs = [], onLegAct }: { row: ShipmentRow; view: RowModel; /* F-OS-202 */ delivery: DeliveryRow | null; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /* owb-ss3 */ leg?: Leg | null; legActs?: readonly LegAct[]; onLegAct?: (act: LegAct) => void }) {
   const t = useT('order-shipments')
   const o = useT('orders')
   const depth = useT('warehouse-shipments-depth')
@@ -75,6 +79,7 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
       </div>
       <div className="fw-os-c-s" role="cell">
         <StateCellView view={view} order={order} model={model} />
+        {leg ? <LegMarks leg={leg} status={row.status} acts={legActs} onAct={onLegAct} /> : null}
       </div>
       <div className="fw-os-c-t" role="cell" data-l={depth('transport.title')}>
         <TravelsCellView view={view} row={row} fold={fold} onFold={openFold} onTracking={() => actions?.onShipmentTracking?.(view.id)} />
@@ -87,7 +92,7 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
       <div className="fw-os-c-o" role="cell">
         {/* F-OS-202: the row's acts by state (each Warehouse's own window, in place; hidden without the right, held only by state),
             then its read doors. */}
-        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery, model.can /* F-OS-303: the after-sales doors */), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
+        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery, model.can /* F-OS-303: the after-sales doors */, leg /* owb-ss3 */), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
           { id: 'open', label: t('ships.carries.notRead'), href },
           // os-fx7 (W-10): Show in the thread — a read door, where the page has the conversation (hidden without it), at the row's newest moment.
           ...(view.showAt && frame?.showInThread ? [{ id: 'show', label: f('discuss.showInThread'), onSelect: () => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at: view.showAt ?? '' }) }] : []),

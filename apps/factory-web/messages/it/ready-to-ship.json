@@ -1,0 +1,51 @@
+{
+  "ready": {
+    "title": "Pronti da spedire",
+    "info": "Ogni ordine con capi pronti e non ancora su una spedizione, per cliente. Spunta ordini di un cliente: partono in una spedizione. La casella accanto a un cliente spunta tutti i suoi ordini. Poi imballa e spedisci in Magazzino.",
+    "answer": "Spunta ordini di un cliente. Partono in una spedizione.",
+    "picked_one": "{count} ordine spuntato · {pieces} capi",
+    "picked_other": "{count} ordini spuntati · {pieces} capi",
+    "readOnly": "Il tuo ruolo legge questo elenco; le vendite e chi spedisce pianificano le spedizioni.",
+    "empty": "Niente è pronto da spedire ora.",
+    "together": "Questi ordini possono partire in una spedizione.",
+    "pieces_one": "{count} capo pronto",
+    "pieces_other": "{count} capi pronti",
+    "tickCustomer": "Spunta ogni ordine di {name}",
+    "tickOrder": "Spunta {number}"
+  },
+  "act": {
+    "makeShipment": "Crea una spedizione",
+    "oneShipment_one": "Una spedizione per {count} ordine",
+    "oneShipment_other": "Una spedizione per i {count} ordini",
+    "addTo": "Aggiungi a {number}"
+  },
+  "held": {
+    "noRight": "Il tuo ruolo non pianifica spedizioni",
+    "pick": "Spunta gli ordini di un cliente",
+    "twoCustomers_one": "Solo ordini di {count} cliente",
+    "twoCustomers_other": "Ordini di {count} clienti non viaggiano mai in una spedizione: spunta gli ordini di un cliente",
+    "tooMany": "Al massimo {max} ordini in una spedizione",
+    "busy": "Ci sto lavorando…"
+  },
+  "ships": {
+    "title": "Spedizioni",
+    "info": "Ogni spedizione, la più recente prima: Aperte (in bozza o imballate), In viaggio, Arrivate, o Tutte. Aprine una per imballarla, spostare capi tra i colli e scrivere i numeri di tracciamento.",
+    "answer_one": "{count} spedizione",
+    "answer_other": "{count} spedizioni",
+    "empty": "Nessuna spedizione qui.",
+    "none": "Nessuna spedizione qui.",
+    "chips": "Quali spedizioni",
+    "chip": {
+      "open": "Aperte",
+      "onTheWay": "In viaggio",
+      "arrived": "Arrivate",
+      "all": "Tutte"
+    },
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "parcels_one": "{count} collo",
+    "parcels_other": "{count} colli"
+  },
+  "failed": "Impossibile caricare {part}",
+  "retry": "Riprova"
+}

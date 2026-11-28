@@ -622,22 +622,20 @@ describe('B-OP-041: a shared shipment shows on both orders in the shipping core'
     await ok('warehouse', 'POST', `/shipping/shipments/${alone.id}/cancel`, { version: alone.version, reason: 'Test: one order alone' })
   })
 
-  it("holds: the system holds it while any of its orders' balance before shipping is open, and names that order", async () => {
+  // owb- (order workflow, S3 ss1 step 1.4; settle L2, R39 (a)): flipped, same strictness — no order's open balance before shipping holds
+  // the shared shipment any more (a payment due is a warning when the goods leave: warehouse-leg/warehouse-leg.pg), while it is open
+  // and after it is paid.
+  it("holds: no order's open balance before shipping holds it (R39 (a): a warning when the goods leave)", async () => {
     const step = newId()
     await forced(
       `INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, status) SELECT $1, o."tenantId", o."companyId", o.id, o."partyId", 99, 'BEFORE_SHIPPING', 100, 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`,
       [step, orders().so3],
     )
     const system = callerFor(database, systemContext(A.tenant, `b-op-041-${run}`))
-    await syncSystemHolds(system, [shared.id!]) // op-fx1: set by the first case of this describe
-    const held = await admin<{ reason: string; words: string; releasedAt: Date | null }>(`SELECT reason::text AS reason, words, "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id])
-    expect(held).toEqual([expect.objectContaining({ releasedAt: null })])
-    expect(held[0]!.words).toContain(await number(orders().so3))
-    expect(held[0]!.words).not.toContain(await number(orders().so2))
-    // Paid: the hold lifts itself.
+    expect(await syncSystemHolds(system, [shared.id!])).toEqual({ placed: 0, lifted: 0 }) // op-fx1: set by the first case of this describe
+    expect(await admin(`SELECT 1 FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id])).toEqual([])
     await forced(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [step])
-    await syncSystemHolds(system, [shared.id!]) // op-fx1: set by the first case of this describe
-    expect((await admin<{ releasedAt: Date | null }>(`SELECT "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id]))[0]!.releasedAt).not.toBeNull()
+    expect(await syncSystemHolds(system, [shared.id!])).toEqual({ placed: 0, lifted: 0 })
   })
 
   // The split of a shared shipment is in shipment-orders.pg (its world stays within the cells' releases, which the line

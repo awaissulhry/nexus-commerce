@@ -18,6 +18,7 @@ import { command, StaleVersionError, type CommandCaller, type CommandTools, type
 import { actorOf } from '../../../core/context'
 import { lockMaterials, readRevisionFor } from '../bom/store'
 import { contextOf, mayWrite } from '../materials/store'
+import { assertMayEditDraft, mayDesign } from '../drafts/may-edit' // owb-pd1 1.4
 import {
   invalid,
   lockPlacements,
@@ -65,12 +66,17 @@ const audited = (row: Pick<PlacementRow, 'seq' | 'pocket' | 'protectorItemId' | 
   positionNote: row.positionNote,
 })
 
-/** The style and revision as the caller may see them (product.bom.view), and the write right over the style's company. */
+/**
+ * The style and revision as the caller may see them (product.bom.view), and the write right over the style's company. owb-pd1 1.4:
+ * product.bom.manage, or the designer (product.drafts.edit) on a DRAFT revision (../drafts/may-edit.ts: 409 DRAFT_ONLY else).
+ */
 async function writer(caller: CommandCaller, styleId: string, revisionId: string) {
   const seen = await readRevisionFor(caller, styleId, revisionId)
-  if (!mayWrite(actorOf(contextOf(caller)), PRODUCT_BOM_MANAGE, seen.style.companyId)) {
+  const context = contextOf(caller)
+  if (!mayWrite(actorOf(context), PRODUCT_BOM_MANAGE, seen.style.companyId) && !mayDesign(context, seen.style.companyId)) {
     throw new ForbiddenError(seen.style.companyId === null ? 'The protector placement of a style for every company is changed only by a role over every company.' : undefined)
   }
+  assertMayEditDraft(context, seen.style.companyId, seen.revision.status, PRODUCT_BOM_MANAGE)
   return seen
 }
 

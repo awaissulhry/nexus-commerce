@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { scannedBundleRefusal } from '@nexus/factory-domain/production/bundles/rules'
@@ -70,7 +70,9 @@ export async function reasons(caller: CommandCaller) {
  * previous operation passed), and the operation this station does next (`next`, or `choose` when two fit). A label of
  * another kind or factory, or a typo, is a 400 in words; a bundle of another site is not found.
  */
-export async function bundleCard(caller: CommandCaller, query: { readonly code: string }) {
+// owb-fl1 (S5, the basket read): the permission is a parameter, production.scan by default (this route's); the basket read calls
+// the card with production.bundles.view for the office (A/production/baskets/read.ts), production.scan for the floor.
+export async function bundleCard(caller: CommandCaller, query: { readonly code: string }, permission: Permission = PRODUCTION_SCAN) {
   const context = floorOrOffice(caller)
   const typed = query.code.trim().toUpperCase()
   const scan = parseScanId(typed, { tenantTag: tenantTag(context.tenantId), types: ['BUNDLE'] })
@@ -79,7 +81,7 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
   const card = await caller.withClient(async (db) => {
     const bundle = await readBundleByCode(db, code)
     const workOrder = bundle ? await readHeader(db, bundle.workOrderId) : null
-    if (!bundle || !workOrder || !mayScan(context, PRODUCTION_SCAN, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
+    if (!bundle || !workOrder || !mayScan(context, permission, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
     const operations = await readOperations(db, workOrder.id)
     const scans = await readBundleScans(db, bundle.id)
     // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments and a child's place in the flow.

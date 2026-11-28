@@ -50,7 +50,8 @@ const keyOf = (deviceId: string, clientEventId: string) => `${deviceId}.${client
 
 export const noteTiles = () => ({ tiles: FLOOR_NOTE_TILES.map((tile) => ({ code: tile.code, label: tile.label, needsDetail: tile.needsDetail })), reminder: NO_FACES_REMINDER, limits: FLOOR_NOTE_LIMITS })
 
-function siteUploader(request: FastifyRequest, tenantId: string, workOrder: Pick<ScanHeader, 'companyId' | 'siteId'>): CommandCaller {
+// owb-fl1: exported — the basket's quality step photo (A/production/baskets/photo.ts) uploads through the same system caller.
+export function siteUploader(request: FastifyRequest, tenantId: string, workOrder: Pick<ScanHeader, 'companyId' | 'siteId'>): CommandCaller {
   const view = Object.create(request) as FastifyRequest
   const grant: Grant = { permissions: [FILES_UPLOAD, FILES_MANAGE], companies: [workOrder.companyId], sites: [workOrder.siteId], parties: 'all' }
   const context: SystemContext = Object.freeze({ audience: 'system', tenantId, actorId: SYSTEM_ACTOR_ID, requestId: String(request.id), grants: [grant] })

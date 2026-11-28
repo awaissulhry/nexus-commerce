@@ -67,7 +67,11 @@ export interface ColleaguesActions {
 
 type ColleagueLine = ColleaguesModel['rows'][number]
 
-export function ColleaguesSection({ model, slow, actions, inviteHeld, prices = true, title, hint }: { model: ColleaguesModel; slow?: boolean; actions?: ColleaguesActions | undefined; inviteHeld: string | null; prices?: boolean; title?: string; hint?: string }) {
+/**
+ * owb-po4.3: `does` adds "What this person does" after the role — the role's own words (`role.sees.<key>`, the ones the invite
+ * shows), for Your people; absent: the list as before (Account, the supplier's Profile).
+ */
+export function ColleaguesSection({ model, slow, actions, inviteHeld, prices = true, title, hint, does = false }: { model: ColleaguesModel; slow?: boolean; actions?: ColleaguesActions | undefined; inviteHeld: string | null; prices?: boolean; title?: string; hint?: string; does?: boolean }) {
   const t = useT('portal-account')
   const roles = useT('portal')
   const roleOf = (row: ColleagueRow) => (row.roleKey ? roles(`role.${row.roleKey}`) : (row.roleName ?? '—'))
@@ -124,6 +128,7 @@ export function ColleaguesSection({ model, slow, actions, inviteHeld, prices = t
     ]
     if (manage) list.push({ colId: 'email', headerName: t('users.col.email'), minWidth: 200, flex: 1.4, valueGetter: (params) => params.data?.email ?? '—' })
     list.push({ colId: 'role', headerName: t('users.col.role'), minWidth: 130, flex: 0.9, valueGetter: (params) => (params.data ? roleOf(params.data) : '') })
+    if (does) list.push({ colId: 'does', headerName: t('users.col.does'), minWidth: 220, flex: 1.6, valueGetter: (params) => (params.data?.roleKey ? t(`role.sees.${params.data.roleKey}`) : '—') })
     if (prices) list.push({ colId: 'prices', headerName: t('users.col.prices'), minWidth: 120, flex: 0.6, valueGetter: (params) => (params.data ? t(params.data.seesPrices ? 'users.prices.yes' : 'users.prices.no') : ''), cellRenderer: PricesCell })
     if (manage) list.push({ colId: 'lastSignIn', headerName: t('users.col.lastSignIn'), minWidth: 150, flex: 0.8, valueGetter: (params) => params.data?.lastSignIn ?? t('users.never') })
     list.push({ colId: 'status', headerName: t('users.col.status'), minWidth: 150, flex: 0.9, valueGetter: (params) => (params.data ? t(`users.status.${params.data.status}`) : ''), cellRenderer: StatusCell })
@@ -132,7 +137,7 @@ export function ColleaguesSection({ model, slow, actions, inviteHeld, prices = t
     if (manage) list.push({ colId: 'more', headerName: t('users.col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell })
     return list
     // roleOf reads `roles` only.
-  }, [t, roles, manage, actions, prices, facts.customer, facts.seatsFull, facts.projects, facts.readOnly, projects, model.seats?.max])
+  }, [t, roles, manage, actions, prices, does, facts.customer, facts.seatsFull, facts.projects, facts.readOnly, projects, model.seats?.max])
   const picked = model.rows.filter((row) => model.selected.includes(row.id))
   const onlyYou = model.state === 'ready' && model.rows.length === 1 && model.rows[0]?.you === true
   const state = onlyYou ? (

@@ -83,8 +83,12 @@ export async function languageOf(db: CommandTx, salesOrderId: string): Promise<D
   return isDocumentLanguage(order?.language) ? order.language : 'it'
 }
 
-/** The live DDT of a shipment (no cancellation names it), or null. */
-export const liveDdtOf = (db: CommandTx, shipmentId: string) => db.ddt.findFirst({ where: { shipmentId, cancellations: { none: {} } }, select: { id: true, number: true } })
+/**
+ * The live DDT of a shipment (no cancellation names it), or null. owb- (order workflow, S3 ss1 step 1.3): the NEWEST live one, with
+ * its reason — a shipment through our warehouse may hold two live DDTs once sent on (the transfer, then the sale DDT of Send on).
+ */
+export const liveDdtOf = (db: CommandTx, shipmentId: string) =>
+  db.ddt.findFirst({ where: { shipmentId, cancellations: { none: {} } }, select: { id: true, number: true, reason: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
 
 const day = (value: Date): BusinessDate => value.toISOString().slice(0, 10)
 
@@ -103,8 +107,14 @@ export async function readDdtFacts(db: CommandTx, shipment: ShipmentHeader, comp
   const live = await liveDdtOf(db, shipment.id)
   // B-W2b-386 (LQ1:02): the customer's requirements on the shipping checklist, printed as the DDT's remarks by default.
   const requirementRemarks = await ddtRequirementRemarks(db, shipment)
+  // owb- (S3 ss1 step 1.3): through our warehouse first — whether it arrived and was sent on, and the customer's delivery address
+  // (the first order's ship-to) where the sale DDT of Send on takes the goods.
+  const leg = await db.shipmentWarehouseLeg.findFirst({ where: { shipmentId: shipment.id }, select: { arrivedAt: true, forwardedAt: true } })
+  const customerShipTo = leg ? ((await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { shipTo: true } }))?.shipTo ?? null) : null
   return {
     requirementRemarks,
+    warehouseLeg: leg ? { arrived: leg.arrivedAt !== null, forwardedAt: leg.forwardedAt, customerShipTo } : null,
+    liveDdtReason: live?.reason ?? null,
     shipment: { status: shipment.status, transportBy: shipment.transportBy, carrierName: shipment.carrierName, shipTo: shipment.shipTo, shippedAt: shipment.shippedAt },
     liveDdtNumber: live?.number ?? null,
     company,
