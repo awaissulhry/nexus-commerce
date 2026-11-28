@@ -22,6 +22,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedDepartmentOfKind } from './product' // owb-b1: the department of a seeded route step
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
@@ -198,6 +199,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           name: 'Final inspection',
           workCentreKind: WorkCentreKind.INSPECTION,
           standardMinutes: '8.000',
+          departmentId: seedDepartmentOfKind(namespace, WorkCentreKind.INSPECTION), // owb-b1: the step's department
           ...stamp(T.setup),
         },
         select: { id: true },
