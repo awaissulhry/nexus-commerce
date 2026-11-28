@@ -92,7 +92,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const deferred = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.deferred).map((page) => page.id)))
     // B-W2b-362: Sales › Made-to-measure is built (Owner 11-10 Q1 = A). owb- (base settle 7): the order workflow's nine pages
     // are declared and deferred, each until its session's page lands (S2, S3, S5).
-    expect(deferred).toEqual(['home.designDesk', 'warehouse.readyToShip', 'warehouse.ourWarehouses', 'production.baskets', 'production.chains', 'production.teams', 'production.orderStructures', 'people.structure', 'people.byCustomer'])
+    expect(deferred).toEqual(['home.designDesk', 'warehouse.readyToShip', 'warehouse.ourWarehouses', 'production.teams', 'production.orderStructures', 'people.structure', 'people.byCustomer'])
     for (const page of OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((entry) => entry.deferred)))) {
       expect(page.href, page.id).toBeNull()
       expect(page.wave, page.id).toBe('owb')
