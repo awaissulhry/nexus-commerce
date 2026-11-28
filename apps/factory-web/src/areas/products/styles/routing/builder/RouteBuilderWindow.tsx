@@ -7,6 +7,8 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import type { RouteParty } from '../route/api'
 import { deptLooksOf, totalMinutesOf, type Words } from '../route/model'
 import { createTemplate, readCustomers, readRouteSources, readTemplates, setTemplateOpen, type RouteSource, type RouteTemplate } from './api'
+import { addDepartment, renameDepartment, setDepartmentOpen } from './departments-api'
+import { manageRowsOf, nameProblemOf, renameOf, withDepartment } from './manage'
 import {
   addStep,
   builderProblems,
@@ -34,6 +36,7 @@ import {
   type StartStep,
 } from './model'
 import { RouteBuilder, type BuilderViewModel } from './view/RouteBuilder'
+import { ManageDepartments, ManageSwitch, type ManageViewModel } from './view/ManageDepartments'
 
 /**
  * owb-pd6 step 6.2 (S4) — the route builder's container: the route being built (pure, ./model.ts), the ready-made routes and the routes
@@ -68,11 +71,15 @@ export interface RouteBuilderWindowProps {
   /** Saves with the host's call; answers the refusal in words, or null when saved. */
   readonly onSave: (state: BuilderState) => Promise<Words | null>
   readonly onClose: () => void
+  /** Step 6.3: production.departments.manage — the departments list's small switch "Manage" (absent: no switch). */
+  readonly mayManage?: boolean
+  /** Step 6.3: the departments after a Manage act (the host keeps them: every route shows the new name). */
+  readonly onDepartments?: (rows: readonly DepartmentAnswer[]) => void
 }
 
 type Loaded<T> = { readonly state: 'idle' | 'reading' | 'ready' | 'failed'; readonly list: readonly T[] }
 
-export function RouteBuilderWindow({ api, open, departments, fixedParty = null, companyId = null, onSave, onClose }: RouteBuilderWindowProps) {
+export function RouteBuilderWindow({ api, open, departments, fixedParty = null, companyId = null, onSave, onClose, mayManage = false, onDepartments }: RouteBuilderWindowProps) {
   const locale = useLocale()
   const looks = useMemo(() => deptLooksOf(departments, locale), [departments, locale])
   const kindOf = useMemo(() => kindOfLooks(looks), [looks])
@@ -89,6 +96,15 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
   const [templateProblem, setTemplateProblem] = useState<Words | null>(null)
   const [templateDone, setTemplateDone] = useState<string | null>(null)
   const routeMode = state.mode === 'new' || state.mode === 'route'
+  // ---- step 6.3: Manage ----
+  const manageable = mayManage && onDepartments !== undefined
+  const [manage, setManage] = useState(false)
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(() => new Set())
+  const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
+  const [newName, setNewName] = useState('')
+  const [manageBusy, setManageBusy] = useState(false)
+  const [manageProblem, setManageProblem] = useState<Words | null>(null)
+  const [manageDone, setManageDone] = useState<Words | null>(null)
 
   // The ready-made routes, open and closed (again after one is saved, closed or opened).
   useEffect(() => {
@@ -185,13 +201,83 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
     }
   }
 
+  /** One Manage act: the server's answer replaces (or adds) the department; a refusal is said in words. */
+  const manageAct = async (act: () => Promise<DepartmentAnswer>, done: (row: DepartmentAnswer) => Words): Promise<DepartmentAnswer | null> => {
+    if (!onDepartments || manageBusy) return null
+    setManageBusy(true)
+    setManageProblem(null)
+    setManageDone(null)
+    try {
+      const row = await act()
+      onDepartments(withDepartment(departments, row))
+      setManageDone(done(row))
+      return row
+    } catch (error) {
+      setManageProblem(refusalOf(error))
+      return null
+    } finally {
+      setManageBusy(false)
+    }
+  }
+  const dropDraft = (departmentId: string) =>
+    setDrafts((current) => {
+      const next = { ...current }
+      delete next[departmentId]
+      return next
+    })
+  const rename = async (departmentId: string) => {
+    const text = drafts[departmentId]
+    const row = departments.find((each) => each.id === departmentId)
+    const look = looks.find((each) => each.id === departmentId)
+    if (text === undefined || !row || !look) return
+    if (text.trim() === look.dept.shortName) {
+      dropDraft(departmentId)
+      return
+    }
+    const refused = nameProblemOf(text, looks, departmentId)
+    if (refused) {
+      setManageProblem(refused)
+      return
+    }
+    const saved = await manageAct(() => renameDepartment(api, row, renameOf(row, text, locale)), () => ({ key: 'manage.done.renamed', params: { name: text.trim() } }))
+    if (saved) dropDraft(departmentId)
+  }
+  const lock = (departmentId: string, openIt: boolean) => {
+    const row = departments.find((each) => each.id === departmentId)
+    const look = looks.find((each) => each.id === departmentId)
+    if (!row || !look || look.floorReady) return
+    void manageAct(() => setDepartmentOpen(api, row, openIt), () => ({ key: openIt ? 'manage.done.opened' : 'manage.done.closed', params: { name: look.dept.shortName } }))
+  }
+  const addNew = async () => {
+    const refused = nameProblemOf(newName, looks, null)
+    if (refused) {
+      setManageProblem(refused)
+      return
+    }
+    const name = newName.trim()
+    const made = await manageAct(() => addDepartment(api, name), () => ({ key: 'manage.done.added', params: { name } }))
+    if (made) {
+      setFresh((current) => new Set([...current, made.id]))
+      setNewName('')
+    }
+  }
+  const manageModel: ManageViewModel = {
+    rows: manageRowsOf(looks, fresh),
+    drafts,
+    newName,
+    addHeld: manageBusy ? { key: 'held.busy' } : newName.trim() ? nameProblemOf(newName, looks, null) : { key: 'manage.nameFirst' },
+    busy: manageBusy,
+    problem: manageProblem,
+    done: manageDone,
+  }
+
   const problems = builderProblems(state, looks)
   const steps = stepRowsOf(state, looks)
   const options = copyOptionsOf(templates.list, sources.list)
   const model: BuilderViewModel = {
     mode: state.mode,
     subtitle: open.subtitle,
-    palette: paletteOf(state, looks, new Set()),
+    palette: paletteOf(state, looks, fresh),
     steps,
     total: totalMinutesOf(state.steps.map((step) => ({ minutes: step.minutes.replace(',', '.') }))),
     errors: problems.errors.map((issue) => issue.words),
@@ -222,6 +308,25 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
   return (
     <RouteBuilder
       model={model}
+      manageSwitch={manageable ? <ManageSwitch on={manage} onChange={setManage} /> : undefined}
+      manageList={
+        manageable && manage ? (
+          <ManageDepartments
+            model={manageModel}
+            actions={{
+              onDraft: (departmentId, text) => setDrafts((current) => ({ ...current, [departmentId]: text })),
+              onRename: (departmentId) => void rename(departmentId),
+              onLock: lock,
+              onNewName: (text) => {
+                setNewName(text)
+                setManageProblem(null)
+              },
+              onAddDepartment: () => void addNew(),
+              onAddToRoute: (departmentId) => change((current) => addStep(current, departmentId, kindOf)),
+            }}
+          />
+        ) : undefined
+      }
       actions={{
         onAdd: (departmentId) => change((current) => addStep(current, departmentId, kindOf)),
         onDrop: (departmentId, at) => change((current) => addStep(current, departmentId, kindOf, at === 'end' ? endIndexFor(current, departmentId, kindOf) : at)),

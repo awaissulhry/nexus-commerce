@@ -189,5 +189,27 @@
     "FROZEN": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
     "PRINTED": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
     "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati."
+  },
+  "manage": {
+    "switch": "Gestisci",
+    "hint": "Aggiungi un reparto, cambiane il nome o chiudilo. I reparti con schermi in reparto tengono il loro nome e restano aperti. Premi di nuovo Gestisci quando hai finito.",
+    "listLabel": "I reparti della fabbrica",
+    "nameOf": "Il nome del reparto {name}",
+    "onFloor": "schermi in reparto",
+    "closed": "chiuso",
+    "closeOf": "Chiudi il reparto {name}",
+    "closeHint": "Esce dalla lista. I percorsi che lo usano lo tengono. Non si cancella nulla.",
+    "openOf": "Riapri il reparto {name}",
+    "openHint": "Torna nella lista.",
+    "newLabel": "Il nome di un nuovo reparto",
+    "newPlaceholder": "Un nuovo reparto",
+    "add": "Aggiungi",
+    "nameFirst": "Scrivi prima il nome del nuovo reparto.",
+    "done": {
+      "added": "{name} è un nuovo reparto: trascinalo nel percorso, o premi il suo +.",
+      "renamed": "Il reparto ora si chiama {name}: ogni percorso lo mostra.",
+      "closed": "{name} è chiuso. Esce dalla lista; i percorsi che lo usano lo tengono.",
+      "opened": "{name} è di nuovo aperto."
+    }
   }
 }

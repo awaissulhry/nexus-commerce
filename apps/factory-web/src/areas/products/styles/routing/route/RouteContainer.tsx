@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fixedDepartments, type DepartmentAnswer } from '../../../../../lib/department/model'
-import { keptDepartments, wantDepartments } from '../../../../../lib/department/use-departments'
+import { keptDepartments, resetDepartments, wantDepartments } from '../../../../../lib/department/use-departments'
 import { useDepartmentWords } from '../../../../../lib/department/words'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StyleView } from '../../api'
 import { createStyleRoute, saveProductRoute, updateStyleRoute } from '../builder/api'
+import { mayManage } from '../builder/manage'
 import { productBody, refusalOf, routeBody, type BuilderState } from '../builder/model'
 import { RouteBuilderWindow, type BuilderOpen } from '../builder/RouteBuilderWindow'
 import { RouteView, type RouteViewModel } from '../view/RouteView'
@@ -22,6 +23,8 @@ import { useOfficeReach } from './office'
  * Step 6.2: "Edit this route…" opens the builder on the chosen route (the product's: its kept steps keep their `stepId`; a model or
  * customer route: its name and who it is for), "New route…" on a copy of the product's route; the builder opens only when nothing
  * holds it (routeEditHeld: product.routing.manage on a DRAFT, the departments read) and saves with this container's call per mode.
+ * Step 6.3: the builder's Manage switch for production.departments.manage; a department added, renamed, closed or opened there comes
+ * back here, so the steps table shows the new name at once.
  */
 
 export interface RouteContainerProps {
@@ -42,7 +45,7 @@ export interface RouteContainerProps {
 type Read = { status: 'reading' } | { status: 'ready'; routing: RouteRouting } | { status: 'failed'; problem: string }
 
 export function RouteContainer({ style, revisionId, manage, busy, routingVersion, onChanged, onStartRevision }: RouteContainerProps) {
-  const { api } = useOfficeReach()
+  const { api, can } = useOfficeReach()
   const locale = useLocale()
   const t = useT('products-route')
   const sayDept = useDepartmentWords()
@@ -186,7 +189,21 @@ export function RouteContainer({ style, revisionId, manage, busy, routingVersion
         }}
       />
       {builder && api && rows && (
-        <RouteBuilderWindow api={api} open={builder.open} departments={rows} fixedParty={style.brand ?? null} companyId={style.companyId} onSave={saveBuilder} onClose={() => setBuilder(null)} />
+        <RouteBuilderWindow
+          api={api}
+          open={builder.open}
+          departments={rows}
+          fixedParty={style.brand ?? null}
+          companyId={style.companyId}
+          onSave={saveBuilder}
+          onClose={() => setBuilder(null)}
+          mayManage={mayManage(can)}
+          onDepartments={(next) => {
+            // Step 6.3: every mount reads the departments again; this tab shows the new names at once.
+            resetDepartments()
+            setRows(next)
+          }}
+        />
       )}
     </>
   )

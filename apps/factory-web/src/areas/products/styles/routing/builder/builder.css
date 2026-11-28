@@ -247,3 +247,41 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- step 6.3: Manage, inside the departments list (design § 5x) — the same row height as the list to add from ---- */
+.fw-rb-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+.fw-rb-mrow {
+  cursor: default;
+}
+.fw-rb-mrow[data-closed] {
+  background: var(--nds-surface-sunken);
+}
+.fw-rb-mdot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  border-radius: var(--nds-radius-pill);
+  background: var(--fw-dept-fg);
+  color: var(--nds-surface);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-rb-mname {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.fw-rb-mnew {
+  border-style: dashed;
+  cursor: default;
+}

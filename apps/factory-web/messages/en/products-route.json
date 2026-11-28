@@ -189,5 +189,27 @@
     "FROZEN": "The basket cards of this order are printed: the route of a line is fixed now.",
     "PRINTED": "The basket cards of this order are printed: the route of a line is fixed now.",
     "NOT_DRAFT": "This revision is not a draft any more: its routes are frozen."
+  },
+  "manage": {
+    "switch": "Manage",
+    "hint": "Add a department, change its name, or close it. The departments on the floor keep their name and stay open. Press Manage again when you are done.",
+    "listLabel": "The departments of the factory",
+    "nameOf": "The name of the department {name}",
+    "onFloor": "on the floor",
+    "closed": "closed",
+    "closeOf": "Close the department {name}",
+    "closeHint": "It leaves the list. The routes that use it keep it. Nothing is deleted.",
+    "openOf": "Open the department {name} again",
+    "openHint": "It comes back in the list.",
+    "newLabel": "The name of a new department",
+    "newPlaceholder": "A new department",
+    "add": "Add",
+    "nameFirst": "Type the name of the new department first.",
+    "done": {
+      "added": "{name} is a new department: drag it into the route, or press its +.",
+      "renamed": "The department is called {name} now: every route shows it.",
+      "closed": "{name} is closed. It leaves the list; the routes that use it keep it.",
+      "opened": "{name} is open again."
+    }
   }
 }
