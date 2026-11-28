@@ -326,7 +326,7 @@ const sheetFacts = {
   page: output({ kind: z.enum(['order', 'request']), id: id() }),
   /** The base's nine words (orderLifeOf) and its note ("40 of 114", cancelled, refused, waits for the office's yes …). */
   life: z.enum(ORDER_LIFE),
-  lifeNote: output({ kind: z.enum(LIFE_NOTE_KINDS), shipped: z.number().int().optional(), total: z.number().int().optional() }).nullable(),
+  lifeNote: output({ kind: z.enum(LIFE_NOTE_KINDS), shipped: z.number().int().optional(), total: notMoney(z.number().int().optional()) }).nullable(),
   lines: z.array(sheetLine),
   ownColumnIds: z.array(id()),
   /** "Waits · news": only what waits; SEND_LABEL (owb- po2.6): a shipment arrived at the factory's warehouse waits for the customer's label. */
@@ -380,20 +380,22 @@ export const sheetDownloadContract = defineContract({
 
 // ---- owb- po2.2 (order workflow; design § 5m; the S1 Shape "MONEY"): the customer's Money tab — the price grain only (403 without) —
 // and "I paid: tell the factory…" (a notice: nothing owed changes). Amounts in minor units, marked price.
+// The money guard (check-money-grains) reads a field's NAME: a field named like money is written `money.price(…)` in place; this
+// constant serves only fields whose names do not look like money (order, invoiced, paid, stillToPay, open).
 const amount = money.price(z.number().int())
-const notice = output({ id: id(), stepId: id().nullable(), amount, paidOn: day, state: z.enum(NOTICE_STATES) })
+const notice = output({ id: id(), stepId: id().nullable(), amount: money.price(z.number().int()), paidOn: day, state: z.enum(NOTICE_STATES) })
 export const moneyContract = defineContract({
   params: orderParams,
   response: {
     200: output({
       currency: z.string(),
-      totals: output({ order: amount, invoiced: amount, paid: amount, stillToPay: amount }),
+      totals: notMoney(output({ order: amount, invoiced: amount, paid: amount, stillToPay: amount })),
       /** How it adds up: lines, charges, VAT, credit notes (negative), paid (negative). */
-      addsUp: z.array(output({ key: z.enum(ADDS_UP_KEYS), amount })),
+      addsUp: z.array(output({ key: z.enum(ADDS_UP_KEYS), amount: money.price(z.number().int()) })),
       /** The payment plan: its milestones (else its deposit requests) and the rest (`id` 'REST': no deposit request, no milestone). */
-      plan: z.array(output({ id: z.string(), kind: z.enum(PLAN_STEP_KINDS), percent: z.number().nullable(), amount, due: day.nullable(), state: z.enum(PLAN_STATES), paid: amount, noticeOpen: z.boolean() })),
+      plan: z.array(output({ id: z.string(), kind: z.enum(PLAN_STEP_KINDS), percent: z.number().nullable(), amount: money.price(z.number().int()), due: day.nullable(), state: z.enum(PLAN_STATES), paid: amount, noticeOpen: z.boolean() })),
       /** The order's invoices and their credit notes (the customer's own documents: their numbers shown). */
-      invoices: z.array(output({ id: id(), kind: z.enum(MONEY_DOCUMENT_KINDS), number: z.string(), date: z.string(), amount, open: amount, documentId: id().nullable() })),
+      invoices: z.array(output({ id: id(), kind: z.enum(MONEY_DOCUMENT_KINDS), number: z.string(), date: z.string(), amount: money.price(z.number().int()), open: amount, documentId: id().nullable() })),
       notices: z.array(notice),
       may: output({ notify: z.boolean() }),
     }),
