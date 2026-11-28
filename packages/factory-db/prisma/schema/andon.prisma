@@ -82,6 +82,11 @@ model HelpCall {
   /// detail while the call is open; set once.
   reasonCode        String?
   requestedQuantity Decimal?       @db.Decimal(18, 4)
+  /// owb-fl0 (order workflow build, schema wave "floor baskets 2"; design "Show the place" on a problem): where on the
+  /// basket's picture the problem is, one of its nine places 0-8 (a 3 x 3 grid, left to right, top to bottom; the CHECK
+  /// constraint HelpCall_spot_range). Told when it is sent or changed while the call is open (its own trigger,
+  /// HelpCall_spot: the call's guard stays as it is); null: not shown.
+  spot              Int?
   status            HelpCallStatus @default(SENT)
   sentAt            DateTime       @db.Timestamptz(3)
   /// Each step's time and who took it (a team leader, a responder; an office user or a floor worker), set once.

@@ -14,6 +14,9 @@ import {
   RESOLUTION_CODE,
   STATION_CALL_STATES,
 } from '@nexus/factory-domain/production/calls/rules'
+// owb-fl3 (S5 server B): the floor's problem and ask windows, photo and voice on a call.
+import { ASK_TO_KINDS, CALL_FILE_LIMITS, CALL_SPOTS, FLOOR_CALL_GROUPS } from '@nexus/factory-domain/production/baskets/signals'
+import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
  * The help calls' routes (B-W2b-35; MES-142 … MES-145, MES-147, MES-137; design floor.help SCR-172, production.calls
@@ -308,3 +311,86 @@ export const updateTypeContract = defineContract({
   response: { 200: output({ type: typeOut, replayed: z.boolean() }) },
 })
 
+
+// ── owb-fl3 (S5 server B; `_owb-fl-common.md` § 2 settles 2–5, § 3 "fl3"): problems and asks on a phone ─────────────────────────
+// Problems and asks are help-call types by code (factory-domain production/baskets/signals): the floor's windows read the site's
+// active types of their codes; a call is sent with today's POST /production/calls/station (the session's station on a phone); a
+// photo or a voice note rides on the caller's own open call; the basket's calls are read with their state and the answer.
+
+const callWords = { labelIt: z.string(), labelEn: z.string(), labelI18n: words, icon: z.string().nullable(), colour: z.string().nullable() }
+
+export const floorTypesContract = defineContract({
+  querystring: input({ for: z.enum(FLOOR_CALL_GROUPS) }),
+  response: {
+    200: output({
+      for: z.enum(FLOOR_CALL_GROUPS),
+      /** The site's ACTIVE types of the window's codes, in the site's order (a code the site lacks is not there). */
+      types: z.array(
+        output({
+          id: id(),
+          code: z.string(),
+          kind: z.enum(CALL_KINDS),
+          active: z.boolean(),
+          escalateAfterMinutes: z.number().int().nullable(),
+          /** Who answers an ask (fixed by its code); null for a problem (its type's team, or the site's team leaders). */
+          to: z.enum(ASK_TO_KINDS).nullable(),
+          ...callWords,
+        }),
+      ),
+      /** The sentence the window shows when the site has none of these codes (never an empty box); null when it has some. */
+      none: z.string().nullable(),
+    }),
+  },
+})
+
+const callFileParams = input({ callId: id() })
+export const callFileAnnounceContract = defineContract({
+  params: callFileParams,
+  body: input({
+    originalName: z.string().min(1).max(500),
+    /** A picture (image/…) is a PHOTO, a sound (audio/…) a voice note. */
+    contentType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().min(1),
+    sha256: z.string(),
+    /** A voice note's length by the phone: required for a sound, at most CALL_FILE_LIMITS.voiceSeconds. */
+    durationSeconds: z.number().min(0).max(CALL_FILE_LIMITS.voiceSeconds).optional(),
+  }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+export const callFileCompleteContract = defineContract({ params: input({ callId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
+
+export const callSpotContract = defineContract({
+  params: callFileParams,
+  body: input({ spot: z.number().int().min(0).max(CALL_SPOTS - 1) }),
+  response: { 200: output({ callId: id(), spot: z.number().int(), replayed: z.boolean() }) },
+})
+
+/** One call of a basket as the floor and the office read it: no person, no office note beyond the answer the worker reads. */
+export const basketCallView = output({
+  id: id(),
+  typeCode: z.string(),
+  /** The basket page's window (PROBLEM, ASK) or null for any other call type. */
+  group: z.enum(FLOOR_CALL_GROUPS).nullable(),
+  to: z.enum(ASK_TO_KINDS).nullable(),
+  state: z.enum(CALL_STATUSES),
+  open: z.boolean(),
+  sentAt: z.string(),
+  /** Whole minutes open (the red card's "12 min"), while open. */
+  minutes: z.number().int().nullable(),
+  /** Past its type's minutes and told to the office ("It is at the office now"). */
+  escalated: z.boolean(),
+  /** "An answer for you": the words of the one who solved it (resolutionNote); null until then. */
+  answer: z.string().nullable(),
+  answeredAt: z.string().nullable(),
+  /** Where on the basket picture (0–8); null: not said. */
+  spot: z.number().int().nullable(),
+  /** The photos and voice notes on it (ids only; the files' own routes open them). */
+  files: z.array(output({ id: id(), kind: z.enum(['PHOTO', 'AUDIO']) })),
+})
+
+export const basketCallsContract = defineContract({
+  /** The basket's code (as scanned) or its id. */
+  params: input({ code: z.string().trim().min(1).max(80) }),
+  response: { 200: output({ basket: output({ id: id(), code: z.string() }), calls: z.array(basketCallView) }) },
+})
+// ── end owb-fl3 ──
