@@ -1,6 +1,13 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { manifest } from './manifest'
+// ---- server A (owb-fl1/fl2) imports ----
+import { basketContract, homeContract, photoAnnounceContract, photoCompleteContract, sessionDepartmentContract } from './contract'
+import { basketHome } from './home'
+import { announcePhoto, completePhoto } from './photo'
+import { readBasket } from './read'
+import { pickDepartment } from './session'
+// ---- end server A imports ----
 // ---- server B (owb-fl3/fl4) imports ----
 import { setFlags } from './flags'
 import { sayLate } from './late'
@@ -16,6 +23,21 @@ import { teamHome } from './team'
  * Each write is one command with an Idempotency-Key (a floor act keyed `<device>.<clientEventId>` when none is sent).
  */
 export default defineRoutes('production.baskets', manifest, async (app) => {
+  // ---- server A (owb-fl1/fl2): the basket read, the home, the department pick, the quality photo ----
+  // The home first: a static path, never read as a basket's code.
+  app.get('/production/baskets/home', { schema: homeContract }, async (request) => basketHome(request))
+
+  app.get('/production/baskets/:bundleId', { schema: basketContract }, async (request) => readBasket(request, request.params.bundleId, request.query))
+
+  app.post('/floor/session/department', { schema: sessionDepartmentContract }, async (request) => pickDepartment(request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/production/baskets/:bundleId/checklist/:stepCode/photo', { schema: photoAnnounceContract }, async (request, reply) =>
+    reply.code(201).send(await announcePhoto(request, request.params, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.post('/production/baskets/:bundleId/checklist/:stepCode/photo/:fileId/complete', { schema: photoCompleteContract }, async (request) => completePhoto(request, request.params, request.body))
+  // ---- end server A ----
+
   // ---- server B (owb-fl3/fl4): flags, late, team, board, from the floor ----
   app.post('/production/baskets/flags', { schema: flagsContract }, async (request) => setFlags(request, request.body, idempotencyKeyFrom(request)))
 
