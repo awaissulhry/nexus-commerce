@@ -1,0 +1,25 @@
+/* owb-of5 step 1 — the order band's picture slot: the picture is the door; a small camera says it opens the picture window. Tokens only. */
+.fw-flow-bandpic {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.fw-flow-bandpic-cam {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  padding: 2px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  border: 1px solid var(--nds-border);
+  pointer-events: none;
+  box-sizing: content-box;
+}
+
+.fw-flow-bandpic.is-door:hover .fw-flow-bandpic-cam,
+.fw-flow-bandpic.is-door:focus-within .fw-flow-bandpic-cam {
+  color: var(--nds-text);
+}

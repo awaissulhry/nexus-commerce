@@ -59,6 +59,7 @@ import type { OrderIssues } from './production/api' // F-PT-103: the order's ask
 import type { StyleView } from '../../../products/styles/api' // F-PT-401: the order's styles (What we make it to)
 import type { ReceiptActions, ReceiptModel } from './production/receipt' // F-PT-304
 import type { ShortageLine } from '../../../purchasing/requests/ask/model' // F-PT-304
+import type { OrderFlowActions, OrderFlowModel } from './band/model' // owb-of5: the design band and the Overview's new parts
 
 /** F-OS-204: a notice's words — the order page's catalogue, or the Shipments tab's own (`order-shipments`, L11). */
 export type NoticeWords = Phrase & { readonly ns?: 'order-shipments' }
@@ -267,6 +268,8 @@ export type OrderChangesActions = ChangeReviewActions & {
 // ---- end F-OP-116
 
 export interface OrderRecordModel {
+  /** owb-of5: what the design band and the Overview's new parts read beside the order (legs, picture, request, strip); absent: a design case. */
+  flow?: OrderFlowModel | null
   /** F-OP-116: the order's work-order changes and the decide window; absent: not read here (a design case). */
   orderChanges?: OrderChangesModel | null
   /** F-OP-101: the reasons a no names (the tenant's APPROVAL_REJECT list) while Refuse… is open; null: not open or not read. */
@@ -476,6 +479,8 @@ export interface MoneyPlanState {
 // ---- end F-OM-201 / 202
 
 export interface OrderRecordActions {
+  /** owb-of5: the picture saved (read again), Restrict on the floor / Open it to the department. */
+  flow?: OrderFlowActions
   /** F-OP-116: open / decide a work-order change in place (Apply, Leave as is). */
   orderChanges?: OrderChangesActions
   /** F-OP-116: Done on one of the order's production tasks (Still to do; the task's own right, R-12). */

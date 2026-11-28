@@ -369,6 +369,7 @@
   "tile": {
     "mywork": "My work",
     "operation": "Operation",
+    "baskets": "Baskets",
     "cut": "Cut a hide",
     "fabriccut": "Fabric cutting",
     "bundles": "Bundles",
@@ -390,6 +391,7 @@
       "myworkWarehouse": "Your warehouse tasks: next first",
       "scan": "Any label of the factory",
       "operation": "Report a bundle at your operation",
+      "baskets": "The baskets of your department, For you, Coming next",
       "cut": "Check a hide and log what you cut",
       "fabriccut": "Cut ticket, lay, count, cut, stickers, recuts, to sewing",
       "bundles": "Make bundles and print their tickets",
@@ -423,6 +425,7 @@
     "machine": "Machine problem",
     "clock": "Clock in & out",
     "myday": "My day",
+    "me": "Me",
     "training": "Training & PPE sign-off",
     "instructions": "Spec & instructions",
     "mydayAnswers_one": "{count} answer to your dispute waits",
