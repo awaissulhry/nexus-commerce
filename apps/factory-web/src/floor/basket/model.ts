@@ -227,9 +227,8 @@ let flash: DoneFlash | null = null
 export const putFlash = (next: DoneFlash): void => {
   flash = next
 }
-/** Read once: the home says it, then it is gone. */
-export const takeFlash = (): DoneFlash | null => {
-  const out = flash
+/** What the home says once (read when it opens; React may read it twice in development: the home clears it after its first paint). */
+export const peekFlash = (): DoneFlash | null => flash
+export const clearFlash = (): void => {
   flash = null
-  return out
 }

@@ -17,7 +17,7 @@ import { atQuality, basketHome, basketRead, FRAME, PACKING, QUALITY, route, STIT
 import { HELP_READY } from './help'
 import { memorySeenStore, SEEN_KEPT, seenKeyOf, unseenForYou, withSeen } from './home/seen'
 import { BasketHomeView, type BasketHomeViewModel } from './home/view/BasketHomeView'
-import { basketHomeOf, basketPath, deptOf, dockOf, elsewhereOf, homeOf, previousStepOf, qualityOf, readyOf, stepBarOf, stepDone, takeFlash, putFlash, viewOf, type BasketView, type DockInput } from './model'
+import { basketHomeOf, basketPath, deptOf, dockOf, elsewhereOf, homeOf, previousStepOf, qualityOf, readyOf, stepBarOf, stepDone, peekFlash, clearFlash, putFlash, viewOf, type BasketView, type DockInput } from './model'
 import { BasketPageView, type BasketPageViewModel } from './page/view/BasketPageView'
 import { STEPS_READY } from './steps'
 
@@ -60,8 +60,9 @@ describe('the home: ONE For you list, the baskets here, Coming next', () => {
 
   it('the line after a Done is said once', () => {
     putFlash({ code: 'B-0431', to: null, moved: false, saved: false })
-    expect(takeFlash()?.code).toBe('B-0431')
-    expect(takeFlash()).toBeNull()
+    expect(peekFlash()?.code).toBe('B-0431')
+    clearFlash()
+    expect(peekFlash()).toBeNull()
   })
 })
 

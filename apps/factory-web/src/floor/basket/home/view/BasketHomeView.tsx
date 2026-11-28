@@ -174,7 +174,6 @@ function HereBody({ model, onAction }: { readonly model: BasketHomeViewModel; re
 }
 
 function HereRow({ row, now, onOpen }: { readonly row: BasketRow; readonly now: number; readonly onOpen: () => void }) {
-  const tb = useT(BASKET_NS)
   return (
     <FloorListRow
       icon={<BasketPic id={row.bundleId} code={row.code} picture={row.picture} size="phone" now={now} />}

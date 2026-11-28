@@ -10,7 +10,7 @@ import { readScan } from '../../scan/scan-model'
 import { basketPageFor, TASK_ROUTES, taskForScan, taskOfTile } from '../../tasks/routes'
 import { cabinetOfScan, CABINET_PATH } from '../../tasks/sds/model'
 import { fetchBasketHome, pickDepartment, type BasketHome as HomeRead } from '../api'
-import { basketPath, deptOf, homeOf, takeFlash, type DoneFlash } from '../model'
+import { basketPath, clearFlash, deptOf, homeOf, peekFlash, type DoneFlash } from '../model'
 import { seenKeyOf, SEEN_KINDS, seenStore } from './seen'
 import { BasketHomeView, type BasketHomeAction } from './view/BasketHomeView'
 import type { DepartmentPickModel } from './view/DepartmentPick'
@@ -41,7 +41,7 @@ export function BasketHome() {
   const [seen, setSeen] = useState<string[]>([])
   const [pick, setPick] = useState<Pick>(CLOSED_PICK)
   const [refused, setRefused] = useState(false)
-  const [flash] = useState<DoneFlash | null>(() => takeFlash())
+  const [flash] = useState<DoneFlash | null>(() => peekFlash())
   const { departments } = useDepartments(api)
   const person = me?.worker.id ?? null
 
@@ -52,6 +52,9 @@ export function BasketHome() {
     if (answer.problem.kind === 'signedOut') return void sessionEnded()
     setLoad({ state: answer.problem.kind === 'offline' ? 'offline' : 'unavailable' })
   }, [api, sessionEnded])
+
+  // The line after a Done is said once: gone after the first paint.
+  useEffect(() => clearFlash(), [])
 
   useEffect(() => {
     if (!person) return
