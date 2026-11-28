@@ -157,6 +157,8 @@ export function orderBandOf(input: {
     actions,
     more,
     ask: { type: 'SalesOrder', id: order.id, label: name },
+    // owb-po6.4: no docked conversation on the order page — the band's Chat opens the panel at this order's chat.
+    chat: { type: 'SalesOrder', id: order.id, label: name },
     // ---- end B-TH-275
     ...(chips ? { chips } : {}),
     // pp-w1 (w1.2; O1-B9): + ⌘J (show or hide the conversation) and ⌘↵ (send the message), in the shell's ONE keys window.

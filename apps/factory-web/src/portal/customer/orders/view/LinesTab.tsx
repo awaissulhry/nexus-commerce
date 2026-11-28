@@ -1,143 +1,81 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
-import { MoreHorizontal } from 'lucide-react'
-import { Card, Disclosure, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
-import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
-import { ListFrame } from '../../../../list-frame/ListFrame'
-import type { OrderLine, OrderRecord } from '../api'
-import { linePromise, pieceCount, shownLinesOf, totalsOf, unitPriceText } from '../model'
+import { Card, Disclosure, SummaryTable } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
+import { EditModeBar } from '../../../../lib/i18n/ds-parts'
+import { OrderLinesTable, ownColumnsOfRecord } from '../../../../lib/order-lines'
+import type { OrderRecord } from '../api'
+import { shownLinesOf, totalsOf, unitPriceText } from '../model'
+import { linesModeOf, NO_ASKS, orderLinePricesOf, orderLineRowsOf } from '../order-lines'
+import { usePageWords } from '../page-words'
 import { useOrderWords } from '../words'
 import { PricesNote, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
-// ---- F-CP-143 (customer page plan C3, D2; 11 §3.4; picture 21): "Your price" beside our unit price, the Price check card, "Your prices…".
-import { diffText, sourceKey, yourPriceOf } from '../price-check'
-import { MatchTag, PriceCheckDialog } from './PriceCheck'
-// ---- end F-CP-143
 
 /**
- * Order › Lines (design rec "Order" tab lines: "What you ordered", "Totals"): every line in the shared list frame (read-only:
- * no action applies to several lines; cards on a phone) with its pieces ordered / shipped / open, its price and amount (price
- * grain), its own promise when it differs; a made-to-measure line names the rider and the measurement revision. Each
- * line's size run below (opened from the row's ⋯ or the address's `line=`), then the totals as agreed.
+ * owb-po6.1 (plan § 5j; design `linesTab`, `lineMay`) — Order › Lines on the ONE lines table (lib/order-lines, web A's: mounted, never
+ * edited). After Confirm typing a line's pieces makes an ASK (nothing changes before the factory answers): the save bar says "n changes
+ * not saved · Undo · Discard · Review and ask…" (⌘ S), and Review opens today's Ask window at its change step with the asks in its note
+ * (today's change-request path: sizes / pieces, colourway, date, address, note — a material change is a note ask). The customer's own
+ * columns apply at once (no price, no promise moves). After shipping: read only ("It left the factory. A change now is a return.").
+ * Below: each line's size run with its doors (ask on this line, reorder it), the lines' options and artwork, the totals (money only).
  */
 export function LinesTab({ model, record, actions }: { model: OrderRecordViewModel; record: OrderRecord; actions?: OrderRecordActions }) {
   const words = useOrderWords()
-  const { t, locale, day } = words
-  const latest = useRef({ model, actions, record })
-  latest.current = { model, actions, record }
+  const page = usePageWords()
+  const { t, locale } = words
   const seesPrices = record.seesPrices
   const currency = record.order.currency
-  // F-CP-143: the customer's own price check, for a price holder once read (anyone else: prices.none, no call).
-  const priceCheck = seesPrices && model.priceCheck?.state === 'ready' ? model.priceCheck.check : null
-
-  const hasCheck = priceCheck !== null // F-CP-143
-  // F-CP-143: a saved price draws again (the cells read the check as it is now).
-  const checkStamp = priceCheck ? priceCheck.lines.map((line) => `${line.lineId}:${line.row?.id ?? ''}:${line.row?.version ?? 0}:${line.brandAmount ?? ''}`).join('|') : ''
-  const columns = useMemo((): ColDef<OrderLine>[] => {
-    const LineCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span className="fw-pord-num">{data.seq}</span> : null)
-    const StyleCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      if (!data) return null
-      return (
-        <span className="fw-pord-stack">
-          <span className="fw-pord-strong">{data.style ? `${data.style.code} · ${data.style.name}` : (data.description ?? '—')}</span>
-          {data.measurement ? <span className="fw-pord-sub">{t('lines.mtm', { rider: data.measurement.riderName, revision: data.measurement.revision })}</span> : null}
-        </span>
-      )
-    }
-    const ColourCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span>{data.colourway ? `${data.colourway.name} (${data.colourway.code})` : '—'}</span> : null)
-    const PiecesCell = ({ data }: ICellRendererParams<OrderLine>) =>
-      data ? (
-        <span className="fw-pord-stack">
-          <span>{t('lines.pieces', { shipped: data.pieces.shipped, ordered: data.pieces.ordered })}</span>
-          {data.closedShort ? <span className="fw-pord-sub">{t('lines.closedShort', { count: data.closedShort.quantity })}</span> : null}
-        </span>
-      ) : null
-    const OpenCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span className={data.pieces.open === 0 ? 'fw-pord-sub' : undefined}>{data.pieces.open}</span> : null)
-    const PriceCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span className="fw-pord-num">{unitPriceText(data.unitPrice, currency, locale) ?? '—'}</span> : null)
-    const AmountCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span className="fw-pord-num">{words.money(data.netAmount, currency)}</span> : null)
-    const PromiseCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      if (!data) return null
-      const own = linePromise(data, latest.current.record.order)
-      return <span className={own ? undefined : 'fw-pord-sub'}>{own ? day(own) : t('lines.asOrder')}</span>
-    }
-    const MoreCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      if (!data) return null
-      const now = latest.current
-      const items: MenuItemDef[] = [
-        { id: 'sizes', label: t('lines.showSizes'), onSelect: () => now.actions?.onLine?.(data.id) },
-        { id: 'change', label: t('lines.askChange'), disabled: now.model.changeHeld !== null, description: now.model.changeHeld ?? undefined, onSelect: () => now.actions?.onChangeLine?.(data.id) },
-        // B-W2b-194: Reorder this line (a size-grid line; New order copies it at today's prices).
-        ...(now.model.reorderHref && data.style && !data.measurement ? [{ id: 'reorder', label: t('lines.reorder'), href: `${now.model.reorderHref}&line=${encodeURIComponent(data.id)}` }] : []),
-      ]
-      return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('lines.menu', { seq: data.seq }) }} items={items} />
-    }
-    // ---- F-CP-143: "Your price" beside our unit price — the customer's own (a row the factory typed says so), its amount, the check,
-    // the difference (our price minus theirs). Only for a price holder once the check is read.
-    const checkLine = (lineId: string) => latest.current.model.priceCheck?.check?.lines.find((entry) => entry.lineId === lineId) ?? null
-    const YourPriceCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      const line = data ? checkLine(data.id) : null
-      if (!line) return null
-      const yours = yourPriceOf(line)
-      return (
-        <span className="fw-pord-stack">
-          <span className="fw-pord-num">{unitPriceText(yours.unit, currency, locale) ?? '—'}</span>
-          {yours.source && yours.source !== 'PORTAL' ? <span className="fw-pord-sub">{t(sourceKey(yours.source))}</span> : null}
-        </span>
-      )
-    }
-    const YourAmountCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      const line = data ? checkLine(data.id) : null
-      return line ? <span className="fw-pord-num">{line.brandAmount !== null ? words.money(line.brandAmount, currency) : '—'}</span> : null
-    }
-    const CheckCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      const line = data ? checkLine(data.id) : null
-      return line ? <MatchTag match={line.priceMatch} /> : null
-    }
-    const DiffCell = ({ data }: ICellRendererParams<OrderLine>) => {
-      const line = data ? checkLine(data.id) : null
-      return line ? <span className="fw-pord-num">{diffText(line.priceDiff, (minor) => words.money(minor, currency)) ?? '—'}</span> : null
-    }
-    // ---- end F-CP-143
-    const column = (colId: string, header: string, cellRenderer: ColDef<OrderLine>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number; maxWidth?: number }): ColDef<OrderLine> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
-    return [
-      { ...column('style', t('lines.col.style'), StyleCell, { flex: 1.6, minWidth: 220 }), valueGetter: ({ data }) => (data?.style ? `${data.style.code} · ${data.style.name}` : (data?.description ?? '')) },
-      { ...column('seq', t('lines.col.line'), LineCell, { width: 80, minWidth: 70 }), valueGetter: ({ data }) => (data ? String(data.seq) : '') },
-      { ...column('colour', t('lines.col.colour'), ColourCell, { flex: 1, minWidth: 150 }), valueGetter: ({ data }) => data?.colourway?.name ?? '' },
-      { ...column('pieces', t('lines.col.pieces'), PiecesCell, { flex: 1, minWidth: 150 }), valueGetter: ({ data }) => (data ? t('lines.pieces', { shipped: data.pieces.shipped, ordered: data.pieces.ordered }) : '') },
-      { ...column('open', t('lines.col.open'), OpenCell, { flex: 0.5, minWidth: 90 }), valueGetter: ({ data }) => (data ? String(data.pieces.open) : '') },
-      ...(seesPrices
-        ? [
-            { ...column('price', t('lines.col.price'), PriceCell, { flex: 0.7, minWidth: 110 }), valueGetter: ({ data }: { data?: OrderLine }) => (data ? (unitPriceText(data.unitPrice, currency, locale) ?? '') : '') },
-            { ...column('amount', t('lines.col.amount'), AmountCell, { flex: 0.8, minWidth: 120 }), valueGetter: ({ data }: { data?: OrderLine }) => (data ? words.money(data.netAmount, currency) : '') },
-          ]
-        : []),
-      // ---- F-CP-143: the customer's own price beside ours (a price holder, the check read).
-      ...(hasCheck
-        ? [
-            column('yourPrice', t('priceCheck.yourPrice'), YourPriceCell, { flex: 0.8, minWidth: 130 }),
-            column('yourAmount', t('priceCheck.yourAmount'), YourAmountCell, { flex: 0.8, minWidth: 120 }),
-            column('priceMatch', t('priceCheck.check'), CheckCell, { flex: 0.7, minWidth: 130 }),
-            column('priceDiff', t('priceCheck.difference'), DiffCell, { flex: 0.7, minWidth: 110 }),
-          ]
-        : []),
-      // ---- end F-CP-143
-      { ...column('promise', t('lines.col.promise'), PromiseCell, { flex: 0.8, minWidth: 130 }), valueGetter: ({ data }) => (data && linePromise(data, latest.current.record.order) ? day(linePromise(data, latest.current.record.order)!) : '') },
-      { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
-    ]
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- F-CP-143: checkStamp redraws the cells after a save
-  }, [t, locale, day, words, seesPrices, currency, hasCheck, checkStamp])
-
+  const rows = orderLineRowsOf(record)
+  const mode = linesModeOf(record.order.status)
+  const asks = model.lineAsks ?? NO_ASKS
+  const asked = asks.order.length
   const totals = seesPrices ? totalsOf(record) : null
-  // pp-w1 (w1.4, O3-B1): a charge line (FEE) is not drawn here in round 1; the totals below count it (the order's own amounts).
   const lines = shownLinesOf(record.lines)
   return (
     <div className="fw-pord-tab">
       <h2 className="fw-pord-h2">{t('lines.title')}</h2>
       {!seesPrices ? <PricesNote /> : null}
-      {/* owb-po5.2: the Price check card moved to Money (the design's place); a line's price cells still open its window here. */}
-      {seesPrices && model.priceCheck?.dialog && model.priceCheck.check ? <PriceCheckDialog model={model.priceCheck.dialog} check={model.priceCheck.check} actions={actions?.priceCheck?.dialog} /> : null}
-      <ListFrame<OrderLine> label={t('lines.label')} title={t('lines.title')} listKey={null} rows={lines} rowId={(line) => line.id} columns={columns} count={t('lines.count', { count: lines.length, pieces: pieceCount(record.pieces.ordered, locale) })} onOpen={(line) => actions?.onLine?.(line.id)} />
+      <OrderLinesTable
+        model={{
+          rows,
+          mode,
+          columns: ownColumnsOfRecord(record.ownColumns),
+          styles: [],
+          kinds: [],
+          prices: orderLinePricesOf(record),
+          pending: false,
+          removed: [],
+          // Asking is the band's right too: who may not ask reads the lines, with why.
+          writeHeld: mode === 'confirmed' ? model.changeHeld : null,
+          saving: [],
+          columnsDoor: false,
+          door: 'portal',
+        }}
+        actions={{
+          onAsk: (rowId, field, value) => (field === 'pieces' ? actions?.onLineAsk?.(rowId, value) : undefined),
+          onOwnValue: (rowId, columnId, value, version) => actions?.onOwnValue?.(rowId, columnId, value, version),
+        }}
+      />
+      <p className="fw-pord-quiet">{page('lines.notes')}</p>
+      {asked > 0 ? (
+        <EditModeBar
+          count={asked}
+          message={
+            <span className="fw-pord-asks">
+              {page('lines.asked', { count: asked })}{' '}
+              <Button size="sm" variant="quiet" onClick={() => actions?.onUndoAsk?.()}>
+                {page('lines.undo')}
+              </Button>
+            </span>
+          }
+          onDiscard={() => actions?.onDiscardAsks?.()}
+          onApply={() => actions?.onReviewAsks?.()}
+          applyLabel={page('lines.review')}
+          applyHeldReason={model.changeHeld}
+          saveShortcut
+        />
+      ) : null}
       <section className="fw-pord-section" aria-labelledby="fw-pord-sizes">
         <h2 id="fw-pord-sizes" className="fw-pord-h2">
           {t('lines.sizesTitle')}
@@ -164,6 +102,19 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
                 }}
               />
             )}
+            {/* The line's own doors (were its ⋯): ask on this line; reorder it (a person who may order). */}
+            <span className="fw-pord-doors">
+              {mode === 'confirmed' ? (
+                <Button size="sm" variant="quiet" heldReason={model.changeHeld} onClick={() => actions?.onChangeLine?.(line.id)}>
+                  {t('lines.askChange')}
+                </Button>
+              ) : null}
+              {model.reorderHref && line.style && !line.measurement ? (
+                <Button asChild size="sm" variant="quiet">
+                  <a href={`${model.reorderHref}&line=${encodeURIComponent(line.id)}`}>{t('lines.reorder')}</a>
+                </Button>
+              ) : null}
+            </span>
           </Disclosure>
         ))}
       </section>

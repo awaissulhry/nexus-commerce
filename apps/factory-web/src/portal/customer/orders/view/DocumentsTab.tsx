@@ -1,12 +1,14 @@
 'use client'
 
-import { Download, Eye, FileText, Lock } from 'lucide-react'
-import { EmptyState } from '@nexus/ui/components'
+import { Download, Eye, FileText, ImageIcon, Lock } from 'lucide-react'
+import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow } from '../../../../lib/i18n/ds-parts'
 import type { OrderDocument } from '../api'
 import { documentsInOrder } from '../model'
 import { useOrderWords } from '../words'
+import { usePageWords } from '../page-words' // owb-po6.4
+import { pictureChoicesOf } from '../picture' // owb-po6.4
 import { Loading, PricesNote, ReadFailed } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
 // F-SA-238: the order's shared files, grouped like the office's Files tab — the SAME body (lib/record-thread files-view), its customer face.
@@ -22,9 +24,37 @@ import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
 export function DocumentsTab({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   return (
     <div className="fw-pord-tab">
+      <PictureFromFiles model={model} actions={actions} />
       <OrderFiles model={model} actions={actions} />
       <Library model={model} actions={actions} />
     </div>
+  )
+}
+
+/**
+ * owb-po6.4 (design § 5zi E: "the Files tab — a file can become the picture") — the order's files that may be its picture (an image or a
+ * PDF the customer can open; never an office-only, priced or size file: `pictureChoicesOf`), each with "Use as the picture". Only for who
+ * may change it; none to show: not drawn.
+ */
+function PictureFromFiles({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
+  const page = usePageWords()
+  const choices = actions?.onUsePicture ? pictureChoicesOf(model.files?.read ?? null) : []
+  if (choices.length === 0) return null
+  return (
+    <Card header={page('picture.title')} headingLevel={2} description={page('picture.line')}>
+      <ul className="fw-pord-files">
+        {choices.map((choice) => (
+          <li key={choice.fileId} className="fw-pord-step">
+            <span>
+              <ImageIcon size={14} aria-hidden /> {choice.name}
+            </span>
+            <Button size="sm" variant="quiet" heldReason={model.pictureBusy ? page('held.busy') : null} onClick={() => actions?.onUsePicture?.(choice.fileId)}>
+              {page('picture.use')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 

@@ -75,7 +75,7 @@ function requestCase(input: { status?: 'DRAFT' | 'SENT'; tab?: RequestTab; seesP
       back: { href: `${PREFIX}/orders`, label: t('band.back') },
       refs: frame.customerRef ? { theirs: frame.customerRef, ours: null } : null,
       status: { label: '', tone: 'neutral', life: frame.life, note: frame.note },
-      picture: { recordId: ID, number: frame.title, onOpen: frame.may.picture ? () => undefined : null },
+      picture: { recordId: ID, number: frame.title, source: 'customerRequest', onOpen: frame.may.picture ? () => undefined : null },
       actions: primary ? [primary] : [],
     }
     return {

@@ -53,6 +53,7 @@ import { mayOpenPriced, PRICED_LOCK, seesPrices } from '@nexus/factory-domain/fi
 // ---- end B-CP-023
 // ---- B-CP-079: "Ask the factory designer" rides on the post (checked before it; the note after it).
 import { askDesignerAfterPost, cappedAnswer, planDesignerAsk, type DesignerAskAnswer } from './designer-ask'
+import { feedEventOf, groupQuietLines } from '@nexus/factory-domain/threads/quiet-lines' // owb- po2.3
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -98,6 +99,9 @@ const MESSAGE_PARTNER = {
   // B-TH-050: the shared message it answers or corrects (partner-readable: a shared message points only at a shared one).
   replyToMessageId: true,
   correctsMessageId: true,
+  // owb- po2.3: a quiet line's key and arguments.
+  eventKey: true,
+  eventArgs: true,
 } as const satisfies Prisma.MessageSelect
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_PARTNER }>
 
@@ -166,12 +170,13 @@ async function minePosts(request: FastifyRequest, caller: PartnerCaller, rows: r
   return new Set(audits.map((row) => row.recordId))
 }
 
-function messageViewOf(caller: PartnerCaller, row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, mine: ReadonlySet<string>, links: MessageLinks = NO_LINKS): PartnerMessageView {
+function messageViewOf(caller: PartnerCaller, row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, mine: ReadonlySet<string>, links: MessageLinks = NO_LINKS, /* owb- po2.3 */ quiet: ReadonlyMap<string, number> = new Map()): PartnerMessageView {
   const side = sideOf(row.direction)
   const linked = (id: string | null) => (id ? (links.linked.get(id) ?? null) : null) // B-TH-050
   return {
     id: row.id,
     side,
+    event: feedEventOf(row, quiet), // owb- po2.3
     channel: row.channel,
     author: { name: row.authorName ?? (side === 'COMPANY' ? caller.session.company.name : null), mine: mine.has(row.id) },
     body: row.bodyText,
@@ -232,8 +237,11 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
           select: MESSAGE_PARTNER,
         })
       : []
-    const shown = rows.slice(0, page.limit)
+    // owb- po2.3: quiet lines of one side and key inside 10 minutes are ONE line (grouped at read time).
+    const grouped = groupQuietLines(rows.slice(0, page.limit))
+    const shown = rows.slice(0, page.limit).filter((row) => !grouped.dropped.has(row.id))
     return {
+      grouped,
       record,
       thread,
       rows,
@@ -253,14 +261,14 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
   // fix-wall-1: a walled file is left out of its message's files (and so of what the page counts) — tw-s: and of every quote's count.
   const walled = await walledForOutside(request as CommandCaller, [...read.attachments.keys(), ...quoted.flatMap((source) => (source.files ?? []).map((file) => file.id))])
   for (const fileId of walled) read.attachments.delete(fileId)
-  const last = read.shown.at(-1)
+  const last = read.rows.slice(0, page.limit).at(-1)
   const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, [...read.shown, ...quoted]) // B-TH-079
   const links = finishedLinks(read.links, { erased, mine, walled })
   // ---- end tw-s S.1
   return {
     record: recordViewOf(ref.type, read.record),
     thread: read.thread ? { id: read.thread.id, status: read.thread.status } : null,
-    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, links), ...(erased.has(row.id) ? { erased: true } : {}) })),
+    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, links, read.grouped.counts), ...(erased.has(row.id) ? { erased: true } : {}) })),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
     reading: read.reading,
@@ -281,8 +289,9 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
   return request.withClient(async (client) => {
     const kinds = await kindsOfSession(client, caller)
     // The party's newest shared messages (ids and times only), the newest of each thread, then those messages whole.
+    // owb- po2.3: a quiet line is no conversation's last message (it never bumps a thread in the list).
     const newest = await client.message.findMany({
-      where: { audience: 'PARTNER', ...(query.from === 'company' ? { direction: 'OUTBOUND' as const } : {}) },
+      where: { audience: 'PARTNER', eventKey: null, ...(query.from === 'company' ? { direction: 'OUTBOUND' as const } : {}) },
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
       take: PARTNER_THREADS_SCAN,
       select: { id: true, threadId: true },

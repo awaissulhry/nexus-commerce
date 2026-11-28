@@ -534,7 +534,7 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     const receivedOf = async () => ((await as(R.buyer, 'GET', '/portal/customer-documents/conformity')).styles as Json[]).find((entry) => entry.style.code === 'SEED-JKT-02')!
     const before = await receivedOf()
     expect(before).toMatchObject({ ppe: true, certificateRequired: true })
-    expect((before.received as Json[]).find((row) => row.shipment.number === 'SEED-SH-0001')).toMatchObject({ declaration: null })
+    expect((before.received as Json[]).find((row) => row.shipment.id === id('shipping:shipment:SH-0001')) /* owb-po2c: no SH- number */).toMatchObject({ declaration: null })
     for (const [kind, name] of [
       ['DECLARATION_OF_CONFORMITY', 'doc-jkt-02.pdf'],
       ['USER_INFORMATION', 'info-jkt-02.pdf'],
@@ -548,7 +548,7 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     }
     await ok(P.warehouse, 'POST', `/shipping/shipments/${id('shipping:shipment:SH-0001')}/documents/attach`, {})
     await settle()
-    const row = ((await receivedOf()).received as Json[]).find((entry) => entry.shipment.number === 'SEED-SH-0001')!
+    const row = ((await receivedOf()).received as Json[]).find((entry) => entry.shipment.id === id('shipping:shipment:SH-0001'))!
     expect(row).toMatchObject({ order: { id: id('production:sales-order:SO-0002'), yourNumber: { seq: expect.any(Number) } } /* fix-portal-numbers-1 */, state: 'COMPLETE', declaration: { kind: 'DECLARATION_OF_CONFORMITY' }, certificate: { validOnShippingDate: true } })
     const library = await as(R.buyer, 'GET', '/portal/customer-documents')
     const doc = (library.items as Json[]).find((item) => item.kind === 'DECLARATION_OF_CONFORMITY')!

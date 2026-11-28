@@ -128,6 +128,11 @@ export interface PortalBand {
    * change it). Data only; absent: no picture.
    */
   picture?: PortalBandPicture | null
+  /**
+   * owb-po6.4 (lead decision: the chat left the order page, design § 5d): the page has no docked conversation — the band's Chat opens
+   * the top bar's panel at this record's chat (its new messages on the button). Absent: none (a page that docks keeps `thread`).
+   */
+  chat?: { readonly type: string; readonly id: string; readonly label: string | null } | null
   /** owb-po5.1: People — the order's people; absent or null: no button (no read of them yet: never a door to nowhere). */
   people?: { readonly count: number; readonly onOpen: () => void } | null
 }
@@ -135,6 +140,8 @@ export interface PortalBand {
 /** owb-po5.1: the band's picture button: whose picture (its record id, read by `customerOrder`), its name, and what a press does. */
 export interface PortalBandPicture {
   readonly recordId: string
+  /** owb-po6.4: whose batch read — an order's (default) or a Draft / Sent order's (`customerRequest`, web A's source). */
+  readonly source?: 'customerOrder' | 'customerRequest'
   /** The record's name in words ("Your order 12"): the picture's name. */
   readonly number: string
   readonly onOpen: (() => void) | null

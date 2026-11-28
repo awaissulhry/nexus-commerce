@@ -6,7 +6,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/conte
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { readProblem, writeProblem } from '../../../../warehouse/shipments/model'
 import { printAgain, printSheet, printStartPreview, type SheetCard } from './api'
-import { againBodyOf, againCardsOf, againFormOf, againHeldOf, againPagesOf, mayPrintOf, PRINT_NS, toggledIn, type AgainForm, type AgainPage } from './model'
+import { againBodyOf, againCardsOf, againFormOf, againFormOnlyOf, againHeldOf, againPagesOf, againPagesWith, mayPrintOf, PRINT_NS, toggledIn, type AgainForm, type AgainPage } from './model'
 import { PrintSheet } from './sheet/PrintSheet'
 import { PrintAgainView, type PrintAgainViewModel } from './view/PrintAgainView'
 
@@ -27,6 +27,11 @@ export interface PrintAgainWindowProps {
   readonly companyId: string
   /** The order (SalesOrder id). */
   readonly orderId: string
+  /**
+   * owb-ss4b (optional; every mount before keeps working): "Print this page again…" from Place the scan code — only this page ticked, no
+   * card. Absent: from the order, everything offered is ticked.
+   */
+  readonly pageOnly?: { readonly salesOrderLineId: string; readonly page: number } | null
 }
 
 /**
@@ -46,7 +51,7 @@ export function PrintAgainWindow(props: PrintAgainWindowProps): ReactElement | n
 
 const EMPTY: AgainForm = Object.freeze({ pages: new Set<string>(), cards: new Set<string>(), reason: null, note: '' })
 
-function Container({ open, onClose, orderId }: PrintAgainWindowProps): ReactElement {
+function Container({ open, onClose, orderId, pageOnly = null }: PrintAgainWindowProps): ReactElement {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const may = useMemo(() => mayPrintOf(session.permissions), [session.permissions])
@@ -63,7 +68,7 @@ function Container({ open, onClose, orderId }: PrintAgainWindowProps): ReactElem
   useEffect(() => {
     let live = true
     printStartPreview(api, orderId)
-      .then((preview) => live && setPages(againPagesOf(preview.pages)))
+      .then((preview) => live && setPages(againPagesWith(againPagesOf(preview.pages), preview.pages, pageOnly)))
       .catch((error: unknown) => live && setReadFailed(readProblem(error)))
     // The cards: the first print's sheet; a failed read leaves the pages (they still print) and says the cards are not known.
     printSheet(api, orderId, null)
@@ -76,6 +81,7 @@ function Container({ open, onClose, orderId }: PrintAgainWindowProps): ReactElem
     return () => {
       live = false
     }
+    // The page asked for (pageOnly) comes with the window and does not change while it is open: read once per window.
   }, [api, orderId])
 
   // From the order: every page and every card offered is ticked, once both are read.
@@ -83,8 +89,8 @@ function Container({ open, onClose, orderId }: PrintAgainWindowProps): ReactElem
   useEffect(() => {
     if (ticked.current || pages === null || cards === null) return
     ticked.current = true
-    setForm(againFormOf(pages, cards))
-  }, [pages, cards])
+    setForm(pageOnly ? againFormOnlyOf(pages, pageOnly) : againFormOf(pages, cards))
+  }, [pages, cards, pageOnly])
 
   const held = againHeldOf({ may, form, busy })
 

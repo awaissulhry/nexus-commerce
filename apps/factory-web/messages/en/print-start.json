@@ -102,5 +102,49 @@
     "due": "due {day}",
     "pieces_one": "{count} piece",
     "pieces_other": "{count} pieces"
+  },
+  "place": {
+    "title": "Place the scan code",
+    "act": "Save the place",
+    "printAgain": "Print this page again…",
+    "readFailed": "The pages could not be read",
+    "notForYou": "The pages of this order open for the people who print and start the work. Ask sales to place the code, or to give you that right.",
+    "none": "No piece of this order has a mockup page yet.",
+    "piecePrev": "The piece before",
+    "pieceNext": "The next piece",
+    "pieceOf": "Piece {n} of {of}",
+    "pages": "The pages of this piece",
+    "page": "Page {n}",
+    "drawFailed": "This page could not be drawn.",
+    "drag": "Drag the code to any free place. Pull its corner to make it bigger or smaller. Keys: arrows move it 1 mm, Shift + arrows 5 mm, + and − change its size.",
+    "rule": "It stays on the page and it is never smaller than {min} mm, so a phone can read it.",
+    "savedNow": "Saved. The print puts the code here.",
+    "savedBy": "Placed by {name} · {at}",
+    "notSaved": "Not placed by a person yet: the print puts it at the usual place, top right.",
+    "pageAlt": "The design page",
+    "codeLabel": "The scan code: {where}",
+    "size": "Size",
+    "mm": "{mm} mm",
+    "whereTitle": "Place",
+    "at": "{x} mm from the left · {y} mm from the top · {size} mm",
+    "quick": "Quick places",
+    "spot": {
+      "TOP_LEFT": "Top left",
+      "TOP_MIDDLE": "Top middle",
+      "TOP_RIGHT": "Top right",
+      "BOTTOM_LEFT": "Bottom left",
+      "BOTTOM_MIDDLE": "Bottom middle",
+      "BOTTOM_RIGHT": "Bottom right"
+    },
+    "why": {
+      "min": "It stops at {min} mm: smaller, a phone cannot read it.",
+      "max": "It stops at the page's size.",
+      "edge": "It stops at the edge: the code stays on the page."
+    },
+    "held": {
+      "noRight": "Your role does not place the scan code",
+      "drawing": "The page is still drawing",
+      "unchanged": "Move or size the code first: this place is saved"
+    }
   }
 }

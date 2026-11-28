@@ -135,7 +135,8 @@
       "MINUTES_BAD": "Passaggio {no}: i minuti sono un numero, come 12 o 12,5.",
       "NAME_NEEDED": "Dai un nome al percorso.",
       "CUSTOMER_NEEDED": "Scegli il cliente per cui è questo percorso.",
-      "REASON_NEEDED": "Scrivi perché questo ordine è diverso."
+      "REASON_NEEDED": "Scrivi perché questo ordine è diverso.",
+      "TOO_MANY": "Il percorso di una riga ha al massimo {max} passaggi."
     },
     "note": {
       "NO_QUALITY": "Questo percorso non ha un controllo qualità. Puoi salvarlo.",
@@ -190,7 +191,11 @@
     "PRINTED": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
     "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati.",
     "CLOSED": "Questo reparto è chiuso: riaprilo prima di cambiarne il nome.",
-    "CODE_TAKEN": "Il codice operazione di questo reparto è già usato da un’altra operazione della libreria: dai prima un altro codice a quella."
+    "CODE_TAKEN": "Il codice operazione di questo reparto è già usato da un’altra operazione della libreria: dai prima un altro codice a quella.",
+    "NAME_TAKEN_ROUTE": "Un altro percorso di questa revisione ha questo nome: dagliene un altro.",
+    "NAME_TAKEN_TEMPLATE": "Un percorso pronto con questo nome è già aperto: dagliene un altro.",
+    "ONLY_PRODUCTION_MANAGER": "Solo il responsabile di produzione cambia il percorso di una riga.",
+    "NOT_A_MODEL": "Questo non è un percorso modello di questo prodotto per questo cliente."
   },
   "manage": {
     "switch": "Gestisci",

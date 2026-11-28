@@ -10,7 +10,6 @@ import { mayOnThread, mayShare } from './records'
 import { wallScopeOf, wallScopesOf } from './records' // B-PR-08a part 2
 import { contextOf, type RecordRef } from './threads' // B-PR-08a part 2: scopeOfThread → wallScopeOf
 // B-OP-061 (order page dock A2): whether the reader may read each record's thread — the thread page's own check.
-import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { THREAD_PLACES, threadPlaceOf } from './records'
 import { officeRecord } from './threads'
 // B-CP-071 residual (customer page lead addition 5): a portal person counts only the records its portal opens.
@@ -21,6 +20,7 @@ import { isPartnerKind, partnerKindsOf, type PartnerKind } from '@nexus/factory-
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import type { PartnerReader } from '../search/partner/view'
 import { databaseNow } from '../audit/security-events/record' // pg-fx2: a read mark's time is never ahead of the database's
+import { orderWallFilter, orderWallHolds } from './order-wall' // owb- po2.4: the designer wall on an order's thread
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -89,6 +89,7 @@ function newWhere(threadId: string, who: Who, after: { at: Date; id: string } | 
     AND: [
       { threadId },
       who.office ? { OR: [{ authorId: null }, { authorId: { not: who.userId } }] } : { audience: 'PARTNER' },
+      { eventKey: null }, // owb- po2.3: a quiet line is never unread
       after ? { OR: [{ at: { gt: after.at } }, { at: after.at, id: { gt: after.id } }] } : {},
     ],
   }
@@ -279,11 +280,12 @@ export interface UnreadCount {
  * (a work order's, hold's or NCR's through its wall party). A record of no known type, an unknown id and a record of a customer the
  * person does not reach are all false — the answer never tells them apart.
  */
-async function officeReadable(client: Reader, actor: Actor, record: RecordRef): Promise<boolean> {
+async function officeReadable(client: Reader, context: RequestContext, record: RecordRef): Promise<boolean> {
   const place = (await threadPlaceOf(client, record)) ?? record
   try {
     const found = await officeRecord(client, place)
-    return mayOnThread(actor, THREADS_READ, place.type, found.scope)
+    // owb- po2.4 (R20): + the designer wall of an order's thread.
+    return mayOnThread(actorOf(context), THREADS_READ, place.type, found.scope) && (await orderWallHolds(client, context, place, found.scope))
   } catch (error) {
     if (error instanceof NotFoundError) return false
     throw error
@@ -307,7 +309,9 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
     // threads of these types are left out first).
     const seen = threads.filter((thread) => who.office || mayShare(thread.recordType))
     const scopeOf = await wallScopesOf(client, seen)
-    const mayRead = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)))
+    // owb- po2.4 (R20): an order's thread also needs orders.view, or orders.view.own while the reader is on the order (in the read).
+    const wall = await orderWallFilter(client, context)
+    const mayRead = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)) && wall({ type: thread.recordType, id: thread.recordId }, scopeOf(thread)))
     // ---- end B-PR-08a
     // B-CP-071 residual (lead addition 5): a portal person, only the records its portal opens (else as an unknown id).
     const readable = who.office ? mayRead : await openedByPartner(caller, client, mayRead)
@@ -322,7 +326,7 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
         // A record whose conversation is another's (the thread page reads that one), or with no thread yet: the office asks the
         // record itself; a portal person reads only its party's threads that exist.
         const asOffice = who.office && (Object.hasOwn(THREAD_PLACES, record.type) || !withThread.has(key))
-        readableOf.set(key, asOffice ? await officeReadable(client, actorOf(context), record) : read.has(key))
+        readableOf.set(key, asOffice ? await officeReadable(client, context, record) : read.has(key))
       }
     }
     // ---- end B-OP-061
@@ -339,6 +343,7 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
            WHERE m."threadId" = ANY(${ids}::uuid[])
              AND (seen."id" IS NULL OR (m."at", m."id") > (seen."at", seen."id"))
              AND m."authorId" IS DISTINCT FROM ${who.userId}::uuid
+             AND m."eventKey" IS NULL -- owb- po2.3: a quiet line is never unread
            GROUP BY m."threadId"`
       : await client.$queryRaw<{ threadId: string; newCount: number; lastAt: Date | null }[]>`
           SELECT m."threadId"::text AS "threadId", count(*)::int AS "newCount", max(m."at") AS "lastAt"
@@ -348,6 +353,7 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
            WHERE m."threadId" = ANY(${ids}::uuid[])
              AND (seen."id" IS NULL OR (m."at", m."id") > (seen."at", seen."id"))
              AND m."audience" = 'PARTNER'
+             AND m."eventKey" IS NULL -- owb- po2.3: a quiet line is never unread
            GROUP BY m."threadId"`
     const byThread = new Map(rows.map((row) => [row.threadId, row]))
     return { counts: new Map(readable.map((thread) => [`${thread.recordType}:${thread.recordId}`, { newCount: byThread.get(thread.id)?.newCount ?? 0, lastAt: byThread.get(thread.id)?.lastAt ?? null }])), readableOf }

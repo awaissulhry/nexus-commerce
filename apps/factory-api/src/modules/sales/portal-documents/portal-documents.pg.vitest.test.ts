@@ -361,8 +361,9 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
     const style: Json = (answer.styles as Json[]).find((entry) => entry.style.code === 'SEED-JKT-02') ?? {}
     expect(style).toMatchObject({ ppe: true, certificateRequired: true })
     const row = style.received[0]
+    const shipped = await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0001'`, [T])
     expect(row).toMatchObject({
-      shipment: { number: 'SEED-SH-0001' },
+      shipment: { id: shipped.id }, // owb-po2c: by its id, never the office's SEED-SH-0001
       order: { yourNumber: { seq: expect.any(Number) } }, // fix-portal-numbers-1 (B-TH-303): never the office's SEED-SO-0002
       revision: 1,
       state: 'COMPLETE',
@@ -376,6 +377,16 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
     expect(row.batches).toEqual([{ number: 'SEED-BT-0001', publicDocAddress: expect.stringMatching(/\/doc\/[0-9A-HJKMNP-TV-Z]{8}$/) }])
     expect((await ok(browsers.quality, '/portal/customer-documents/conformity?q=nothing-like-this')).count).toBe(0)
     expect((await browsers.finance.get('/portal/customer-documents/conformity')).status).toBe(403)
+  })
+
+  it('the brand wall: a conformity row names its shipment by its id only, never the office series SH-… (owb-po2c)', async () => {
+    const answer = await ok(browsers.quality, '/portal/customer-documents/conformity')
+    const rows = (answer.styles as Json[]).flatMap((style) => style.received as Json[])
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) expect(Object.keys(row.shipment)).toEqual(['id'])
+    const series = (await admin<{ number: string }>('SELECT number FROM "Shipment" WHERE "tenantId" = $1', [T])).map((entry) => entry.number)
+    expect(series.length).toBeGreaterThan(0)
+    expect(series.filter((number) => JSON.stringify(answer).includes(number))).toEqual([])
   })
 
   it('a withdrawn declaration leaves the library; the style says a document is missing', async () => {

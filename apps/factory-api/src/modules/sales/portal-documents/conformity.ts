@@ -113,7 +113,8 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
           const state = receivedStateOf({ ppe: classification.isPpe, certificateRequired: classification.certificateRequired, declaration: declaration !== null, userInformation: userInformation !== null, certificateValid })
           const order = orderOf.get(row.orderId ?? shipment.salesOrderId) // B-OP-044: the garments' own order
           return {
-            shipment: { id: shipment.id, number: shipment.number },
+            // owb-po2c (the brand wall, plan §0.5): the shipment by its id only, never the office's series (SH-…); the sort above may use it.
+            shipment: { id: shipment.id },
             // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's SO-….
             order: order ? { id: order.id, customerRef: order.customerRef, yourNumber: customerNumberOf('ORDER', order.customerSeq) } : null,
             shippedOn,

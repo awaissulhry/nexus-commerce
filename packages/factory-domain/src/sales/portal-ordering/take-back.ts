@@ -19,15 +19,6 @@ export const TAKE_BACK_WORDS = Object.freeze({
   WITHDRAWN: { en: 'This order was withdrawn: it cannot be taken back.', it: 'Questo ordine è stato ritirato: non si può riprendere.' },
 } as const)
 
-/**
- * A draft taken back keeps the number of its first Send, so it is never discarded (G1 (e): the database refuses the DELETE); it is
- * withdrawn instead (S1 po2.1 makes "Delete" do that). Until then the delete says so in words.
- */
-export const SENT_ONCE_WORDS = Object.freeze({
-  en: 'This order was sent once and keeps its number: it is withdrawn, never deleted.',
-  it: 'Questo ordine è già stato inviato una volta e tiene il suo numero: si ritira, non si elimina.',
-} as const)
-
 export type TakeBackRefusal = keyof typeof TAKE_BACK_WORDS
 
 export interface TakeBackFacts {

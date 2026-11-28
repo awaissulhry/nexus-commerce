@@ -175,6 +175,13 @@ export const listStylesQuery = input({
    * never another brand's. A customer the person may not see answers like an unknown one (404).
    */
   forCustomer: id().optional(),
+  // owb-pd4s s.1 (S4 products; web A's "Who it is for"): our own range or the products made for a customer.
+  /**
+   * OUR_RANGE: the styles that name no customer (`brandPartyId` null); FOR_CUSTOMER: those made for one (`brandPartyId` set). Absent:
+   * both. With every other filter (a customer's own `brandPartyId` narrows FOR_CUSTOMER further). The words are STYLE_FAMILIES' below
+   * (written out here: a const declared later in this file is not there yet when this schema is built).
+   */
+  family: z.enum(['OUR_RANGE', 'FOR_CUSTOMER']).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 })

@@ -166,6 +166,8 @@ const partnerMessage = z.object({
   corrects: partnerLink.nullable().optional().catch(undefined),
   correctedBy: z.object({ id: z.string(), at: z.string() }).nullable().optional().catch(undefined),
   at: z.string(),
+  // owb-po6.4 (server po2.3): a quiet line — a SYSTEM line of the factory's or your team's change, drawn from its key and args (no bubble).
+  event: z.object({ key: z.string(), args: z.record(z.string(), z.union([z.string(), z.number()])), count: z.number().int().min(1) }).nullable().optional().catch(undefined),
 })
 export type PartnerMessageRead = z.infer<typeof partnerMessage>
 export const partnerThreadSchema = z.object({

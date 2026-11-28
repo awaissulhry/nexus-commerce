@@ -312,7 +312,8 @@
     "askChange": "Chiedete una modifica su questa riga",
     "sizesTitle": "Taglie di ogni riga",
     "sizesOf": "Riga {seq} · {style} {colour}",
-    "reorder": "Riordina questa riga"
+    "reorder": "Riordina questa riga",
+    "ownFailed": "Il vostro valore non è stato salvato. Riprovate tra un momento."
   },
   "sizes": {
     "size": "Taglia",
@@ -386,7 +387,9 @@
       "trackOf": "Segui la spedizione {number} sul sito del corriere"
     },
     "also_one": "Anche {count} pezzo del vostro ordine {order}",
-    "also_other": "Anche {count} pezzi del vostro ordine {order}"
+    "also_other": "Anche {count} pezzi del vostro ordine {order}",
+    "labelSent": "La vostra etichetta di spedizione è presso la fabbrica.",
+    "labelFailed": "L'etichetta non è stata inviata. Riprovate tra un momento."
   },
   "toShip": {
     "title": "Ancora da spedire",
@@ -967,5 +970,12 @@
   },
   "strip": {
     "deposit": "Acconto da pagare entro il {date}"
+  },
+  "money": {
+    "sent": "Abbiamo avvisato la fabbrica. Registra il pagamento quando arriva."
+  },
+  "picture": {
+    "saved": "L'immagine dell'ordine è cambiata.",
+    "failed": "L'immagine non è cambiata. Riprovate tra un momento."
   }
 }

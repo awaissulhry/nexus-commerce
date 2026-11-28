@@ -149,7 +149,7 @@ describe('the sheet as ONE order (owb- po1.1)', { timeout: SLOW_TEST_TIMEOUT_MS 
       expect(ORDER_LIFE).toContain(row.life)
       for (const line of row.lines as Json[]) expect(LINE_MODEL_KINDS).toContain(line.model.kind)
       for (const wait of row.waits as Json[]) expect(SHEET_WAITS).toContain(wait.kind)
-      expect(row.waits.map((wait: Json) => wait.kind)).not.toContain('SEND_LABEL')
+      // owb- po2.6 (pin moved): SEND_LABEL comes with S3's warehouse leg — only for an order with a shipment at the factory's warehouse.
     }
     expect(sheet.ownColumns).toEqual([expect.objectContaining({ id: A.columnId, name: 'Rider number (made up)', kind: 'TEXT' })])
     // Without drafts=true (an older web): no DRAFT row, every other row as before.

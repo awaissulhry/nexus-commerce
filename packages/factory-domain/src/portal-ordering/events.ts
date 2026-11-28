@@ -16,6 +16,7 @@ import { defineEvent } from '../events/define'
  *   portal_order_request.draft_changed  B-CP-071: a customer changed one of its drafts (the office reads drafts, read-only)
  *   portal_order_request.taken_back  owb- po1.2: the customer took a sent request back to its draft (number kept) before the
  *                                    office decided it
+ *   payment_notice.sent              owb- po2.2: a customer said it paid for one of its orders ("I paid": a notice, nothing owed moves)
  *   delivery_address.checked        the office approved or refused an address the customer added (B-W2b-F15)
  *
  * Reach the office's Home › Approvals and sales screens (orders.view over the request's company and customer): ids,
@@ -77,6 +78,16 @@ export const events = [
     live: { permission: 'orders.view', fields: ['requestId'] },
   }),
   // ---- end owb- po1.2
+  // ---- owb- po2.2 (order workflow, "I paid: tell the factory…"): the customer told us it paid for one of its orders (a notice; nothing
+  // owed changes): the office's Waiting and Money read it (S2 answers it). Ids only, never the amount; the party only routes it.
+  defineEvent({
+    type: 'payment_notice.sent',
+    context: 'portal-ordering',
+    description: 'A customer told the factory it paid for one of its orders (a notice the office records or dismisses; nothing owed changes by it).',
+    payload: z.strictObject({ noticeId: z.uuid(), salesOrderId: z.uuid(), partyId: z.uuid() }),
+    live: { permission: 'orders.view', fields: ['noticeId', 'salesOrderId'] },
+  }),
+  // ---- end owb- po2.2
   // B-W2b-F15: the office decided a delivery address a customer added in the portal (sales/portal-ordering address-check.ts:
   // approved or refused by hand, or approved by accepting a request that names it). The customer's person who asked hears it
   // (platform/portal/notifications rules/addresses.ts). Ids and the decision only: never the address, the reason or a name.

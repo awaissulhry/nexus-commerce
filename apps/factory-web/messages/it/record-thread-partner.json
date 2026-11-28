@@ -21,5 +21,42 @@
     "attached_one": "{count} file allegato",
     "attached_other": "{count} file allegati",
     "drop": "Non allegate {name}"
+  },
+  "quiet": {
+    "pictureSet": {
+      "FACTORY": "La fabbrica ha cambiato l'immagine dell'ordine",
+      "CUSTOMER": "Il vostro team ha cambiato l'immagine dell'ordine"
+    },
+    "lineAdded": {
+      "FACTORY": "La fabbrica ha aggiunto una riga",
+      "CUSTOMER": "Il vostro team ha aggiunto una riga"
+    },
+    "lineChanged": {
+      "FACTORY": "La fabbrica ha modificato una riga",
+      "CUSTOMER": "Il vostro team ha modificato una riga"
+    },
+    "lineTakenOut": {
+      "FACTORY": "La fabbrica ha tolto una riga",
+      "CUSTOMER": "Il vostro team ha tolto una riga"
+    },
+    "ownColumnAdded": {
+      "FACTORY": "La fabbrica ha aggiunto una delle vostre colonne",
+      "CUSTOMER": "Il vostro team ha aggiunto una delle vostre colonne"
+    },
+    "promiseSet": {
+      "FACTORY": "La fabbrica ha fissato la data promessa",
+      "CUSTOMER": "La data promessa è stata fissata"
+    },
+    "fileShared": {
+      "FACTORY": "La fabbrica ha condiviso un file",
+      "CUSTOMER": "Il vostro team ha condiviso un file"
+    },
+    "detail": {
+      "words": ": {words}",
+      "pieces_one": ", {count} pezzo",
+      "pieces_other": ", {count} pezzi",
+      "count_one": " · {count} modifica",
+      "count_other": " · {count} modifiche"
+    }
   }
 }

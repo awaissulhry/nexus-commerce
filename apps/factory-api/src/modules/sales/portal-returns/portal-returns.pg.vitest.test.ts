@@ -406,6 +406,14 @@ describe('"Report a problem" by a claim link', { timeout: SLOW_TEST_TIMEOUT_MS }
     expect((await linkCall(token, 'GET', `/link/claim/cases/RETURN/${requested.id}`)).statusCode).toBe(404)
     expect((await linkCall('garbage', 'GET', '/link/claim')).statusCode).toBe(404)
   })
+
+  it('the brand wall: the complaint the link opened names its shipment by its id only, never the office series SH-… (owb-po2c)', async () => {
+    const complaint = await one<{ id: string }>('SELECT id FROM "Complaint" WHERE "tenantId" = $1 AND "shipmentId" = $2 ORDER BY "receivedAt" DESC LIMIT 1', [T, shipmentId])
+    const record = (await ok(browsers.quality, `/portal/complaints/${complaint.id}`)).complaint
+    expect(record.request.shipment).toEqual({ id: shipmentId })
+    const { number } = await one<{ number: string }>('SELECT number FROM "Shipment" WHERE id = $1', [shipmentId])
+    expect(JSON.stringify(record)).not.toContain(number)
+  })
 })
 
 describe('the investigation’s steps are dated by their Rome day, not their UTC day (B-W2b-F35)', () => {

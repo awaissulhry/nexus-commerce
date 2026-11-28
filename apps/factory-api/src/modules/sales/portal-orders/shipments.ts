@@ -17,6 +17,7 @@ import { walledForOutside } from '../../../platform/files/content-wall' // fix-w
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking' // B-OP-034: a typed link, https only
 import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules' // B-OS-006
+import { atWarehouseOf } from '../../shipping/warehouse-leg/portal' // owb- po2.6 (S3's ss1, imported)
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -108,6 +109,9 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
   })
   // fix-wall-1: a paper whose content is another customer's (an old copy of a mixed lot's photo on the shipment) is not listed.
   const walled = await walledForOutside(request, read.papers.map((file) => file.id))
+  // owb- po2.6 (S3's seam, ss1): a shipment that goes through the factory's warehouse first — where it is there, as S3 answers it (the
+  // tenant's scope after the partner read found the shipments; S3's party filter keeps the brand wall; no person field).
+  const legs = await reader.inTenant((client) => atWarehouseOf(client, { partyId: reader.session.partyId, shipmentIds: read.shipments.map((row) => row.id) }))
   const names = await reader.inTenant((client) => namesOf(client, [...new Set(read.lines.map((line) => line.styleId))], [...new Set(read.lines.map((line) => line.colourwayId))]))
   const lineOf = new Map(read.lines.map((line) => [line.id, line]))
   const styleOf = (lineId: string) => {
@@ -127,7 +131,8 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
     const status = customerShipmentStatusOf(shipment.status, latest.get(shipment.id) ?? [])
     return {
       id: shipment.id,
-      number: shipment.number,
+      // owb-po2c (the brand wall, plan §0.5 "counts do not leak"): never the office's shipment series (SH-…) — the web names a parcel
+      // by its place on the order ("Parcel 1, 2…"); the carrier's tracking numbers stay on its parcels.
       status,
       words: SHIPMENT_STATUS_WORDS[status],
       transportBy: shipment.transportBy,
@@ -172,6 +177,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       // B-OP-044 (N6): "also N pieces of your order #12": the customer's other orders on this shipment (B-OP-047: N6 on).
       otherOrders: otherOrdersOn(read, shipment.id, order.partyId),
       papers: read.papers.filter((file) => file.recordId === shipment.id && !walled.has(file.id)).map((file) => ({ fileId: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, versionNo: file.versionNo })),
+      atWarehouse: legs.get(shipment.id) ?? null, // owb- po2.6: S3's value as is (null: it goes straight to the customer)
     }
   })
 

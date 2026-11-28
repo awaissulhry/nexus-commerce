@@ -134,6 +134,7 @@ export function portalMessageOf(message: PartnerMessageRead, locale: string): Po
     replyTo: message.replyTo ? portalQuoteOf(message.replyTo) : null,
     correctedBy: message.correctedBy ?? null,
     erased: message.erased === true,
+    event: message.event ?? null, // owb-po6.4: a quiet line
   }
 }
 

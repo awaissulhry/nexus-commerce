@@ -400,13 +400,18 @@ describe('production progress by the share level (B-PR-14)', { timeout: SLOW_TES
   })
 })
 
+/** owb-po2c: a shipment's id by its office number (read in the database: the portal answer no longer carries the number). */
+const shipmentIdOf = (number: string) => one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, number]).then((row) => row.id)
+
 describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('shows each shipment that left with its live DDT, parcels and tracking, and what is still to ship', async () => {
     const so2 = await orderId('SEED-SO-0002')
     const answer = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
     expect(answer.shipments).toHaveLength(1)
     const shipment = answer.shipments[0]
-    expect(shipment).toMatchObject({ number: 'SEED-SH-0001', status: 'IN_TRANSIT', words: { en: 'On the way' }, ddt: { number: expect.stringMatching(/^144/) } })
+    // owb-po2c (pin moved): never the office's shipment series — the shipment by its id, no `number` key.
+    expect(shipment).toMatchObject({ id: await shipmentIdOf('SEED-SH-0001'), status: 'IN_TRANSIT', words: { en: 'On the way' }, ddt: { number: expect.stringMatching(/^144/) } })
+    expect(shipment).not.toHaveProperty('number')
     expect(shipment.milestones.map((step: Json) => [step.key, step.done])).toEqual([
       ['PACKED', true],
       ['COLLECTED', true],
@@ -462,7 +467,7 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
       await admin('SET session_replication_role = DEFAULT')
     }
     const answer = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
-    expect(answer.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', status: 'IN_TRANSIT', expectedDeliveryAt: eta })
+    expect(answer.shipments[0]).toMatchObject({ id: shipment.id, status: 'IN_TRANSIT', expectedDeliveryAt: eta }) // owb-po2c: by id
     expect(answer.shipments[0].parcels.map((parcel: Json) => parcel.trackingLink)).toEqual([
       { url: `https://tracking.example.com/${parcels[0]!.trackingNumber}`, words: { it: 'Segui sul sito del corriere', en: "Track on the carrier's site" } },
       null,
@@ -497,9 +502,9 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
       await admin('SET session_replication_role = DEFAULT')
     }
     const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
-    expect(own.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0002', typedTrackingNumber: 'T-OP031-BRT-0001' })])
+    expect(own.shipments).toEqual([expect.objectContaining({ id: sh2.id, typedTrackingNumber: 'T-OP031-BRT-0001' })]) // owb-po2c: by id
     const so2 = await ok(browsers.viewer, `/portal/sales-orders/${await orderId('SEED-SO-0002')}/shipments`)
-    expect(so2.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', typedTrackingNumber: null })
+    expect(so2.shipments[0]).toMatchObject({ id: await shipmentIdOf('SEED-SH-0001'), typedTrackingNumber: null }) // owb-po2c: by id
     // The wall: another customer finds neither the order nor the number.
     const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
     expect(theirs.status).toBe(404)
@@ -517,7 +522,7 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
       await admin('SET session_replication_role = DEFAULT')
     }
     const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
-    expect(own.shipments.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001', typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
+    expect(own.shipments.find((row: Json) => row.id === sh2.id)).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001', typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
     const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)
     expect(theirs.status).toBe(404)
     expect(JSON.stringify(theirs.body)).not.toContain('track.example.com')
@@ -547,11 +552,12 @@ describe('B-OP-044: a shared shipment in the portal', { timeout: SLOW_TEST_TIMEO
       const so2 = await orderId('SEED-SO-0002')
       const so3 = await orderId('SEED-SO-0003')
       const seqOf = async (id: string) => (await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [id])).customerSeq
-      const second = (await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)).shipments.find((row: Json) => row.number === 'SEED-SH-0001')
+      const sh1 = await shipmentIdOf('SEED-SH-0001') // owb-po2c: by id (the answer carries no office number)
+      const second = (await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)).shipments.find((row: Json) => row.id === sh1)
       expect(second).toBeDefined()
       expect(second.lines.map((line: Json) => line.quantity)).toEqual([1])
       expect(second.otherOrders).toEqual([{ yourNumber: (await seqOf(so2)) === null ? null : expect.objectContaining({ seq: await seqOf(so2) }), customerRef: 'SEED-PO-78', pieces: 2 }])
-      const first = (await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)).shipments.find((row: Json) => row.number === 'SEED-SH-0001')
+      const first = (await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)).shipments.find((row: Json) => row.id === sh1)
       expect(first.lines.map((line: Json) => [line.colourway?.code, line.size, line.quantity]).sort()).toEqual([
         ['BLK', '50', 1],
         ['RED', '52', 1],
@@ -588,7 +594,8 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
     await relabel('test:os-006-parcel-2', 'TEST-OS006-0002')
     try {
       const answer = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
-      const row = (answer.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0001')!
+      const sh1Id = await shipmentIdOf('SEED-SH-0001') // owb-po2c: by id (the answer carries no office number)
+      const row = (answer.shipments as Json[]).find((entry) => entry.id === sh1Id)!
       expect(row.parcels).toHaveLength(2)
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === test.seq)).toMatchObject({ trackingNumber: null, trackingLink: null })
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === real.seq)).toMatchObject({ trackingNumber: real.trackingNumber })
@@ -618,7 +625,8 @@ describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLO
     await type('AWB-OS022-P001', 'https://track.example.com/AWB-OS022-P001')
     try {
       const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
-      const row = (own.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
+      const sh2Id = await shipmentIdOf('SEED-SH-0002') // owb-po2c: by id
+      const row = (own.shipments as Json[]).find((entry) => entry.id === sh2Id)!
       expect((row.parcels as Json[]).find((parcel) => parcel.seq === 1)).toMatchObject({ trackingNumber: 'AWB-OS022-P001', trackingLink: { url: 'https://track.example.com/AWB-OS022-P001' } })
       // The wall: another customer finds neither the order nor the number.
       const theirs = await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)

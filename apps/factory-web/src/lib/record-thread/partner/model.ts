@@ -4,6 +4,7 @@ import type { RowModel } from '../card/view/MessageRow'
 import type { BarPin } from '../head/pins-bar'
 import type { SenderTone } from '../parts/tones'
 import { senderTone } from '../parts/tones'
+import type { QuietEvent } from './quiet' // owb-po6.4
 
 /**
  * pt-w2 W2.1 (lane pt-, S1, S6, S7; ONE SHARED THREAD): the partner face's model — what a customer, a supplier, a workshop, an
@@ -72,6 +73,8 @@ export interface PortalThreadMessage {
   readonly correctedBy?: { readonly id: string; readonly at: string } | null | undefined
   /** Erased after a privacy request: "Message removed after a privacy request", no name. */
   readonly erased?: boolean | undefined
+  /** owb-po6.4: a quiet line (its key, args and grouped count): drawn as a small line in the middle, never a bubble; null: a message. */
+  readonly event?: QuietEvent | null | undefined
 }
 
 /** A pin of a message shared with the reader, as the portal reads it (never who pinned). */

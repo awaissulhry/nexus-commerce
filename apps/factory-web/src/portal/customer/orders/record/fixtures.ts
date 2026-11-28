@@ -386,5 +386,36 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'loading', label: 'Loading', model: recordCase({ model: () => ({ state: 'loading', record: null }) }) },
     { id: 'error', label: 'The order could not be read', model: recordCase({ model: () => ({ state: 'error', record: null }) }) },
     { id: 'missing', label: 'Not one of their orders', model: recordCase({ model: () => ({ state: 'missing', record: null }) }), note: 'Another customer’s order answers like one that does not exist.' },
+    // ---- owb-po6 (order page, part 2)
+    {
+      id: 'po6-lines-asked',
+      label: 'owb-po6 · Lines on the ONE table: two asks typed after Confirm — the save bar (Undo · Discard · Review and ask…)',
+      model: recordCase({ tab: 'lines', model: () => ({ lineAsks: { pieces: { [RECORD.lines[0]!.id]: 12 }, order: [RECORD.lines[0]!.id] } }) }),
+      note: 'Nothing changes before the factory answers; Review opens the Ask window at its change step with the asks in its note.',
+    },
+    { id: 'po6-money', label: 'owb-po6 · Money: totals, the plan with "I paid: tell the factory…" on the due step, invoices', model: recordCase({ tab: 'money', model: () => ({ money: { state: 'ready', read: PO6_MONEY } }) }) },
+    { id: 'po6-money-told', label: 'owb-po6 · Money: the deposit says "You told the factory on …" (a notice waits; nothing owed changed)', model: recordCase({ tab: 'money', model: () => ({ money: { state: 'ready', read: { ...PO6_MONEY, plan: PO6_MONEY.plan.map((step) => (step.id === 'deposit' ? { ...step, noticeOpen: true } : step)), notices: [{ id: 'n1', stepId: 'deposit', amount: 32400, paidOn: dayAt(-1), state: 'OPEN' }] } } }) }) },
+    {
+      id: 'po6-warehouse',
+      label: 'owb-po6 · Shipments: "At the factory’s warehouse" with Send the shipping label; the customer’s own shipment count (never SH-)',
+      model: recordCase({ tab: 'shipments', model: () => ({ shipments: { state: 'ready', read: shipmentsRead({ shipments: shipmentsRead().shipments.map((shipment, index) => (index === 0 ? { ...shipment, atWarehouse: { place: 'Magazzino Esempio', city: 'Prato', since: dayAt(-2), sentOn: false, labelSent: false } } : shipment)) }) } }) }),
+    },
   ],
 })
+
+/** owb-po6: a made-up money read (minor units): a deposit due, the rest later, no invoice yet. */
+const PO6_MONEY = {
+  currency: 'EUR',
+  totals: { order: 108000, invoiced: 0, paid: 0, stillToPay: 108000 },
+  addsUp: [
+    { key: 'LINES' as const, amount: 88525 },
+    { key: 'VAT' as const, amount: 19475 },
+  ],
+  plan: [
+    { id: 'deposit', kind: 'DEPOSIT' as const, percent: 30, amount: 32400, due: dayAt(2), state: 'DUE' as const, paid: 0, noticeOpen: false },
+    { id: 'REST', kind: 'REST' as const, percent: 70, amount: 75600, due: null, state: 'LATER' as const, paid: 0, noticeOpen: false },
+  ],
+  invoices: [],
+  notices: [],
+  may: { notify: true },
+}

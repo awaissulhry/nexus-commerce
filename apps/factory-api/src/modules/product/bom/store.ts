@@ -1,10 +1,11 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, holds, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { BomLineView, BomRevisionView, BomView } from '@nexus/factory-domain/product/bom/contracts'
 import { PRODUCT_BOM_VIEW } from '@nexus/factory-domain/product/bom/permissions'
+import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions' // owb-pd4s s.2
 import { lineBySize, requirements } from '@nexus/factory-domain/product/bom/requirements'
 import { bomIssues, editRefusal, inRangeOrder, type BomIssue, type BomIssueCode, type BomLineData, type BomLineFields, type BomMaterial, type BomStyle } from '@nexus/factory-domain/product/bom/rules'
 import { ROUTING_ISSUE_CODES, routingIssues, type LibraryOperation, type RoutingIssue, type RoutingIssueCode, type StepData } from '@nexus/factory-domain/product/routing/rules'
@@ -156,6 +157,23 @@ export async function readRevisionFor(caller: CommandCaller, styleId: string, re
   const style = await readStyleFor(caller, styleId)
   return { style, revision: await caller.withClient((client) => findRevision(client, styleId, revisionId)) }
 }
+
+// ---- owb-pd4s s.2 (S4 products; design § 5q "Who": Sales reads the Sizes tab): the size table, how to measure and the protectors
+/**
+ * The style and revision for the Sizes tab's READS (the measurement spec with its points' how-to words, the protector placement):
+ * product.bom.view OR product.styles.view over the style's company and brand. Neither held in any grant: 403 (the routes ask only a
+ * signed-in office person, so this is the right's check); a style outside both: not found, as readStyleFor. No money is in these
+ * reads. Every write of the Sizes tab keeps its own right (product.bom.manage, or product.drafts.edit on a DRAFT).
+ */
+export async function readRevisionForSizes(caller: CommandCaller, styleId: string, revisionId: string): Promise<{ style: BomStyleRow; revision: RevisionRow }> {
+  const actor = actorOf(contextOf(caller))
+  if (!holds(actor, PRODUCT_BOM_VIEW) && !holds(actor, PRODUCT_STYLES_VIEW)) throw new ForbiddenError()
+  if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
+  const row = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS }))
+  if (!row || (!can(actor, PRODUCT_BOM_VIEW, styleScope(row)) && !can(actor, PRODUCT_STYLES_VIEW, styleScope(row)))) throw new NotFoundError('Style not found.')
+  return { style: row, revision: await caller.withClient((client) => findRevision(client, styleId, revisionId)) }
+}
+// ---- end owb-pd4s
 
 export function assertMayWrite(context: RequestContext, permission: Permission, companyId: string | null): void {
   if (!mayWrite(actorOf(context), permission, companyId)) {
