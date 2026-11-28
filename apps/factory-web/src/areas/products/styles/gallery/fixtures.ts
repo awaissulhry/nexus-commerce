@@ -1,6 +1,6 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { BRANDS, CAN, DEMO_PRICES, GRAINS, PREFIX, ROWS } from '../demo/fixtures'
-import { pricesByStyle, type ListPrices, type StylesListViewModel } from '../list/list-model'
+import { BRANDS, CAN, GRAINS, PREFIX, ROWS } from '../demo/fixtures'
+import type { StylesListViewModel } from '../list/list-model'
 import { StylesListView } from '../list/view/StylesListView'
 import type { LooksState, StyleLook } from './gallery-model'
 
@@ -25,7 +25,6 @@ export function demoPicture(fill: string, kind: 'jacket' | 'trousers' | 'glove' 
 }
 
 const open = ROWS.filter((row) => row.status !== 'ARCHIVED')
-const PRICES: ListPrices = { state: 'ready', list: DEMO_PRICES.list, byStyle: pricesByStyle(DEMO_PRICES.entries) }
 const SWATCHES = {
   black: { code: 'NERO', name: 'Nero', hex: '#1F1F1F' },
   grey: { code: 'ANTR', name: 'Antracite', hex: '#4A4D52' },
@@ -61,7 +60,6 @@ const base: StylesListViewModel = {
   prefix: PREFIX,
   can: CAN.owner,
   grains: GRAINS.owner,
-  prices: PRICES,
   duplicate: null,
   filters: { view: 'open', q: '', type: '', ppe: '' },
   rows: { items: open, more: false, count: open.length, problem: null },

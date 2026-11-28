@@ -56,6 +56,9 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  *   sales_order.schedule_changed its payment schedule was made, made again after an amendment, a step paid (its
  *                                deposit request), cancelled with the order, or (B-W2a-F2) a before-shipping step's
  *                                deposit request made when the office opened the step (REQUESTED)
+ * owb-of1 (order workflow, settle L6; live: orders.view):
+ *   sales_order.floor_restricted the order was restricted on the floor (only workers given its baskets by name open them) or
+ *                                opened to its departments again (orders.manage)
  * B-W2a-43 (customer returns; live: sales.returns.view; the dock's events also reach the floor of the RMA's site):
  *   return.authorised            an RMA was made (AUTHORISED, numbered), with the lines that come back and the deadline
  *   return.lines_changed         lines were added, changed or removed before the goods arrived
@@ -315,6 +318,14 @@ export const events = [
     description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, a before-shipping step's deposit request made when the office opened the step, a step waived by the owner, or changed by hand (B-OM-011…016: the money plan's hand acts).",
     payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED', /* B-OM-011 */ 'BY_HAND']), milestoneIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
+  }),
+  // owb-of1 (order workflow, plan.md § 5k "Restrict"; settle L6: orders.manage): an order restricted on the floor or opened again.
+  defineEvent({
+    type: 'sales_order.floor_restricted',
+    context: 'sales',
+    description: 'A sales order was restricted on the floor (a worker opens its baskets only when given them by name) or opened to its departments again.',
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), restricted: z.boolean(), partyId: livePartyId() }),
+    live: { ...orderLive, fields: ['orderId', 'number', 'restricted'] },
   }),
   // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).
   defineEvent({
