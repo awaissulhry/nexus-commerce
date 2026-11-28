@@ -509,3 +509,98 @@ CREATE TRIGGER "Operation_department_check" AFTER INSERT OR UPDATE OF "departmen
 CREATE TRIGGER "RoutingOperation_department_check" AFTER INSERT OR UPDATE OF "departmentId" ON "RoutingOperation"
   FOR EACH ROW EXECUTE FUNCTION "factory_operation_department_check"();
 
+-- =====================================================================================================================
+-- OrderTeam (brand-production.prisma; owb G4; PL-schema § 5A row 10): the teams an order is given to — one in charge, the
+-- others with a share of its baskets (bundleIds, filled at Print in SPLIT).
+--   INSERT     open (no end), at version 1.
+--   UPDATE     the company, customer, site, order, team, how it was given and the creation never change; the version goes up by one;
+--              an ended row never changes again; ending writes when and who together, once.
+--   every row  a share of 1 or more, or none; each basket once; the order of the row's company; the team of the row's
+--              company and site; the baskets (when they change) baskets of the order's work orders at the team's site — a
+--              work order of the order: one with a cell of a line of the order; a basket with at most one open team (read
+--              under a transaction lock per tenant, so two writes at once wait for each other).
+--   DELETE     refused (ended instead: the order's history keeps who had it). TRUNCATE refused.
+-- Partial uniques: one open team in charge per order (OrderTeam_one_in_charge); a team once per order among the open rows
+-- (OrderTeam_team_once).
+CREATE FUNCTION "factory_order_team_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  order_company uuid;
+  team_company uuid;
+  team_site uuid;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'production: a team of an order is ended, never deleted (order team %)', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."endedAt" IS NOT NULL OR NEW."endedById" IS NOT NULL OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'production: a new order team is open (not ended), at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF OLD."endedAt" IS NOT NULL THEN
+      RAISE EXCEPTION 'production: order team % was ended; it never changes again', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF (NEW."id", NEW."companyId", NEW."partyId", NEW."siteId", NEW."salesOrderId", NEW."teamId", NEW."givenBy", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."companyId", OLD."partyId", OLD."siteId", OLD."salesOrderId", OLD."teamId", OLD."givenBy", OLD."createdAt", OLD."createdById") THEN
+      RAISE EXCEPTION 'production: the order, customer, team, site, company, how it was given and the creation of order team % never change', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'production: the version of order team % goes up by one', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF (NEW."endedAt" IS NULL) <> (NEW."endedById" IS NULL) THEN
+    RAISE EXCEPTION 'production: order team % is ended with when and who, both or neither', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."basketShare" IS NOT NULL AND NEW."basketShare" < 1)
+     OR NEW."bundleIds" IS NULL
+     OR cardinality(NEW."bundleIds") <> (SELECT count(DISTINCT x) FROM unnest(NEW."bundleIds") AS x) THEN
+    RAISE EXCEPTION 'production: order team % has a share of its order''s baskets of 1 or more (or none), and names each basket once', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT o."companyId" INTO order_company FROM "SalesOrder" o WHERE o."tenantId" = NEW."tenantId" AND o."id" = NEW."salesOrderId";
+  IF FOUND AND order_company <> NEW."companyId" THEN
+    RAISE EXCEPTION 'production: order team % is of its order''s company', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT t."companyId", t."siteId" INTO team_company, team_site FROM "Team" t WHERE t."tenantId" = NEW."tenantId" AND t."id" = NEW."teamId";
+  IF FOUND AND (team_company <> NEW."companyId" OR team_site <> NEW."siteId") THEN
+    RAISE EXCEPTION 'production: order team % names a team of its own company and site', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF cardinality(NEW."bundleIds") > 0 AND (TG_OP = 'INSERT' OR NEW."bundleIds" IS DISTINCT FROM OLD."bundleIds")
+     AND EXISTS (SELECT 1 FROM unnest(NEW."bundleIds") AS x(id)
+                  WHERE NOT EXISTS (SELECT 1 FROM "Bundle" b
+                                     WHERE b."tenantId" = NEW."tenantId" AND b."id" = x.id AND b."siteId" = NEW."siteId"
+                                       AND EXISTS (SELECT 1 FROM "WorkOrderSize" s
+                                                     JOIN "SalesOrderLine" l ON l."tenantId" = s."tenantId" AND l."id" = s."salesOrderLineId"
+                                                    WHERE s."tenantId" = b."tenantId" AND s."workOrderId" = b."workOrderId" AND l."orderId" = NEW."salesOrderId"))) THEN
+    RAISE EXCEPTION 'production: the baskets of order team % are baskets of its order''s work orders at the team''s site', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."endedAt" IS NULL AND cardinality(NEW."bundleIds") > 0 THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.order-team-baskets', NEW."tenantId"), 0));
+    IF EXISTS (SELECT 1 FROM "OrderTeam" o
+                WHERE o."tenantId" = NEW."tenantId" AND o."id" <> NEW."id" AND o."endedAt" IS NULL AND o."bundleIds" && NEW."bundleIds") THEN
+      RAISE EXCEPTION 'production: a basket is with one team at a time; order team % names a basket another open team has', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "OrderTeam_guard" AFTER INSERT OR UPDATE OR DELETE ON "OrderTeam"
+  FOR EACH ROW EXECUTE FUNCTION "factory_order_team_guard"();
+CREATE TRIGGER "OrderTeam_no_truncate" BEFORE TRUNCATE ON "OrderTeam"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+CREATE UNIQUE INDEX "OrderTeam_one_in_charge" ON "OrderTeam" ("tenantId", "salesOrderId") WHERE "inCharge" AND "endedAt" IS NULL;
+CREATE UNIQUE INDEX "OrderTeam_team_once" ON "OrderTeam" ("tenantId", "salesOrderId", "teamId") WHERE "endedAt" IS NULL;
+
