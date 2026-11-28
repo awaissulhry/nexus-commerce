@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { demoBom, demoCost, GRAINS } from '../demo/fixtures'
 import type { BomLine } from '../api'
-import { ceRecheckOf, costsOf, customerSent, isCeLine, lineFactsOf, longestWaits, mainOf, needOf, orderNeedOf, piecesOf, stepOf, topLineOf, typedSizesOf } from './materials-model'
+import { ApiError } from '../../../../lib/api/errors'
+import { LOCALES } from '../../../../lib/i18n/locales'
+import { CATALOGUE } from '../../../../lib/i18n/messages'
+import { writeProblem } from '../problems'
+import { BOM_REFUSALS, bomRefusalOf, ceRecheckOf, costsOf, customerSent, isCeLine, lineFactsOf, longestWaits, mainOf, needOf, orderNeedOf, piecesOf, stepOf, topLineOf, typedSizesOf } from './materials-model'
 
 /**
  * owb-pd5 steps 5.1 + 5.2 (design § 5zc "Materials"; prototype mat.js needQ, openNeed, lineCost) — the Materials tab's rules (written,
@@ -81,6 +85,33 @@ describe('step 5.1 — main material, waits and what the customer sends', () => 
     const facts = lineFactsOf(bom, null, null)
     expect(facts.every((fact) => fact.wait === null && !fact.main)).toBe(true)
     expect(longestWaits(facts)).toEqual([])
+  })
+})
+
+describe('owb-pd8b — the BOM\'s own refusals (pd3 as landed) in the Materials tab\'s words', () => {
+  it('reads MAIN_REQUIRED / SAME_MATERIAL from the refused paths; anything else is none', () => {
+    expect(bomRefusalOf(['refusal/MAIN_REQUIRED'])).toBe('MAIN_REQUIRED')
+    expect(bomRefusalOf(['body/qty', 'refusal/SAME_MATERIAL'])).toBe('SAME_MATERIAL')
+    expect(bomRefusalOf(['refusal/OTHER', 'version'])).toBeNull()
+    expect(bomRefusalOf(undefined)).toBeNull()
+  })
+
+  it('a BOM rule is no moved record: the studio\'s notice points to the tab, nothing is read again', () => {
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/MAIN_REQUIRED' }]))).toEqual({ key: 'problem.write.bomRule', reload: false, paths: ['refusal/MAIN_REQUIRED'] })
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SAME_MATERIAL' }]))).toMatchObject({ key: 'problem.write.bomRule', reload: false })
+  })
+
+  it('the words exist in both languages; the tab draws them, the line action sends a real `isMain`', () => {
+    for (const locale of LOCALES) {
+      const mat = (CATALOGUE[locale]['products-bom-depth'] ?? {}) as Record<string, unknown>
+      const products = (CATALOGUE[locale]['products'] ?? {}) as Record<string, unknown>
+      for (const code of BOM_REFUSALS) expect(`mat.refusal.${code}` in mat || JSON.stringify(mat).includes(`"${code}"`), `${locale} ${code}`).toBe(true)
+      expect('problem.write.bomRule' in products || JSON.stringify(products).includes('"bomRule"'), locale).toBe(true)
+    }
+    const tab = readFileSync(new URL('./view/BomTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('const bomRefused = bomRefusalOf(model.refused)')
+    expect(tab).toContain('td(`mat.refusal.${bomRefused}`)')
+    expect(readFileSync(new URL('./depth/view/LinesGrid.tsx', import.meta.url), 'utf8')).toContain('onEditLine?.(data.id, { isMain: true })')
   })
 })
 

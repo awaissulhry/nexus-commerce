@@ -460,6 +460,10 @@
       "answer": "{pieces} pezzi aperti in {orders} ordini, contati alla taglia base {size}.",
       "none": "Ora nessun ordine aperto ne ha bisogno.",
       "info": "I pezzi aperti degli ordini aperti con questo prodotto, tutti contati alla taglia base: qui le taglie di ogni ordine non si dividono."
+    },
+    "refusal": {
+      "MAIN_REQUIRED": "Il materiale principale non si può togliere né smarcare: segna prima un'altra riga come materiale principale.",
+      "SAME_MATERIAL": "Questo materiale è già nella lista nello stesso punto: modifica quella riga."
     }
   }
 }
