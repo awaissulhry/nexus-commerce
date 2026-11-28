@@ -423,6 +423,8 @@
     "machine": "Guasto macchina",
     "clock": "Timbratura",
     "myday": "La mia giornata",
+    "board": "Tabellone",
+    "chains": "Catene",
     "training": "Firma formazione e DPI",
     "instructions": "Scheda e istruzioni",
     "mydayAnswers_one": "{count} risposta alla tua contestazione",
