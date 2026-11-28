@@ -44,8 +44,10 @@ export const chainReportContract = defineContract({
     /** The phone's id for the "+12" (the scan's client scan id): a resent tap reports once. */
     clientEventId: z.string().regex(CLIENT_SCAN_ID, 'Expected 8 to 64 letters, digits, dots, colons, underscores or hyphens.'),
   }),
+  // `scan` null (owb-fl2): the basket had been moved back to this step by hand, so this Done moved it on (the second Done): no
+  // scan, nothing to undo.
   response: {
-    201: output({ scan: output({ id: id() }), bundle: output({ id: id(), code: z.string(), quantity: z.number().int() }), operationId: id(), replayed: z.boolean() }),
-    200: output({ scan: output({ id: id() }), bundle: output({ id: id(), code: z.string(), quantity: z.number().int() }), operationId: id(), replayed: z.boolean() }),
+    201: output({ scan: output({ id: id() }).nullable(), bundle: output({ id: id(), code: z.string(), quantity: z.number().int() }), operationId: id(), replayed: z.boolean() }),
+    200: output({ scan: output({ id: id() }).nullable(), bundle: output({ id: id(), code: z.string(), quantity: z.number().int() }), operationId: id(), replayed: z.boolean() }),
   },
 })

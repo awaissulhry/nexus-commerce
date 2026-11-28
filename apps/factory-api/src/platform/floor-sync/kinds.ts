@@ -361,7 +361,8 @@ async function applyOnBehalf(caller: CommandCaller, event: QueuedEvent): Promise
   const body = parsed(onBehalfBody, { ...event.payload, clientScanId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
   if (!body.ok) return refusedBy(body.refusal)
   const result = await reportOnBehalf(caller, body.value)
-  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OperationScan', id: result.scan.id } }
+  // owb-fl2 (S5): a second Done answers a basket's FORWARD move (no scan), as applyScan answers it.
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: result.scan === null ? { type: 'BasketMove', id: result.movedGroupId } : { type: 'OperationScan', id: result.scan.id } }
 }
 
 /** B-W2b-47: a queued tick, through the checklists' own command (its key: `<device>.<client event id>`). */
