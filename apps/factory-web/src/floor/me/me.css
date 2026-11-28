@@ -1,0 +1,88 @@
+/*
+ * owb-fl8 step 4 — Floor › Me: layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*` tokens (every
+ * control a FloorButton: 48 px and more), colours are semantic `--nds-*` roles; logical properties only (Urdu reads right to left).
+ * One short page: two columns of buttons on a phone, three on a tablet, by the grid's own width (no viewport query).
+ */
+
+.fw-me {
+  max-width: 900px;
+  margin-inline: auto;
+}
+.fw-me-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-14);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-me-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-me-face {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--nds-density-control-h-primary);
+  height: var(--nds-density-control-h-primary);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.fw-me-face > svg {
+  width: 55%;
+  height: 55%;
+}
+.fw-me-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-me-who > h2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.fw-me-team,
+.fw-me-can {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-me-depts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-density-font-label);
+}
+.fw-me-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-me-grid > .nds-floor-btn {
+  width: 100%;
+  min-width: 0;
+}
+.fw-me-toggle .nds-floor-btn-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+}
+.fw-me-state {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-me-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+

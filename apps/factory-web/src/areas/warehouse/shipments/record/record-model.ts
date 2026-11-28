@@ -2,6 +2,7 @@ import type { Backorder, Bought, Ddt, DdtPreview, DdtRow, Documents, Evidence, E
 // F-OP-130 (order page N6): the orders that may join a DRAFT.
 import type { OrderCandidates } from '../api'
 import type { DdtForm, Phrase, RecordTab, ShippingAbilities } from '../model'
+import type { OrderWarningKind } from '@nexus/factory-domain/sales/warnings/kinds' // owb-ss3
 
 /** SCR-067 — a shipment's view model (ShipmentRecordView draws it and fetches nothing). */
 
@@ -92,6 +93,11 @@ export interface ShipmentRecordModel {
   sent: SentLinks | null
   /** B-W2a-71: the last void's outcome per parcel (the Void labels dialog's receipt). */
   voided: Voided | null
+  /**
+   * owb-ss3 (settle L2): the hand-over was refused with these warnings (a payment due before shipping is still open): the dialog says
+   * them in words, and its act is "Ship it anyway" (the same hand-over with them as `overrides`). Absent or null: none.
+   */
+  handOverWarnings?: readonly OrderWarningKind[] | null
 }
 
 export interface ShipmentRecordActions {

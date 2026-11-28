@@ -9,6 +9,7 @@ import { everyCase, render, textOf } from '../record-thread/parts/testing'
 import { isBatchSource, orderPicturePath, orderPictureSaver, PICTURE_ROUTES, readPictures } from './api'
 import { forgetRecord, recordOf, resetPictureCache, want, type ReadPictures } from './cache'
 import { designScreen } from './fixtures'
+import { errorKindFor } from '../api/errors'
 import { DESIGN_CHOICE, isPictureFile, openPictureState, orderPictureViewOf, pickPicture, pictureKindOf, refusedWith, saveHeldOf, saveRefusalOf, saveStarted, uploadDone, uploadStarted, type PictureChoice } from './order-picture'
 import { OrderPictureWindowBody, OrderPictureWindowFoot, type OrderPictureWindowModel } from './view/OrderPictureWindowView'
 import { pictureWordsFor } from './words'
@@ -110,6 +111,11 @@ describe('the window model', () => {
     expect(orderPictureViewOf(refusedWith(chosen, 'UPLOAD_FAILED')).refusal).toEqual({ key: 'window.refused.upload' })
     expect(en('window.refused.stale')).toBe('Someone changed the picture of this order a moment ago. Close the window and open it again to see it.')
     expect(en('window.held.stale')).toBe('The picture changed meanwhile. Close the window and open it again.')
+  })
+
+  it('owb-po3.4: the API refuses a file that may not be the picture with 400 validation_failed (it has no 422): said as "not an allowed file"', () => {
+    expect(saveRefusalOf(errorKindFor(400, [{ path: 'body.fileId', message: 'validation_failed' }]))).toBe('NOT_ALLOWED')
+    expect(saveRefusalOf(errorKindFor(409))).toBe('STALE')
   })
 
   it('an upload joins the choices first and is picked; only PNG, JPG, WebP or PDF', () => {

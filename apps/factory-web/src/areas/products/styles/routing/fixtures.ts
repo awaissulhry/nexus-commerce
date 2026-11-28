@@ -1,5 +1,5 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { demoBom, demoCost, demoRouting, demoStyle, demoSubcontractedRouting, newStyle, OPERATIONS, recordModel, REV, REVISIONS, WORKSHOPS } from '../demo/fixtures'
+import { demoBom, demoCost, demoRouting, demoStyle, demoSubcontractedRouting, newStyle, recordModel, REV, REVISIONS, WORKSHOPS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
 // B-TH-261: the studio with its docked thread (RecordFrame).
 import { StyleDesign } from '../demo/fixtures'
@@ -9,6 +9,9 @@ import { DEMO_OPTIONS, DEMO_PLANS, demoDepthModel, STEP_ID } from './depth/demo/
 /**
  * SCR-043 Operations (routing) of DEMO-JKT-01 — made-up data only: nine operations, 96.5 standard minutes per garment
  * (cutting 12.5, sewing 64, assembly 9, finishing 6, inspection 5), four scanned, the final check last.
+ * owb-pd6 (step 6.1): the tab is "Route" now — the route face reads for itself (no office here: it says so), the steps' depth is under
+ * "More"; "Add operations" and "Remove a step" are gone from this tab (the route builder is the one place a route changes), so their
+ * three cases went with them.
  */
 
 const routing = (overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 'production' | 'sales' = 'owner') =>
@@ -16,14 +19,12 @@ const routing = (overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-043',
-  title: 'Style studio: Operations (routing)',
+  title: 'Product studio: Route (routing in depth under More)',
   view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Routing (draft revision 3)', model: routing(), note: 'Minutes by department (a tile filters), the labour cost with the cost grain; minutes typed here; scanned switches; the final operation.' },
     { id: 'differs', label: 'Minutes differ from the library', model: routing({ routing: { status: 'ready', value: demoRouting({ differs: true }) } }), note: '"Library: 17 min · Use library value".' },
     { id: 'production', label: 'Production manager (no cost)', model: routing({}, 'production'), note: 'Labour per garment: "Not in your role".' },
-    { id: 'add', label: 'Add operations', model: routing({ dialog: { kind: 'addOperations' }, operationSearch: { query: '', kind: null, results: OPERATIONS, problem: null } }), note: 'Several at once, in the order ticked.' },
-    { id: 'remove', label: 'Remove the final operation', model: routing({ dialog: { kind: 'removeStep', stepId: demoRouting().steps[8]!.id } }) },
     { id: 'released', label: 'Released revision 2 (frozen)', model: routing({ style: { status: 'ready', value: demoStyle() }, revisionId: REV.r2, routing: { status: 'ready', value: demoRouting({ revision: REVISIONS[1] }) }, bom: { status: 'ready', value: demoBom({ revision: REVISIONS[1] }) } }) },
     { id: 'empty', label: 'No operations yet', model: recordModel('owner', { tab: 'routing', style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, routing: { status: 'ready', value: demoRouting({ revision: { ...REVISIONS[2]!, status: 'DRAFT' }, empty: true }) }, bom: { status: 'ready', value: demoBom({ revision: { ...REVISIONS[2]!, status: 'DRAFT' }, empty: true }) }, compliance: { status: 'idle' } }) },
     { id: 'subcontracted', label: 'W2a: subcontracted operations', model: routing({ routing: { status: 'ready', value: demoSubcontractedRouting() } }), note: 'Tile "Subcontracted operations 2"; the Subcontracted column: workshop, €4.50 per piece, 6 days there and back; the finishing "fee agreed per order".' },
@@ -38,7 +39,6 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'parallel', label: 'W2b: two operations side by side', model: routing({ routing: { status: 'ready', value: demoRouting({ parallel: 'together' }) } }), note: 'Column "Side by side": Op 40 and Op 50 in group 1 (Select: in sequence, group 1 (40, 50), new group 2); each says which step it runs beside; the hint under the table.' },
     { id: 'parallel-split', label: 'W2b: a side by side group split', model: routing({ routing: { status: 'ready', value: demoRouting({ parallel: 'split' }) } }), note: 'Op 40 and Op 60 in group 1 with Op 50 between them: the release check refuses it in words.' },
     { id: 'parallel-released', label: 'W2b: side by side on a released revision', model: routing({ style: { status: 'ready', value: demoStyle() }, revisionId: REV.r2, routing: { status: 'ready', value: demoRouting({ revision: REVISIONS[1], parallel: 'together' }) }, bom: { status: 'ready', value: demoBom({ revision: REVISIONS[1] }) } }), note: 'Read only: "Group 1" and "Side by side with 50 · CUC-ZIP" as text.' },
-    { id: 'remove-used', label: 'W2b: remove an operation a BOM line uses', model: routing({ bom: { status: 'ready', value: demoBom({ tied: true }) }, dialog: { kind: 'removeStep', stepId: demoRouting().steps[6]!.id } }), note: 'Remove held: lines 40 · PROT-SPAL-L2 and 50 · PROT-GOM-L2 name Op 70; tie them elsewhere in the BOM first.' },
     { id: 'loading', label: 'Loading', model: routing({ routing: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: routing({ routing: { status: 'error', problem: 'problem.read.unavailable' } }) },
     // ---- B-W2b-235: the routing in depth (design style.rt.grid's W2b columns, the operation drawer's variants) ----------------

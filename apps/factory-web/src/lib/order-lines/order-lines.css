@@ -1,0 +1,51 @@
+/* owb-po3.2 — THE ONE LINES TABLE: layout only, semantic DS tokens. A grid of rows on a wide room (it scrolls inside its box, never
+   the page), one card per line in a narrow room (a phone, a docked panel). Own columns: chips. */
+.fw-ol { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.fw-ol-mode, .fw-ol-quiet { margin: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.fw-ol-scroll { overflow-x: auto; max-width: 100%; }
+.fw-ol-grid {
+  --fw-ol-template: 2.25rem minmax(11rem, 2fr) repeat(var(--fw-ol-rest, 3), minmax(7.5rem, 1fr)) 5rem;
+  display: flex; flex-direction: column; min-width: calc(7.25rem + 11rem + var(--fw-ol-rest, 3) * 7.5rem);
+}
+.fw-ol-row { display: grid; grid-template-columns: var(--fw-ol-template); gap: var(--nds-space-8); align-items: center; padding: var(--nds-space-6) 0; border-bottom: 1px solid var(--nds-border-subtle); }
+.fw-ol-head { font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-ol-row.is-saving { opacity: 0.7; }
+.fw-ol-n { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); text-align: center; }
+.fw-ol-num { text-align: right; }
+.fw-ol-cell { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-ol-cell.fw-ol-num { align-items: flex-end; }
+.fw-ol-acts { display: flex; gap: var(--nds-space-2); justify-content: flex-end; }
+.fw-ol-strong { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.fw-ol-cellbtn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: var(--nds-space-4); min-height: 2rem; border-radius: var(--nds-radius-sm); overflow-wrap: anywhere; }
+.fw-ol-cellbtn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.fw-ol-open { color: var(--nds-text-muted); }
+.fw-ol-numin { text-align: right; max-width: 7rem; }
+.fw-ol-price { display: inline-flex; flex-direction: column; align-items: flex-end; gap: var(--nds-space-2); }
+.fw-ol-hint { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-ol-hint.is-ok { color: var(--nds-text-strong); }
+.fw-ol-refused { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-danger-text); }
+.fw-ol-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.fw-ol-grow { flex: 1 1 auto; }
+.fw-ol-total { font-size: var(--nds-font-size-sm); }
+.fw-ol-removed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-ol-removed li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+/* a narrow room: one card per line, a label over each field, the row's buttons in the card's head */
+.fw-ol-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.fw-ol-card { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nds-space-8); padding: var(--nds-space-8); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); background: var(--nds-surface); }
+.fw-ol-card.is-saving { opacity: 0.7; }
+.fw-ol-card .fw-ol-cardhead { grid-column: 1 / 2; align-self: center; }
+.fw-ol-card .fw-ol-acts { grid-column: 2 / 3; grid-row: 1; }
+.fw-ol-card .fw-ol-cell:first-of-type { grid-column: 1 / -1; }
+.fw-ol-card .fw-ol-cell.fw-ol-num { align-items: flex-start; }
+.fw-ol-label { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+/* own columns as chips (OwnChips): two, then "+ n" */
+.fw-ol-chips { display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-4); min-width: 0; }
+.fw-ol-chip { display: inline-flex; align-items: center; gap: var(--nds-space-2); max-width: 12rem; padding: 0 var(--nds-space-6); border-radius: var(--nds-radius-full); background: var(--nds-surface-sunken); font-size: var(--nds-font-size-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the window "Columns of your own" */
+.fw-ol-ownlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-ol-ownrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.fw-ol-ownrow .fw-ol-grow { min-width: 6rem; }
+.fw-ol-ownnew { display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.fw-ol-kinds { display: flex; flex-wrap: wrap; gap: var(--nds-space-4); }
+.fw-ol-ask { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+.fw-ol-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
