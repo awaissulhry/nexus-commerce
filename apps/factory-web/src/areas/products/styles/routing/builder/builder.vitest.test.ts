@@ -18,6 +18,7 @@ import {
   endIndexFor,
   kindOfLooks,
   lineBody,
+  LINE_STEPS_MAX,
   minutesInputOf,
   minutesOut,
   moveStep,
@@ -258,6 +259,33 @@ describe('a refusal in words', () => {
     expect(refusalOf({ kind: 'invalid', code: 'validation_failed', issues: [{ path: ['steps', 'LAST_NOT_PACKING'] }] })).toEqual({ key: 'rule.LAST_NOT_PACKING' })
     expect(refusalOf({ kind: 'conflict', code: 'conflict' })).toEqual({ key: 'problem.conflict' })
     expect(refusalOf({ kind: 'forbidden', code: 'forbidden' })).toEqual({ key: 'problem.forbidden' })
+  })
+  // owb-pd8 (pd2 landed): the server's real answers — rules 400 at `refusal/<code>`, NAME_TAKEN 409 by what was saved, the line's codes.
+  it('pd2: a rule refused with 400 at refusal/<code> says the rule\'s words', () => {
+    for (const code of ['TOO_FEW', 'LAST_NOT_PACKING', 'DEPARTMENT_CLOSED']) expect(refusalOf({ kind: 'invalid', code: 'validation_failed', issues: [{ path: `refusal/${code}`, message: 'x' }] }, 'route')).toEqual({ key: `rule.${code}` })
+  })
+  it('pd2: NAME_TAKEN 409 says whose name it is — a department, a route of the revision, an open ready-made route', () => {
+    const taken = { kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/NAME_TAKEN', message: 'x' }] }
+    expect(refusalOf(taken)).toEqual({ key: 'refusal.NAME_TAKEN' })
+    expect(refusalOf(taken, 'route')).toEqual({ key: 'refusal.NAME_TAKEN_ROUTE' })
+    expect(refusalOf(taken, 'template')).toEqual({ key: 'refusal.NAME_TAKEN_TEMPLATE' })
+  })
+  it('pd2: a line\'s refusals — FROZEN 409, ONLY_PRODUCTION_MANAGER 403, NOT_A_MODEL 400 — in words, in both languages', () => {
+    expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/FROZEN' }] }, 'line')).toEqual({ key: 'refusal.FROZEN' })
+    expect(refusalOf({ kind: 'forbidden', code: 'forbidden', issues: [{ path: 'refusal/ONLY_PRODUCTION_MANAGER' }] }, 'line')).toEqual({ key: 'refusal.ONLY_PRODUCTION_MANAGER' })
+    expect(refusalOf({ kind: 'invalid', code: 'validation_failed', issues: [{ path: 'refusal/NOT_A_MODEL' }] }, 'line')).toEqual({ key: 'refusal.NOT_A_MODEL' })
+    for (const locale of LOCALES)
+      for (const key of ['refusal.NAME_TAKEN_ROUTE', 'refusal.NAME_TAKEN_TEMPLATE', 'refusal.ONLY_PRODUCTION_MANAGER', 'refusal.NOT_A_MODEL', 'builder.error.TOO_MANY'])
+        expect(CATALOGUE[locale]['products-route']?.[key], `${locale} ${key}`).toBeTruthy()
+  })
+})
+
+describe('owb-pd8 (pd2 LINE_EXCEPTION_STEPS_MAX): one line\'s route has at most 50 steps', () => {
+  it('51 steps hold Save with words; 50 save', () => {
+    const steps = (count: number) => Array.from({ length: count }, (_, index) => ({ departmentId: index === count - 1 ? 'dept-6' : 'dept-5', minutes: '1' }))
+    const at = (count: number) => setReason(startBuilder('line', steps(count)), 'Made by hand')
+    expect(saveHeldOf(at(51), looks, false)).toEqual({ key: 'builder.error.TOO_MANY', params: { max: LINE_STEPS_MAX } })
+    expect(builderProblems(at(50), looks).errors.map((issue) => issue.code)).not.toContain('TOO_MANY')
   })
 })
 
