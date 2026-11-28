@@ -388,11 +388,6 @@ export function getRouting(api: ApiClient, styleId: string, revisionId: string):
   return api.get(`${revisionPath(styleId, revisionId)}/routing`, { schema: oneRouting }).then((answer) => answer.routing)
 }
 
-export function addSteps(api: ApiClient, styleId: string, revision: { id: string; version: number }, operationIds: readonly string[]): Promise<RoutingView> {
-  return api
-    .post(`${revisionPath(styleId, revision.id)}/routing/steps`, { body: { version: revision.version, operations: operationIds.map((operationId) => ({ operationId })) }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
 /** A step's subcontract details (W2a, PRD-120): the workshop, its fee per piece (the cost grain) and the transit days. */
 export interface SubcontractPatch {
@@ -424,17 +419,7 @@ export function updateStep(
     .then((answer) => answer.routing)
 }
 
-export function removeStep(api: ApiClient, styleId: string, revision: { id: string; version: number }, stepId: string): Promise<RoutingView> {
-  return api
-    .request('DELETE', `${revisionPath(styleId, revision.id)}/routing/steps/${enc(stepId)}`, { query: { version: revision.version }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
-export function reorderSteps(api: ApiClient, styleId: string, revision: { id: string; version: number }, stepIds: readonly string[]): Promise<RoutingView> {
-  return api
-    .request('PUT', `${revisionPath(styleId, revision.id)}/routing/order`, { body: { version: revision.version, stepIds }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
 // ---- the cost sheet (SCR-044) -------------------------------------------------------------------------------------------
 

@@ -13,7 +13,6 @@ import type {
   LabelTemplateRow,
   MaterialRow,
   MaterialView,
-  OperationRow,
   ProductRow,
   RouteSummaryStep,
   RoutingView,
@@ -78,8 +77,6 @@ export type StyleDialog =
   | { kind: 'generate' }
   | { kind: 'bomLine'; lineId: string | null }
   | { kind: 'removeLine'; lineId: string }
-  | { kind: 'addOperations' }
-  | { kind: 'removeStep'; stepId: string }
   /** W2a: a routing step's subcontract details (design pop:styles.opDrawer "Subcontract details"). */
   | { kind: 'subcontract'; stepId: string }
   | { kind: 'upload'; documentKind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string }
@@ -124,7 +121,6 @@ export interface StyleRecordViewModel {
   /** The materials of the BOM's colour-dependent lines (their colours fill the colour grid's choices). */
   materials: Record<string, MaterialView | null>
   materialSearch: SearchState<MaterialRow>
-  operationSearch: SearchState<OperationRow> & { kind: string | null }
   bomView: BomViewMode
   /** The Cost tab's cell (a colourway and a size). */
   costCell: { colourwayId: string; size: string } | null
@@ -224,14 +220,10 @@ export interface StyleRecordActions {
   onLineColours?: (lineId: string, colours: Array<{ colourwayId: string; itemColourId: string | null }>) => void
   onHideYield?: (pct: string | null) => Promise<boolean>
   // routing
-  onOperationQuery?: (query: string, kind: string | null) => void
-  onAddSteps?: (operationIds: string[]) => Promise<boolean>
   onStep?: (stepId: string, patch: StepPatch) => Promise<boolean>
   /** W2a: a step's subcontract details; null takes it back in-house. */
   onSubcontract?: (stepId: string, subcontract: SubcontractPatch | null) => Promise<boolean>
   onLoadWorkshops?: () => void
-  onRemoveStep?: (stepId: string) => Promise<boolean>
-  onMoveStep?: (stepId: string, delta: -1 | 1) => void
   // cost
   onCostCell?: (cell: { colourwayId: string; size: string }) => void
   // compliance

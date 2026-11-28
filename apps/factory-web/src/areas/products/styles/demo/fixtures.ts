@@ -5,7 +5,7 @@ import { StyleRecordView } from '../record/view/StyleRecordView'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
 import { asMoney } from '@nexus/factory-domain/money/marked'
-import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, ProductRow, RouteSummaryStep, RoutingView, ScaleRow, StyleComplianceView, StyleOrders, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, ProductRow, RouteSummaryStep, RoutingView, ScaleRow, StyleComplianceView, StyleOrders, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
@@ -771,7 +771,6 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     libraries: { scales: SCALES, colours: COLOURS, brands: can.brands ? BRANDS : null, labels: null, workshops: can.workshops ? WORKSHOPS : null },
     materials: {},
     materialSearch: { query: '', results: null, problem: null },
-    operationSearch: { query: '', kind: null, results: null, problem: null },
     bomView: 'lines',
     costCell: null,
     save: { state: 'saved', at: at(29, 9, 12) },
@@ -843,14 +842,6 @@ export function lineMaterial(n: number): MaterialView {
 export const LINE_MATERIALS: Record<string, MaterialView> = Object.fromEntries([1, 6, 7].map((n) => [uid('4400', n), lineMaterial(n)]))
 
 export const MATERIAL_RESULTS = [MATERIAL, lineMaterial(2), lineMaterial(3)].map(({ units: _units, standardCostPerPurchaseUnit: _a, standardCostPerConsumptionUnit: _b, animalSpecies: _c, tannage: _d, grade: _e, finish: _f, thicknessMinMm: _g, thicknessMaxMm: _h, composition: _i, animalOrigin: _j, attributes: _k, colours: _l, warnings: _m, createdAt: _n, createdById: _o, ...row }) => row)
-
-// ---- the operation library (for Add operations) -----------------------------------------------------------------------------
-
-export const OPERATIONS: OperationRow[] = [
-  ...OPS.map(([code, name, kind, minutes, machine, skill]: (typeof OPS)[number], index: number) => ({ id: uid('2200', index + 1), companyId: null, code, name, nameI18n: null, workCentreKind: kind, machineType: machine, skill, standardMinutes: code === 'CUC-MAN' ? '17' : minutes, status: 'ACTIVE' as const, usedIn: 4, differing: code === 'CUC-MAN' ? 1 : 0, version: 1, updatedAt: at(10, 9) })),
-  { id: uid('2200', 20), companyId: null, code: 'CUC-RIF', name: 'Applicazione inserti riflettenti', nameI18n: null, workCentreKind: 'SEWING', machineType: 'Piana 1 ago', skill: 'Cucitrice', standardMinutes: '4.5', status: 'ACTIVE', usedIn: 1, differing: 0, version: 1, updatedAt: at(10, 9) },
-  { id: uid('2200', 21), companyId: null, code: 'IMB-SAC', name: 'Imbustamento e cartellino', nameI18n: null, workCentreKind: 'PACKING', machineType: null, skill: null, standardMinutes: '1.5', status: 'ACTIVE', usedIn: 6, differing: 0, version: 1, updatedAt: at(10, 9) },
-]
 
 // ---- the cost sheet (made-up prices and rates; every figure worked out below from the BOM and the routing) ----------------------
 

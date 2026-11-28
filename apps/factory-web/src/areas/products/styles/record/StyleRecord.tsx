@@ -19,7 +19,6 @@ import type { PanelRead } from '../../../../record-panels/model'
 import {
   addBomLine,
   addColourway,
-  addSteps,
   announceDocument,
   archiveStyle,
   assignLabel,
@@ -29,7 +28,6 @@ import {
   documentDownload,
   exportBom,
   findMaterials,
-  findOperations,
   generateSkus,
   getBom,
   getCompliance,
@@ -50,8 +48,6 @@ import {
   reactivateStyle,
   releaseRevision,
   removeBomLine,
-  removeStep,
-  reorderSteps,
   setBomColours,
   setBomSizes,
   setGarmentTracking,
@@ -168,7 +164,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const [costCell, setCostCell] = useState<{ colourwayId: string; size: string } | null>(null)
   const [materials, setMaterials] = useState<Record<string, MaterialView | null>>({})
   const [materialSearch, setMaterialSearch] = useState<StyleRecordViewModel['materialSearch']>({ query: '', results: null, problem: null })
-  const [operationSearch, setOperationSearch] = useState<StyleRecordViewModel['operationSearch']>({ query: '', kind: null, results: null, problem: null })
   /** The latest version of the revision in view (a revision's BOM and routing are one versioned record). */
   const revisionVersionRef = useRef<{ id: string; version: number } | null>(null)
   const [libraries, setLibraries] = useState<StyleRecordViewModel['libraries']>({ scales: null, colours: null, brands: null, labels: null, workshops: null })
@@ -581,14 +576,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       .then((results) => mine === materialSeq.current && setMaterialSearch({ query, results, problem: null }))
       .catch((error: unknown) => mine === materialSeq.current && setMaterialSearch({ query, results: null, problem: readProblem(error) }))
   }
-  const operationSeq = useRef(0)
-  const onOperationQuery = (query: string, kind: string | null) => {
-    const mine = ++operationSeq.current
-    setOperationSearch({ query, kind, results: null, problem: null })
-    findOperations(api, query, kind, companyId)
-      .then((results) => mine === operationSeq.current && setOperationSearch({ query, kind, results, problem: null }))
-      .catch((error: unknown) => mine === operationSeq.current && setOperationSearch({ query, kind, results: null, problem: readProblem(error) }))
-  }
 
   const exportFile = (format: BomExportFormat) => {
     const style = styleRef.current
@@ -667,7 +654,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     libraries,
     materials,
     materialSearch,
-    operationSearch,
     bomView,
     costCell,
     save,
@@ -897,7 +883,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onLineSizes: (lineId, sizes) => void bomWrite((target) => setBomSizes(api, styleId, target, lineId, sizes)),
         onLineColours: (lineId, colours) => void bomWrite((target) => setBomColours(api, styleId, target, lineId, colours)),
         onHideYield: (pct) => bomWrite((target) => updateRevision(api, styleId, target, { plannedHideYieldPct: pct }), { key: 'notice.saved', tone: 'success' }),
-        onOperationQuery,
         onSubcontract: (stepId, subcontract) => routingWrite((target) => updateStep(api, styleId, target, stepId, { subcontract }), { key: subcontract ? 'notice.subcontractSaved' : 'notice.inHouse', tone: 'success' }),
         onLoadWorkshops: loadWorkshops,
         onDuplicate: () => {
@@ -908,18 +893,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onImportBom: bomImport.open,
         bomImport: bomImport.actions,
         onExportBom: exportFile,
-        onAddSteps: (operationIds) => routingWrite((target) => addSteps(api, styleId, target, operationIds), { key: 'notice.stepsAdded', tone: 'success', params: { count: operationIds.length } }),
         onStep: (stepId, patch) => routingWrite((target) => updateStep(api, styleId, target, stepId, patch)),
-        onRemoveStep: (stepId) => routingWrite((target) => removeStep(api, styleId, target, stepId), { key: 'notice.stepRemoved', tone: 'success' }),
-        onMoveStep: (stepId, delta) => {
-          const steps = routingRef.current?.steps ?? []
-          const index = steps.findIndex((step) => step.id === stepId)
-          const to = index + delta
-          if (index < 0 || to < 0 || to >= steps.length) return
-          const order = steps.map((step) => step.id)
-          ;[order[index], order[to]] = [order[to]!, order[index]!]
-          void routingWrite((target) => reorderSteps(api, styleId, target, order))
-        },
         onCostCell: setCostCell,
         onUpload: ({ kind, language, number, file }) =>
           run(async () => {
