@@ -28,6 +28,7 @@ import { NotInAccess } from './view/parts'
 import { useOrderWords } from './words'
 // ---- owb-po7.2 + po7.3: the drafts bar, Send… (Review and send), Take it back, Delete the drafts, Withdrawn, the picture window.
 import { Banner } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives' // owb-po7b: the delete question's buttons
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { useT } from '../../../lib/i18n/provider'
 import { DRAFT_NS } from '../../../lib/order-draft/words'
@@ -40,6 +41,15 @@ import { bulkDelete, bulkSend, discardDraft, fetchDraft, sendDraft, takeBack } f
 import { fetchOrder } from './api'
 import { draftsOf, listedRows, pageOf, pictureDoorOf, rowTitleOf, sentLineOf, withdrawnCount, type RowPage } from './sheet/model'
 import { DraftsBar, SentLine, SHEET_NS, WithdrawnChip } from './sheet/view/SheetParts'
+// ---- owb-po7b (po7.1): S2's ONE sheet part, kind `portal` (no index.ts: imported from its files), through this page's adapter.
+import { OrdersSheet } from '../../../lib/orders-sheet/view/OrdersSheet'
+import { SheetPicturesProvider } from '../../../lib/orders-sheet/pictures'
+import { parseTarget } from '../../../lib/orders-sheet/rows'
+import type { SheetCommit, SheetCommitAnswer } from '../../../lib/orders-sheet/model'
+import { isPortalSheetFilter, lineIdOfKey, PORTAL_SHEET_COLUMNS, PORTAL_SHEET_FILTERS, sheetOrdersOf, type PortalSheetFilter } from './sheet/adapter'
+import { ViewSwitch } from './sheet/view/SheetParts'
+import { addCustomLine, changeCustomLine, changeHeader, createDraft } from '../neworder/api'
+// ---- end owb-po7b
 // ---- end owb-po7
 
 /**
@@ -96,6 +106,13 @@ function ListContainer() {
   const [updates, setUpdates] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const reading = useRef<AbortController | null>(null)
+  // owb-po7b: Sheet (the default) or List (`?view=list` keeps it); the sheet's filter tab reads today's chips (All · In work · Shipped ·
+  // Delivered). The list keeps its groups band as before.
+  const [view, setView] = useState<'sheet' | 'list'>(() => (search?.get('view') === 'list' ? 'list' : 'sheet'))
+  const [sheetFilter, setSheetFilter] = useState<PortalSheetFilter>('ALL')
+  const sheetMode = view === 'sheet'
+  const chipNow = sheetMode ? sheetFilter : sheetChipOf(group)
+  const ordersNow = sheetMode || orders
 
   const load = useCallback(async () => {
     reading.current?.abort()
@@ -105,17 +122,17 @@ function ListContainer() {
       // The sheet's read: the group's rows with their portal columns, and the band's numbers (the server's, before the search). Closed
       // requests hold no order: the read then brings the band's numbers only.
       // owb-po7: the drafts come with the sheet (the drafts bar holds them) for a reader who keeps drafts.
-      const next = await fetchSheet(api, { chip: sheetChipOf(group), q, ...(orders ? {} : { limit: 1 }), ...(frame.me.permissions.includes('portal.orderDrafts.edit') ? { drafts: true } : {}) }, control.signal)
+      const next = await fetchSheet(api, { chip: chipNow, q, ...(ordersNow ? {} : { limit: 1 }), ...(frame.me.permissions.includes('portal.orderDrafts.edit') ? { drafts: true } : {}) }, control.signal)
       if (control.signal.aborted) return
       setRead(next)
-      setRows(orders ? next.items : [])
+      setRows(ordersNow ? next.items : [])
       setState('ready')
       setUpdates(0)
     } catch (error) {
       if (control.signal.aborted) return
       setState(isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'error')
     }
-  }, [api, group, q, orders])
+  }, [api, q, chipNow, ordersNow])
 
   const loadRequests = useCallback(async () => {
     if (!seesRequests) return
@@ -158,10 +175,10 @@ function ListContainer() {
   })
 
   const more = async () => {
-    if (!read || loadingMore || !orders) return
+    if (!read || loadingMore || !ordersNow) return
     setLoadingMore(true)
     try {
-      const next = await fetchSheet(api, { chip: sheetChipOf(group), q, offset: rows.length }) // B-TH-246
+      const next = await fetchSheet(api, { chip: chipNow, q, offset: rows.length }) // B-TH-246
       setRows((current) => [...current, ...next.items.filter((row) => !current.some((old) => old.id === row.id))])
     } catch {
       setState('error')
@@ -228,11 +245,14 @@ function ListContainer() {
     return kind === 'conflict' ? ts('ordersSheet.refusedConflict') : kind === 'forbidden' ? ts('ordersSheet.refusedAccess') : ts('ordersSheet.failed')
   }
   /** Send… → "Review and send" for the drafts (each read for its version, its lines and its list prices). */
-  const openReview = async () => {
+  const openReview = async (ids?: readonly string[]) => {
+    // owb-po7b: the sheet's Send… (one row) or its bulk bar (the drafts picked); the drafts bar sends them all.
+    const chosen = ids ? drafts.filter((row) => ids.includes(row.id)) : drafts
+    if (chosen.length === 0) return
     setReview({ drafts: [], currency: 'EUR', busy: true, note: '', results: null })
     try {
-      const records = await Promise.all(drafts.map((row) => fetchDraft(api, row.id)))
-      setReview({ drafts: records.map((record, index) => reviewDraftOf(record, rowTitleOf(drafts[index]!) ?? ts('ordersSheet.noSubject'))), currency: records[0]?.request.currency ?? 'EUR', busy: false, note: '', results: null })
+      const records = await Promise.all(chosen.map((row) => fetchDraft(api, row.id)))
+      setReview({ drafts: records.map((record, index) => reviewDraftOf(record, rowTitleOf(chosen[index]!) ?? ts('ordersSheet.noSubject'))), currency: records[0]?.request.currency ?? 'EUR', busy: false, note: '', results: null })
     } catch (error) {
       setReview(null)
       setNotice(refusalWords(error))
@@ -319,8 +339,104 @@ function ListContainer() {
   }
   const pageHref = (page: RowPage | null): string | null => (page ? (page.kind === 'order' ? `${frame.prefix}/orders/${encodeURIComponent(page.id)}` : `${frame.prefix}/orders/requests/${encodeURIComponent(page.id)}`) : null)
   const sentLine = sentLineOf(rows, sentIds)
+
+  // ---- owb-po7b (po7.1): the sheet's own doors — a typed cell of a draft saved in place, the "New order" row makes a draft and opens
+  // nothing, every number / chip / picture / bin a door, the bulk bar (Send… · Delete the drafts · Export). A delete always asks first.
+  const [askDelete, setAskDelete] = useState<readonly string[] | null>(null)
+  const draftOf = (key: string) => rows.find((row) => row.id === key && row.kind === 'DRAFT')
+  const commitSheet = async (commit: SheetCommit): Promise<SheetCommitAnswer> => {
+    const order = draftOf(commit.orderKey)
+    if (!order) return { kind: 'REFUSED', words: ts('ordersSheet.typeDraftOnly') }
+    try {
+      const record = await fetchDraft(api, order.id)
+      const version = record.request.version
+      const value = commit.value.trim()
+      if (commit.lineKey === null) {
+        if (commit.column === 'what') await changeHeader(api, order.id, { version, subject: value === '' ? null : value }, newIdempotencyKey())
+        else if (commit.column === 'wanted') await changeHeader(api, order.id, { version, requestedDate: value === '' ? null : value }, newIdempotencyKey())
+        else return { kind: 'REFUSED', words: ts('ordersSheet.typeInWindow') }
+      } else {
+        // A line in the customer's own words takes its words and a total here; a catalogue line, its material and its sizes are typed in
+        // the New order window (they are a colour, an option, a size run there).
+        const line = (record.request.customLines ?? []).find((entry) => entry.id === lineIdOfKey(commit.lineKey!))
+        if (!line || line.byPerson || (commit.column !== 'what' && commit.column !== 'pieces')) return { kind: 'REFUSED', words: ts('ordersSheet.typeInWindow') }
+        const total = /^\d+$/.test(value) ? Number(value) : null
+        if (commit.column === 'pieces' && value !== '' && (total === null || total < 1)) return { kind: 'REFUSED', words: ts('ordersSheet.typePieces') }
+        await changeCustomLine(api, order.id, line.id, commit.column === 'pieces' ? { version, byPerson: false, quantity: total, sizes: [] } : { version, description: value === '' ? null : value }, newIdempotencyKey())
+      }
+      void load()
+      return { kind: 'SAVED' }
+    } catch (error) {
+      return { kind: 'REFUSED', words: refusalWords(error) }
+    }
+  }
+  /** The "New order" row: what is typed makes a draft (the subject, the date wanted, or a line in the customer's words) and opens nothing. */
+  const newOrderFromSheet = async (seed: { column: string; value: string }) => {
+    const value = seed.value.trim()
+    if (value === '' || offline) return
+    try {
+      const made = await createDraft(api, { source: 'PICKER', ...(seed.column === 'what' ? { subject: value } : seed.column === 'wanted' ? { requestedDate: value } : {}) }, newIdempotencyKey())
+      if (seed.column === 'pieces' || seed.column === 'material' || seed.column === 'sizes') {
+        const total = /^\d+$/.test(value) ? Number(value) : null
+        await addCustomLine(api, made.request.id, { version: made.request.version, line: { kind: 'DESCRIBED', ...(seed.column === 'pieces' && total ? { quantity: total } : { description: value }) } }, newIdempotencyKey())
+      }
+    } catch (error) {
+      setNotice(refusalWords(error))
+    }
+    void load()
+  }
+  /** A door of the sheet (`act:key`): the order's page, its chat, the design, the picture, a line to add, the bin, Send…. */
+  const openTarget = (target: string) => {
+    const { act, key } = parseTarget(target)
+    const row = rows.find((entry) => entry.id === key)
+    if (!row) return
+    const href = pageHref(pageOf(row))
+    if (act === 'picture') void openPicture(row)
+    else if (act === 'deleteDraft') setAskDelete([row.id])
+    else if (act === 'send') void openReview([row.id])
+    else if (act === 'addLine' && row.kind === 'DRAFT') router.push(`${frame.prefix}/orders/new?draft=${encodeURIComponent(row.id)}`)
+    else if (act === 'chat' && href) router.push(`${href}?thread=open`)
+    else if (href) router.push(href)
+  }
+  const pickView = (next: 'sheet' | 'list') => {
+    setView(next)
+    const params = new URLSearchParams(search?.toString() ?? '')
+    if (next === 'list') params.set('view', 'list')
+    else params.delete('view')
+    const query = params.toString()
+    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false })
+  }
+  // ---- end owb-po7b
   const above = (
     <>
+      <span className="fw-pos-bar">
+        <ViewSwitch view={view} onPick={pickView} />
+      </span>
+      {askDelete ? (
+        <Banner
+          tone="warning"
+          title={askDelete.length === 1 ? ts('ordersSheet.deleteOne', { title: rowTitleOf(rows.find((row) => row.id === askDelete[0]) ?? { subject: null, customerRef: null }) ?? ts('ordersSheet.noSubject') }) : ts('ordersSheet.deleteAll', { count: askDelete.length })}
+          action={
+            <span className="fw-pos-acts">
+              <Button size="sm" onClick={() => setAskDelete(null)}>
+                {ts('ordersSheet.cancel')}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                heldReason={heldOffline}
+                onClick={() => {
+                  const ids = askDelete
+                  setAskDelete(null)
+                  void deleteDrafts(ids)
+                }}
+              >
+                {ts('ordersSheet.delete')}
+              </Button>
+            </span>
+          }
+        />
+      ) : null}
       {notice ? <Banner tone="info" title={notice} action={<button type="button" className="fw-pos-chip" onClick={() => setNotice(null)}>{ts('ordersSheet.ok')}</button>} /> : null}
       {sentLine ? (
         <SentLine
@@ -400,10 +516,44 @@ function ListContainer() {
       above={above}
     />
   )
+  // owb-po7b (po7.1): the Sheet — S2's ONE part, kind `portal`, fed by this page's adapter; no price column for anybody. The office-ticked
+  // portal columns and "Download (Excel)" stay (the List shows the columns; the band and Export keep the file).
+  const sheetOrders = sheetMode ? sheetOrdersOf(rows, { locale: locale === 'it' ? 'it' : 'en', t: ts, ownColumns: read?.ownColumns ?? [] }, showWithdrawn) : []
+  const sheet = (
+    <div className="fw-pos-top">
+      {above}
+      <SheetPicturesProvider value={{ read: pictures, sourceOf: (record) => (record.kind === 'REQUEST' ? 'customerRequest' : 'customerOrder') }}>
+        <OrdersSheet
+          kind="portal"
+          orders={sheetOrders}
+          columns={PORTAL_SHEET_COLUMNS}
+          filters={{ items: PORTAL_SHEET_FILTERS.map((id) => ({ id, words: ts(`ordersSheet.filter.${id}`) })), active: sheetFilter, onPick: (id) => (isPortalSheetFilter(id) ? setSheetFilter(id) : undefined) }}
+          onCommit={commitSheet}
+          onOpen={openTarget}
+          {...(mayDraft ? { onNewOrder: (seed: { column: string; value: string }) => newOrderFromSheet(seed) } : {})}
+          bulk={[
+            ...(mayOrder ? [{ id: 'send', words: ts('ordersSheet.send'), icon: 'send', primary: true, run: (keys: readonly string[]) => void openReview(keys) }] : []),
+            ...(mayDraft ? [{ id: 'deleteDrafts', words: ts('ordersSheet.deleteDrafts'), icon: 'trash-2', run: (keys: readonly string[]) => { const ids = keys.filter((key) => draftOf(key)); if (ids.length > 0) setAskDelete(ids) } }] : []),
+            { id: 'export', words: ts('ordersSheet.export'), icon: 'download', run: () => void downloadAll() },
+          ]}
+          live={{ lastChange: read?.asOf ?? null, flashKeys: [] }}
+          loading={state === 'loading' && !read}
+          error={state === 'error' ? ts('ordersSheet.failed') : null}
+        />
+      </SheetPicturesProvider>
+      {read && rows.length < read.count ? (
+        <span className="fw-pos-bar">
+          <Button size="sm" heldReason={loadingMore ? ts('ordersSheet.busy') : heldOffline} onClick={() => void more()}>
+            {ts('ordersSheet.showMore')}
+          </Button>
+        </span>
+      ) : null}
+    </div>
+  )
   // The windows over the page: Review and send, the picture of the order.
   return (
     <>
-      {list}
+      {sheetMode ? sheet : list}
       {review ? (
         <ReviewSendWindow
           model={{ open: true, drafts: review.drafts, currency: review.currency, note: review.note, noteDoor: false, held: review.busy && review.drafts.length === 0 ? ts('ordersSheet.busy') : mayOrder ? heldOffline : ts('ordersSheet.sendNotYours'), busy: review.busy, results: review.results }}

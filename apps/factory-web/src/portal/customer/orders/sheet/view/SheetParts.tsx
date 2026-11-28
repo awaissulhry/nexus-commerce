@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Camera, CircleCheck, Eye, FileText, Send, Trash2, Undo2 } from 'lucide-react'
+import { Camera, CircleCheck, Eye, FileText, List, Send, Sheet, Trash2, Undo2 } from 'lucide-react'
 import { Banner } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
@@ -163,5 +163,19 @@ export function PictureButton({ picture, label, onPress }: { picture: ReactNode;
         <Camera size={12} />
       </span>
     </button>
+  )
+}
+
+/** owb-po7b: Sheet (the default) or List — the same rows, two faces; the choice stays in the address (`?view=list`). */
+export function ViewSwitch({ view, onPick }: { view: 'sheet' | 'list'; onPick?: (view: 'sheet' | 'list') => void }) {
+  const t = useT(SHEET_NS)
+  return (
+    <span className="fw-pos-acts" role="group" aria-label={t('ordersSheet.view.aria')}>
+      {(['sheet', 'list'] as const).map((each) => (
+        <Button key={each} size="sm" variant={view === each ? 'secondary' : 'quiet'} aria-pressed={view === each} onClick={() => onPick?.(each)}>
+          {each === 'sheet' ? <Sheet size={14} aria-hidden /> : <List size={14} aria-hidden />} {t(`ordersSheet.view.${each}`)}
+        </Button>
+      ))}
+    </span>
   )
 }

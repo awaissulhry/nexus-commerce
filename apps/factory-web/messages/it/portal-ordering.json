@@ -510,6 +510,22 @@
     "sendNotYours": "Lo invia un collega che può ordinare: la bozza resta com’è.",
     "failed": "Non ha funzionato. Riprovate.",
     "refusedConflict": "La fabbrica ha già risposto a questo ordine, oppure qualcuno lo ha cambiato nel frattempo.",
-    "refusedAccess": "Il vostro accesso non lo permette: chiedete al vostro amministratore."
+    "refusedAccess": "Il vostro accesso non lo permette: chiedete al vostro amministratore.",
+    "view": {
+      "aria": "Vista",
+      "sheet": "Foglio",
+      "list": "Elenco"
+    },
+    "filter": {
+      "ALL": "Tutti",
+      "OPEN": "In lavorazione",
+      "SHIPPED": "Spediti",
+      "DELIVERED": "Consegnati"
+    },
+    "export": "Esportate",
+    "showMore": "Mostrate altri",
+    "typeDraftOnly": "Qui si scrive solo in una bozza: dopo l’invio aprite l’ordine (dopo la conferma chiedete una modifica).",
+    "typeInWindow": "Cambiatelo nella finestra della bozza: apritela dal suo oggetto.",
+    "typePieces": "Pezzi: scrivete un numero intero da 1, oppure lasciate vuoto."
   }
 }

@@ -3,7 +3,8 @@ import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { everyCase, leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
 import { fetchSheet, orderRowSchema, ordersSchema, type OrderRow } from '../api'
-import { sheetRowsOf, sheetRowsOfOrder } from './adapter'
+import { lineIdOfKey, PORTAL_SHEET_COLUMNS, PORTAL_SHEET_FILTERS, sheetOrderOf, sheetOrdersOf, sheetRowsOf, sheetRowsOfOrder } from './adapter'
+import { CATALOGUE, createTranslator } from '../../../../lib/i18n/messages'
 import { designScreen } from './fixtures'
 import { bulkOf, detailsOf, draftsOf, lifeOf, listedRows, pageOf, pictureDoorOf, sentLineOf, waitChipsOf, withdrawnCount } from './model'
 import { DraftsBar, PictureButton, WaitsChips, WithdrawnChip } from './view/SheetParts'
@@ -170,5 +171,41 @@ describe('owb-po7.3 + po7.4: picture, Waits · news, Details, phone', () => {
     const cases = everyCase(designScreen)
     expect(new Set(cases.map(([, id]) => id))).toEqual(new Set(['empty', 'drafts', 'sent', 'late', 'columns']))
     for (const [locale, id, html] of cases) expect(leftKeys(html, ['ordersSheet', 'waits', 'own', 'chips']), `${locale} ${id}`).toEqual([])
+  })
+})
+
+describe('owb-po7b (po7.1): the portal page mounts S2\u2019s ONE sheet part, kind portal, with no price key', () => {
+  const t = createTranslator('en', CATALOGUE.en['portal-ordering'] ?? {})
+  const ctx = { locale: 'en' as const, t, ownColumns: [{ id: 'c-remake', name: 'Remake', kind: 'YES_NO' as const, choices: [], closed: false, version: 1 }] }
+
+  it('the page draws OrdersSheet with kind "portal", the portal columns and its pictures by record (requests under requestIds)', () => {
+    const page = readFileSync(new URL('../OrdersPage.tsx', import.meta.url), 'utf8')
+    expect(page).toMatch(/<OrdersSheet\n\s+kind="portal"\n\s+orders=\{sheetOrders\}\n\s+columns=\{PORTAL_SHEET_COLUMNS\}/)
+    expect(page).toMatch(/sourceOf: \(record\) => \(record\.kind === 'REQUEST' \? 'customerRequest' : 'customerOrder'\)/)
+    expect(page).toContain('{sheetMode ? sheet : list}')
+    expect(PORTAL_SHEET_COLUMNS).toEqual(['what', 'wanted', 'promised', 'where', 'news', 'material', 'sizes', 'pieces', 'details', 'act'])
+    expect(PORTAL_SHEET_FILTERS).toEqual(['ALL', 'OPEN', 'SHIPPED', 'DELIVERED'])
+  })
+
+  it('every row kind becomes the part\u2019s order: ORDER an order, a Sent or Draft request a request; only a draft is typed in place', () => {
+    const order = sheetOrderOf(row('ORDER'), ctx)
+    const sent = sheetOrderOf(row('REQUEST'), ctx)
+    const draft = sheetOrderOf(row('DRAFT'), ctx)
+    expect([order.record.kind, sent.record.kind, draft.record.kind]).toEqual(['ORDER', 'REQUEST', 'REQUEST'])
+    expect([order.life, sent.life, draft.life]).toEqual(['CONFIRMED', 'SENT', 'DRAFT'])
+    expect([order.may.editLines, sent.may.editLines, draft.may.editLines]).toEqual([null, null, 'DRAFT'])
+    expect(draft.may).toMatchObject({ send: true, deleteDraft: true, withdraw: false })
+    expect(order.number).toBe('Your order 12')
+    expect(order.lines[0]).toMatchObject({ key: 'order-1:l-1', text: 'Alpha race suit', material: 'Cowhide black', own: [{ columnId: 'c-remake', name: 'Remake', kind: 'YES_NO', value: true }] })
+    expect(lineIdOfKey(order.lines[0]!.key)).toBe('l-1')
+    expect(order.chips).toEqual([{ tone: 'info', icon: 'message-circle', words: '1 new', door: { kind: 'page', target: 'chat:order-1' } }])
+  })
+
+  it('no price key in anything the part is given, even from a price holder\u2019s read; a withdrawn row only behind its chip', () => {
+    const rows = [row('ORDER'), row('REQUEST'), row('DRAFT'), row('REQUEST', { id: 'gone-1', life: 'WITHDRAWN' })]
+    expect(keysOf(rows).some((key) => MONEY.test(key))).toBe(true)
+    expect(keysOf(sheetOrdersOf(rows, ctx, true)).filter((key) => MONEY.test(key))).toEqual([])
+    expect(sheetOrdersOf(rows, ctx, false).map((entry) => entry.key)).toEqual(['order-1', 'request-1', 'draft-1'])
+    expect(sheetOrdersOf(rows, ctx, true)).toHaveLength(4)
   })
 })
