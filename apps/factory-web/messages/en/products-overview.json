@@ -51,5 +51,85 @@
     "noHowTo": "No words for this point yet.",
     "protectors": "Protectors",
     "noPrice": "This sheet never shows a price."
+  },
+  "overview": {
+    "answer": {
+      "noRevision": "No revision yet.",
+      "inOrders_one": "It is in {count} open order.",
+      "inOrders_other": "It is in {count} open orders.",
+      "noOrders": "No open order uses it yet."
+    },
+    "design": {
+      "title": "Design",
+      "answer": "The main pictures, front and back.",
+      "none": "No design picture yet. Add pictures in Variants and markets below.",
+      "info": "The main picture of the gallery and the next one. The Product sheet puts them on one A4 page, never with a price."
+    },
+    "facts": {
+      "title": "Product facts",
+      "change": "Change",
+      "family": "Who it is for",
+      "readOnly": "Read only: your role reads this product.",
+      "info": "The fixed facts of this product. Product facts change with the right to manage products; the designer changes them while the newest revision is a draft."
+    },
+    "release": {
+      "title": "Before release",
+      "archived": "This product is archived: it cannot be ordered.",
+      "things_one": "{count} thing before release.",
+      "things_other": "{count} things before release.",
+      "info": "What a draft still needs before it can be ordered. Press r to open the check."
+    },
+    "prices": {
+      "title": "Agreed prices",
+      "answer_one": "{range} for one piece, from {count} agreed price.",
+      "answer_other": "{range} for one piece, from {count} agreed prices.",
+      "none": "No agreed price yet.",
+      "notRead": "The agreed prices are not read yet.",
+      "lists": "Price lists",
+      "info": "The lowest and the highest price agreed with the customers for one piece. The price comes from each customer's agreed prices, never from the product."
+    },
+    "made": {
+      "title": "How it is made",
+      "answer_one": "{count} department, in this order.",
+      "answer_other": "{count} departments, in this order.",
+      "none": "No route yet.",
+      "info": "The departments this product goes through. The production manager sets the route on the Route tab."
+    },
+    "used": {
+      "title": "Where it is used",
+      "answer_one": "{count} open order, {pieces} pieces.",
+      "answer_other": "{count} open orders, {pieces} pieces.",
+      "none": "No open order uses it yet.",
+      "info": "The open orders with this product: delivered, closed and cancelled orders are left out.",
+      "col": {
+        "order": "Order",
+        "customer": "Customer",
+        "pieces": "Pieces",
+        "state": "State"
+      },
+      "noCustomer": "No customer",
+      "more_one": "And {count} more order.",
+      "more_other": "And {count} more orders."
+    },
+    "variants": {
+      "title": "Variants and markets",
+      "answer": "{colourways} colourways, {skus} SKUs. Also the markets, GTINs, pictures, names per language, private label and lifecycle.",
+      "open": "Show the variants and markets",
+      "close": "Hide the variants and markets",
+      "info": "Colourways and sizes, the SKU matrix with its GTINs, the markets it is sold in, the pictures and the product's other details. Closed to keep the page short."
+    }
+  },
+  "sizes": {
+    "title": "Sizes",
+    "info": "The sizes this product is made in and the base size the size table starts from. The Sizes tab holds the size table, how to measure and the protectors.",
+    "baseMark": "{size} · base",
+    "answer": {
+      "range": "{from} to {to}. The base size is {base}.",
+      "rangeMtm": "{from} to {to}. The base size is {base}. Made to measure too.",
+      "rangeNoBase": "{from} to {to}. No base size yet.",
+      "rangeMtmNoBase": "{from} to {to}. No base size yet. Made to measure too.",
+      "mtm": "Made to measure. Each piece is cut to the rider's measurements.",
+      "none": "No size is chosen yet."
+    }
   }
 }

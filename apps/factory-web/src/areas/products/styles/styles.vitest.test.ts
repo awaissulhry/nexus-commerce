@@ -372,7 +372,9 @@ describe('the BOM tab\'s rules', () => {
 })
 
 describe('money by grain on the Cost tab (A1 §2.6)', () => {
-  it('without the cost grain no figure reaches the page, the structure does', () => {
+  // owb-pd4 (step 4.2; design § 5q "Who"): the Cost tab opens only with the cost grain — the production manager and sales get no Cost
+  // tab at all (the page opens on the Overview), so no figure and no cost structure reaches them.
+  it('without the cost grain no figure reaches the page, and no Cost tab is drawn', () => {
     const owner = costScreen.cases.find((item) => item.id === 'owner')!
     const production = costScreen.cases.find((item) => item.id === 'production')!
     const sales = costScreen.cases.find((item) => item.id === 'sales')!
@@ -381,8 +383,7 @@ describe('money by grain on the Cost tab (A1 §2.6)', () => {
     for (const item of [production, sales]) {
       const html = render(costScreen as DesignScreen<unknown>, item.model, 'en')
       expect(html, item.id).not.toContain('€')
-      expect(html, item.id).toContain('Not in your role')
-      expect(html, item.id).toContain('PEL-BOV-12')
+      expect(html, item.id).not.toContain('tab=cost')
     }
     // The routing's labour tile follows the same grain.
     expect(render(routingScreen as DesignScreen<unknown>, routingScreen.cases.find((item) => item.id === 'production')!.model, 'en')).not.toContain('€')

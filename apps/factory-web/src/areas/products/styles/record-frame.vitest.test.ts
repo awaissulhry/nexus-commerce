@@ -54,7 +54,8 @@ describe('the style on RecordFrame', () => {
     const html = draw('variants-owner')
     expect(html).toContain(`id="${VARIANTS_ANCHOR}"`)
     const text = textOf(html)
-    for (const part of ['Add colourway', 'Release check']) expect(text, part).toContain(part)
+    // owb-pd4 (step 4.3): the release check is the Overview's "Before release"; the colourways sit in its closed "Variants and markets".
+    for (const part of ['Add colourway', 'Before release', 'Variants and markets']) expect(text, part).toContain(part)
     // Patterns keeps the pattern files and the pieces (cutting data): it is a tab, not the thread's Files view.
     expect(tabsFor(recordModel('owner').can)).toContain('patterns')
     expect(tabsFor(recordModel('sales').can)).not.toContain('patterns')

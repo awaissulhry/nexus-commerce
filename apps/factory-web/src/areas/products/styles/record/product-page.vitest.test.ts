@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { demoStyle, STYLE_ID } from '../demo/fixtures'
+import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import { DEMO_ROUTE, DEMO_STYLE_ORDERS, demoStyle, recordModel, STYLE_ID, StyleDesign } from '../demo/fixtures'
 import { abilitiesOf, bandPrimaryOf, grainsOf, mayEditDraftParts, mayEditFacts, startRevisionHeld, STYLE_TABS, tabsFor } from '../model'
 import { productSheetOf } from '../sheet/sheet-model'
-import { isSheet, sheetHref } from './product-model'
+import { howItIsMadeOf, isSheet, overviewSectionsFor, routeSummaryOf, sheetHref, whereUsedOf } from './product-model'
 
 /**
  * owb-pd4 — the product page's rules, written per step (not run: Owner rule, checks at the end).
@@ -103,5 +104,45 @@ describe('step 4.2 — the Product sheet', () => {
     expect(JSON.stringify(sheet)).not.toMatch(/€|EUR/)
     expect(sheet.code).toBe('DEMO-JKT-01')
     expect(sheet.facts.map((fact) => fact.label)).toEqual(expect.arrayContaining(['sheet.type', 'sheet.family', 'sheet.sizes', 'sheet.protection']))
+  })
+})
+
+describe('step 4.3 — the Overview in the section kit, per person', () => {
+  it('the sections in the design\'s order; Agreed prices only with the price grain; Where it is used only with an orders read', () => {
+    expect(overviewSectionsFor(abilitiesOf(OWNER), grainsOf(OWNER), { orders: true })).toEqual(['design', 'facts', 'sizes', 'release', 'prices', 'made', 'used', 'variants'])
+    expect(overviewSectionsFor(abilitiesOf(DESIGNER), grainsOf(DESIGNER), { orders: true })).not.toContain('prices')
+    expect(overviewSectionsFor(abilitiesOf(SALES), grainsOf(SALES), { orders: true })).toContain('prices')
+    expect(overviewSectionsFor(abilitiesOf(PRODUCTION_MANAGER), grainsOf(PRODUCTION_MANAGER), { orders: true })).not.toContain('prices')
+    expect(overviewSectionsFor(abilitiesOf(OWNER), grainsOf(OWNER), { orders: false })).not.toContain('used')
+    expect(overviewSectionsFor(abilitiesOf([]), grainsOf([]), { orders: true })).toEqual([])
+    // "Variants and markets" is ONE closed section, the last one (S4 settle 12).
+    expect(overviewSectionsFor(abilitiesOf(OWNER), grainsOf(OWNER), { orders: true }).at(-1)).toBe('variants')
+  })
+  it('How it is made has no minutes: department chips in the route\'s order, from the summary only', () => {
+    const route = howItIsMadeOf(DEMO_ROUTE)
+    expect(route.map((dept) => dept.no)).toEqual([1, 2, 4, 5, 6])
+    expect(route.map((dept) => dept.shortName)).toEqual(['Pattern', 'Cutting', 'Stitching', 'Quality', 'Packing'])
+    expect(JSON.stringify(route)).not.toMatch(/minute/i)
+    expect(howItIsMadeOf(null)).toEqual([])
+    expect(routeSummaryOf({ routeSummary: [] })).toBeNull()
+    expect(routeSummaryOf({})).toBeNull()
+    const html = textOf(renderView(StyleDesign, recordModel('sales'), 'en'))
+    expect(html).toContain('How it is made')
+    expect(html).toContain('Stitching')
+    expect(html).not.toMatch(/\d+(?:[.,]\d+)? ?min\b/)
+  })
+  it('Where it is used: one row per open order with its pieces; empty — one plain line', () => {
+    const rows = whereUsedOf(DEMO_STYLE_ORDERS.lines)
+    expect(rows.map((row) => row.orderNumber)).toEqual(['SO-2026-0158', 'SO-2026-0152', 'SO-2026-0141'])
+    expect(rows.find((row) => row.orderNumber === 'SO-2026-0141')?.pieces).toBe(30)
+    expect(whereUsedOf([])).toEqual([])
+    const empty = textOf(renderView(StyleDesign, recordModel('owner', { orders: { status: 'ready', value: { lines: [], totals: { openOrders: 0, openPieces: 0 } } } }), 'en'))
+    expect(empty).toContain('No open order uses it yet.')
+    const designer = textOf(renderView(StyleDesign, recordModel('designer'), 'en'))
+    expect(designer).not.toContain('Where it is used')
+    expect(designer).not.toContain('Agreed prices')
+  })
+  it('the Overview never shows money without its grain: no agreed price for the production manager or the designer', () => {
+    for (const role of ['production', 'designer'] as const) expect(renderView(StyleDesign, recordModel(role), 'en'), role).not.toContain('€')
   })
 })

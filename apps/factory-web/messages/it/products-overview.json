@@ -51,5 +51,85 @@
     "noHowTo": "Ancora nessuna parola per questo punto.",
     "protectors": "Protezioni",
     "noPrice": "Questa scheda non mostra mai un prezzo."
+  },
+  "overview": {
+    "answer": {
+      "noRevision": "Ancora nessuna revisione.",
+      "inOrders_one": "È in {count} ordine aperto.",
+      "inOrders_other": "È in {count} ordini aperti.",
+      "noOrders": "Ancora nessun ordine aperto lo usa."
+    },
+    "design": {
+      "title": "Design",
+      "answer": "Le immagini principali, davanti e dietro.",
+      "none": "Ancora nessuna immagine del design. Aggiungi le immagini in Varianti e mercati qui sotto.",
+      "info": "L'immagine principale della galleria e la successiva. La scheda prodotto le mette su una pagina A4, mai con un prezzo."
+    },
+    "facts": {
+      "title": "Dati del prodotto",
+      "change": "Modifica",
+      "family": "Per chi è",
+      "readOnly": "Sola lettura: il tuo ruolo legge questo prodotto.",
+      "info": "I dati fissi di questo prodotto. Cambiano con il permesso di gestire i prodotti; il designer li cambia mentre la revisione più recente è una bozza."
+    },
+    "release": {
+      "title": "Prima del rilascio",
+      "archived": "Questo prodotto è archiviato: non si può ordinare.",
+      "things_one": "{count} cosa prima del rilascio.",
+      "things_other": "{count} cose prima del rilascio.",
+      "info": "Quello che manca a una bozza prima di poterla ordinare. Premi r per aprire il controllo."
+    },
+    "prices": {
+      "title": "Prezzi concordati",
+      "answer_one": "{range} per un pezzo, da {count} prezzo concordato.",
+      "answer_other": "{range} per un pezzo, da {count} prezzi concordati.",
+      "none": "Ancora nessun prezzo concordato.",
+      "notRead": "I prezzi concordati non sono ancora letti.",
+      "lists": "Listini",
+      "info": "Il prezzo più basso e il più alto concordati con i clienti per un pezzo. Il prezzo viene dai prezzi concordati di ogni cliente, mai dal prodotto."
+    },
+    "made": {
+      "title": "Come si fa",
+      "answer_one": "{count} reparto, in quest'ordine.",
+      "answer_other": "{count} reparti, in quest'ordine.",
+      "none": "Ancora nessun percorso.",
+      "info": "I reparti da cui passa questo prodotto. Il responsabile della produzione imposta il percorso nella scheda Percorso."
+    },
+    "used": {
+      "title": "Dove si usa",
+      "answer_one": "{count} ordine aperto, {pieces} pezzi.",
+      "answer_other": "{count} ordini aperti, {pieces} pezzi.",
+      "none": "Ancora nessun ordine aperto lo usa.",
+      "info": "Gli ordini aperti con questo prodotto: quelli consegnati, chiusi e annullati restano fuori.",
+      "col": {
+        "order": "Ordine",
+        "customer": "Cliente",
+        "pieces": "Pezzi",
+        "state": "Stato"
+      },
+      "noCustomer": "Nessun cliente",
+      "more_one": "E ancora {count} ordine.",
+      "more_other": "E ancora {count} ordini."
+    },
+    "variants": {
+      "title": "Varianti e mercati",
+      "answer": "{colourways} varianti colore, {skus} SKU. Anche i mercati, i GTIN, le immagini, i nomi per lingua, il marchio privato e il ciclo di vita.",
+      "open": "Mostra varianti e mercati",
+      "close": "Nascondi varianti e mercati",
+      "info": "Varianti colore e taglie, la matrice degli SKU con i GTIN, i mercati in cui si vende, le immagini e gli altri dettagli del prodotto. Chiusa per tenere la pagina corta."
+    }
+  },
+  "sizes": {
+    "title": "Taglie",
+    "info": "Le taglie in cui si fa questo prodotto e la taglia base da cui parte la tabella taglie. La scheda Taglie ha la tabella taglie, come misurare e le protezioni.",
+    "baseMark": "{size} · base",
+    "answer": {
+      "range": "Da {from} a {to}. La taglia base è {base}.",
+      "rangeMtm": "Da {from} a {to}. La taglia base è {base}. Anche su misura.",
+      "rangeNoBase": "Da {from} a {to}. Ancora nessuna taglia base.",
+      "rangeMtmNoBase": "Da {from} a {to}. Ancora nessuna taglia base. Anche su misura.",
+      "mtm": "Su misura. Ogni pezzo si taglia sulle misure del pilota.",
+      "none": "Ancora nessuna taglia scelta."
+    }
   }
 }

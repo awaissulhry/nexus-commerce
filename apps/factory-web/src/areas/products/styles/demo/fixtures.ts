@@ -4,7 +4,7 @@ import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { StyleRecordView } from '../record/view/StyleRecordView'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
-import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, ProductRow, RoutingView, ScaleRow, StyleComplianceView, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, ProductRow, RouteSummaryStep, RoutingView, ScaleRow, StyleComplianceView, StyleOrders, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
@@ -61,11 +61,13 @@ export const CAN: Record<'owner' | 'product' | 'production' | 'sales' | 'viewer'
   designer: { ...NONE, view: true, bomView: true, thread: true, draftsEdit: true },
 }
 
-export const GRAINS: Record<'owner' | 'product' | 'production' | 'sales', Grains> = {
+export const GRAINS: Record<'owner' | 'product' | 'production' | 'sales' | 'designer', Grains> = {
   owner: { cost: true, price: true, margin: true },
   product: { cost: true, price: false, margin: false },
   production: { cost: false, price: false, margin: false },
   sales: { cost: false, price: true, margin: true },
+  // owb-pd4: the designer sees no money (no grain).
+  designer: { cost: false, price: false, margin: false },
 }
 
 // ---- libraries ----------------------------------------------------------------------------------------------------------
@@ -780,8 +782,34 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     projects: { view: can.thread, manage: can.manage },
     duplicate: null,
     bomImport: null,
+    // owb-pd4 (steps 4.3, 4.4): How it is made, the open orders (no money in them), the agreed price range (the Owner only here).
+    routeSummary: DEMO_ROUTE,
+    ...(role === 'designer' ? {} : { orders: { status: 'ready' as const, value: DEMO_STYLE_ORDERS }, ordersOpen: true }),
+    ...(role === 'owner' ? { agreed: { status: 'ready' as const, value: ROWS[0]! } } : {}),
     ...overrides,
   }
+}
+
+// ---- owb-pd4: How it is made and the open orders of DEMO-JKT-01 (made up) --------------------------------------------------
+
+/** The route summary of revision 3 (pd1 shape: department, number, short name, tone, icon — never a minute). */
+export const DEMO_ROUTE: RouteSummaryStep[] = [
+  { departmentId: uid('6666', 1), number: 1, shortName: 'Pattern', tone: 'blue', icon: 'ruler' },
+  { departmentId: uid('6666', 2), number: 2, shortName: 'Cutting', tone: 'orange', icon: 'scissors' },
+  { departmentId: uid('6666', 4), number: 4, shortName: 'Stitching', tone: 'cyan', icon: 'shirt' },
+  { departmentId: uid('6666', 5), number: 5, shortName: 'Quality', tone: 'purple', icon: 'shield-check' },
+  { departmentId: uid('6666', 6), number: 6, shortName: 'Packing', tone: 'yellow', icon: 'package' },
+]
+
+/** The open order lines of DEMO-JKT-01 (pd1 shape): two orders in sizes, one made to measure per rider. */
+export const DEMO_STYLE_ORDERS: StyleOrders = {
+  lines: [
+    { orderId: uid('5555', 1), orderNumber: 'SO-2026-0141', customer: { id: BRANDS[0]!.id, code: 'BR-DEMO', name: 'Brand Alpha' }, lineId: uid('5556', 1), quantity: 24, sizes: '48–56', revision: 2, measurement: null, life: 'IN_PRODUCTION' },
+    { orderId: uid('5555', 1), orderNumber: 'SO-2026-0141', customer: { id: BRANDS[0]!.id, code: 'BR-DEMO', name: 'Brand Alpha' }, lineId: uid('5556', 2), quantity: 6, sizes: '58', revision: 2, measurement: null, life: 'IN_PRODUCTION' },
+    { orderId: uid('5555', 2), orderNumber: 'SO-2026-0152', customer: { id: uid('4444', 9), code: 'BR-BETA', name: 'Brand Beta' }, lineId: uid('5556', 3), quantity: 1, sizes: null, revision: 3, measurement: 'FILE', life: 'CONFIRMED' },
+    { orderId: uid('5555', 3), orderNumber: 'SO-2026-0158', customer: { id: uid('4444', 9), code: 'BR-BETA', name: 'Brand Beta' }, lineId: uid('5556', 4), quantity: 1, sizes: null, revision: 3, measurement: 'MISSING', life: 'SENT' },
+  ],
+  totals: { openOrders: 3, openPieces: 32 },
 }
 
 // ---- materials of the BOM (their colours fill the colour grid) ---------------------------------------------------------

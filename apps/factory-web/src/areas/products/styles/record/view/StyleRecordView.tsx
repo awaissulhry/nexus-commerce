@@ -12,7 +12,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { BomView, StyleView } from '../../api'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
-import { bandPrimaryOf, draftOf, editableRevision, isRoutingBlocker, isWideTab, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, VARIANTS_ANCHOR, type StyleTab } from '../../model'
+import { bandPrimaryOf, draftOf, editableRevision, isRoutingBlocker, isWideTab, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, type StyleTab } from '../../model'
 // ---- owb-pd4 (step 4.2): the band by right, the Product sheet, the held tabs ----
 import { bandPictureOf, madeForOf, sheetHref } from '../product-model'
 import { PRODUCT_NS, useProductWords } from '../product-words'
@@ -25,8 +25,7 @@ import { PrepacksSection } from '../prepacks/view/PrepacksSection'
 import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
 // B-W2b-241: the BOM tab's problem mark from THE check.
 import { bomMarkCount } from '../../bom/depth/model'
-// B-W2b-236: Overview & variants › Sketches and pictures; Patterns › Pattern files.
-import { GallerySection } from '../gallery/view/GallerySection'
+// B-W2b-236: Patterns › Pattern files (owb-pd4: Sketches and pictures moved into the Overview's "Variants and markets").
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
 // B-W2b-240: Sizes & measurements › Measurement spec.
 import { SpecSection } from '../spec/view/SpecSection'
@@ -35,7 +34,6 @@ import { TabBody } from './TabBody'
 import { VersionsTab } from '../../versions/view/VersionsTab'
 import { CompareDialog } from '../../versions/view/CompareDialog'
 import { ReleaseGateDialog } from '../../release/view/ReleaseGateDialog'
-import { VariantsTab } from './VariantsTab'
 // B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
 import type { StyleDepthSlots } from '../overview/slots'
 // ---- B-TH-261: the style on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
@@ -444,15 +442,9 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
           </RecordNotices>
 
           {tab === 'overview' ? (
-            // B-W2b-236 + B-TH-261: Overview & variants — the identity and its side, Sketches and pictures, then the size range, the
-            // colourways and the SKU matrix (Colourways & sizes, merged here: every action kept).
-            <div className="fw-st-stack-lg">
-              <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
-              <GallerySection model={model.gallery} actions={actions?.gallery} />
-              <section id={VARIANTS_ANCHOR} className="fw-st-variants" aria-label={t('record.variantsLabel')}>
-                <VariantsTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
-              </section>
-            </div>
+            // owb-pd4 (step 4.3): the Overview in the section kit — its last, closed section "Variants and markets" holds Sketches and
+            // pictures, the colourways and the SKU matrix (B-W2b-236 + B-TH-261: every action kept).
+            <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
           ) : tab === 'patterns' ? (
             // B-W2b-236: Patterns' sections — Pattern files per revision and size range, then the pattern pieces.
             <div className="fw-st-stack-lg">
