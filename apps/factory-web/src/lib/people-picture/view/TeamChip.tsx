@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import type { PictureSource } from '../model'
 import { PeoplePicture } from './PeoplePicture'
 
@@ -13,7 +14,7 @@ export interface TeamChipProps {
   readonly team: PictureSource & { readonly name: string }
 }
 
-export function TeamChip({ team }: TeamChipProps) {
+export function TeamChip({ team }: TeamChipProps): ReactElement {
   return (
     <span className="fw-ppic-chip">
       <PeoplePicture source={{ ...team, who: 'team' }} size="sm" nameBeside />

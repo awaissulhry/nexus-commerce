@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import { Button } from '@nexus/ui/primitives'
 import { tableMinWidth } from '../model'
 import { WindowShell, type WindowAct } from './WindowShell'
@@ -23,7 +23,7 @@ export interface WindowShellLabModel {
   readonly table?: { readonly columns: readonly string[]; readonly rows: readonly (readonly string[])[] }
 }
 
-export function WindowShellLab({ model }: { model: WindowShellLabModel }) {
+export function WindowShellLab({ model }: { model: WindowShellLabModel }): ReactElement {
   const acts = model.show !== 'show'
   const act: WindowAct | null = acts && model.actWords ? { words: model.actWords, onAct: () => undefined, held: model.show === 'held' ? (model.held ?? null) : null, busy: model.show === 'busy', danger: model.show === 'danger' } : null
   return (

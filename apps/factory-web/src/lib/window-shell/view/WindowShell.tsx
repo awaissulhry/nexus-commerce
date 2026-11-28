@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { Button } from '@nexus/ui/primitives'
 import { Modal } from '../../i18n/ds-parts'
 import { actHeldOf, windowFootOf, windowKeyOf } from '../model'
@@ -52,7 +52,7 @@ export interface WindowShellProps {
   readonly children: ReactNode
 }
 
-export function WindowShell({ open, onClose, title, subtitle, act = null, more, size = 'md', closeHeld = null, children }: WindowShellProps) {
+export function WindowShell({ open, onClose, title, subtitle, act = null, more, size = 'md', closeHeld = null, children }: WindowShellProps): ReactElement {
   const t = useWindowWords()
   const body = useRef<HTMLDivElement>(null)
   const foot = windowFootOf({ acts: act !== null, more: more !== undefined && more !== null })

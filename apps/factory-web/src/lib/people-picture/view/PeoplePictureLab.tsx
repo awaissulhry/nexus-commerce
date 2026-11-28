@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import type { PictureSource } from '../model'
 import { PeoplePicture } from './PeoplePicture'
 import { TeamChip } from './TeamChip'
@@ -12,7 +13,7 @@ export interface PeoplePictureLabModel {
   readonly rows: readonly { readonly label: string; readonly pictures: readonly PictureSource[]; readonly chips?: boolean }[]
 }
 
-export function PeoplePictureLab({ model }: { model: PeoplePictureLabModel }) {
+export function PeoplePictureLab({ model }: { model: PeoplePictureLabModel }): ReactElement {
   return (
     <div className="fw-ppic-lab">
       {model.rows.map((row) => (

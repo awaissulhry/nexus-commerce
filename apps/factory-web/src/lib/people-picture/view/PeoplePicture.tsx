@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import { Briefcase, Factory, Flag, ImageIcon, Layers, Package, Ruler, Scissors, Shield, Shirt, Truck, Users } from 'lucide-react'
 import { pictureOf, type PictureIcon, type PictureSource } from '../model'
 import '../people-picture.css'
@@ -36,7 +37,7 @@ export interface PeoplePictureProps {
   readonly nameBeside?: boolean
 }
 
-export function PeoplePicture({ source, size = 'md', nameBeside = false }: PeoplePictureProps) {
+export function PeoplePicture({ source, size = 'md', nameBeside = false }: PeoplePictureProps): ReactElement {
   const face = pictureOf(source)
   const Icon = face.icon ? ICONS[face.icon] : null
   const className = ['fw-ppic', `is-${size}`, `is-${face.who}`, `t-${face.tone}`].join(' ')
