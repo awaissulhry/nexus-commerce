@@ -5,6 +5,10 @@ import { manifest } from './manifest'
 import { setFlags } from './flags'
 import { sayLate } from './late'
 import { flagsContract, lateContract } from './signals-contract'
+import { basketsBoard } from './board'
+import { boardContract, fromTheFloorContract, lateAnswerContract, teamContract } from './board-contract'
+import { answerLate, fromTheFloor } from './from-the-floor'
+import { teamHome } from './team'
 // ---- end server B imports ----
 
 /**
@@ -19,5 +23,13 @@ export default defineRoutes('production.baskets', manifest, async (app) => {
     const answer = await sayLate(request, request.body, idempotencyKeyFrom(request))
     return reply.code(answer.replayed ? 200 : 201).send(answer)
   })
+
+  app.get('/production/baskets/board', { schema: boardContract }, async (request) => basketsBoard(request, request.query))
+
+  app.get('/production/baskets/team', { schema: teamContract }, async (request) => teamHome(request))
+
+  app.get('/production/baskets/from-the-floor', { schema: fromTheFloorContract }, async (request) => fromTheFloor(request, request.query))
+
+  app.post('/production/baskets/late/:id/answer', { schema: lateAnswerContract }, async (request) => answerLate(request, request.params.id, request.body, idempotencyKeyFrom(request)))
   // ---- end server B ----
 })
