@@ -142,6 +142,8 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
 
     const sourceLines = await readLines(tx, sourceId)
     const lines = copyLines(sourceLines, newId)
+    // owb-pd3 step 3.3: the main material travels with its line (by place: the copy keeps every place).
+    const mainSeq = sourceLines.find((line) => line.isMain === true)?.seq ?? null
     if (lines.length > 0) {
       await tx.bomLine.createMany({
         data: lines.map((line) => ({
@@ -163,6 +165,7 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
           note: line.note,
           // B-W2b-88: the step that uses it, by place: the copied routing keeps every place.
           routingSeq: line.routingSeq ?? null,
+          ...(mainSeq !== null && line.seq === mainSeq ? { isMain: true } : {}),
           ...stamp,
         })),
       })

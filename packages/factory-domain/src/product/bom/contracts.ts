@@ -80,6 +80,8 @@ export const addLineBody = input({
   note: lineFields.note,
   seq: lineFields.seq.optional(),
   routingSeq: lineFields.routingSeq,
+  /** owb-pd3: the main material (one line of a revision): true moves the mark to this line. */
+  isMain: z.boolean().optional(),
 })
 export type AddLineBody = z.output<typeof addLineBody>
 
@@ -101,6 +103,8 @@ export const updateLineBody = input({
   note: lineFields.note,
   seq: lineFields.seq.optional(),
   routingSeq: lineFields.routingSeq,
+  /** owb-pd3: true moves the main-material mark to this line; false on the main line is refused (MAIN_REQUIRED). */
+  isMain: z.boolean().optional(),
 })
 export type UpdateLineBody = z.output<typeof updateLineBody>
 
@@ -183,6 +187,10 @@ export const bomLineView = output({
    * in the material's base unit (rounded half up to 4 decimals); null where the line has no quantity for the size.
    */
   bySize: z.array(output({ size: z.string(), qty: z.string().nullable(), gross: z.string().nullable(), base: z.string().nullable() })),
+  /** owb-pd3: the main material (the line the customer's leather choice hangs on; it cannot be taken out). */
+  isMain: z.boolean().optional(),
+  /** owb-pd3: the material's wait in calendar days (its own, else its preferred source's, else that supplier's); null: none known. */
+  leadTimeDays: z.number().int().nullable().optional(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),

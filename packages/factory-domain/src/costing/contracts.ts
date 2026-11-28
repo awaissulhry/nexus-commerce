@@ -416,6 +416,11 @@ export const costingSettingsView = output({
    * overheadPct is then 0 and not read). Always false on the tenant-wide row.
    */
   overheadFromTenant: z.boolean(),
+  /**
+   * owb-pd3 (S4 settle 9): "one person may keep a cost" — on a company's own row only (the tenant-wide row is always false). ON: Keep
+   * makes and approves a standard cost in one command by the same person, with a reason. Optional for readers made before it.
+   */
+  oneKeeperAllowed: z.boolean().optional(),
   version: z.number().int(),
   updatedAt: instant(),
 })
@@ -443,5 +448,9 @@ export const saveSettingsBody = input({
    */
   overheadFromTenant: z.boolean().optional(),
   version: z.number().int().min(1).optional(),
+  /** owb-pd3: the company's switch "one person may keep a cost" (a company's own row only); left out: as it is. */
+  oneKeeperAllowed: z.boolean().optional(),
+  /** owb-pd3: why the switch changes (required with a change of it; kept in the audit). */
+  reason: z.string().trim().min(1).max(500).optional(),
 })
 export type SaveSettingsBody = z.output<typeof saveSettingsBody>

@@ -12,6 +12,8 @@ import { askApproval, withdrawPending } from '../../../platform/approvals/engine
 import type { TaskRef } from '../../../platform/approvals/kinds/kind'
 import { decidersOf } from '../../../platform/approvals/store'
 import { contextOf } from '../../product/bom/store'
+// owb-pd3 (Keep): a sheet Keep made leaves its standard costs behind when approved.
+import { keepStandardsInCommand, keptSheetOf } from '../keep/standards'
 import { refused, versionRefusalOf } from './refusals'
 import { leftOutOf, linesOf, lockSeries, readSheetFor, SHEET_COLUMNS, type SheetRow } from './store'
 import { assertDraft, emitChanged, versionRowOf } from './versions'
@@ -32,6 +34,10 @@ import { assertDraft, emitChanged, versionRowOf } from './versions'
  *   take back  costing.sheets.approve: an approved version FROZEN (WITHDRAWN) with a reason (a mistake found)
  *   season     the season's close freezes its approved versions (SEASON_CLOSED, by the system) and sends back its drafts'
  *              waiting requests, in the close's own command (modules/sales/seasons calls `freezeSeasonSheets`)
+ *   Keep       owb-pd3 (S4 settle 9): Keep's command (modules/costing/keep) writes a version and, where the company lets one person
+ *              keep a cost, approves it by the same person with the reason (`approveAloneInCommand`; the redefined guard allows maker
+ *              = approver only then), else asks the same request (`askForYesInCommand`). A sheet Keep made leaves its standard costs
+ *              behind when approved, either way (keep/standards.ts).
  */
 
 const tenantOf = (tools: CommandTools): string => ('tenantId' in tools.context ? tools.context.tenantId : '') ?? ''
@@ -81,17 +87,43 @@ export async function submitVersion(caller: CommandCaller, sheetId: string, body
       const kept = sheet.inputs && typeof sheet.inputs === 'object' && !Array.isArray(sheet.inputs) ? (sheet.inputs as Record<string, unknown>) : {}
       await tx.costSheet.update({ where: { id: sheetId }, data: { inputs: { ...kept, approval: { coveredByTyped: true, saidById: asker } } as Prisma.InputJsonObject, updatedAt: now }, select: { id: true } })
     }
-    const roleId = await approverRoleOf(tools, sheet.companyId, [asker, ...(sheet.createdById ? [sheet.createdById] : [])])
-    const outcome = await askApproval(tools, { kind: COST_SHEET_KIND, recordId: sheetId, requester: { userId: asker }, note: body.note ?? null, ...(roleId ? { whenNoRule: { approverRoleId: roleId, requireStepUp: false } } : {}) })
-    if (!outcome.asked) throw refused('NO_APPROVER')
-    await tx.costSheet.update({ where: { id: sheetId }, data: { approvalTaskId: outcome.taskId, updatedAt: now }, select: { id: true } })
-    tools.audit({ recordType: 'CostSheet', recordId: sheetId, companyId: sheet.companyId, after: { taskId: outcome.taskId, ruleIds: outcome.ruleIds, approverRoleId: outcome.approverRoleId, approverUserId: outcome.approverUserId, coveredByTyped: leftOut.length > 0 } })
-    emitChanged(tools, sheet, 'DRAFT', 'submitted')
+    await askForYesInCommand(tools, sheet, asker, body.note ?? null, { coveredByTyped: leftOut.length > 0 })
     return { sheet: await versionRowOf(tx, sheetId) }
   }).catch((error: unknown) => {
     throw versionRefusalOf(error)
   })
   return result
+}
+
+/**
+ * A draft's COST_SHEET request asked, inside a command (submit, and owb-pd3's Keep when the company keeps four eyes): an approval
+ * rule in force names who decides, else the costing owner's role with someone other than the asker and the maker; none → NO_APPROVER.
+ */
+export async function askForYesInCommand(tools: CommandTools, sheet: Pick<SheetRow, 'id' | 'companyId' | 'createdById' | 'styleId' | 'sheetVersion'>, asker: string, note: string | null, more: Record<string, unknown> = {}): Promise<string> {
+  const roleId = await approverRoleOf(tools, sheet.companyId, [asker, ...(sheet.createdById ? [sheet.createdById] : [])])
+  const outcome = await askApproval(tools, { kind: COST_SHEET_KIND, recordId: sheet.id, requester: { userId: asker }, note, ...(roleId ? { whenNoRule: { approverRoleId: roleId, requireStepUp: false } } : {}) })
+  if (!outcome.asked) throw refused('NO_APPROVER')
+  await tools.tx.costSheet.update({ where: { id: sheet.id }, data: { approvalTaskId: outcome.taskId, updatedAt: tools.now }, select: { id: true } })
+  tools.audit({ recordType: 'CostSheet', recordId: sheet.id, companyId: sheet.companyId, after: { taskId: outcome.taskId, ruleIds: outcome.ruleIds, approverRoleId: outcome.approverRoleId, approverUserId: outcome.approverUserId, ...more } })
+  emitChanged(tools, sheet, 'DRAFT', 'submitted')
+  return outcome.taskId
+}
+
+/**
+ * owb-pd3 (Keep, S4 settle 9): a draft approved by its own maker, with the reason — only where the company's own costing settings let
+ * one person keep a cost (the redefined factory_cost_sheet_guard holds the same rule for every login). Under the series' lock the
+ * version in force is FROZEN (SUPERSEDED) and this one APPROVED; the audit says `keptAlone`; the event is cost_sheet.version_changed
+ * (state APPROVED: no request was decided, and cost_sheet.approved names the request's task).
+ */
+export async function approveAloneInCommand(tools: CommandTools, sheet: SheetRow, byId: string, reason: string): Promise<void> {
+  assertDraft(sheet)
+  if (!(await seasonOpen(tools, sheet.seasonId))) throw refused('SEASON_CLOSED')
+  await lockSeries(tools.tx, tenantOf(tools), sheet.key)
+  const supersededId = await freezeInForce(tools, sheet, byId)
+  await tools.tx.costSheet.update({ where: { id: sheet.id }, data: { state: 'APPROVED', approvedAt: tools.now, approvedById: byId, keptAloneReason: reason, version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+  tools.audit({ action: 'costing.approveCostSheetVersion', recordType: 'CostSheet', recordId: sheet.id, companyId: sheet.companyId, before: { state: 'DRAFT' }, after: { state: 'APPROVED', approvedById: byId, keptAlone: true, supersededId }, reason })
+  // No request decided it (cost_sheet.approved names the request's task): the screens hear the version changed, now APPROVED.
+  emitChanged(tools, sheet, 'APPROVED', 'updated')
 }
 
 /** Freezes the series' version in force (if any, other than `sheet`) as SUPERSEDED, by the person who approved its successor. */
@@ -121,6 +153,13 @@ export async function approvedInCommand(tools: CommandTools, task: TaskRef): Pro
     await tools.tx.costSheet.update({ where: { id: sheet.id }, data: { state: 'APPROVED', approvedAt: tools.now, approvedById: task.decidedById, approvalTaskId: task.id, version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'costing.approveCostSheetVersion', recordType: 'CostSheet', recordId: sheet.id, companyId: sheet.companyId, before: { state: 'DRAFT' }, after: { state: 'APPROVED', approvedById: task.decidedById, taskId: task.id, supersededId } })
     tools.emit({ type: 'cost_sheet.approved', subject: sheet.id, companyId: sheet.companyId, payload: { sheetId: sheet.id, styleId: sheet.styleId, sheetVersion: sheet.sheetVersion, taskId: task.id, approvedById: task.decidedById, supersededId } })
+    // owb-pd3: a sheet Keep sent for approval leaves its standard costs behind now (a standard kept today already: they follow
+    // from Finance; the approval stands).
+    const kept = keptSheetOf(sheet.inputs)
+    if (kept) {
+      const outcome = await keepStandardsInCommand(tools, sheet, kept.reason)
+      tools.audit({ action: 'costing.keepStandards', recordType: 'CostSheet', recordId: sheet.id, companyId: sheet.companyId, after: { standards: outcome.written, keptToday: outcome.keptToday } })
+    }
   } catch (error) {
     throw versionRefusalOf(error)
   }
