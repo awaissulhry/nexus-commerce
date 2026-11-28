@@ -11,7 +11,7 @@
 -- another row reads only what the role that fires it may read and skips a row this session cannot see — except a file a
 -- record names as its picture, its proof or its label: one this session cannot open is refused, never skipped.
 --
--- NEW here (PL-schema § 5A, guards G2-G9 and G11):
+-- NEW here (PL-schema § 5A, guards G2-G9 and G11; G12 the base lead's ask of 2026-11-28):
 --   factory_order_workflow_refuse_truncate        BEFORE TRUNCATE on every new table that is not append-only (the
 --                                                 append-only ones use factory_refuse_production_ledger_change).
 --   factory_order_picture_check (G2)              + triggers SalesOrder_picture_check, PortalOrderRequest_picture_check
@@ -65,6 +65,9 @@
 --   factory_party_office_person_guard (G11)       + triggers PartyOfficePerson_guard, PartyOfficePerson_no_truncate; index
 --                                                 PartyOfficePerson_one_open: an active office person of the tenant, one
 --                                                 open row per customer and person, ended once, never deleted.
+--   factory_message_event_check (G12)            + trigger Message_event_system (AFTER INSERT, WHEN it names a quiet line's key
+--                                                 or arguments): a SYSTEM message only (a portal post or a person's message
+--                                                 never carries one); the arguments only beside the key, one object.
 --
 -- Earlier functions REDEFINED here, each ONCE, from its newest body, word for word but for the lines marked owb G1 / owb G10:
 --   factory_portal_order_request_guard  (…_order_start_guards, OD s.1: its newest; no later migration redefines it)
@@ -1193,6 +1196,34 @@ CREATE TRIGGER "PartyOfficePerson_guard" AFTER INSERT OR UPDATE OR DELETE ON "Pa
 CREATE TRIGGER "PartyOfficePerson_no_truncate" BEFORE TRUNCATE ON "PartyOfficePerson"
   FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
 CREATE UNIQUE INDEX "PartyOfficePerson_one_open" ON "PartyOfficePerson" ("tenantId", "partyId", "userId") WHERE "endedAt" IS NULL;
+
+-- =====================================================================================================================
+-- Message (threads.prisma; owb G12, the base lead's ask of 2026-11-28; PL-schema § 5A row 6): a quiet line — what happened on
+-- the record, in the reader's own words: the event's key (a word key of the web, `order.confirmed`) and its arguments.
+--   INSERT    a message with a key or arguments is the system's own (authorKind SYSTEM, so no author id: the message guard);
+--             the arguments only beside the key, as one JSON object; the key a word key (a lower-case letter first, then
+--             letters, digits, "_" and "-", parts joined by ".", up to 120). The partner role's INSERT grant covers both columns:
+--             a portal post (always PARTY, …_portal_frame_w2b_guards) never carries a quiet line's key, nor does a person's
+--             message in the office.
+-- A message is append-only (Message_append_only): what it says is fixed at its insert.
+CREATE FUNCTION "factory_message_event_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."authorKind" <> 'SYSTEM' THEN
+    RAISE EXCEPTION 'threads: message % carries a quiet line''s key; a quiet line is a SYSTEM message, never a person''s (it is %)', NEW."id", NEW."authorKind"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."eventKey" IS NULL OR NEW."eventKey" !~ '^[a-z][A-Za-z0-9_-]*([.][A-Za-z0-9_-]+)*$' OR length(NEW."eventKey") > 120
+     OR (NEW."eventArgs" IS NOT NULL AND jsonb_typeof(NEW."eventArgs"::jsonb) IS DISTINCT FROM 'object') THEN
+    RAISE EXCEPTION 'threads: quiet line % names its key (a word key: letters, digits, _ and -, parts joined by ., up to 120), and its arguments only beside it, as one object', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "Message_event_system" AFTER INSERT ON "Message"
+  FOR EACH ROW WHEN (NEW."eventKey" IS NOT NULL OR NEW."eventArgs" IS NOT NULL)
+  EXECUTE FUNCTION "factory_message_event_check"();
 
 -- =====================================================================================================================
 -- Bundle (MES-065, MES-068, MES-073; owb G10): REDEFINES factory_bundle_guard (…_production_leftovers_guards, B-W1-40/41: its
