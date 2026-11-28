@@ -1134,3 +1134,148 @@ CREATE TRIGGER "Shipment_warehouse_leg_delivered" BEFORE UPDATE OF "status" ON "
   FOR EACH ROW WHEN (NEW."status" = 'DELIVERED' AND OLD."status" IS DISTINCT FROM NEW."status")
   EXECUTE FUNCTION "factory_shipment_warehouse_leg_delivered_check"();
 
+-- =====================================================================================================================
+-- Bundle (MES-065, MES-068, MES-073; owb G10): REDEFINES factory_bundle_guard (…_production_leftovers_guards, B-W1-40/41: its
+-- newest), word for word but for the lines marked owb G10 (a)-(c): a basket made at "Print and start the work" (madeAtPrint)
+-- only where the site turned it on (ProductionSettings.basketsAtPrint), before its cut (no cut log entry); while ACTIVE it
+-- takes the entries of the hides cut for it later and they only grow (a cell is cut from several hides over time), so the
+-- lot trace and the final evidence keep reading its hide and lot; madeAtPrint never changes. Its trigger stays as it is.
+-- (The comment block of …_production_leftovers_guards, with owb G10:)
+--   INSERT     ACTIVE, with its first ticket (no replaced code), for a RELEASED or IN_PROGRESS work order; at least one
+--              garment, exactly one for a made-to-measure unit (single-piece mode); its cut log entries are entries of
+--              its work order, neither reversals nor named twice. owb G10 (a): made at print only on a site whose floor rules
+--              turn baskets at print on (none: off), and with no cut log entry yet.
+--   UPDATE     an UPDATE that changes nothing passes; only a reprint (a new code; the old one appended to the replaced
+--              codes, MES-073) of an ACTIVE bundle, with its BundleReprint row (the reason), or ACTIVE → VOID with its
+--              time and reason; a VOID bundle never changes. Its client event id never changes (a frozen column).
+--              owb G10 (b): and an ACTIVE basket made at print adds cut log entries (every one it names stays; each new one
+--              an entry of its work order, not a reversal, none named twice). owb G10 (c): madeAtPrint never changes.
+--   every row  VOID exactly with its time and reason; a client event id, when it has one, is not blank.
+--   DELETE     refused (voided). TRUNCATE refused.
+CREATE OR REPLACE FUNCTION "factory_bundle_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  kept CONSTANT text[] := ARRAY['tenantId', 'siteId'];
+  changing CONSTANT text[] := ARRAY['code', 'replacedCodes', 'status', 'voidedAt', 'voidReason', 'version', 'updatedAt'];
+  order_state text;
+  order_kind text;
+  -- owb G10 (a): the site's switch "baskets at print". owb G10 (b): cutLogIds while a basket made at print takes entries.
+  baskets_at_print boolean;
+  attaching text[] := ARRAY[]::text[];
+  -- end owb G10 (a), (b)
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'production: bundle % is voided, never deleted', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."status" <> 'ACTIVE' OR cardinality(NEW."replacedCodes") > 0 THEN
+      RAISE EXCEPTION 'production: bundle % starts ACTIVE with its first ticket', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."quantity" < 1 THEN
+      RAISE EXCEPTION 'production: bundle % carries at least one garment', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT w."status"::text, w."kind"::text INTO order_state, order_kind
+      FROM "WorkOrder" w WHERE w."tenantId" = NEW."tenantId" AND w."siteId" = NEW."siteId" AND w."id" = NEW."workOrderId";
+    IF FOUND THEN
+      IF order_state NOT IN ('RELEASED', 'IN_PROGRESS') THEN
+        RAISE EXCEPTION 'production: work order % is %; bundles are made only for a RELEASED or IN_PROGRESS work order', NEW."workOrderId", order_state
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF order_kind = 'MADE_TO_MEASURE' AND NEW."quantity" <> 1 THEN
+        RAISE EXCEPTION 'production: bundle % of made-to-measure work order % is the one garment (single-piece mode, MES-068)', NEW."id", NEW."workOrderId"
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF (SELECT count(DISTINCT x) FROM unnest(NEW."cutLogIds") AS x) <> cardinality(NEW."cutLogIds")
+         OR EXISTS (SELECT 1 FROM unnest(NEW."cutLogIds") AS x(id)
+                     WHERE NOT EXISTS (SELECT 1 FROM "CutLog" c
+                                        WHERE c."tenantId" = NEW."tenantId" AND c."siteId" = NEW."siteId" AND c."workOrderId" = NEW."workOrderId"
+                                          AND c."id" = x.id AND c."reversalOfId" IS NULL)) THEN
+        RAISE EXCEPTION 'production: bundle % names cut log entries of its work order, each once, none a reversal', NEW."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    -- owb G10 (a) (plan.md § 4 G10; PL-review § 4 guard 5): a basket made at "Print and start the work", before cutting, only
+    -- where the site turned it on (its ProductionSettings row, read by the site's id; no row: off, as every site starts), and
+    -- with no cut log entry yet (its entries are added as its hides are cut, (b)).
+    IF NEW."madeAtPrint" THEN
+      SELECT s."basketsAtPrint" INTO baskets_at_print
+        FROM "ProductionSettings" s WHERE s."tenantId" = NEW."tenantId" AND s."siteId" = NEW."siteId" AND s."id" = NEW."siteId";
+      IF NOT coalesce(baskets_at_print, false) THEN
+        RAISE EXCEPTION 'production: baskets are made at print only where the site turned it on (bundle %)', NEW."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF cardinality(NEW."cutLogIds") > 0 THEN
+        RAISE EXCEPTION 'production: bundle % is made at print, before its cut: it names no cut log entry yet', NEW."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    -- end owb G10 (a)
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NEW;
+    END IF;
+    -- owb G10 (b) (plan.md § 4 G10; PL-review § 4 guard 1; lead 88's yes 07:50 to S3's ask of 07:33): an ACTIVE basket made at
+    -- print takes the cut log entries of the hides cut for it, as they are cut — a cell is cut from several hides over time, so
+    -- the list only grows: every entry it names stays (OLD ⊆ NEW) and each new one passes the insert's own check (an entry of
+    -- its work order, not a reversal, none named twice). Any other bundle's entries still never change: for it cutLogIds stays
+    -- outside the columns that may change, so the whole-row compare below refuses it with its words, as before.
+    IF NEW."cutLogIds" IS DISTINCT FROM OLD."cutLogIds" AND OLD."madeAtPrint" THEN
+      IF OLD."status" <> 'ACTIVE' OR NEW."status" <> 'ACTIVE' OR NOT (OLD."cutLogIds" <@ NEW."cutLogIds") THEN
+        RAISE EXCEPTION 'production: basket % made at print only adds cut log entries, while ACTIVE; every entry it names stays', OLD."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF (SELECT count(DISTINCT x) FROM unnest(NEW."cutLogIds") AS x) <> cardinality(NEW."cutLogIds")
+         OR EXISTS (SELECT 1 FROM unnest(NEW."cutLogIds") AS x(id)
+                     WHERE NOT (x.id = ANY (OLD."cutLogIds"))
+                       AND NOT EXISTS (SELECT 1 FROM "CutLog" c
+                                        WHERE c."tenantId" = NEW."tenantId" AND c."siteId" = NEW."siteId" AND c."workOrderId" = NEW."workOrderId"
+                                          AND c."id" = x.id AND c."reversalOfId" IS NULL)) THEN
+        RAISE EXCEPTION 'production: bundle % names cut log entries of its work order, each once, none a reversal', NEW."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+      attaching := ARRAY['cutLogIds'];
+    END IF;
+    -- end owb G10 (b)
+    -- owb G10 (c): madeAtPrint is in neither `changing` nor `attaching`: this compare keeps it as the bundle was made.
+    IF (to_jsonb(NEW) - (kept || changing || attaching)) IS DISTINCT FROM (to_jsonb(OLD) - (kept || changing || attaching)) THEN
+      RAISE EXCEPTION 'production: bundle % changes only by a reprint of its ticket or by being voided', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- end owb G10 (c)
+    IF OLD."status" = 'VOID' THEN
+      RAISE EXCEPTION 'production: bundle % is VOID; it never changes', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF (NEW."code", NEW."replacedCodes") IS DISTINCT FROM (OLD."code", OLD."replacedCodes")
+       AND (NEW."code" = OLD."code" OR NEW."replacedCodes" IS DISTINCT FROM (OLD."replacedCodes" || OLD."code")
+            OR NEW."code" = ANY (NEW."replacedCodes") OR NEW."status" <> 'ACTIVE') THEN
+      RAISE EXCEPTION 'production: a reprint of bundle % gives its ticket a new code and voids the old one (MES-073)', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."code" IS DISTINCT FROM OLD."code"
+       AND NOT EXISTS (SELECT 1 FROM "BundleReprint" r
+                        WHERE r."tenantId" = NEW."tenantId" AND r."bundleId" = NEW."id" AND r."code" = NEW."code" AND r."replacedCode" = OLD."code") THEN
+      RAISE EXCEPTION 'production: a reprint of bundle % says why: its BundleReprint row (% replacing %, with the reason) comes first (MES-073)', OLD."id", NEW."code", OLD."code"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF btrim(NEW."code") = '' THEN
+    RAISE EXCEPTION 'production: bundle % has a code', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."clientEventId" IS NOT NULL AND btrim(NEW."clientEventId") = '' THEN
+    RAISE EXCEPTION 'production: bundle % has a client event id that is not blank, or none', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."status" = 'VOID') <> (NEW."voidedAt" IS NOT NULL)
+     OR (NEW."status" = 'VOID') <> (btrim(coalesce(NEW."voidReason", '')) <> '') THEN
+    RAISE EXCEPTION 'production: bundle % is % with the wrong void (a VOID bundle has its time and reason)', NEW."id", NEW."status"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
