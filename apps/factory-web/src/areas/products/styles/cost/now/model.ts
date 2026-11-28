@@ -38,6 +38,19 @@ export const partOf = (category: string): CostPart => (Object.hasOwn(PART_OF, ca
 /** The Cost tab opens only with the cost grain (design § 5zh: "Only the owner sees this tab"): costing.view AND money.cost. */
 export const costTabOpen = (can: { readonly costView: boolean }, grains: { readonly cost: boolean }): boolean => can.costView && grains.cost
 
+/**
+ * owb-pd8b (pd3 as landed): price against cost is read with the price, the cost AND the margin grain (what a price earns is a margin) —
+ * without one of them the Cost tab does not ask: the card says why, and Keep (which counts with its cost now) says why too.
+ */
+/**
+ * owb-pd8b (pd3 as landed): Keep keeps it alone only where the company's own switch is on AND the person may approve cost sheets
+ * (costing.sheets.approve); else it goes to Finance (four eyes). The Keep window says which before the press.
+ */
+export const KEEP_ALONE_RIGHT = 'costing.sheets.approve'
+export const keepsAlone = (oneKeeper: boolean, can: (permission: string) => boolean): boolean => oneKeeper && can(KEEP_ALONE_RIGHT)
+
+export const priceAgainstCostOpen = (grains: { readonly price: boolean; readonly cost: boolean; readonly margin: boolean }): boolean => grains.price && grains.cost && grains.margin
+
 const num = (value: string | null | undefined): number => (value === null || value === undefined || value === '' ? 0 : Number(value))
 /** Two decimals, as every money column shows it. */
 export const cents = (value: number): string => (Math.round(value * 100) / 100).toFixed(2)
@@ -195,7 +208,8 @@ export function keepDoneOf(answer: { readonly mode: 'KEPT' | 'SENT_FOR_APPROVAL'
   return answer.mode === 'KEPT' && answer.kept ? { key: 'keep.done.kept', params: { version: answer.kept.version, amount: money(answer.kept.amount) } } : { key: 'keep.done.sent' }
 }
 
-export const KEEP_REFUSALS = ['SAME_AS_KEPT', 'TOTAL_MOVED', 'MISSING_PARTS'] as const
+/** Keep's refusals (pd3 as landed, 409 at `refusal/<CODE>`): owb-pd8b adds KEPT_TODAY (a second Keep the same day) and NO_APPROVER. */
+export const KEEP_REFUSALS = ['SAME_AS_KEPT', 'TOTAL_MOVED', 'MISSING_PARTS', 'KEPT_TODAY', 'NO_APPROVER'] as const
 
 /** A refused write in words: a known refusal code (its own, an issue's, the end of an issue's path) first, else the kind of answer. */
 export function refusalOf(error: unknown, known: readonly string[] = KEEP_REFUSALS): Words {

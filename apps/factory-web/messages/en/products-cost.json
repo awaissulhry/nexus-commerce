@@ -58,7 +58,7 @@
     "none": "No customer has an agreed price for this product yet.",
     "lowest": "The lowest price that keeps {target} %: {amount}.",
     "lowestUnknown": "The lowest price that keeps {target} % is not known yet: the cost misses an input.",
-    "noGrains": "Prices against costs need both the price and the cost right.",
+    "noGrains": "Prices against costs need the price, the cost and the margin right: ask the person who keeps the roles.",
     "failed": "The agreed prices could not be read",
     "col": {
       "customer": "Customer",
@@ -100,7 +100,8 @@
       "same": "This cost is kept already.",
       "reason": "Say why the standard cost changes.",
       "reading": "Reading the cost…",
-      "noPrices": "The cost now could not be read: try again."
+      "noPrices": "The cost now could not be read: try again.",
+      "noGrains": "Keeping a cost here needs the price, the cost and the margin right: ask the person who keeps the roles."
     },
     "done": {
       "kept": "Kept: version {version}, {amount}. The orders count with it now.",
@@ -186,7 +187,9 @@
   "refusal": {
     "SAME_AS_KEPT": "This cost is kept already.",
     "TOTAL_MOVED": "The cost moved meanwhile: it was read again, check it and keep it once more.",
-    "MISSING_PARTS": "Parts of the cost are missing: the cost now lists what to add first."
+    "MISSING_PARTS": "Parts of the cost are missing: the cost now lists what to add first.",
+    "KEPT_TODAY": "A standard cost of this product was kept today already: a new one can be kept from tomorrow.",
+    "NO_APPROVER": "Nobody can approve this cost yet: ask the person who keeps the roles to let a Finance role approve cost sheets."
   },
   "problem": {
     "forbidden": "Your role may not do this.",
