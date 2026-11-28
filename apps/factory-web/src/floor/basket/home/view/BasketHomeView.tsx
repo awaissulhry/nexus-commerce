@@ -1,17 +1,17 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import { CircleAlert, CircleCheck, CloudOff, History, Image as ImageIcon, MessageSquare, Package, RotateCcw, UserCheck } from 'lucide-react'
-import { FloorButton, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorTone } from '@nexus/ui/floor'
+import { CircleAlert, CircleCheck, CloudOff, Package, RotateCcw } from 'lucide-react'
+import { FloorButton, FloorList, FloorListRow, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { useT } from '../../../../lib/i18n/provider'
-import type { BasketRow, ForYouItem, ForYouKind } from '../../api'
-import { deptOf, opensBasket, type DoneFlash, type HomeLists } from '../../model'
+import type { BasketRow, ForYouItem } from '../../api'
+import { deptOf, type DoneFlash, type HomeLists } from '../../model'
 import { BASKET_NS, BasketPic, RowFlags, StateFlag, StepName } from '../../parts'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import { TILE_ICON } from '../../../home/view/HomeView'
 import type { TileKey } from '../../../model'
 import { DepartmentButton, DepartmentPickWindow, type DepartmentPickAction, type DepartmentPickModel } from './DepartmentPick'
+import { ForYouList } from './ForYouList'
 import '../../basket.css'
 
 /**
@@ -51,15 +51,6 @@ export type BasketHomeAction =
   | { readonly type: 'job'; readonly key: TileKey }
   | DepartmentPickAction
 
-const ITEM_LOOK: Readonly<Record<ForYouKind, { readonly tone: FloorTone; readonly icon: ReactNode }>> = {
-  CHANGED_DESIGN: { tone: 'warning', icon: <ImageIcon /> },
-  ANSWER: { tone: 'success', icon: <MessageSquare /> },
-  SOLVED: { tone: 'info', icon: <CircleCheck /> },
-  HANDOVER: { tone: 'primary', icon: <History /> },
-  PROBLEM: { tone: 'danger', icon: <CircleAlert /> },
-  ASK: { tone: 'primary', icon: <UserCheck /> },
-}
-
 export function BasketHomeView({ model, onAction, onFrame, camera }: { readonly model: BasketHomeViewModel; readonly onAction: (action: BasketHomeAction) => void; readonly onFrame?: (action: FrameAction) => void; readonly camera?: CameraScanner }) {
   const tb = useT(BASKET_NS)
   const t = useT('floor')
@@ -69,29 +60,7 @@ export function BasketHomeView({ model, onAction, onFrame, camera }: { readonly 
     <FloorFrameView frame={model.frame} onFrame={onFrame} lead={<DepartmentButton current={department} onPress={() => onAction({ type: 'pickOpen' })} />}>
       <div className="fw-bk-stack">
         {model.flash ? <FlashLine flash={model.flash} /> : null}
-        {lists && lists.forYou.length > 0 ? (
-          <section className="fw-bk-stack fw-bk-list" aria-labelledby="fw-bk-foryou">
-            <SectionHead id="fw-bk-foryou" words={tb('homePage.forYou')} count={lists.forYou.length} />
-            <FloorList label={tb('homePage.forYou')}>
-              {lists.forYou.map((item) => (
-                <FloorListRow
-                  key={`${item.kind}:${item.bundleId ?? '-'}:${item.at}`}
-                  icon={ITEM_LOOK[item.kind].icon}
-                  tone={ITEM_LOOK[item.kind].tone}
-                  title={tb(`item.${item.kind}`)}
-                  meta={
-                    <>
-                      {item.code ? <bdi className="fw-bk-code">{item.code}</bdi> : null}
-                      {item.code && item.words ? ' · ' : null}
-                      {item.words ? <bdi>{item.words}</bdi> : null}
-                    </>
-                  }
-                  {...(opensBasket(item) ? { onPress: () => onAction({ type: 'open', code: item.code!, item }) } : {})}
-                />
-              ))}
-            </FloorList>
-          </section>
-        ) : null}
+        {lists ? <ForYouList items={lists.forYou} onOpen={(item) => onAction({ type: 'open', code: item.code!, item })} /> : null}
         <ScanInput
           label={tb('homePage.scan')}
           hint={model.scanHeld ? t('tile.held.notice') : tb('homePage.scanHint')}
