@@ -1,0 +1,30 @@
+{
+  "section": {
+    "info": "Una spedizione andata prima al nostro magazzino aspetta qui l’etichetta di spedizione del cliente, poi parte per il cliente: Inoltra al cliente. In viaggio: ha lasciato la fabbrica e non è ancora arrivata.",
+    "answer": "{at} nel nostro magazzino · {onTheWay} in viaggio",
+    "nothing": "Niente qui ora."
+  },
+  "at": {
+    "title_one": "Nel nostro magazzino · {count} capo",
+    "title_other": "Nel nostro magazzino · {count} capi",
+    "since": "Dal {day}",
+    "labelYes": "L’etichetta del cliente è qui",
+    "labelNo": "Aspetta l’etichetta del cliente",
+    "empty": "Niente aspetta qui ora."
+  },
+  "way": {
+    "title_one": "In viaggio · {count} capo",
+    "title_other": "In viaggio · {count} capi",
+    "left": "Partita il {day}",
+    "empty": "Niente è in viaggio verso qui."
+  },
+  "pieces_one": "{count} capo",
+  "pieces_other": "{count} capi",
+  "act": {
+    "sendOn": "Inoltra al cliente",
+    "arrived": "È arrivata al magazzino"
+  },
+  "none": "L’azienda non ha un magazzino proprio.",
+  "failed": "Impossibile caricare i nostri magazzini",
+  "retry": "Riprova"
+}

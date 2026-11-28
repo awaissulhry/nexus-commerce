@@ -1,0 +1,102 @@
+/*
+ * owb-ss3 step 3.4 — Warehouse › Ready to ship and Our warehouses (ready-to-ship/view, our-warehouses/view). The sections are the record
+ * kit's (lib/record-sections: `fw-pt`, a size container). DS tokens only (no raw colour): light and dark come from the tokens. A phone
+ * stacks the cards (no sideways scroll at 375 px); a wide room fills the row with them (no dead space at 1440 / 1920).
+ */
+.fw-rts,
+.fw-ows {
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-rts-groups,
+.fw-ows-rows {
+  display: grid;
+  gap: var(--nds-space-12);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+@container sec (min-width: 760px) {
+  .fw-rts-groups,
+  .fw-ows-rows { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+}
+.fw-rts-card,
+.fw-ows-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+.fw-rts-card-h,
+.fw-ows-card-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rts-card-t,
+.fw-ows-card-t {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-rts-mu,
+.fw-ows-mu {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.fw-rts-link,
+.fw-ows-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-rts-orders,
+.fw-rts-ships,
+.fw-ows-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.fw-rts-order,
+.fw-rts-ship,
+.fw-ows-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  min-height: 32px;
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+.fw-rts-ship,
+.fw-ows-item {
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.fw-rts-ship:first-child,
+.fw-ows-item:first-child { border-top: 0; }
+.fw-rts-sp,
+.fw-ows-sp { flex: 1 1 auto; }
+.fw-rts-t,
+.fw-ows-t { font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.fw-rts-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-ows-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}

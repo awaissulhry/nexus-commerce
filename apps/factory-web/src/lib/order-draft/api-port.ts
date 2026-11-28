@@ -41,6 +41,12 @@ export interface OrderDraftPort {
   removeFile(id: string, fileId: string, version: number, idempotencyKey: string): Promise<DraftRecord>
   /** od-w2.4: a file of the draft marked a logo or a reference (the DRAFT's version; a measurement sheet stays one: 409). */
   markFile(id: string, fileId: string, body: { version: number; part: MarkablePart }, idempotencyKey: string): Promise<DraftRecord>
+  // ---- owb-po3 (owb-po-server § Shape "COMMANDS", the server's owb-po1): optional, so a door that has not wired them yet (the office
+  // twin) still compiles; the ONE lines table hides Copy / Put it back where the host gives no command.
+  /** Copy a line (its model, material, sizes, options and own values): the new line comes right after it. */
+  copyLine?(id: string, lineId: string, version: number, idempotencyKey: string): Promise<DraftRecord>
+  /** A line taken out comes back as it was (its options, people and files stayed). */
+  putBackLine?(id: string, lineId: string, version: number, idempotencyKey: string): Promise<DraftRecord>
 }
 
 /** What a draft's own file may be marked (od-ts: the draft files' own values; a measurement sheet never moves). */

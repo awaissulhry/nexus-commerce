@@ -1,4 +1,4 @@
-import { defineManifest } from '../../../core/manifest'
+import { defineManifest, SIGNED_IN } from '../../../core/manifest'
 
 /**
  * Help calls (B-W2b-35; MES-142 … MES-145, MES-147, MES-137; design floor.help SCR-172, production.calls SCR-142,
@@ -26,4 +26,14 @@ export const manifest = defineManifest({
   'POST /production/calls/types': { audiences: ['office'], permission: 'production.calls.manage', scope: 'record' },
   'PATCH /production/calls/types/:typeId': { audiences: ['office'], permission: 'production.calls.manage', scope: 'record' },
   'GET /production/calls/:callId': { audiences: ['office'], permission: 'production.calls.view', scope: 'record' },
+  // ── owb-fl3 (S5 server B; order workflow, pick C): problems and asks on a phone (./floor.ts). The window's tiles and a photo or
+  // voice note on the caller's own open call are the floor's own work (floor.work, every floor role); a basket's calls are read
+  // by the floor (floor.work at its site) and the office (production.calls.view, the brand wall): one route, both rights, so the
+  // handler asks them (`SIGNED_IN`, as the departments' read).
+  'GET /production/calls/station/types': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  'POST /production/calls/:callId/files': { audiences: ['floor'], permission: 'floor.work', scope: 'record' },
+  'POST /production/calls/:callId/files/:fileId/complete': { audiences: ['floor'], permission: 'floor.work', scope: 'record' },
+  'POST /production/calls/:callId/spot': { audiences: ['floor'], permission: 'floor.work', scope: 'record' },
+  'GET /production/baskets/:code/calls': { audiences: ['office', 'floor'], permission: SIGNED_IN, scope: 'record' },
+  // ── end owb-fl3 ──
 })

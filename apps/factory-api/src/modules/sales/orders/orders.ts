@@ -16,7 +16,9 @@ import type { PriorityLevel } from '@nexus/factory-domain/planning/backlog/rank'
 import { orderUrgentIn } from './customer-urgency'
 import { urgentOrderOf } from './sort'
 import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
-import { assertMay, officeContextOf } from './access'
+import { assertMay, officeContextOf, seenOrdersWhere } from './access'
+// owb-of1a (R20): a list adds the orders the designer is on (orders.view.own), ids in SQL before paging.
+import { ownOrdersOf } from './on-the-order'
 import { makeOrderInCommand } from './make'
 // B-TH-017: what each row carries beside the order (picture, labels, Invoiced, the ids its doors open).
 import { orderRowExtras } from './row-extras'
@@ -157,10 +159,11 @@ function searchWhere(context: OfficeContext, q: string): Prisma.SalesOrderWhereI
 // ── end B-TH-057 ──
 
 // B-TH-019: exported for the Customer switcher (./customers): the same scope and terms as the list.
-export function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
+// owb-of1a (R20): `own` = on-the-order.ts ownOrdersOf (the orders a designer is on); left out, the scope is orders.view's alone.
+export function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate, own: { readonly salesOrderIds: readonly string[] } | null = null): Prisma.SalesOrderWhereInput {
   return {
     AND: [
-      scopeWhere(actorOf(context), ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput,
+      seenOrdersWhere(context, own),
       filters.status ? { status: filters.status } : {},
       filters.open === 'true' ? { status: { in: [...OPEN_STATUSES] } } : {},
       filters.companyId ? { companyId: filters.companyId } : {},
@@ -232,7 +235,7 @@ async function customWhere(client: Reader, context: OfficeContext, cf: string | 
 export async function viewWhere(client: Reader, context: OfficeContext, filters: ListFilters, today: BusinessDate): Promise<Prisma.SalesOrderWhereInput> {
   const terms: Prisma.SalesOrderWhereInput = {
     AND: [
-      whereOf(context, filters, today),
+      whereOf(context, filters, today, await ownOrdersOf(client, context)), // owb-of1a (R20)
       await customWhere(client, context, filters.cf),
       filters.atRisk === 'true' ? atRiskWhere(await riskRulesOf(client), today) : {},
       filters.profile ? await profileWhere(client, context, filters.profile) : {}, // B-SA-021

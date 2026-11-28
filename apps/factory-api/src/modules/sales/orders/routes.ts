@@ -66,6 +66,9 @@ import { doneStillToDoTask, stillToDoTaskDoneContract } from './still-to-do'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
 import { recordPictures } from '../../product/images/small-pictures'
+// owb-of1a (plan.md § 5 D R20): the reads the designer uses (manifest.ts ORDER_READ, signed-in) refuse a caller with neither
+// orders.view nor orders.view.own here, as their manifest did before; each handler checks the order itself (access.ts assertSees).
+import { ordersReader } from './access'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -81,23 +84,23 @@ import { recordPictures } from '../../product/images/small-pictures'
  * moves.ts), the payment schedule (./schedule) and the order copied as a new quote (quotes/duplicate).
  */
 export default defineRoutes('sales.orders', manifest, async (app) => {
-  app.get('/sales/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
+  app.get('/sales/orders', { schema: listOrdersContract }, async (request) => listOrders(ordersReader(request), request.query))
 
-  app.get('/sales/orders/board', { schema: boardContract }, async (request) => orderBoard(request, request.query))
+  app.get('/sales/orders/board', { schema: boardContract }, async (request) => orderBoard(ordersReader(request), request.query))
 
   // B-TH-019: the Customer switcher's numbers (registered before /sales/orders/:orderId).
-  app.get('/sales/orders/customers', { schema: customersContract }, async (request) => orderCustomers(request, request.query))
+  app.get('/sales/orders/customers', { schema: customersContract }, async (request) => orderCustomers(ordersReader(request), request.query))
 
   // B-CL-003: where each customer's work stands, for a page of the customers list (before /sales/orders/:orderId).
   app.get('/sales/orders/customers/work', { schema: customersWorkContract }, async (request) => customersWork(request, request.query))
 
   // B-TH-058: the overall view's totals per customer and for the whole view, each with the filter of its rows (before /:orderId).
-  app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(request, request.query))
+  app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(ordersReader(request), request.query))
 
   // B-SA-011: the small pictures of a page of orders (the ids the reader may not see are left out; before /:orderId).
-  app.post('/sales/orders/pictures', { schema: orderPicturesReadContract }, async (request) => recordPictures(request, 'order', request.body.orderIds))
+  app.post('/sales/orders/pictures', { schema: orderPicturesReadContract }, async (request) => recordPictures(ordersReader(request), 'order', request.body.orderIds))
 
-  app.get('/sales/orders/:orderId', { schema: getOrderContract }, async (request) => getOrder(request, request.params.orderId))
+  app.get('/sales/orders/:orderId', { schema: getOrderContract }, async (request) => getOrder(ordersReader(request), request.params.orderId))
 
   app.post('/sales/orders', { schema: makeOrderContract }, async (request, reply) => {
     const answer = await makeOrder(request, request.body, idempotencyKeyFrom(request))
@@ -119,7 +122,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   app.post('/sales/orders/manual', { schema: createManualContract }, async (request, reply) => reply.code(201).send(await createManualOrder(request, request.body, idempotencyKeyFrom(request))))
 
-  app.get('/sales/orders/:orderId/amendments', { schema: listAmendmentsContract }, async (request) => listAmendments(request, request.params.orderId))
+  app.get('/sales/orders/:orderId/amendments', { schema: listAmendmentsContract }, async (request) => listAmendments(ordersReader(request), request.params.orderId))
 
   app.post('/sales/orders/:orderId/amendments/preview', { schema: previewAmendmentContract }, async (request) => previewAmendment(request, request.params.orderId, request.body))
 
@@ -161,33 +164,33 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   })
 
   // B-W2b-398 (LOG-067)
-  app.get('/sales/orders/:orderId/deliveries', { schema: deliveriesContract }, async (request) => getDeliveries(request, request.params.orderId))
+  app.get('/sales/orders/:orderId/deliveries', { schema: deliveriesContract }, async (request) => getDeliveries(ordersReader(request), request.params.orderId))
 
   // B-SA-013: the Picture cell's one-row read went; the page's pictures are POST /sales/orders/pictures (B-SA-011).
 
   // B-TH-077: what points at the order, for its record (W27: only its own customer's).
-  app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(request, request.params.orderId))
+  app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(ordersReader(request), request.params.orderId))
 
   // B-SA-031 / B-SA-032 (Sales page plan P2, P16): the order page's production read (parts by right) and its milestones.
-  app.get('/sales/orders/:orderId/production', { schema: orderProductionContract }, async (request) => orderProduction(request, request.params.orderId, request.query))
-  app.get('/sales/orders/:orderId/milestones', { schema: orderMilestonesContract }, async (request) => orderMilestones(request, request.params.orderId))
+  app.get('/sales/orders/:orderId/production', { schema: orderProductionContract }, async (request) => orderProduction(ordersReader(request), request.params.orderId, request.query))
+  app.get('/sales/orders/:orderId/milestones', { schema: orderMilestonesContract }, async (request) => orderMilestones(ordersReader(request), request.params.orderId))
 
   // B-SA-036 (Sales page plan N9, P14): the order's files by source group, and the walled opening of one.
-  app.get('/sales/orders/:orderId/files', { schema: orderFilesContract }, async (request) => orderFiles(request, request.params.orderId))
-  app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  app.get('/sales/orders/:orderId/files', { schema: orderFilesContract }, async (request) => orderFiles(ordersReader(request), request.params.orderId))
+  app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(ordersReader(request), request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
   // B-OP-050 (order page plan N7, R-14): the small previews and PDF links of the cards in view (≤ 24 ids, ≤ 8 addresses a call).
-  app.post('/sales/orders/:orderId/files/previews', { schema: orderFilePreviewsContract }, async (request) => orderFilePreviews(request, request.params.orderId, request.body))
+  app.post('/sales/orders/:orderId/files/previews', { schema: orderFilePreviewsContract }, async (request) => orderFilePreviews(ordersReader(request), request.params.orderId, request.body))
   // B-OP-025 (order page plan N1; review R-12): Done on a production task from the order's Still to do.
   app.post('/sales/orders/:orderId/still-to-do/tasks/:taskId/done', { schema: stillToDoTaskDoneContract }, async (request) => doneStillToDoTask(request, request.params.orderId, request.params.taskId, request.body, idempotencyKeyFrom(request)))
 
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (never who read it).
-  app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))
+  app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(ordersReader(request), request.params.orderId, request.query))
   // F-SA-244: the told lines of all the order's changes (the order page's one read).
-  app.get('/sales/orders/:orderId/told/changes', { schema: toldChangesContract }, async (request) => toldChanges(request, request.params.orderId))
+  app.get('/sales/orders/:orderId/told/changes', { schema: toldChangesContract }, async (request) => toldChanges(ordersReader(request), request.params.orderId))
 
   // ---- owb- (order workflow, b3.1 + b3.2): the ONE order log, and the order's picture (office)
-  app.get('/sales/orders/:orderId/log', { schema: officeOrderLogContract }, async (request) => officeOrderLog(request, request.params.orderId, request.query))
-  app.get('/sales/order-requests/:requestId/log', { schema: officeRequestLogContract }, async (request) => officeRequestLog(request, request.params.requestId, request.query))
+  app.get('/sales/orders/:orderId/log', { schema: officeOrderLogContract }, async (request) => officeOrderLog(ordersReader(request), request.params.orderId, request.query))
+  app.get('/sales/order-requests/:requestId/log', { schema: officeRequestLogContract }, async (request) => officeRequestLog(ordersReader(request), request.params.requestId, request.query))
   app.post('/sales/orders/:orderId/picture', { schema: orderPictureContract }, async (request) => setOrderPicture(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/order-requests/:requestId/picture', { schema: requestPictureContract }, async (request) => {
     const { writer } = await officeDraftWriter(app, request, request.params.requestId, ORDERS_MANAGE)

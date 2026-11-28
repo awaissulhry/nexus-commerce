@@ -766,6 +766,11 @@ model SalesOrder {
   // owb-b1: its prints of the work papers (production.prisma), the teams that own its work (brand-production.prisma).
   prints              OrderPrint[]         @relation("OrderPrintOrder")
   orderTeams          OrderTeam[]          @relation("OrderTeamOrder")
+  // owb-ssw (S3 schema wave "structures + units"): its structure by hand (structures.prisma), what its lines kept at the first
+  // print, the places of the scan code on its lines' design pages (production.prisma). No column of its own (L9).
+  structureOverrides  OrderStructureOverride[] @relation("OrderStructureOverrideOrder")
+  structuresKept      OrderLineStructureKept[] @relation("OrderLineStructureKeptOrder")
+  scanCodePlacements  ScanCodePlacement[]      @relation("ScanCodePlacementOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
@@ -927,6 +932,10 @@ model SalesOrderLine {
   // owb-b1 (order workflow build, schema wave "order workflow 1/1"): order-columns.prisma, the customer's own column values
   // on it.
   ownValues          OrderLineOwnValue[]      @relation("OrderLineOwnValueOrderLine")
+  // owb-ssw (S3 schema wave "structures + units"): what it kept at its order's first print (one row: its unique key), the places
+  // of the scan code on its design pages. No column of its own (L9).
+  structureKept      OrderLineStructureKept[] @relation("OrderLineStructureKeptLine")
+  scanCodePlacements ScanCodePlacement[]      @relation("ScanCodePlacementLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

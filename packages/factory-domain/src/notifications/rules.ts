@@ -86,6 +86,8 @@ export const MESSAGE_TEMPLATES = {
   'notifications.security.drillDue': { en: 'The next restore drill is due on {title}: the last one that passed was on {record}', it: 'La prossima prova di ripristino scade il {title}: l’ultima superata è del {record}' },
   // B-W2b-35 (modules/production/calls): a station called for help, told to the type's responder team ({record}: the station; {title}: the type and the line).
   'notifications.calls.raised': { en: 'Help call from station {record}: {title}', it: 'Chiamata di aiuto dalla postazione {record}: {title}' },
+  // owb-fl3 (S5 floor, R53): a help call still open after its type's minutes, to the office ({record}: the station; {title}: the type, line and minutes).
+  'notifications.calls.escalated': { en: 'Help call at station {record} still open: {title}', it: 'Chiamata di aiuto alla postazione {record} ancora aperta: {title}' },
   // B-W2b-GB29 (G217): a schedule published to the floor, to the leaders of the lines it covers ({record}: the version, "v13"; {title}: the line).
   'notifications.planning.schedulePublished': { en: 'New schedule {record} for line {title}: check the dispatch list', it: 'Nuovo programma {record} per la linea {title}: controlla la lista di lavoro' },
   // B-W2b-GB29 (G221): a pre-production gate marked done, or started before, to its owner ({record}: the order's number).
