@@ -36,7 +36,7 @@ export const RATE_COLUMNS = {
 } as const satisfies Prisma.LabourRateSelect
 export type RateRow = Prisma.LabourRateGetPayload<{ select: typeof RATE_COLUMNS }>
 
-export const SETTINGS_COLUMNS = { id: true, companyId: true, overheadPct: true, overheadFromTenant: true, version: true, updatedAt: true } as const satisfies Prisma.CostingSettingsSelect
+export const SETTINGS_COLUMNS = { id: true, companyId: true, overheadPct: true, overheadFromTenant: true, oneKeeperAllowed: true /* owb-pd3 */, version: true, updatedAt: true } as const satisfies Prisma.CostingSettingsSelect
 export type SettingsRow = Prisma.CostingSettingsGetPayload<{ select: typeof SETTINGS_COLUMNS }>
 
 const text = (value: { toString(): string }): string => decimalText(value.toString())

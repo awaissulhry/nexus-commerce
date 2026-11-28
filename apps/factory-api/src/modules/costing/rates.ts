@@ -269,7 +269,7 @@ export async function archiveRate(caller: CommandCaller, rateId: string, body: A
 
 // ---- costing settings ---------------------------------------------------------------------------------------------------
 
-const settingsView = (row: SettingsRow): CostingSettingsView => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), overheadFromTenant: row.overheadFromTenant, version: row.version, updatedAt: toUtcIso(row.updatedAt) })
+const settingsView = (row: SettingsRow): CostingSettingsView => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), overheadFromTenant: row.overheadFromTenant, oneKeeperAllowed: row.oneKeeperAllowed /* owb-pd3 */, version: row.version, updatedAt: toUtcIso(row.updatedAt) })
 
 /** The tenant-wide settings, a company's when asked, and which of them a cost sheet for that company uses. */
 export async function getSettings(caller: CommandCaller, query: SettingsQuery): Promise<SettingsListView> {
@@ -305,10 +305,16 @@ export async function saveSettings(caller: CommandCaller, body: SaveSettingsBody
   const fromTenant = body.overheadFromTenant === true
   if (fromTenant && companyId === null) throw invalid([{ path: 'body/overheadFromTenant', message: 'The tenant-wide settings follow no other overhead: only a company follows the tenant-wide one.' }], 'costing setting')
   if (fromTenant && overheadPct !== '0') throw invalid([{ path: 'body/overheadPct', message: 'A company that follows the tenant-wide overhead keeps none of its own: send 0.' }], 'costing setting')
+  // owb-pd3 (S4 settle 9): "one person may keep a cost" lives on a company's own row only (the database refuses it elsewhere too).
+  if (body.oneKeeperAllowed === true && companyId === null) throw invalid([{ path: 'body/oneKeeperAllowed', message: "One person may keep a cost only on a company's own costing settings, not on those of the whole factory." }], 'costing setting')
   const id = companyId ?? tenantOf(context)
   const existing = await caller.withClient((client) => client.costingSettings.findUnique({ where: { id }, select: SETTINGS_COLUMNS }))
   if (existing && body.version === undefined) throw new ConflictError('These costing settings exist: send their version to change them.')
   if (!existing && body.version !== undefined) throw new ConflictError('These costing settings do not exist yet: save them without a version.')
+  // owb-pd3: a change of the switch says why (kept in the audit).
+  const keeper = body.oneKeeperAllowed ?? existing?.oneKeeperAllowed ?? false
+  const keeperChanged = keeper !== (existing?.oneKeeperAllowed ?? false)
+  if (keeperChanged && !body.reason?.trim()) throw invalid([{ path: 'body/reason', message: 'Say why one person may (or may no longer) keep a cost.' }], 'costing setting')
 
   const { result } = await command(
     caller,
@@ -317,14 +323,21 @@ export async function saveSettings(caller: CommandCaller, body: SaveSettingsBody
       const { tx, now } = tools
       const row = existing ? await tx.costingSettings.findUniqueOrThrow({ where: { id }, select: SETTINGS_COLUMNS }) : null
       const before = row === null ? null : text(row.overheadPct)
-      const fields = [...(before !== overheadPct ? ['overheadPct'] : []), ...(row !== null && row.overheadFromTenant !== fromTenant ? ['overheadFromTenant'] : [])]
+      const fields = [...(before !== overheadPct ? ['overheadPct'] : []), ...(row !== null && row.overheadFromTenant !== fromTenant ? ['overheadFromTenant'] : []), ...(row !== null && row.oneKeeperAllowed !== keeper ? ['oneKeeperAllowed'] : [])]
       if (row === null) {
-        await tx.costingSettings.create({ data: { id, companyId, overheadPct, overheadFromTenant: fromTenant, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
+        await tx.costingSettings.create({ data: { id, companyId, overheadPct, overheadFromTenant: fromTenant, ...(keeper ? { oneKeeperAllowed: true } : {}), createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
       } else if (fields.length > 0) {
-        await tx.costingSettings.update({ where: { id }, data: { overheadPct, overheadFromTenant: fromTenant, updatedAt: now }, select: { id: true } })
+        await tx.costingSettings.update({ where: { id }, data: { overheadPct, overheadFromTenant: fromTenant, oneKeeperAllowed: keeper, updatedAt: now }, select: { id: true } })
       }
-      tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, ...(row === null ? {} : { before: { overheadPct: before, overheadFromTenant: row.overheadFromTenant } }), after: { companyId, overheadPct, overheadFromTenant: fromTenant } })
-      if (row === null || fields.length > 0) tools.emit({ type: 'costing_settings.changed', subject: id, companyId, payload: { settingsId: id, fields: row === null ? ['overheadPct', ...(fromTenant ? ['overheadFromTenant'] : [])] : fields } })
+      tools.audit({
+        recordType: 'CostingSettings',
+        recordId: id,
+        companyId,
+        ...(row === null ? {} : { before: { overheadPct: before, overheadFromTenant: row.overheadFromTenant, oneKeeperAllowed: row.oneKeeperAllowed } }),
+        after: { companyId, overheadPct, overheadFromTenant: fromTenant, oneKeeperAllowed: keeper },
+        ...(keeperChanged && body.reason ? { reason: body.reason.trim() } : {}),
+      })
+      if (row === null || fields.length > 0) tools.emit({ type: 'costing_settings.changed', subject: id, companyId, payload: { settingsId: id, fields: row === null ? ['overheadPct', ...(fromTenant ? ['overheadFromTenant'] : []), ...(keeper ? ['oneKeeperAllowed'] : [])] : fields } })
       return settingsView(await tx.costingSettings.findUniqueOrThrow({ where: { id }, select: SETTINGS_COLUMNS }))
     },
   ).catch((error: unknown) => {

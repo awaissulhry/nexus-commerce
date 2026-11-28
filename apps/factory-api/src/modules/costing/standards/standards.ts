@@ -307,38 +307,75 @@ export async function freezeStandard(caller: CommandCaller, standardId: string, 
   const { result } = await command(
     caller,
     { name: 'costing.freezeStandard', idempotencyKey, input: { standardId, version }, record: { type: 'StandardCost', id: standardId, expectedVersion: version } },
-    async (tools) => {
-      const { tx, now } = tools
-      if (!('tenantId' in tools.context)) throw new ForbiddenError()
-      // The trigger's own lock (factory_money_lock 'standard-cost'): two freezes of the company never cross.
-      await tx.$executeRaw`SELECT "factory_money_lock"('standard-cost', ${tools.context.tenantId}::uuid, ${seen.companyId}::uuid)`
-      const row = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
-      if (row.status !== 'DRAFT') throw new InvalidStateError('This standard is frozen already.')
-      const target = { id: row.id, validFrom: dayOf(row.validFrom), validTo: row.validTo ? dayOf(row.validTo) : null }
-      const lock = (await lockedPeriods(tx, row.companyId)).find((period) => period.periodStart <= target.validFrom && target.validFrom <= period.periodEnd)
-      if (lock) throw new ConflictError(`${target.validFrom} is in the locked period ${lock.periodStart} to ${lock.periodEnd}: a standard is frozen from a day after it.`)
-      const others = await tx.standardCost.findMany({ where: { companyId: row.companyId, itemId: row.itemId, status: 'FROZEN' }, select: STANDARD_COLUMNS })
-      const plan = freezePlan(target, others.map((other) => ({ id: other.id, status: other.status, validFrom: dayOf(other.validFrom), validTo: other.validTo ? dayOf(other.validTo) : null, currency: other.currency })))
-      if (plan.problem) throw new ConflictError(plan.problem)
-      const actorId = officeActor(tools)
-      if (!actorId) throw new ForbiddenError()
-      let ended: StandardRow | null = null
-      if (plan.end) {
-        await tx.standardCost.update({ where: { id: plan.end.id }, data: { validTo: dateOf(plan.end.validTo), version: { increment: 1 }, updatedAt: now }, select: { id: true } })
-        ended = await tx.standardCost.findUniqueOrThrow({ where: { id: plan.end.id }, select: STANDARD_COLUMNS })
-        tools.audit({ action: 'costing.endStandard', recordType: 'StandardCost', recordId: ended.id, companyId: ended.companyId, before: { validTo: null }, after: { validTo: plan.end.validTo }, reason: `The standard from ${target.validFrom} takes over.` })
-        change(tools, ended, 'ended')
-      }
-      await tx.standardCost.update({ where: { id: standardId }, data: { status: 'FROZEN', frozenAt: now, frozenById: actorId, updatedAt: now }, select: { id: true } })
-      tools.audit({ recordType: 'StandardCost', recordId: standardId, companyId: row.companyId, before: { status: 'DRAFT' }, after: { status: 'FROZEN', validFrom: target.validFrom, validTo: target.validTo, unitCost: markMoney('cost', text(row.unitCost)) } })
-      const frozen = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
-      change(tools, frozen, 'frozen')
-      const valued = await valueWaitingMoves(tools, frozen)
-      const [view, endedView] = await viewsOf(tx, ended ? [frozen, ended] : [frozen])
-      return { standard: view!, ended: endedView ? strip(endedView) : null, valued }
-    },
+    async (tools) => freezeStandardInCommand(tools, standardId),
   )
   return result
+}
+
+/**
+ * The freeze itself, inside a command (owb-pd3: Keep freezes the standards it writes in its own command): the company's money lock,
+ * DRAFT → FROZEN, the open frozen standard before it ended the day before, the waiting stock moves valued (see freezeStandard).
+ */
+export async function freezeStandardInCommand(tools: CommandTools, standardId: string) {
+  const { tx, now } = tools
+  if (!('tenantId' in tools.context)) throw new ForbiddenError()
+  const first = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
+  // The trigger's own lock (factory_money_lock 'standard-cost'): two freezes of the company never cross.
+  await tx.$executeRaw`SELECT "factory_money_lock"('standard-cost', ${tools.context.tenantId}::uuid, ${first.companyId}::uuid)`
+  const row = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
+  if (row.status !== 'DRAFT') throw new InvalidStateError('This standard is frozen already.')
+  const target = { id: row.id, validFrom: dayOf(row.validFrom), validTo: row.validTo ? dayOf(row.validTo) : null }
+  const lock = (await lockedPeriods(tx, row.companyId)).find((period) => period.periodStart <= target.validFrom && target.validFrom <= period.periodEnd)
+  if (lock) throw new ConflictError(`${target.validFrom} is in the locked period ${lock.periodStart} to ${lock.periodEnd}: a standard is frozen from a day after it.`)
+  const others = await tx.standardCost.findMany({ where: { companyId: row.companyId, itemId: row.itemId, status: 'FROZEN' }, select: STANDARD_COLUMNS })
+  const plan = freezePlan(target, others.map((other) => ({ id: other.id, status: other.status, validFrom: dayOf(other.validFrom), validTo: other.validTo ? dayOf(other.validTo) : null, currency: other.currency })))
+  if (plan.problem) throw new ConflictError(plan.problem)
+  const actorId = officeActor(tools)
+  if (!actorId) throw new ForbiddenError()
+  let ended: StandardRow | null = null
+  if (plan.end) {
+    await tx.standardCost.update({ where: { id: plan.end.id }, data: { validTo: dateOf(plan.end.validTo), version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+    ended = await tx.standardCost.findUniqueOrThrow({ where: { id: plan.end.id }, select: STANDARD_COLUMNS })
+    tools.audit({ action: 'costing.endStandard', recordType: 'StandardCost', recordId: ended.id, companyId: ended.companyId, before: { validTo: null }, after: { validTo: plan.end.validTo }, reason: `The standard from ${target.validFrom} takes over.` })
+    change(tools, ended, 'ended')
+  }
+  await tx.standardCost.update({ where: { id: standardId }, data: { status: 'FROZEN', frozenAt: now, frozenById: actorId, updatedAt: now }, select: { id: true } })
+  tools.audit({ action: 'costing.freezeStandard', recordType: 'StandardCost', recordId: standardId, companyId: row.companyId, before: { status: 'DRAFT' }, after: { status: 'FROZEN', validFrom: target.validFrom, validTo: target.validTo, unitCost: markMoney('cost', text(row.unitCost)) } })
+  const frozen = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
+  change(tools, frozen, 'frozen')
+  const valued = await valueWaitingMoves(tools, frozen)
+  const [view, endedView] = await viewsOf(tx, ended ? [frozen, ended] : [frozen])
+  return { standard: view!, ended: endedView ? strip(endedView) : null, valued }
+}
+
+/** A standard Keep writes (owb-pd3): one finished item's parts from the kept cost sheet, from a day, kept at once. */
+export interface KeptStandard {
+  readonly companyId: string
+  readonly itemId: string
+  readonly currency: string
+  readonly validFrom: string
+  readonly parts: StandardParts
+  readonly labourMinutes: string | null
+  readonly breakdown: Prisma.InputJsonValue
+  readonly note: string
+}
+
+/**
+ * owb-pd3 (S4; Keep): a DRAFT standard written from a kept cost sheet (source ROLLUP) and frozen in the same command — the open
+ * frozen standard of the item ended the day before, its waiting stock moves valued (freezeStandardInCommand). Answers its id.
+ */
+export async function keepStandardInCommand(tools: CommandTools, kept: KeptStandard): Promise<string> {
+  const { tx, now } = tools
+  const id = newId()
+  const unitCost = unitCostOf(kept.parts)
+  await tx.standardCost.create({
+    data: { id, companyId: kept.companyId, itemId: kept.itemId, validFrom: dateOf(kept.validFrom), validTo: null, source: 'ROLLUP', currency: kept.currency, ...kept.parts, unitCost, labourMinutes: kept.labourMinutes, breakdown: kept.breakdown, note: kept.note, createdAt: now, updatedAt: now, createdById: officeActor(tools) },
+    select: { id: true },
+  })
+  tools.audit({ action: 'costing.prepareStandard', recordType: 'StandardCost', recordId: id, companyId: kept.companyId, after: { itemId: kept.itemId, validFrom: kept.validFrom, source: 'ROLLUP', ...auditedParts({ ...kept.parts, unitCost }), status: 'DRAFT', kept: true } })
+  change(tools, await tx.standardCost.findUniqueOrThrow({ where: { id }, select: STANDARD_COLUMNS }), 'prepared')
+  await freezeStandardInCommand(tools, id)
+  return id
 }
 
 /**
