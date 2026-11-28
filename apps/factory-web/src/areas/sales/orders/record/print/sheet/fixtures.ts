@@ -38,7 +38,7 @@ const viewOf = (answer: PrintSheetAnswer): PrintSheetViewModel => ({
   state: 'ready',
   problem: null,
   title: sheetTitleOf(answer),
-  pages: sheetPagesOf(answer).map((page) => ({ ...page, src: null, failed: true, qrSrc: null })),
+  pages: sheetPagesOf(answer).map((page) => ({ ...page, src: null, pageMm: null, failed: true, qrSrc: null })),
   cardSheets: cardSheetsOf(answer).map((sheet) => sheet.map((card) => ({ ...card, pictureSrc: null, qrSrc: null }))),
   drawing: false,
 })

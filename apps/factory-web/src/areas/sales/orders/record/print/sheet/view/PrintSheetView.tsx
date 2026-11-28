@@ -7,7 +7,7 @@ import { Button, Spinner } from '@nexus/ui/primitives'
 import { DeptChip } from '../../../../../../../lib/department/view/DeptChip'
 import { formatDate } from '../../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../../lib/i18n/provider'
-import type { SheetCardModel, SheetPageModel } from '../model'
+import { codeBoxOf, codePlaceOf, frameOf, type PercentBox, type SheetCardModel, type SheetPageModel } from '../model'
 import '../print-sheet.css'
 
 /**
@@ -23,7 +23,8 @@ export interface PrintSheetViewModel {
   /** Why it could not be read (a `shipments` word: problem.read.*). */
   readonly problem: string | null
   readonly title: { readonly key: string; readonly params: Readonly<Record<string, string>> } | null
-  readonly pages: readonly (SheetPageModel & { readonly src: string | null; readonly failed: boolean; readonly qrSrc: string | null })[]
+  /** owb-ss4b: `pageMm` — the design page's own size, once drawn (the code is placed in it, as Place the scan code places it). */
+  readonly pages: readonly (SheetPageModel & { readonly src: string | null; readonly pageMm: { readonly widthMm: number; readonly heightMm: number } | null; readonly failed: boolean; readonly qrSrc: string | null })[]
   readonly cardSheets: readonly (readonly (SheetCardModel & { readonly pictureSrc: string | null; readonly qrSrc: string | null })[])[]
   /** Pictures and codes still drawing (Print waits for them). */
   readonly drawing: boolean
@@ -34,7 +35,7 @@ export interface PrintSheetViewActions {
   readonly onClose?: () => void
 }
 
-const mm = (value: number): string => `${value}mm`
+const pct = (box: PercentBox): CSSProperties => ({ left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` })
 
 export function PrintSheetView({ model, actions = {} }: { model: PrintSheetViewModel; actions?: PrintSheetViewActions }): ReactElement {
   const t = useT('print-start')
@@ -92,13 +93,18 @@ export function PrintSheetView({ model, actions = {} }: { model: PrintSheetViewM
 function DesignPage({ page }: { page: PrintSheetViewModel['pages'][number] }): ReactElement {
   const t = useT('print-start')
   const locale = useLocale()
-  const code: CSSProperties = { left: mm(page.code.xMm), top: mm(page.code.yMm), width: mm(page.code.sizeMm), height: mm(page.code.sizeMm) }
+  // owb-ss4b: the design page whole and centred on the paper (its own shape), the code at its place in the page's own millimetres.
+  const pageMm = page.pageMm
   return (
     <section className="fw-psheet-paper fw-psheet-page" aria-label={t('sheet.pageOf', { label: page.label, page: page.page })}>
-      {page.src ? <img className="fw-psheet-mockup" src={page.src} alt={t('sheet.pageOf', { label: page.label, page: page.page })} /> : null}
+      {page.src && pageMm ? (
+        <div className="fw-psheet-frame" style={pct(frameOf(pageMm))}>
+          <img className="fw-psheet-mockup" src={page.src} alt={t('sheet.pageOf', { label: page.label, page: page.page })} />
+          {page.qrSrc ? <img className="fw-psheet-qr" style={pct(codeBoxOf(codePlaceOf(page.placement, pageMm), pageMm))} src={page.qrSrc} alt={t('sheet.qrOf', { code: page.workOrderNumber })} /> : null}
+        </div>
+      ) : null}
       {!page.src && !page.failed ? <span className="fw-psheet-wait">{t('sheet.drawing')}</span> : null}
       {page.failed ? <span className="fw-psheet-wait">{t('sheet.pageFailed')}</span> : null}
-      {page.qrSrc ? <img className="fw-psheet-qr" style={code} src={page.qrSrc} alt={t('sheet.qrOf', { code: page.workOrderNumber })} /> : null}
       <span className="fw-psheet-foot">
         <span>
           {page.styleCode} · {page.workOrderNumber}

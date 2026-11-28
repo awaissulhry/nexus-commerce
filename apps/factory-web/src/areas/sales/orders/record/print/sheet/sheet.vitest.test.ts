@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PrintSheetAnswer, SheetCard } from '../api'
-import { A4, CARD_MM, CARDS_PER_SHEET, cardSheetsOf, codePlaceOf, CODE_MIN_MM, isPdf, printMarkOf, qrTextsOf, sheetPagesOf, sheetTitleOf, stepDepartmentOf } from './model'
+import { A4, CARD_MM, CARDS_PER_SHEET, cardSheetsOf, codeBoxOf, codePlaceOf, CODE_MIN_MM, frameOf, isPdf, printMarkOf, qrTextsOf, sheetPagesOf, sheetTitleOf, stepDepartmentOf } from './model'
 
 /**
  * owb-ss4 step 4.2 (design plan § 4.1, § 5f, § 5zj B; settles L6, L8) — the ONE print sheet, pure: the page list (the work order number
@@ -44,11 +44,30 @@ describe('the design pages', () => {
     expect(isPdf('image/jpeg')).toBe(false)
   })
 
-  it('the code: none placed → top right, 20 mm; a placement is kept on the page and never under 20 mm', () => {
-    expect(codePlaceOf(null)).toEqual({ xMm: A4.widthMm - CODE_MIN_MM - 8, yMm: 8, sizeMm: 20 })
+  it('the code: none placed → top right, 20 mm, 10 mm in (the domain\'s); a placement is kept on the page and never under 20 mm', () => {
+    expect(codePlaceOf(null)).toEqual({ xMm: A4.widthMm - CODE_MIN_MM - 10, yMm: 10, sizeMm: 20 })
     expect(codePlaceOf({ xMm: 10, yMm: 250, sizeMm: 30 })).toEqual({ xMm: 10, yMm: 250, sizeMm: 30 })
     expect(codePlaceOf({ xMm: 200, yMm: -5, sizeMm: 12 })).toEqual({ xMm: 190, yMm: 0, sizeMm: 20 })
     expect(codePlaceOf({ xMm: 0, yMm: 290, sizeMm: 40 })).toEqual({ xMm: 0, yMm: 257, sizeMm: 40 })
+    // owb-ss4b: in the page's OWN millimetres — an A4 across (297 × 210): the usual place is at its own top right.
+    expect(codePlaceOf(null, { widthMm: 297, heightMm: 210 })).toEqual({ xMm: 267, yMm: 10, sizeMm: 20 })
+  })
+
+  it('owb-ss4b: the design page keeps its shape on the paper, and the code sits in per cent of the page', () => {
+    const whole = frameOf(A4)
+    for (const [field, value] of [['left', 0], ['top', 0], ['width', 100], ['height', 100]] as const) expect(whole[field]).toBeCloseTo(value, 6)
+    const across = frameOf({ widthMm: 297, heightMm: 210 })
+    expect(across.width).toBe(100)
+    expect(across.height).toBeCloseTo((210 * (210 / 297) / 297) * 100, 6)
+    expect(across.top).toBeCloseTo((100 - across.height) / 2, 6)
+    const narrow = frameOf({ widthMm: 100, heightMm: 297 })
+    expect(narrow).toMatchObject({ top: 0, height: 100 })
+    expect(narrow.width).toBeCloseTo((100 / 210) * 100, 6)
+    const box = codeBoxOf({ xMm: 21, yMm: 29.7, sizeMm: 21 }, A4)
+    expect(box.left).toBeCloseTo(10, 6)
+    expect(box.top).toBeCloseTo(10, 6)
+    expect(box.width).toBeCloseTo(10, 6)
+    expect(box.height).toBeCloseTo((21 / 297) * 100, 6)
   })
 
   it('"Print N · date" only from the second print on', () => {
