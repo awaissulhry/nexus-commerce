@@ -148,6 +148,8 @@ export const recordContract = defineContract({
       order: output({
         id: id(),
         customerRef: z.string().nullable(),
+        /** owb- po2 (S1 lead add): the subject of the Draft/Sent order it was confirmed from (its title); null: none. */
+        subject: z.string().nullable(),
         // pp-s s.1 (O3-W1): the office's series (a count across every customer) is never in the customer's order: its own
         // number (`yourNumber`) and its PO name it. A key left out here is stripped from the answer.
         // B-TH-105
@@ -268,6 +270,8 @@ const shipment = output({
   /** B-OP-044 (order page N6): the customer's other orders this shipment carries — "also N pieces of your order #12" (empty: none). */
   otherOrders: z.array(output({ yourNumber, customerRef: z.string().nullable(), pieces: z.number().int() })),
   papers: z.array(output({ fileId: id(), name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), versionNo: z.number().int() })),
+  /** owb- po2.6 (S3's ss1): "At the factory's warehouse" — where it is there (S3's value as is); null: it goes straight to the customer. */
+  atWarehouse: output({ place: z.string(), city: z.string().nullable(), since: instant().nullable(), sentOn: z.boolean(), labelSent: z.boolean() }).nullable().optional(),
 })
 
 export const shipmentsContract = defineContract({
@@ -325,7 +329,7 @@ const sheetFacts = {
   lifeNote: output({ kind: z.enum(LIFE_NOTE_KINDS), shipped: z.number().int().optional(), total: z.number().int().optional() }).nullable(),
   lines: z.array(sheetLine),
   ownColumnIds: z.array(id()),
-  /** "Waits · news": only what waits; SEND_LABEL comes with S3's warehouse leg (never sent until then). */
+  /** "Waits · news": only what waits; SEND_LABEL (owb- po2.6): a shipment arrived at the factory's warehouse waits for the customer's label. */
   waits: z.array(output({ kind: z.enum(SHEET_WAITS), count: z.number().int().nullable() })),
   may: output({ edit: z.boolean(), send: z.boolean(), delete: z.boolean(), takeBack: z.boolean(), picture: z.boolean() }),
 }

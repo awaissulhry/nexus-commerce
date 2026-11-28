@@ -14,6 +14,7 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { forgetProgress } from './progress'
+import { atWarehouseOf } from '../../shipping/warehouse-leg/portal' // owb- po2.6
 
 /**
  * The customer's Money tab and "I paid" (owb- order workflow, S1 po2.2; design § 5m; the S1 Shape "MONEY") on the local stack,
@@ -25,6 +26,9 @@ import { forgetProgress } from './progress'
  *   - BRAND: another customer's order is not found (404) — read and notice alike
  *   - "I paid": a notice OPEN only, unanswered, amount marked price; nothing owed changes; refused above what is open, on a day
  *     ahead; 409 when nothing is still to pay; the event `payment_notice.sent` (ids only)
+ *   - po2.6: a shipment through the factory's warehouse shows S3's `atWarehouse` (no person field); another customer's shipment is in
+ *     no map; the sheet's waits ask for the label once it arrived there
+ *   - the S1 lead's add: the order record's `subject` (none: null)
  */
 
 let h: Harness
@@ -162,5 +166,35 @@ describe('the Money tab and "I paid" (owb- po2.2)', { timeout: SLOW_TEST_TIMEOUT
       expect(after.notices.map((entry: Json) => entry.id)).toContain(notice.id)
       return
     }
+  })
+})
+
+describe('at the factory’s warehouse (owb- po2.6) and the order’s subject', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a shipment through our warehouse shows where it is (no person field); another customer’s is in no map; SEND_LABEL waits', async () => {
+    const shipment = await admin<{ id: string; companyId: string; siteId: string; orderId: string }>(`SELECT s.id, s."companyId", s."siteId", s."salesOrderId" AS "orderId" FROM "Shipment" s WHERE s."tenantId" = $1 AND s."partyId" = $2 AND s.status = 'SHIPPED' ORDER BY s.number LIMIT 1`, [T, P1])
+    const warehouse = shipment[0] ? await admin<{ id: string }>(`SELECT id FROM "Site" WHERE "tenantId" = $1 AND "companyId" = $2 AND kind = 'WAREHOUSE' LIMIT 1`, [T, shipment[0].companyId]) : []
+    if (shipment[0] && warehouse[0]) {
+      await admin(`INSERT INTO "ShipmentWarehouseLeg" (id, "tenantId", "companyId", "siteId", "partyId", "shipmentId", "warehouseSiteId", "arrivedAt", version, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 1, now(), now())`, [newId(), T, shipment[0].companyId, shipment[0].siteId, P1, shipment[0].id, warehouse[0].id])
+      const read = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${shipment[0].orderId}/shipments`)
+      const leg = read.shipments.find((row: Json) => row.id === shipment[0]!.id).atWarehouse
+      expect(Object.keys(leg).sort()).toEqual(['city', 'labelSent', 'place', 'sentOn', 'since'])
+      expect(leg).toMatchObject({ sentOn: false, labelSent: false })
+      const sheet = await ok(browsers.buyer, 'GET', '/portal/sales-orders/sheet?chip=ALL')
+      expect(sheet.items.find((row: Json) => row.id === shipment[0]!.orderId).waits).toEqual(expect.arrayContaining([{ kind: 'SEND_LABEL', count: 1 }]))
+      // Another customer's id reads no leg of P1's shipment (S3's party filter: the brand wall).
+      const map = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, (client) => atWarehouseOf(client, { partyId: world.partyId, shipmentIds: [shipment[0]!.id] }))
+      expect(map.size).toBe(0)
+    }
+    for (const orderId of orders) {
+      const read = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${orderId}/shipments`)
+      for (const row of read.shipments as Json[]) if (row.atWarehouse) expect(JSON.stringify(row.atWarehouse)).not.toMatch(/ById|arrivedBy|forwardedBy/)
+    }
+    expect((await call(browsers.other, 'GET', `/portal/sales-orders/${orders[0]}/shipments`)).status).toBe(404)
+  })
+
+  it('the order record says the subject of the request it came from; none: null', async () => {
+    const record = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${orders[0]}`)
+    expect(record.order).toHaveProperty('subject')
+    expect(record.order.subject === null || typeof record.order.subject === 'string').toBe(true)
   })
 })
