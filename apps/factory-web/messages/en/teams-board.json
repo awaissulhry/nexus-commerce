@@ -1,0 +1,117 @@
+{
+  "head": {
+    "teams_one": "{count} team",
+    "teams_other": "{count} teams",
+    "withTeam_one": "{count} order with a team",
+    "withTeam_other": "{count} orders with a team",
+    "noTeam_one": "{count} order with no team yet",
+    "noTeam_other": "{count} orders with no team yet",
+    "newTeam": "New team…",
+    "readOnly": "You read this page",
+    "readNote": "The production manager gives orders to teams. You see the team of each order; on an order you can ask for another team.",
+    "info": "One column a team, and one for the orders that have no team yet. A card opens the order. The numbers are for a team, never for one person: small teams show no numbers. The customer sees no team.",
+    "infoLabel": "About this page"
+  },
+  "site": {
+    "choose": "Teams work on one site. Choose the site:"
+  },
+  "filter": {
+    "label": "Show",
+    "all": "All teams",
+    "none": "No team yet"
+  },
+  "column": {
+    "none": "No team yet",
+    "noneHint": "Every worker sees these baskets.",
+    "leader": "Leader: {name}",
+    "noLeader": "No leader yet",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "empty": "No order now.",
+    "noneEmpty": "Every order has a team.",
+    "orders": "Orders of {team}"
+  },
+  "load": {
+    "small": "—",
+    "smallInfo": "Small teams show no numbers.",
+    "of": "{count} of {max} baskets",
+    "count_one": "{count} basket",
+    "count_other": "{count} baskets"
+  },
+  "mark": {
+    "OVER_LIMIT": "Over its limit",
+    "NO_NEW_ORDERS": "Takes no new order",
+    "MISSING_TODAY": "People missing today",
+    "MISSING_TODAY_n": "{count} missing today",
+    "LATE": "Late",
+    "LATE_n": "{count} late"
+  },
+  "card": {
+    "baskets_one": "{count} basket",
+    "baskets_other": "{count} baskets",
+    "due": "Due {date}",
+    "late": "Late",
+    "inCharge": "In charge",
+    "give": "Give to a team…",
+    "change": "Change…"
+  },
+  "people": {
+    "label": "People of {team}",
+    "lend": "Lend {name}…",
+    "leader": "leader",
+    "onLoan": "on loan"
+  },
+  "lend": {
+    "title": "Lend {name}",
+    "home": "Home team: {team}",
+    "homeNone": "Home team: none (a shared worker)",
+    "body": "The home team stays. After the last day the person is back in it. The history keeps who lent whom, until when and why.",
+    "to": "To which team",
+    "noOther": "There is no other team.",
+    "until": "Until",
+    "untilChoice": {
+      "TODAY": "Today",
+      "THREE_DAYS": "3 days",
+      "WEEK": "A week",
+      "DAY": "A day you pick"
+    },
+    "pick": "The last day (at most 31 days)",
+    "reason": "Why",
+    "reasonHint": "For example: a big order",
+    "act": "Lend",
+    "done": "{name} works with {team} until {date}.",
+    "held": {
+      "team": "Choose the team first.",
+      "noLine": "This team has no line: a loan needs a line for now.",
+      "day": "Choose a last day from today, at most {count} days.",
+      "reason": "Say why the person is lent.",
+      "reasonLong": "At most {count} characters."
+    },
+    "refusal": {
+      "LEFT": "This person has left: they are lent to no team.",
+      "LINE_NOT_OF_SITE": "The team's line is not of the person's site.",
+      "TEAM_OTHER_SITE": "The team is of another site.",
+      "TEAM_ARCHIVED": "The team is closed.",
+      "TEAM_OTHER_LINE": "The team works on another line.",
+      "LOAN_OVERLAP": "The person is already lent in those days: one loan at a time."
+    }
+  },
+  "privacy": "The numbers here are for a team, never for one person. The customer sees no team.",
+  "failed": "The teams could not be read.",
+  "notice": {
+    "saved": "The teams are saved.",
+    "dismiss": "Dismiss"
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "error": {
+    "read": "Something went wrong while reading.",
+    "write": "It was not saved. Try again.",
+    "forbidden": "You may not do this.",
+    "offline": "No answer from the factory: check the network and try again.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again. Check it and try again.",
+    "invalid": "It was refused as it is: check what you chose."
+  }
+}

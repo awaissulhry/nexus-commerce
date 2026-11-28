@@ -51,6 +51,7 @@
     "eq": "{sum} = {ordered} ordinati",
     "bucket": {
       "shipped": "Spediti",
+      "atWarehouse": "Nel nostro magazzino",
       "packed": "Su una spedizione imballata",
       "draft": "Su una spedizione in bozza",
       "planned": "Su spedizioni non partite",
@@ -67,7 +68,8 @@
       "create": "Crea spedizione… ↓",
       "warehouseShips": "li spedisce il magazzino",
       "production": "Produzione ›",
-      "lines": "Righe ›"
+      "lines": "Righe ›",
+      "legs": "Aspetta lì l’etichetta del cliente: Invia al cliente dalla sua riga"
     },
     "card": {
       "lines_one": "Riga {seqs}",

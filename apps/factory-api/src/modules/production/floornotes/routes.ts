@@ -4,6 +4,10 @@ import { announceContract, completeContract, floorAsksContract, noteContract, ti
 import { manifest } from './manifest'
 import { announceFile, completeFile, noteTiles, postFloorNote } from './notes'
 import { floorAsks } from './asks' // B-OF-034
+// owb-fl3 (S5 server B): Tell the office and the Me page.
+import { profileContract, suggestionContract, suggestionVoiceCompleteContract, suggestionVoiceContract } from './contract'
+import { myProfile } from './profile'
+import { announceSuggestionVoice, completeSuggestionVoice, tellOffice } from './suggestions'
 
 /**
  * A comment or a photo from the floor (B-W2b-47; MES-101, COL-017): the tiles and the reminder, a file announced and
@@ -24,4 +28,16 @@ export default defineRoutes('production.floornotes', manifest, async (app) => {
     const { replayed, ...answer } = await postFloorNote(request, request.params.workOrderId, request.body)
     return reply.code(replayed ? 200 : 201).send(answer)
   })
+
+  // ---- owb-fl3 (S5 server B): Tell the office (./suggestions.ts) and the Me page (./profile.ts) ----
+  app.post('/floor/suggestions/files', { schema: suggestionVoiceContract }, async (request, reply) => reply.code(201).send(await announceSuggestionVoice(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/floor/suggestions/files/:fileId/complete', { schema: suggestionVoiceCompleteContract }, async (request) => completeSuggestionVoice(request, request.params.fileId, idempotencyKeyFrom(request)))
+
+  app.post('/floor/suggestions', { schema: suggestionContract }, async (request, reply) => {
+    const answer = await tellOffice(request, request.body, idempotencyKeyFrom(request))
+    return reply.code(answer.replayed ? 200 : 201).send(answer)
+  })
+
+  app.get('/floor/me/profile', { schema: profileContract }, async (request) => myProfile(request))
 })

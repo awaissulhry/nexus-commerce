@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/baskets.prisma (rules: src/ownership.ts; roles: src/roles.ts). owb-b1 (order workflow build, schema wave \"order workflow 1/1\"; PL-schema § 4, § 5A row 12): the floor (factory_floor_runtime, its OWN site: a phone or a tablet; production.baskets.move, production.baskets.route) and the office (factory_runtime; the production manager and the floor supervisor) move baskets by hand and change a basket's route through apps/factory-api, always with floorCommand() or command(); both are append-only (`@append-only`; the …_order_workflow_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login, and check the steps, the undo and the reason: G5). A team leader tells the office a work order will be late (FloorLateWarning); the office answers it once (G6). Personal: the worker who acted (workerId, only where the site's floor rules name workers) and their employee (the subject), for production traceability, as HelpCall. The partner and link sessions read nothing here; no money column. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/baskets.prisma (rules: src/ownership.ts; roles: src/roles.ts). owb-b1 (order workflow build, schema wave \"order workflow 1/1\"; PL-schema § 4, § 5A row 12): the floor (factory_floor_runtime, its OWN site: a phone or a tablet; production.baskets.move, production.baskets.route) and the office (factory_runtime; the production manager and the floor supervisor) move baskets by hand and change a basket's route through apps/factory-api, always with floorCommand() or command(); both are append-only (`@append-only`; the …_order_workflow_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login, and check the steps, the undo and the reason: G5). A team leader tells the office a work order will be late (FloorLateWarning); the office answers it once (G6). owb-fl0 (schema wave \"floor baskets 2\"): a team leader marks a basket \"Do this first\" and clears it once (BasketFlag); a worker tells the office something, with or without their name (FloorSuggestion, append-only, insert only for the floor). Personal: the worker who acted (workerId, only where the site's floor rules name workers) and their employee (the subject), for production traceability, as HelpCall. The partner and link sessions read nothing here; no money column. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "BasketMove": {
       "about": "owb-b1: the site's floor and the office move a basket by hand (forward, back with a reason, taken here, an earlier move undone) and read the moves (a basket's place is its scans plus its moves); nobody changes or removes a move (append-only). A move writes no scan, no pay and no cost. The worker is named only where the site names workers.",
@@ -28,6 +28,26 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": { "subject": "employeeId", "columns": { "workerId": ["PRODUCTION"] } }
+    },
+    "BasketFlag": {
+      "about": "owb-fl0 (schema wave \"floor baskets 2\"): a team leader on the floor marks a basket \"Do this first\" (kind FIRST; floor.lead, the offline kind production.baskets.flag) and clears the mark once (insert, update); the floor reads its own site's marks, the office reads every mark of the tenant (the API scopes it by company and site; the board, the basket page). One open mark per basket and kind; a cleared mark never changes; never deleted (the …_production_floor_baskets_2_guards trigger). Personal: the leader who set it (setByWorkerId, only where the site names workers) and their employee (the subject), for production traceability, as BasketMove; the one who cleared it (clearedByWorkerId, clearedByUserId) is an actor id, as HelpCall's takers. The partner reads nothing here; no money column.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": { "subject": "employeeId", "columns": { "setByWorkerId": ["PRODUCTION"] } }
+    },
+    "FloorSuggestion": {
+      "about": "owb-fl0 (schema wave \"floor baskets 2\"): a worker tells the office an idea, that something is wrong, or a thank-you (Me › Tell the office), with or without their name: the floor inserts it at its own site and never reads one back (insert only: write it without RETURNING, createMany); the office reads every suggestion of the tenant (the API scopes it by company and site). Without the name the row names no worker, no employee and no device (a PHONE device is one person's own; the guard), so a word sent without a name stays without one (Statuto art. 4). Never changed or removed (`@append-only`, the …_production_floor_baskets_2_guards triggers, for every login). Personal: the worker who chose to give their name (workerId) and their employee (the subject). The partner reads nothing here.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] }
       },
       "personal": { "subject": "employeeId", "columns": { "workerId": ["PRODUCTION"] } }
     }
