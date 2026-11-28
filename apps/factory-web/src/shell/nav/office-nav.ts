@@ -136,6 +136,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-434: Dashboards (SCR-031 / SCR-103) and Present in its own window (SCR-490).
   '/home/dashboards',
   '/home/dashboards/present',
+  // owb- S2 (of7): Home › Design desk (flipped from DECLARED_PAGES at the lead's end PR).
+  '/home/design-desk',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
@@ -248,6 +250,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/shipments/manifest',
   '/warehouse/shipments/customs-paper',
   '/warehouse/shipping',
+  // owb- S3 (ss3): Warehouse › Outbound › Ready to ship and Our warehouses (flipped from DECLARED_PAGES at the lead's end PR).
+  '/warehouse/ready-to-ship',
+  '/warehouse/our-warehouses',
   // F-PR-04: Production › Overview, the area's first page (`/production` opens it).
   '/production/overview',
   '/production/floor',
@@ -433,6 +438,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // owb- S5 (fl9): Production › Baskets board and Chains (flipped from DECLARED_PAGES at the land).
   '/production/baskets',
   '/production/chains',
+  // owb- S3 (ss7, ss8): Production › Teams and Production › Settings › Order structures (flipped at the lead's end PR).
+  '/production/teams',
+  '/production/order-structures',
   '/production/dispatch/print',
   // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
   // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
@@ -514,6 +522,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/piecerates',
   '/people/piecerates/rate-sheet',
   '/people/piecerates/statement/[id]',
+  // owb- S3 (ss8) People › Factory structure, owb- S2 (of4) People › People by customer (flipped at the lead's end PR).
+  '/people/structure',
+  '/people/by-customer',
   // B-W2b-234: Production › Floor control › Work instructions (SCR-141), an instruction (SCR-285), its floor preview and
   // its sheet PDF (new tabs, no navigation row).
   '/production/instructions',
@@ -540,17 +551,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
  * OFFICE_PAGES, so no row shows it and no entry lands on it. The land of the session that builds a page moves its address
  * from here to OFFICE_PAGES (and sets the tree entry's `href`): then its row appears by itself.
  */
-export const DECLARED_PAGES: ReadonlySet<string> = new Set([
-  // S3: Production › Teams (ss7), Production › Settings › Order structures (ss8), People › Factory structure (ss8),
-  // Warehouse › Outbound › Ready to ship and Our warehouses (ss3).
-  '/production/teams',
-  '/production/order-structures',
-  '/people/structure',
-  '/warehouse/ready-to-ship',
-  '/warehouse/our-warehouses',
-  // S2: People › People by customer (of4), Home › Design desk (of7).
-  '/people/by-customer',
-  '/home/design-desk',
+export const DECLARED_PAGES: ReadonlySet<string> = new Set<string>([
+  // owb- lead end PR (2026-11-28): all nine declared pages are built and flipped to OFFICE_PAGES; none is declared now.
 ])
 
 /**
