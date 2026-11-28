@@ -310,3 +310,10 @@ button.fw-pcat-name:focus-visible {
     display: none !important;
   }
 }
+
+/* ---- owb-pd4 step 4.5 (gap G9): the customer's product page — the section kit's column (lib/record-sections), its answer line and
+   text. DS tokens only (no raw colour): light and dark follow the theme; the kit's tables become cards in a narrow room. */
+.fw-pprod { min-width: 0; }
+.fw-pprod-answer { margin: 0; padding: var(--nds-space-10) var(--nds-space-14); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.fw-pprod-answer b { color: var(--nds-text-strong); }
+.fw-pprod-text { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); overflow-wrap: anywhere; }

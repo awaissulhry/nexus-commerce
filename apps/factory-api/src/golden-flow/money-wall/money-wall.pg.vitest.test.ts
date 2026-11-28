@@ -164,6 +164,12 @@ async function orderGroup(who: Person): Promise<Json | null> {
   return ((answer.body.groups as Json[]) ?? []).find((group) => group.key === 'ORDER') ?? null
 }
 
+/**
+ * owb-of1 (plan.md § 5 D R20; owb-of1a): the office Factory designer holds orders.view.own, not orders.view — it reads only the
+ * orders it is ON. The Owner puts it on SEED-SO-0002 as a follower (the order's People), as the office does; twice changes nothing.
+ */
+const designerOnSo2 = () => ok(P.owner, 'POST', `/threads/SalesOrder/${SO2()}/followers`, { userId: P.designer.id })
+
 /** A refusal in the money wall's words: 403 and "Shown to people who see prices." (the price check, the summary, the term). */
 async function heldForPrices(who: Person, method: 'GET' | 'PUT' | 'POST', url: string, body?: unknown): Promise<Json> {
   const answer = await as(who, method, url, body)
@@ -307,6 +313,7 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
     }
     const owners = ((await ok(P.owner, 'GET', `/sales/orders?partyId=${P1()}&limit=200`)).orders as Json[]).find((row) => row.id === SO2())!
     expect(owners).toMatchObject({ priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceDiff: 1_000 })
+    await designerOnSo2() // owb-of1 (R20): the designer reads the orders it is on
     for (const who of noPrice()) {
       const order = await noPriceIn(who, `/sales/orders/${SO2()}`)
       const list = await noPriceIn(who, `/sales/orders?partyId=${P1()}&limit=200`)
@@ -315,6 +322,11 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
       if (SALES_AND_MANAGER.includes(who.key as OfficeKey)) {
         expect(order, `${who.key} reads the order`).not.toBeNull()
         expect(list, `${who.key} reads the list`).not.toBeNull()
+      }
+      // owb-of1 (R20): the Factory designer, put on SO2, reads it and finds it in its list — without a price key (noPriceIn).
+      if (who.key === 'designer') {
+        expect(order, 'the designer reads the order it is on').not.toBeNull()
+        expect(((list?.orders as Json[]) ?? []).map((row) => row.id), 'the designer lists the order it is on').toContain(SO2())
       }
     }
   })
@@ -648,6 +660,7 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
     const designer = P.designer
     // owb- (R20): orders.view became orders.view.own — the designer reads the orders it is on (S2 of1 opens those reads).
     expect((await ok(designer, 'GET', '/auth/office/me')).permissions).toEqual(expect.arrayContaining(['orders.view.own', 'files.read', 'threads.read']))
+    await designerOnSo2() // owb-of1: on SO2 first (M01 put it on; again here, so this case reads alone too)
     expect(await noPriceIn(designer, `/sales/orders/${SO2()}`)).not.toBeNull()
     expect(await noPriceIn(designer, `/sales/orders?partyId=${P1()}&limit=200`)).not.toBeNull()
     await heldForPrices(designer, 'GET', `/sales/orders/${SO2()}/price-check`)

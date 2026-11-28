@@ -89,5 +89,67 @@
     "noProduct": "No product yet",
     "failed": "The order could not be confirmed. Try again.",
     "readFailed": "This order could not be read. Close and try again."
+  },
+  "production": {
+    "rush": "Rush…",
+    "printAgain": "Print again…",
+    "placeCode": "Place the scan code…"
+  },
+  "baskets": {
+    "label": "The baskets of this order",
+    "ready": "Ready to ship",
+    "step": "Step {done} of {total}",
+    "late_one": "Late · {days} day",
+    "late_other": "Late · {days} days",
+    "byHand": "Set by hand",
+    "state": {
+      "WORKING": "Working",
+      "PAUSED": "Paused",
+      "WAITING": "Waiting",
+      "READY": "Ready"
+    }
+  },
+  "log": {
+    "chipsLabel": "Show the changes of one kind",
+    "chips": {
+      "all": "All",
+      "asks": "Asks",
+      "lines": "Lines",
+      "dates": "Dates",
+      "design": "Design",
+      "status": "Status"
+    },
+    "emptyChip": "No change of this kind yet."
+  },
+  "notices": {
+    "title": "The customer says it paid",
+    "open_one": "{count} notice waits for you",
+    "open_other": "{count} notices wait for you",
+    "none": "Every notice is answered.",
+    "info": "The customer tells the factory it paid. A notice changes nothing that is owed: record the payment with Record payment… when it is in the bank.",
+    "failed": "The notice could not be answered. Try again.",
+    "row": "Paid on {day} · {step}",
+    "noStep": "no step named",
+    "state": {
+      "OPEN": "Waits",
+      "RECORDED": "Recorded",
+      "DISMISSED": "Dismissed"
+    },
+    "busy": "Saving…",
+    "recorded": "Recorded",
+    "dismiss": "Dismiss",
+    "thenRecord": "Recorded means you saw it: record the payment itself with Record payment… (with your code).",
+    "waiting_one": "The customer says it paid · {count}",
+    "waiting_other": "The customer says it paid · {count}"
+  },
+  "money": {
+    "paidTooMuch": "{amount} is paid too much: the order’s total went below what is paid."
+  },
+  "zip": {
+    "all": "Download all",
+    "busy": "Making the zip…",
+    "failed": "The zip could not be made. Try again.",
+    "leftOut_one": "{count} file was left out of the zip: you cannot open it.",
+    "leftOut_other": "{count} files were left out of the zip: you cannot open them."
   }
 }

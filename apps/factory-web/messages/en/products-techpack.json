@@ -21,7 +21,7 @@
     "audienceHint": {
       "INTERNAL": "Everything the office may see. The PDF never carries a cost: a paper travels.",
       "SUBCONTRACTOR": "No cost, margin or pay figure, no standard minutes, no supplier or workshop names, no alternates, approval states or people's names. What comes with the kit is marked.",
-      "BRAND": "As the workshop copy, and no office notes and no kit mark. A private-label style's copy goes to its own brand only."
+      "BRAND": "As the workshop copy, and no office notes and no kit mark. A private-label product's copy goes to its own brand only."
     },
     "language": {
       "it": "Italian",
@@ -61,13 +61,13 @@
     },
     "held": {
       "noMake": "Your role does not make tech pack PDFs: the production manager or the buyer does.",
-      "noRevision": "The style has no revision yet.",
+      "noRevision": "The product has no revision yet.",
       "offline": "Offline: a PDF is made by the server. Try again when the connection is back.",
       "busy": "The PDF is being made.",
       "noSections": "Tick at least one section.",
       "sectionNotYours": "A section ticked is not one your role may see.",
       "internalParty": "An internal copy is for nobody outside.",
-      "privateLabel": "This private-label style's customer copy is for its own brand only."
+      "privateLabel": "This private-label product's customer copy is for its own brand only."
     },
     "tab": {
       "audience": "Who it is for",
@@ -85,7 +85,7 @@
       "failed": "Couldn't read the tech pack",
       "noRevision": {
         "title": "No revision yet",
-        "body": "The tech pack is a view of a revision: start the first one on the style."
+        "body": "The tech pack is a view of a revision: start the first one on the product."
       },
       "nothing": {
         "title": "No section chosen",
@@ -94,7 +94,7 @@
     },
     "contents": {
       "title": "Contents",
-      "intro": "A view of the live style, section by section. Tick what to show and to print.",
+      "intro": "A view of the live product, section by section. Tick what to show and to print.",
       "all": "Tick all",
       "none": "Untick all",
       "livesIn": "Edit in {tab}"
@@ -125,11 +125,11 @@
       "subtitle": "{code} · revision {revision} ({status})",
       "audience": "Who it is for",
       "language": "Language",
-      "languageHint": "The PDF's words, and the style's own texts where they are typed in it.",
+      "languageHint": "The PDF's words, and the product's own texts where they are typed in it.",
       "forWorkshop": "Workshop",
       "forBrand": "Customer or brand",
       "partyHint": "Printed on the cover. Leave it empty for a copy for anyone of this kind.",
-      "privateLabelHint": "A private-label style: its customer copy is for {brand} only.",
+      "privateLabelHint": "A private-label product: its customer copy is for {brand} only.",
       "noPartiesRight": "Your role does not read the parties: the copy names nobody.",
       "partiesLoading": "Reading the parties…",
       "nobody": "Nobody named",
@@ -145,20 +145,20 @@
       "read": {
         "signed_out": "Your session ended: sign in again.",
         "forbidden": "Your role cannot read this tech pack.",
-        "not_found": "This style or revision no longer exists.",
+        "not_found": "This product or revision no longer exists.",
         "unavailable": "The server did not answer. Try again in a moment.",
         "rate_limited": "Too many requests: wait a moment and try again.",
         "contract": "The answer did not match this screen: reload the page.",
         "internal": "Something went wrong. Try again."
       },
       "make": {
-        "party": "This copy cannot go to that party: a workshop copy goes to a workshop or a supplier, a customer copy to a customer or a brand, never a blocked or archived one, and a private-label style's copy to its own brand only.",
+        "party": "This copy cannot go to that party: a workshop copy goes to a workshop or a supplier, a customer copy to a customer or a brand, never a blocked or archived one, and a private-label product's copy to its own brand only.",
         "sections": "A section asked is not one your role may see, or is asked twice.",
-        "company": "Say which company keeps this copy: the style is every company's.",
+        "company": "Say which company keeps this copy: the product is every company's.",
         "invalid": "The PDF was refused as it is: check who it is for and the sections.",
         "meanwhile": "Another version of this revision was made meanwhile: make the PDF again.",
         "forbidden": "Your role does not make tech pack PDFs for this company.",
-        "notFound": "This style or revision no longer exists.",
+        "notFound": "This product or revision no longer exists.",
         "signed_out": "Your session ended: sign in again.",
         "rate_limited": "Too many requests: wait a moment and try again.",
         "unavailable": "The server did not answer: no PDF was made. Try again in a moment.",
@@ -166,7 +166,7 @@
       }
     },
     "cover": {
-      "style": "Style",
+      "style": "Product",
       "type": "Product type",
       "season": "Season",
       "brand": "Brand",
@@ -400,7 +400,7 @@
       "artwork": "Files",
       "artworkCount": "{logos} logos · {artwork} label artworks",
       "rules": "Packing rules",
-      "noBranding": "No brand packing set for this style.",
+      "noBranding": "No brand packing set for this product.",
       "col": {
         "rule": "Rule",
         "material": "Material",
@@ -415,7 +415,7 @@
       "noPlacements": "No protector placed.",
       "protectors": "Protector lines of the BOM",
       "certificates": "Certificates",
-      "noCertificates": "No certificate covers the style.",
+      "noCertificates": "No certificate covers the product.",
       "tests": "Production control tests",
       "noTests": "No production control test.",
       "notTested": "Not tested yet",
@@ -489,7 +489,7 @@
       "print": "Print",
       "printHeld": "The PDF is not open yet.",
       "made": "{audience} · {code} · made {at} by {by}",
-      "failed": "Couldn't open the style",
+      "failed": "Couldn't open the product",
       "versionsFailed": "Couldn't read the versions",
       "pdfFailed": "Couldn't open this PDF",
       "forbidden": {
@@ -516,7 +516,7 @@
       "failed": "Couldn't check this page",
       "notFound": {
         "title": "No tech pack page has this code",
-        "body": "The code may be mistyped, or the page is of a style your role does not see."
+        "body": "The code may be mistyped, or the page is of a product your role does not see."
       },
       "type": {
         "title": "Check a printed page",

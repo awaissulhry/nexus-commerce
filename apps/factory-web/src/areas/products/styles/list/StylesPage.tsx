@@ -6,14 +6,14 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { archiveStyle, basePriceLists, countStyles, createStyle, listBrands, listScales, listStyles, priceEntries, startRevision, updateStyle } from '../api'
+import { archiveStyle, countStyles, createStyle, listBrands, listScales, listStyles, startRevision, updateStyle } from '../api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { commerceHeld } from '../import/commerce/commerce-model'
 import { useCommerceImport } from '../import/commerce/use-commerce-import'
 import { EVERY_COMPANY } from '../import/sheet-import'
 import { abilitiesOf, grainsOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from '../model'
 import { readProblem, writeProblem } from '../problems'
-import { pickBaseList, pricesByStyle, type ListPrices, type NewStyleDraft, type NewStyleModel, type StyleFilters, type StylesListViewModel } from './list-model'
+import type { NewStyleDraft, NewStyleModel, StyleFilters, StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
 // B-W2b-236 (SCR-303): List · Gallery.
 import { galleryOn, withGallery } from '../gallery/gallery-model'
@@ -28,11 +28,13 @@ import { useAddToProject } from '../../projects/add-to/use-add-to-project'
 const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
 const PPE_CATEGORIES = ['NOT_PPE', 'CATEGORY_I', 'CATEGORY_II', 'CATEGORY_III']
 
-/** The filters in the address (`?view=waiting&type=JACKET&ppe=CATEGORY_II&q=…`), so a filtered list can be shared. */
+/** The filters in the address (`?view=waiting&type=JACKET&ppe=CATEGORY_II&brand=<customer>&q=…`), so a filtered list can be shared. */
 function filtersOf(params: URLSearchParams | null): StyleFilters {
   const type = params?.get('type') ?? ''
   const ppe = params?.get('ppe') ?? ''
-  return { view: viewOf(params?.get('view')), q: params?.get('q') ?? '', type: PRODUCT_TYPES.includes(type) ? type : '', ppe: PPE_CATEGORIES.includes(ppe) ? ppe : '' }
+  // owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" — a party id (the API checks it; another brand's answers nothing).
+  const brand = (params?.get('brand') ?? '').trim().slice(0, 64)
+  return { view: viewOf(params?.get('view')), q: params?.get('q') ?? '', type: PRODUCT_TYPES.includes(type) ? type : '', ppe: PPE_CATEGORIES.includes(ppe) ? ppe : '', brand }
 }
 
 function searchOf(filters: StyleFilters): string {
@@ -40,6 +42,7 @@ function searchOf(filters: StyleFilters): string {
   if (filters.view !== 'open') search.set('view', filters.view)
   if (filters.type) search.set('type', filters.type)
   if (filters.ppe) search.set('ppe', filters.ppe)
+  if (filters.brand) search.set('brand', filters.brand)
   if (filters.q.trim()) search.set('q', filters.q.trim())
   const text = search.toString()
   return text ? `?${text}` : ''
@@ -86,8 +89,20 @@ function StylesContainer() {
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
   const companyId = session.company?.id ?? null
   const [rows, setRows] = useState<StylesListViewModel['rows']>({ items: null, more: false, count: null, problem: null })
-  // B-W2b-236: the Gallery view's pictures for the rows on screen.
-  const looks = useGalleryLooks(api, galleryOn(params), useMemo(() => (rows.items ?? []).map((row) => row.id), [rows.items]))
+  // B-W2b-236: the Gallery view's pictures for the rows on screen. owb-pd4 (step 4.1): read for the list too (its picture column).
+  const looks = useGalleryLooks(api, true, useMemo(() => (rows.items ?? []).map((row) => row.id), [rows.items]))
+  // owb-pd4 (step 4.1): the customers for the family filter "Made for ⟨customer⟩" (parties.view).
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }> | null>(null)
+  useEffect(() => {
+    if (!can.brands) return
+    let live = true
+    listBrands(api)
+      .then((list) => live && setBrands(list.map((brand) => ({ id: brand.id, name: brand.tradeName ?? brand.legalName }))))
+      .catch(() => live && setBrands(null))
+    return () => {
+      live = false
+    }
+  }, [api, can.brands])
   const [cursor, setCursor] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [tiles, setTiles] = useState<StylesListViewModel['tiles']>({})
@@ -96,7 +111,6 @@ function StylesContainer() {
   const [busy, setBusy] = useState(false)
   const [newStyle, setNewStyle] = useState<NewStyleModel | null>(null)
   const readSeq = useRef(0)
-  const [prices, setPrices] = useState<ListPrices>({ state: 'hidden' })
   // B-W2b-237: the gate summed up for the rows on screen (25 per call), read again when the rows are read again.
   const [gate, setGate] = useState<ListGate>(NO_GATE)
   const gateRef = useRef<ListGate>(NO_GATE)
@@ -124,33 +138,8 @@ function StylesContainer() {
     },
   })
 
-  // The list prices (W2a): the BASE list in force for this company, read once; only with the right and a grain to show.
-  const wantsPrices = can.prices && (grains.price || grains.margin)
-  useEffect(() => {
-    if (!wantsPrices) {
-      setPrices({ state: 'hidden' })
-      return
-    }
-    let live = true
-    setPrices({ state: 'loading' })
-    basePriceLists(api, companyId)
-      .then(async (lists) => {
-        const list = pickBaseList(lists, companyId)
-        if (!list || !list.shownVersion) {
-          if (live) setPrices({ state: 'none' })
-          return
-        }
-        const entries = await priceEntries(api, list.id, list.shownVersion.id)
-        if (live) setPrices({ state: 'ready', list: { id: list.id, code: list.code, name: list.name, currency: list.currency }, byStyle: pricesByStyle(entries) })
-      })
-      .catch((error: unknown) => live && setPrices({ state: 'error', problem: readProblem(error) }))
-    return () => {
-      live = false
-    }
-  }, [api, companyId, wantsPrices])
-
   const query = useCallback(
-    (from: StyleFilters, at: string | null) => ({ ...viewQuery(from.view), q: from.q, productType: from.type || undefined, ppeCategory: from.ppe || undefined, cursor: at }),
+    (from: StyleFilters, at: string | null) => ({ ...viewQuery(from.view), q: from.q, productType: from.type || undefined, ppeCategory: from.ppe || undefined, brandPartyId: from.brand || undefined, cursor: at }),
     [],
   )
 
@@ -235,7 +224,7 @@ function StylesContainer() {
   // `?new=1` (Today's New ▾, the `c` key from elsewhere) opens New style once.
   const askedNew = params?.get('new') === '1'
   useEffect(() => {
-    if (askedNew && can.manage) openNew(true)
+    if (askedNew && (can.manage || can.draftsEdit)) openNew(true) // owb-pd4: the designer makes a product too
     // Only when the address asks.
   }, [askedNew])
 
@@ -271,7 +260,7 @@ function StylesContainer() {
     const url = URL.createObjectURL(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `styles-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.download = `products-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
@@ -354,7 +343,8 @@ function StylesContainer() {
     prefix,
     can,
     grains,
-    prices,
+    looks,
+    brands,
     duplicate: duplicate.model,
     filters,
     rows,

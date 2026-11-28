@@ -13,7 +13,7 @@
   "hold": {
     "noManage": "Your role reads this BOM; changing it needs the BOM edit right.",
     "loading": "Wait until the BOM's structure is read.",
-    "archived": "The style is archived: reactivate it to change its BOM.",
+    "archived": "The product is archived: reactivate it to change its BOM.",
     "frozen": "This revision is not a draft: start a new revision to change it.",
     "offline": "Offline — nothing is sent until the connection is back.",
     "busy": "Wait for the change being saved."
@@ -207,7 +207,7 @@
     "ALTERNATE_BLOCKED": "Line {line}: the alternate {alternate} is blocked. Remove it or choose another.",
     "SUB_ASSEMBLY_NOT_RELEASED": "Line {line}: the sub-assembly {sub} is not released. Release it, or take its released revision.",
     "SUB_ASSEMBLY_NOT_MADE": "Line {line}: {material} is no longer a component we make in pieces, pairs or sets (or a customer sends it). Change the line or take the sub-assembly off.",
-    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the sub-assembly {sub} contains this style again (a circle). Take another sub-assembly.",
+    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the sub-assembly {sub} contains this product again (a circle). Take another sub-assembly.",
     "SUB_ASSEMBLY_TOO_DEEP": "Line {line}: the sub-assemblies go deeper than 10 levels.",
     "SUB_ASSEMBLY_UNIT": "Line {line}: its unit does not count what the sub-assembly {sub} makes.",
     "SUB_ASSEMBLY_SIZE_MISSING": "Line {line}: the sub-assembly {sub} has no size for size {size}.",
@@ -215,7 +215,7 @@
     "GROUP_CIRCLE": "Line {line}: grouped under a line that is grouped under it (a circle). Ungroup one of them.",
     "PPE_MATERIAL_NOT_APPROVED": "Line {line}: {material} is used for protection and is not approved yet.",
     "ALTERNATE_ARCHIVED": "Line {line}: the alternate {alternate} is archived: it is never taken.",
-    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: the style of the sub-assembly {sub} is archived."
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: the product of the sub-assembly {sub} is archived."
   },
   "keyHint": {
     "open": "Open the line in depth",
@@ -255,16 +255,16 @@
       "title": "Sub-assembly",
       "none": "No sub-assembly.",
       "remove": "Take it off",
-      "another": "Take another revision or style",
+      "another": "Take another revision or product",
       "change": "Choose another",
-      "search": "Style of the sub-assembly",
-      "searchHint": "Another style's BOM that line {line} takes (a removable liner, an armour insert).",
+      "search": "Product of the sub-assembly",
+      "searchHint": "Another product's BOM that line {line} takes (a removable liner, an armour insert).",
       "placeholder": "Liner, insert, cuff…",
-      "reading": "Reading the style's revisions…",
-      "failed": "Couldn't read that style's revisions.",
+      "reading": "Reading the product's revisions…",
+      "failed": "Couldn't read that product's revisions.",
       "revision": "Revision",
       "revisionHint": "Released first; a draft stops this BOM's release until it is released.",
-      "noRevision": "That style has no revision yet.",
+      "noRevision": "That product has no revision yet.",
       "take": "Take revision {revision}",
       "held": {
         "notComponent": "Line {line} takes a bought material: a sub-assembly line takes the component we make. Choose that component as the line's material first.",
@@ -294,9 +294,9 @@
     "option": {
       "title": "Only for an option",
       "hint": "A line only for one option is taken only when that option is chosen.",
-      "none": "The style offers no options yet.",
-      "failed": "Couldn't read the style's options.",
-      "link": "Options & rules of this style"
+      "none": "The product offers no options yet.",
+      "failed": "Couldn't read the product's options.",
+      "link": "Options & rules of this product"
     }
   },
   "search": {
@@ -345,18 +345,18 @@
     },
     "empty": {
       "title": "No sub-assemblies",
-      "body": "A component we make (a liner, an armour insert) can take another style's revision: open its line and choose the sub-assembly."
+      "body": "A component we make (a liner, an armour insert) can take another product's revision: open its line and choose the sub-assembly."
     }
   },
   "usedIn": {
     "title": "Used as a sub-assembly in",
-    "intro": "The revisions of other styles that take {code} as a sub-assembly.",
+    "intro": "The revisions of other products that take {code} as a sub-assembly.",
     "loading": "Reading where it is used…",
     "failed": "Couldn't read where it is used.",
-    "none": "No other style takes it as a sub-assembly.",
+    "none": "No other product takes it as a sub-assembly.",
     "line": "Line {seq} · {qty} {unit}",
     "col": {
-      "style": "Style",
+      "style": "Product",
       "revision": "Its revision",
       "line": "Line",
       "takes": "Takes"

@@ -27,6 +27,7 @@ import { dayTimeOf } from '../layout'
 import { askWordsOf } from '../model'
 import { changeRowsOf, chipCountsOf, HISTORY_CHIPS, HISTORY_OPEN, historyChipOf, restoreOf, rowsForChip, type ChangeRow, type HistoryChip, type RevisionFacts } from '../history'
 import { RowMenu } from './RowMenu'
+import { WhatChangedLog } from './WhatChangedLog' // owb-of6 step 2: What changed = the ONE order log
 import './changes.css'
 
 /**
@@ -47,6 +48,8 @@ export function HistorySection(props: { order: Order; model: OrderRecordModel; a
 
 function History({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const locale = useLocale() // owb-of6: Restore's words (the latest revision)
+  const restoreHeld = useT(DEPTH)('held.putBackNot') // owb-of6: as the revision row says it
   const params = useSearchParams()
   const search = params?.toString() ?? ''
   const [all, setAll] = useState(false)
@@ -97,6 +100,27 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
     </>
   )
   const answer = reading ? t('changesTab.history.reading') : rows.length > 0 ? t('changesTab.history.count', { count: rows.length }) : failed ? null : t(order.status === 'CANCELLED' || order.status === 'CLOSED' ? 'changesTab.history.emptyFinal' : 'changesTab.history.empty')
+  // ---- owb-of6 step 2 (design § 5l; lead's settles: "What changed = the base's ONE order log"): where the page gives the log's port, the
+  // section IS the log (chips All · Asks · Lines · Dates · Design · Status) — its ONE door "Restore as before…" where today's server
+  // offers it (the latest revision, the changes read's own rule). A design case without the port keeps today's revision rows.
+  if (model.flow?.log) {
+    const latest = rows.find((row) => row.kind === 'revision' && row.latest)
+    const revised = latest && latest.kind === 'revision' ? (latest.revision.change ?? null) : null
+    const restore = revised && model.can.manage ? restoreOf(revised, locale) : null
+    const restoreButton =
+      restore && revised ? (
+        <Button key="restore" size="sm" heldReason={!restore.may ? (restore.why ?? restoreHeld) : model.busy || model.depth?.busy ? t('held.busy') : null} aria-label={t('changesTab.history.restoreOf', { revision: revised.revision })} onClick={() => actions?.depth?.onDialog?.({ kind: 'putBack', changeId: revised.id, reason: '' })}>
+          <Undo2 size={13} aria-hidden /> {t('changesTab.history.restore')}
+        </Button>
+      ) : null
+    return (
+      <Section id="history" title={title} buttons={restoreButton ? [restoreButton] : []} info={info}>
+        <WhatChangedLog read={model.flow.log} />
+        {pointer}
+      </Section>
+    )
+  }
+  // ---- end owb-of6
   return (
     <Section id="history" title={title} answer={answer} info={info}>
       {failed && <PartFailed part={t('changesTab.history.revisionsPart')} problem={source!.problem!} onRetry={() => (changes ? actions?.depth?.onRetry?.('changes') : actions?.onRetryPart?.('amendments'))} />}

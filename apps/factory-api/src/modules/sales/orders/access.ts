@@ -86,4 +86,15 @@ export function seenOrdersWhere(context: OfficeContext, own: { readonly salesOrd
   const mine = ownScope === NO_ROWS || own.salesOrderIds.length === 0 ? NO_ROWS : { AND: [ownScope, { id: { in: [...own.salesOrderIds] } }] }
   return anyOf([viewed, mine]) as Prisma.SalesOrderWhereInput
 }
+
+/** owb-of1: the same scope for the Draft and Sent orders (PortalOrderRequest): orders.view's, OR the requests it is on (ids in SQL). */
+export function seenRequestsWhere(context: OfficeContext, own: { readonly requestIds: readonly string[] } | null): Prisma.PortalOrderRequestWhereInput {
+  const actor = actorOf(context)
+  const columns = { company: 'companyId', party: 'partyId' } as const
+  const viewed = scopeWhere(actor, ORDERS_VIEW, columns)
+  if (!own) return viewed as Prisma.PortalOrderRequestWhereInput
+  const ownScope = scopeWhere(actor, ORDERS_VIEW_OWN, columns)
+  const mine = ownScope === NO_ROWS || own.requestIds.length === 0 ? NO_ROWS : { AND: [ownScope, { id: { in: [...own.requestIds] } }] }
+  return anyOf([viewed, mine]) as Prisma.PortalOrderRequestWhereInput
+}
 // ── end owb-of1a ──
