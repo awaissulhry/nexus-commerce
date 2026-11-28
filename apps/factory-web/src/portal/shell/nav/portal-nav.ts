@@ -1,24 +1,28 @@
-import { Archive, Calculator, ClipboardList, Factory, FileText, Home, IdCard, Package, RotateCcw, ShoppingBag, Truck, UserRound, type LucideIcon } from 'lucide-react'
-import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, type AreaNavItem, type AreaNavSection } from '@nexus/ui/patterns/shell/index'
+import { Archive, Calculator, Factory, FileText, Home, IdCard, Landmark, Package, Plus, RotateCcw, Shirt, ShoppingBag, Tag, Truck, UserCheck, UserRound, Users, Wallet, type LucideIcon } from 'lucide-react'
+import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, type AreaNavItem, type AreaNavPlace, type AreaNavSection } from '@nexus/ui/patterns/shell/index'
 
 /**
  * The Portal navigation (B-W2b-173; design portal.frame › rail, bottom-bar, band; the views' `portal` areas) — THE merge point
  * of every portal page: a step that builds a page sets its `built` here (and a record page its line in RECORD_PAGES), nothing
  * else. Addresses are the portal's own, without `/p/<party code>` (the frame adds it).
  *
- *   Customer       Home · Orders (Orders & requests, New order) · Quotes & samples (Quotes & requests, Samples &
- *                  tech packs, Catalogue)
- *                  · Documents · Returns & claims · Account
- *                  F-PR-10: Home gains Waiting for you; Production after Orders (portal.production.view)
+ *   Customer       owb-po4 (order workflow plan § 5 "Customer portal", PORTAL_NAV; the office's rail + sub-sidebar):
+ *                  Home · Orders (Orders, Prices*, Agreed prices*, New order, Production, Returns & claims) · Customers (Your
+ *                  customers*, Payments*) · Products (Products = the Catalogue, Samples & tech packs) · People (Your people) ·
+ *                  Documents · Account          (* not built yet: hidden; Prices, Agreed prices and Payments only with prices)
+ *                  Nothing is lost (plan § 5 F): Production and Returns are rows under Orders, the Catalogue and Samples are
+ *                  Products, Waiting for you is Home's card "What waits for you" (its page stays: `menu: false`).
  *   Supplier       Home · Orders & jobs (Purchase orders for a supplier, Jobs for a workshop) · Deliveries · Documents · Profile
  *   Subcontractor  Home · Jobs · Documents · Profile
  *   Guest          Home · Accounting (the accountant) · Audit room (an auditor)
  *
  * It FAILS CLOSED (the DS's `areaNavForPerson`, view `portal`): an area or page shows only to the partner kinds it names and
- * only with its permission, and only once it is BUILT — navigation never shows a door that leads nowhere. An area whose
- * person keeps one page of several takes that page's name and address ("Orders & jobs" is "Jobs" for a workshop). Labels
- * are `portal` message keys (`translatePortalNav`). Each area names the rail badge it carries: the area of the one task
- * list (factory-domain portal/tasks/kinds.ts PORTAL_AREAS), so the rail, the bottom bar and Home count the same requests.
+ * only with its permission, and only once it is BUILT — navigation never shows a door that leads nowhere. A money page shows
+ * only to a person who sees prices (`money`; unknown = no). An area whose person keeps one page of several takes that page's
+ * name and address ("Orders & jobs" is "Jobs" for a workshop). Labels are `portal` message keys (`translatePortalNav`). Each
+ * area names the rail badge it carries: the area of the one task list (factory-domain portal/tasks/kinds.ts PORTAL_AREAS), so
+ * the rail, the bottom bar and Home count the same requests; a page that moved into an area brings its own (owb-po4.4: the row
+ * counts both, one key joined by `+`, read with shell/model.ts `badgeOf`).
  */
 
 export const PORTAL_KINDS = ['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const
@@ -26,8 +30,11 @@ export type PortalKind = (typeof PORTAL_KINDS)[number]
 export const isPortalKind = (value: unknown): value is PortalKind => typeof value === 'string' && (PORTAL_KINDS as readonly string[]).includes(value)
 
 /** Permissions a page names before the step that builds it declares them: nobody holds them, so the page stays hidden. */
-// B-W2b-201 declared portal.accounting.view.
-export const PORTAL_PENDING_PERMISSIONS: ReadonlySet<string> = new Set(['portal.quotes.view', 'portal.auditRoom.view'])
+// B-W2b-201 declared portal.accounting.view. owb-po4: Your customers + Payments (plan § 6: a later session) name theirs.
+export const PORTAL_PENDING_PERMISSIONS: ReadonlySet<string> = new Set(['portal.quotes.view', 'portal.auditRoom.view', 'portal.brandCustomers.view'])
+
+/** owb-po4.4: the task-list areas one rail row counts, joined (`orders+production+returns`). */
+export const BADGE_JOIN = '+'
 
 /** One page of the portal. */
 export interface PortalPageDef {
@@ -45,9 +52,23 @@ export interface PortalPageDef {
    * keeps drafts (portal.orderDrafts.edit: the brand's Buyer and Designer) and for who may order (portal.orderRequests.manage).
    */
   anyOf?: readonly string[]
+  /**
+   * owb-po4.1 (plan § 5 F): false — the menu draws no row for it; a card or a link opens it (Waiting for you is Home's card
+   * "What waits for you"). The page stays built for its links, and its address still lights its area.
+   */
+  menu?: false
+  /** owb-po4.1: a money page (the price grain): only a person who sees prices keeps the row. */
+  money?: true
+  /** owb-po4.4: the task-list area this page shows: its count on the row, and on its area's rail row. */
+  badge?: string
+  /** owb-po4.2: on a phone, a tab of the bottom bar (New order: plan § 5 "Home · Orders · New order · Account"). */
+  phone?: 'tab' | 'more'
+  icon?: LucideIcon
+  /** owb-po4.1: the second key of its `g` chord, kept when the page moved inside an area (`g p` Production). */
+  key?: string
 }
 
-/** One area of the portal: a rail row, a bottom-bar slot, and — with two or more pages — the band's Pages button. */
+/** One area of the portal: a rail row, a bottom-bar slot, and — with two or more pages — the area's sub-sidebar. */
 export interface PortalAreaDef {
   id: string
   label: string
@@ -67,7 +88,7 @@ export interface PortalAreaDef {
   /** The second key of its `g` chord (`g o` Orders). */
   key?: string
   built: boolean
-  /** Two or more pages: the area's Pages (the band's button); each page's own permission and kinds. */
+  /** Two or more pages: the area's sub-sidebar (the band's toggle); each page's own permission and kinds. */
   pages?: readonly PortalPageDef[]
 }
 
@@ -87,77 +108,90 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     phone: 'tab',
     key: 'h',
     built: true,
-    // ── F-PR-10 (production plan §5; 06-tree B.0) ──
-    // Home gains Waiting for you, the one place a customer answers. It sits under Home, not Production: a Designer answers
-    // sample and artwork approvals but does not see Production. F-PR-14 built /waiting (`app/(portal)/p/[party]/waiting`): its
-    // door is drawn now. Its count of everything waiting comes with B-PR-20 / F-PR-15; until then no number, never a made-up
-    // one. Home's own page keeps Home's name, so a person left with that one page (a supplier, a role without approvals) sees
-    // Home as before.
     pages: [
       { id: 'home.overview', label: 'nav.home', href: '/', permission: 'portal.home.view', built: true },
-      { id: 'home.waiting', label: 'nav.waiting', href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], built: true /* F-PR-14 */ },
+      // F-PR-14 built /waiting (`app/(portal)/p/[party]/waiting`). owb-po4.1 (plan § 5 F): Waiting for you is Home's card now
+      // ("What waits for you" → its page); the menu draws no row for it, its page and every link to it stay.
+      { id: 'home.waiting', label: 'nav.waiting', href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], menu: false, built: true /* F-PR-14 */ },
     ],
-    // ── end F-PR-10 ──
   },
   {
     id: 'orders',
     label: 'nav.orders',
     href: '/orders',
     icon: ShoppingBag,
-    // F-CP-152 (customer page plan C5, 12 §2 Doors): the area is any of its pages (as Quotes & samples is) — the brand's Designer
-    // keeps New order only (its start lists the drafts); Orders & requests keeps portal.salesOrders.view.
+    // F-CP-152 (customer page plan C5, 12 §2 Doors): the area is any of its pages — the brand's Designer keeps New order only
+    // (its start lists the drafts); the orders list keeps portal.salesOrders.view.
     permission: 'portal.home.view',
     kinds: ['CUSTOMER'],
     badge: 'orders',
-    // F-CP-152: the count is of orders and requests: it shows where Orders & requests does (a Designer's New order carries none).
+    // F-CP-152: the count is of orders and requests: it shows where the orders list does (a Designer's New order carries none).
     badgePages: ['orders.list'],
     phone: 'tab',
     key: 'o',
-    // B-W2b-191: the customer's Orders & tracking.
     built: true,
     pages: [
-      // B-W2b-191: the customer's Orders & tracking (SCR-184). B-TH-223: "Orders & requests" (its requests beside its orders).
-      { id: 'orders.list', label: 'nav.ordersRequests', href: '/orders', permission: 'portal.salesOrders.view', built: true },
-      // B-W2b-194: New order & reorder (SCR-185). B-TH-220: New order as an e-mail. F-CP-152: the draft order's start for who keeps
-      // drafts, the request like an e-mail for who may order.
-      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderDrafts.edit', anyOf: ['portal.orderDrafts.edit', 'portal.orderRequests.manage'], built: true },
+      // B-W2b-191: the customer's Orders & tracking (SCR-184). owb-po4.1: the design's one name, "Orders".
+      { id: 'orders.list', label: 'nav.orders', href: '/orders', permission: 'portal.salesOrders.view', built: true },
+      // owb-po4.1 (plan § 5d, § 6): Prices and Agreed prices are a later session's pages; money only.
+      { id: 'orders.prices', label: 'nav.prices', href: '/prices', icon: Landmark, permission: 'portal.salesOrders.view', money: true, built: false },
+      { id: 'orders.agreedPrices', label: 'nav.agreedPrices', href: '/agreed-prices', icon: Tag, permission: 'portal.salesOrders.view', money: true, built: false },
+      // B-W2b-194: New order & reorder (SCR-185). F-CP-152: the draft order's start for who keeps drafts, the request like an
+      // e-mail for who may order. owb-po4.2: a tab of the phone's bottom bar.
+      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', icon: Plus, permission: 'portal.orderDrafts.edit', anyOf: ['portal.orderDrafts.edit', 'portal.orderRequests.manage'], phone: 'tab', built: true },
+      // F-PR-11: My production — owb-po4.1 (plan § 5 F): a row under Orders (and the order's Overview, owb-po5). Its id, its key
+      // `g p` and its count stay.
+      { id: 'production', label: 'nav.production', href: '/production', icon: Factory, permission: 'portal.production.view', badge: 'production', key: 'p', built: true },
+      // B-W2b-197: Returns & claims (SCR-187) — owb-po4.1: a row under Orders (and "Report a complaint or a return…" on the
+      // order's Shipments, owb-po6). Its id and its count stay.
+      { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', badge: 'returns', built: true },
     ],
   },
-  // ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)) ──
-  // The customer's Production: My production, for a customer with portal.production.view (Production, Buyer, Admin; Quality
-  // and Viewer read; Designer and Finance do not). On a phone a tab after Orders, so Returns goes under More for those people
-  // only (the DS bar keeps four marked tabs in manifest order). F-PR-11 built /production (My production): the door is drawn.
-  // No badge until a count of production items waiting on the customer exists (B-PR-20 / F-PR-15).
-  { id: 'production', label: 'nav.production', href: '/production', icon: Factory, permission: 'portal.production.view', kinds: ['CUSTOMER'], phone: 'tab', key: 'p', built: true /* F-PR-11 */ },
-  // ── end F-PR-10 ──
+  // owb-po4.1 (plan § 6, R31 a): Your customers and Payments are a later session's: the area is hidden while both rows are.
   {
-    id: 'quotes',
-    label: 'nav.quotesSamples',
-    href: '/quotes',
-    icon: ClipboardList,
+    id: 'customers',
+    label: 'nav.customers',
+    href: '/customers',
+    icon: Users,
+    permission: 'portal.home.view',
+    kinds: ['CUSTOMER'],
+    phone: 'more',
+    built: false,
+    pages: [
+      { id: 'customers.list', label: 'nav.yourCustomers', href: '/customers', icon: Users, permission: 'portal.brandCustomers.view', built: false },
+      { id: 'customers.payments', label: 'nav.payments', href: '/customers/payments', icon: Wallet, permission: 'portal.brandCustomers.view', money: true, built: false },
+    ],
+  },
+  // owb-po4.1 (plan § 5 F): Products = the Catalogue, Samples & tech packs its second page (S4 builds those pages; this file
+  // only names their rows). Quotes & requests waits for its step. Approvals are answered on Samples: the badge stays here.
+  {
+    id: 'products',
+    label: 'nav.products',
+    href: '/catalogue',
+    icon: Shirt,
     // The area is any of its pages: each page keeps its own permission.
     permission: 'portal.home.view',
     kinds: ['CUSTOMER'],
     badge: 'quotes',
     // B-W2b-203: quotes to accept and approvals are answered on Quotes & requests (W3) or Samples & tech packs (W2b-4); the
-    // Catalogue alone shows neither, so it carries no badge until one of them is built (Home lists them).
-    badgePages: ['quotes.list', 'quotes.samples'],
+    // Catalogue alone shows neither, so it carries no badge then (Home lists them).
+    badgePages: ['products.quotes', 'products.samples'],
     phone: 'more',
-    built: false,
+    built: true,
     pages: [
-      { id: 'quotes.list', label: 'nav.quotes', href: '/quotes', permission: 'portal.quotes.view', built: false },
+      // B-W2b-194: the Catalogue (SCR-226) — the design's "Products".
+      { id: 'products.catalogue', label: 'nav.products', href: '/catalogue', permission: 'portal.catalogue.view', built: true },
       // B-W2b-262: the brand's Samples & tech packs (SCR-225): what waits for its decision, its styles, its rounds.
-      { id: 'quotes.samples', label: 'nav.samples', href: '/samples', permission: 'portal.samples.view', built: true },
-      // B-W2b-194: the Catalogue (SCR-226).
-      { id: 'quotes.catalogue', label: 'nav.catalogue', href: '/catalogue', permission: 'portal.catalogue.view', built: true },
+      { id: 'products.samples', label: 'nav.samples', href: '/samples', permission: 'portal.samples.view', built: true },
+      { id: 'products.quotes', label: 'nav.quotes', href: '/quotes', permission: 'portal.quotes.view', built: false },
     ],
   },
-  // B-W2b-195: the customer's Documents (SCR-186).
-  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'tab', key: 'd', built: true },
-  // B-W2b-197: the customer's Returns & claims (SCR-187).
-  { id: 'returns', label: 'nav.returns', href: '/returns', icon: RotateCcw, permission: 'portal.returns.view', kinds: ['CUSTOMER'], badge: 'returns', phone: 'tab', built: true },
-  // B-W2b-196: the customer's Account (SCR-188).
-  { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'more', built: true },
+  // owb-po4.3: People › Your people — the customer's own people (today's team cards), its own page.
+  { id: 'people', label: 'nav.people', href: '/people', icon: UserCheck, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], phone: 'more', built: true },
+  // B-W2b-195: the customer's Documents (SCR-186). owb-po4.2: under More on a phone (the design's four tabs).
+  { id: 'documents', label: 'nav.documents', href: '/documents', icon: FileText, permission: 'portal.customerDocuments.view', kinds: ['CUSTOMER'], badge: 'documents', phone: 'more', key: 'd', built: true },
+  // B-W2b-196: the customer's Account (SCR-188). owb-po4.2: a tab on a phone (Home · Orders · New order · Account).
+  { id: 'account', label: 'nav.account', href: '/account', icon: UserRound, permission: 'portal.colleagues.view', kinds: ['CUSTOMER'], badge: 'account', phone: 'tab', built: true },
   {
     id: 'work',
     label: 'nav.ordersJobs',
@@ -237,16 +271,29 @@ export interface PortalAccess {
   kinds: readonly PortalKind[]
   /** Every page as if built (the design review: the frame as it will be). Default: only built pages. */
   everyPage?: boolean
+  /** owb-po4.1: the person sees prices (their role's price grain). Unknown or false: no money page (fails closed). */
+  prices?: boolean
 }
 
 const toArea = (def: PortalAreaDef): AreaNavArea => {
   const pages = def.pages ?? []
-  const items: AreaNavItem[] = pages.map((page) => ({ id: page.id, label: page.label, href: page.href, permission: page.permission, ...(page.kinds ? { kinds: page.kinds } : {}), exact: page.href === def.href && pages.some((other) => other !== page && other.href.startsWith(`${page.href}/`)) }))
+  const items: AreaNavItem[] = pages.map((page) => ({
+    id: page.id,
+    label: page.label,
+    href: page.href,
+    permission: page.permission,
+    ...(page.kinds ? { kinds: page.kinds } : {}),
+    // owb-po4.2/4.4: a row's own icon (the sub-sidebar, the phone), its phone mark and its count.
+    ...(page.icon ? { icon: page.icon } : {}),
+    ...(page.phone ? { phone: page.phone } : {}),
+    ...(page.badge ? { badge: page.badge } : {}),
+    exact: page.href === def.href && pages.some((other) => other !== page && other.href.startsWith(`${page.href}/`)),
+  }))
   const sections: AreaNavSection[] = items.length > 0 ? [{ id: `${def.id}.pages`, label: def.label, hideLabel: true, noCrumb: true, items }] : []
   return { id: def.id, label: def.label, href: def.href, icon: def.icon, permission: def.permission, kinds: def.kinds, phone: def.phone, ...(def.badge ? { badge: def.badge } : {}), ...(sections.length > 0 ? { sections } : {}) }
 }
 
-/** An area left with one page of several takes that page's name and address and has no Pages button. */
+/** An area left with one page of several takes that page's name and address and has no sub-sidebar. */
 const collapse = (area: AreaNavArea): AreaNavArea => {
   const items = area.sections?.flatMap((section) => section.items) ?? []
   if (items.length !== 1) return area
@@ -260,31 +307,36 @@ const firstPage = (area: AreaNavArea): AreaNavArea => {
   return items.length === 0 || items.some((item) => item.href === area.href) ? area : { ...area, href: items[0].href }
 }
 
-/** B-W2b-203: an area keeps its badge only while the person keeps a page that shows what it counts (`badgePages`). */
-const badgeLeads = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavArea => {
-  if (!area.badge || !def?.badgePages) return area
-  const pages = area.sections?.flatMap((section) => section.items.map((item) => item.id)) ?? []
-  if (pages.some((id) => def.badgePages!.includes(id))) return area
+/**
+ * What a rail row counts. B-W2b-203: its own badge only while the person keeps a page that shows what it counts (`badgePages`).
+ * owb-po4.4 (plan § 5 F): + each kept page's own (Production and Returns moved under Orders with their counts) — one key, the
+ * task-list areas joined by BADGE_JOIN (`orders+production+returns`), so no count is lost when a door moves.
+ */
+const counted = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavArea => {
+  const items = area.sections?.flatMap((section) => section.items) ?? []
+  const own = area.badge && (!def?.badgePages || items.some((item) => def.badgePages!.includes(item.id))) ? [area.badge] : []
+  const keys = [...new Set([...own, ...items.flatMap((item) => (item.badge ? [item.badge] : []))])]
   const { badge: _badge, ...rest } = area
-  return rest
+  return keys.length > 0 ? { ...rest, badge: keys.join(BADGE_JOIN) } : rest
 }
 
 /** The navigation this person may open, in rail order (fails closed; unbuilt pages hidden unless `everyPage`). */
 export function portalNavFor(access: PortalAccess, defs: readonly PortalAreaDef[] = PORTAL_AREAS): AreaNav {
   // F-CP-152: a page that opens with any of several permissions asks the one the person holds (else its own: fails closed).
   const held = (page: PortalPageDef): PortalPageDef => (page.anyOf ? { ...page, permission: page.anyOf.find((name) => access.can(name)) ?? page.permission } : page)
+  // owb-po4.1: a page a card opens has no row; a money page only for a person who sees prices (even in the design review).
+  const inMenu = (page: PortalPageDef): boolean => page.menu !== false && (!page.money || access.prices === true)
   const built = defs.flatMap((def): PortalAreaDef[] => {
-    const pages = def.pages?.filter((page) => access.everyPage || page.built).map(held)
-    if (access.everyPage) return [pages ? { ...def, pages } : def]
+    const pages = def.pages?.filter((page) => inMenu(page) && (access.everyPage || page.built)).map(held)
     if (def.pages) return pages && pages.length > 0 ? [{ ...def, pages }] : []
-    return def.built ? [def] : []
+    return access.everyPage || def.built ? [def] : []
   })
   const nav: AreaNav = { view: 'portal', areas: built.map(toArea) }
   // A preview reads as every kind of its party: the union of each kind's areas, the first of an address kept.
   const ids = new Set<string>()
   const hrefs = new Set<string>()
   const defOf = new Map(defs.map((def) => [def.id, def]))
-  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map((area) => firstPage(collapse(badgeLeads(area, defOf.get(area.id))))))
+  const areas = access.kinds.flatMap((kind) => areaNavForPerson(nav, { can: access.can, kind }).areas.map((area) => firstPage(collapse(counted(area, defOf.get(area.id))))))
   return {
     view: 'portal',
     areas: areas.filter((area) => {
@@ -302,18 +354,50 @@ export function translatePortalNav(nav: AreaNav, t: (key: string) => string): Ar
   return { ...nav, areas: nav.areas.map((area) => ({ ...area, label: t(area.label), ...(area.sections ? { sections: area.sections.map((section) => ({ ...section, label: t(section.label), items: section.items.map(row) })) } : {}) })) }
 }
 
-/** Where a portal address is: the area (rail row, bottom-bar slot) and the page of its Pages. */
-export const portalPlace = (nav: AreaNav, path: string) => findAreaNavPlace(nav, path)
+/** Where a portal address is; `card`: a page with no menu row (owb-po4.1), placed in its area so the rail and the bar still light it. */
+export type PortalPlace = AreaNavPlace & { card?: true }
 
-/** The `g` chords of the person's areas (`g h` Home, `g o` Orders or Jobs, `g d` Documents): key → address. */
+/**
+ * Where a portal address is: the area (rail row, bottom-bar slot) and the row of its sub-sidebar. owb-po4.1: an address no row
+ * owns that is a card's page (`menu: false`, Waiting for you) is placed in its area — Home stays lit on /waiting.
+ */
+export function portalPlace(nav: AreaNav, path: string, defs: readonly PortalAreaDef[] = PORTAL_AREAS): PortalPlace | null {
+  const place = findAreaNavPlace(nav, path)
+  if (place) return place
+  const clean = path.split(/[?#]/)[0]!.replace(/\/+$/, '') || '/'
+  const owner = defs.find((def) => (def.pages ?? []).some((page) => page.menu === false && page.built && (clean === page.href || clean.startsWith(`${page.href}/`))))
+  const area = owner ? nav.areas.find((entry) => entry.id === owner.id) : undefined
+  return area ? { area, card: true } : null
+}
+
+/**
+ * The `g` chords of the person's areas (`g h` Home, `g o` Orders or Jobs, `g d` Documents): key → address. owb-po4.1: + a page
+ * that moved inside an area keeps its key (`g p` Production, a row under Orders), after the areas' own.
+ */
 export function portalChords(nav: AreaNav, defs: readonly PortalAreaDef[] = PORTAL_AREAS): Record<string, string> {
-  const keyOf = new Map(defs.map((def) => [def.id, def.key]))
+  const keyOf = new Map<string, string | undefined>(defs.flatMap((def) => [[def.id, def.key] as const, ...(def.pages ?? []).map((page) => [page.id, page.key] as const)]))
   const chords: Record<string, string> = {}
   for (const area of nav.areas) {
     const key = keyOf.get(area.id)
     if (key && !chords[key]) chords[key] = area.href
   }
+  for (const area of nav.areas) {
+    for (const item of area.sections?.flatMap((section) => section.items) ?? []) {
+      const key = keyOf.get(item.id)
+      if (key && !chords[key]) chords[key] = item.href
+    }
+  }
   return chords
+}
+
+/** owb-po4.1: the label of the area or row a chord opens (the shortcuts list names it: "Go to Production"). */
+export function portalChordLabel(nav: AreaNav, href: string): string | null {
+  for (const area of nav.areas) {
+    const item = area.sections?.flatMap((section) => section.items).find((row) => row.href === href)
+    if (item) return item.label
+    if (area.href === href) return area.label
+  }
+  return null
 }
 
 /** Where a record opens for this person: its own page once built, else null (the frame's record page). */
