@@ -75,11 +75,11 @@ export function previewOf(row: DeptRate, draft: RateDraft | undefined): { readon
   return { cpm: null, eff: null, from: 'NONE' }
 }
 
-/** The overhead row in force (the company's own, else the tenant-wide one), and the company's switch. */
+/** The overhead row in force (the company's own, else the tenant-wide one), and the company's switch (its OWN row only: none → off). */
 export function settingsInForce(settings: CostingSettings): { readonly row: SettingsRow | null; readonly oneKeeper: boolean } {
   const rows = [settings.settings.company, settings.settings.tenant]
   const row = rows.find((entry) => entry !== null && entry.id === settings.settings.inForce) ?? null
-  const oneKeeper = settings.oneKeeperAllowed ?? settings.settings.company?.oneKeeperAllowed ?? settings.settings.tenant?.oneKeeperAllowed ?? false
+  const oneKeeper = settings.settings.company?.oneKeeperAllowed ?? false
   return { row, oneKeeper }
 }
 
@@ -109,10 +109,16 @@ export function draftProblems(rows: readonly DeptRate[], draft: RatesDraft, sett
 
 export type RateWrite = { readonly kind: 'create'; readonly body: CreateRate } | { readonly kind: 'update'; readonly rate: RateRow; readonly body: { costPerMinute: string; plannedEfficiencyPct: string } } | { readonly kind: 'settings'; readonly body: SaveSettings }
 
+/** The switch is a company's (owb-pd8b, pd3 as landed): without a company (the whole factory) it is not shown and never sent. */
+export const keeperShown = (companyId: string | null): boolean => companyId !== null
+
 /**
  * What Save sends — only what changed: a department with its own rate is corrected (PATCH, its version); one that follows its kind gets
- * its own rate from today (POST with `departmentId`); the overhead and the switch in ONE settings write (the row in force; none: the
- * company's own), the switch with its reason.
+ * its own rate from today (POST with `departmentId`). The overhead goes on the row in force (none: the company's own, made with it).
+ * owb-pd8b (pd3 as landed): the switch goes on the COMPANY's own row, with its reason — in the overhead's write when that row is the
+ * company's own, else in a write of its own: the company's row as it is (its version; one that follows the whole factory's overhead
+ * keeps following it, with 0), or, none yet, a new row that follows the whole factory's overhead (`overheadFromTenant: true`, 0) —
+ * so keeping the switch never changes the overhead.
  */
 export function writesOf(rows: readonly DeptRate[], draft: RatesDraft, settings: CostingSettings, companyId: string | null, today: string): RateWrite[] {
   const writes: RateWrite[] = []
@@ -131,19 +137,22 @@ export function writesOf(rows: readonly DeptRate[], draft: RatesDraft, settings:
     }
   }
   const { row, oneKeeper } = settingsInForce(settings)
+  const own = settings.settings.company
   const overhead = norm(draft.overhead)
   const overheadChanged = overhead !== '' && (row === null || Number(overhead) !== Number(row.overheadPct))
-  const keeperChanged = draft.oneKeeper !== oneKeeper
-  if (overheadChanged || keeperChanged) {
-    const target = row ?? null
+  const keeperChanged = keeperShown(companyId) && draft.oneKeeper !== oneKeeper
+  const keeper = keeperChanged ? { oneKeeperAllowed: draft.oneKeeper, reason: draft.reason.trim() } : {}
+  // The overhead's write lands on the company's own row: when it is the row in force, or when none is (a new company row).
+  const overheadOnOwn = overheadChanged && companyId !== null && (row === null || (own !== null && row.id === own.id))
+  if (overheadChanged) {
+    writes.push({ kind: 'settings', body: { companyId: row ? row.companyId : companyId, overheadPct: overhead, ...(row ? { version: row.version } : {}), ...(overheadOnOwn ? keeper : {}) } })
+  }
+  if (keeperChanged && !overheadOnOwn && companyId !== null) {
     writes.push({
       kind: 'settings',
-      body: {
-        companyId: target ? target.companyId : companyId,
-        overheadPct: overhead !== '' ? overhead : (target?.overheadPct ?? '0'),
-        ...(target ? { version: target.version } : {}),
-        ...(keeperChanged ? { oneKeeperAllowed: draft.oneKeeper, reason: draft.reason.trim() } : {}),
-      },
+      body: own
+        ? { companyId, overheadPct: own.overheadFromTenant ? '0' : own.overheadPct, ...(own.overheadFromTenant ? { overheadFromTenant: true } : {}), version: own.version, ...keeper }
+        : { companyId, overheadPct: '0', overheadFromTenant: true, ...keeper },
     })
   }
   return writes

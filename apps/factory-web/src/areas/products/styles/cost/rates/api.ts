@@ -7,7 +7,8 @@ import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client
  *   GET  /costing/rates            the labour rates (costing.view; the cost per minute only with the cost grain) — pd2 adds `departmentId`
  *   POST /costing/rates            a new rate (costing.rates.manage), with `departmentId` for one department (it wins over its kind's)
  *   PATCH /costing/rates/:rateId   a correction under its version
- *   GET/PUT /costing/settings      the overhead in force, and (pd3) the company switch `oneKeeperAllowed` ("one person may keep a cost")
+ *   GET/PUT /costing/settings      the overhead in force, and (pd3) the company switch `oneKeeperAllowed` ("one person may keep a cost"):
+ *                                  on the company's OWN row only (owb-pd8b: the server refuses it on the whole factory's row, 400)
  *   GET  /costing/leather-bases    the leathers against the reference (yield and grades; kept in Finance › Costing)
  */
 
@@ -38,7 +39,7 @@ const settingsRow = z.object({
   companyId: z.string().nullable(),
   overheadPct: z.string(),
   overheadFromTenant: z.boolean().optional(),
-  /** pd3: "one person may keep a cost" (default false: four eyes). */
+  /** pd3: "one person may keep a cost" (default false: four eyes) — a company's own row only. */
   oneKeeperAllowed: z.boolean().optional(),
   version: z.number().int(),
 })
@@ -46,8 +47,6 @@ export type SettingsRow = z.infer<typeof settingsRow>
 
 export const costingSettings = z.object({
   settings: z.object({ tenant: settingsRow.nullable(), company: settingsRow.nullable(), inForce: z.string().nullable() }),
-  /** pd3 may answer the company's switch beside the rows. */
-  oneKeeperAllowed: z.boolean().optional(),
 })
 export type CostingSettings = z.infer<typeof costingSettings>
 
@@ -85,6 +84,8 @@ export interface SaveSettings {
   readonly companyId: string | null
   readonly overheadPct: string
   readonly version?: number
+  /** owb-pd8b: a company row that follows the whole factory's overhead keeps following it (with 0) when only the switch changes. */
+  readonly overheadFromTenant?: boolean
   readonly oneKeeperAllowed?: boolean
   /** Why the switch changed (logged). */
   readonly reason?: string
