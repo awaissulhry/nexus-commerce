@@ -104,5 +104,71 @@
     "unsaved_one": "{count} change to the lines is not asked yet.",
     "unsaved_other": "{count} changes to the lines are not asked yet.",
     "draftHeld": "You change the lines of a draft in the order window."
+  },
+  "money": {
+    "totals": "Totals",
+    "order": "Order total",
+    "invoiced": "Invoiced",
+    "paid": "Paid",
+    "stillToPay": "Still to pay",
+    "addsUp": "How it adds up",
+    "addsUpKey": {
+      "LINES": "The lines",
+      "CHARGES": "Charges",
+      "VAT": "VAT",
+      "CREDIT_NOTES": "Credit notes",
+      "PAID": "Paid"
+    },
+    "cols": {
+      "what": "What",
+      "amount": "Amount",
+      "document": "Document",
+      "date": "Date",
+      "open": "Open"
+    },
+    "plan": "Payments plan",
+    "noPlan": "No payment plan on this order.",
+    "kind": {
+      "DEPOSIT": "Deposit",
+      "MILESTONE": "Payment step",
+      "REST": "The rest"
+    },
+    "kindPercent": "{kind} {percent} %",
+    "due": "due {date}",
+    "noDue": "no due day yet",
+    "stepOpen": "{amount} open",
+    "state": {
+      "PAID": "Paid",
+      "PART_PAID": "Part paid",
+      "DUE": "Due now",
+      "LATE": "Late",
+      "LATER": "Not due yet"
+    },
+    "told": "You told the factory on {date}.",
+    "notify": "I paid: tell the factory…",
+    "invoices": "Invoices & credit notes",
+    "noInvoices": "No invoice yet: it comes when the order ships.",
+    "invoice": {
+      "INVOICE": "Invoice",
+      "CREDIT_NOTE": "Credit note"
+    },
+    "failed": "The money of this order could not be read.",
+    "retry": "Try again",
+    "window": "I paid: tell the factory",
+    "windowLine": "The factory records the payment when it arrives. Telling them changes nothing that is owed.",
+    "field": {
+      "amount": "Amount paid",
+      "paidOn": "Paid on",
+      "method": "How (bank transfer, card…)",
+      "note": "Note for the factory"
+    },
+    "send": "Tell the factory",
+    "sendFailed": "The factory was not told. Try again in a moment.",
+    "problem": {
+      "amount": "Type the amount you paid.",
+      "tooMuch": "That is more than what is open on this step.",
+      "day": "Choose the day you paid: today or before.",
+      "long": "The text is too long."
+    }
   }
 }

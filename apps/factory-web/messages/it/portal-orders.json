@@ -968,5 +968,8 @@
   },
   "strip": {
     "deposit": "Acconto da pagare entro il {date}"
+  },
+  "money": {
+    "sent": "Abbiamo avvisato la fabbrica. Registra il pagamento quando arriva."
   }
 }

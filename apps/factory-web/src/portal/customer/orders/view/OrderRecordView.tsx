@@ -37,6 +37,8 @@ import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & p
 import { MoneyTab } from './MoneyTab' // owb-po5.2
 import type { OwnValue } from '../../../../lib/order-lines' // owb-po6.1
 import type { LineAsks } from '../order-lines' // owb-po6.1
+import type { MoneyRead, NoticeDraft } from '../money' // owb-po6.2
+import type { NoticeWindowModel } from './MoneyTab' // owb-po6.2
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -134,7 +136,9 @@ export interface OrderRecordViewModel {
   priceCheck?: PriceCheckModel | null
   // ---- end F-CP-143
   /** owb-po6.1: the lines' asks typed after Confirm and not sent yet (the save bar); absent: none. */
-  lineAsks?: LineAsks
+  lineAsks?: LineAsks  /** owb-po6.2: the money read (price grain; `hidden`: not built yet or refused — the round-1 cards) and the "I paid" window. */
+  money?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: MoneyRead | null }
+  noticeWindow?: NoticeWindowModel | null
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -166,6 +170,12 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onDiscardAsks?: () => void
   onReviewAsks?: () => void
   onOwnValue?: (lineId: string, columnId: string, value: OwnValue['value'], version: number | null) => void
+  // ---- owb-po6.2: the money read again; "I paid: tell the factory…" on a step, its window
+  onRetryMoney?: () => void
+  onNotify?: (stepId: string) => void
+  onNoticeDraft?: (draft: NoticeDraft) => void
+  onNoticeSend?: () => void
+  onNoticeClose?: () => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void

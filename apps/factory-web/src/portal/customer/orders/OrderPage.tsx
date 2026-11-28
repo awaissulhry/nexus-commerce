@@ -114,6 +114,10 @@ import { AllChangesWindow } from './view/AllChangesWindow'
 import { ownColumnsPort, type OwnValue } from '../../../lib/order-lines'
 import { askNoteOf, askTyped, NO_ASKS, orderLineRowsOf, undoAsk, type LineAsks } from './order-lines'
 // ---- end owb-po6.1
+// ---- owb-po6.2: the money read and "I paid: tell the factory…"
+import { fetchMoney, noticeBodyOf, noticeProblem, sendPaymentNotice, stepOpen } from './money'
+import type { NoticeWindowModel } from './view/MoneyTab'
+// ---- end owb-po6.2
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
 import { usePortalPriceCheck } from './use-price-check' // F-CP-143: the customer's own price check (a price holder's)
@@ -984,6 +988,41 @@ function OrderContainer({ id }: { id: string }) {
       .catch(() => setNotice({ tone: 'danger', key: 'lines.ownFailed' }))
   }
 
+  // ── owb-po6.2: the money read (price grain) and "I paid: tell the factory…" ───────────────────────────────────────────
+  const [money, setMoney] = useState<NonNullable<OrderRecordViewModel['money']>>({ state: 'loading', read: null })
+  const loadMoney = useCallback(async () => {
+    try {
+      setMoney({ state: 'ready', read: await fetchMoney(api, id) })
+    } catch (error) {
+      // Not built yet, or not this person's (no price grain): the round-1 cards, no problem said.
+      setMoney((current) => (isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden') ? { state: 'hidden', read: null } : { state: 'error', read: current.read }))
+    }
+  }, [api, id])
+  const seesMoney = record?.seesPrices === true
+  useEffect(() => {
+    if (tab === 'money' && seesMoney) void loadMoney()
+  }, [tab, seesMoney, loadMoney])
+  const [noticeWindow, setNoticeWindow] = useState<NoticeWindowModel | null>(null)
+  const openNotice = (stepId: string) => {
+    const step = money.read?.plan.find((entry) => entry.id === stepId) ?? null
+    setNoticeWindow({ step, draft: { amount: step ? (stepOpen(step) / 100).toFixed(2) : '', paidOn: today, method: '', note: '' }, problem: null, tried: false, busy: false, failed: null })
+  }
+  const sendNotice = () => {
+    const open = noticeWindow
+    if (!open || open.busy) return
+    const problem = noticeProblem(open.draft, open.step, today)
+    if (problem) return setNoticeWindow({ ...open, problem, tried: true })
+    const body = noticeBodyOf(open.draft, open.step?.id ?? null)
+    setNoticeWindow({ ...open, busy: true, failed: null })
+    sendPaymentNotice(api, id, body, keyFor(body))
+      .then(() => {
+        setNoticeWindow(null)
+        setNotice({ tone: 'success', key: 'money.sent' })
+        void loadMoney()
+      })
+      .catch(() => setNoticeWindow((current) => (current ? { ...current, busy: false, failed: pageT('money.sendFailed') } : current)))
+  }
+
   // ── owb-po5: the picture of the order and All changes ───────────────────────────────────────────────────────────────
   const [pictureOpen, setPictureOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
@@ -1167,6 +1206,8 @@ function OrderContainer({ id }: { id: string }) {
         report: problemDialog.model,
         priceCheck: priceCheck.model, // F-CP-143
         lineAsks, // owb-po6.1
+        money: seesMoney ? money : { state: 'hidden', read: null }, // owb-po6.2
+        noticeWindow,
       }}
       actions={{
         priceCheck: priceCheck.actions, // F-CP-143
@@ -1214,6 +1255,12 @@ function OrderContainer({ id }: { id: string }) {
         onDiscardAsks: () => setLineAsks(NO_ASKS),
         onReviewAsks: reviewAsks,
         onOwnValue: saveOwnValue,
+        // ---- owb-po6.2
+        onRetryMoney: () => void loadMoney(),
+        onNotify: openNotice,
+        onNoticeDraft: (draft) => setNoticeWindow((current) => (current ? { ...current, draft, problem: noticeProblem(draft, current.step, today), failed: null } : current)),
+        onNoticeSend: sendNotice,
+        onNoticeClose: () => setNoticeWindow((current) => (current?.busy ? current : null)),
         // ---- F-PR-12a
         onRetryProduction: () => {
           setProduction({ state: 'loading', read: null })

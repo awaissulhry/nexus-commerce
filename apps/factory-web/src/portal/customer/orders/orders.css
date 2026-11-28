@@ -434,3 +434,35 @@
   gap: var(--nds-space-8);
   margin-top: var(--nds-space-8);
 }
+
+/* ── owb-po6.2: the payments plan (a step per row, its state and its one button at the end) ────────────────────────────── */
+.fw-pord-plan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pord-step {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  flex-wrap: wrap;
+}
+
+.fw-pord-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pord-step-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}

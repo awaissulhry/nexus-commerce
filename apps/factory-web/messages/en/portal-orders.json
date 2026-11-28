@@ -968,5 +968,8 @@
   },
   "strip": {
     "deposit": "Deposit to pay by {date}"
+  },
+  "money": {
+    "sent": "We told the factory. It records the payment when it arrives."
   }
 }
