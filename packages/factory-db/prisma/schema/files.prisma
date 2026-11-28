@@ -274,6 +274,8 @@ model StoredFile {
   salesOrderPictures     SalesOrder[]               @relation("SalesOrderPicture")
   portalRequestPictures  PortalOrderRequest[]       @relation("PortalOrderRequestPicture")
   paymentNoticeFiles     PaymentNotice[]            @relation("PaymentNoticeFile")
+  // owb-b1 shipping.prisma: the warehouse legs whose customer label it is.
+  warehouseLegLabels     ShipmentWarehouseLeg[]     @relation("ShipmentWarehouseLegLabel")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

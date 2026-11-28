@@ -577,6 +577,10 @@ model Site {
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
   planVersions        PlanVersion[]
+  // owb-b1 shipping.prisma (order workflow build, schema wave "order workflow 1/1"): the warehouse legs of its shipments,
+  // and, as our warehouse, the legs that go through it.
+  warehouseLegs         ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegSite")
+  warehouseLegsThrough  ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegWarehouse")
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

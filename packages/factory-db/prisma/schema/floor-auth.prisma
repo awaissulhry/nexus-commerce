@@ -126,6 +126,11 @@ model Device {
   bundleCoupons        BundleCoupon[]
   labourDisputes       LabourDispute[]
   handoverNotes        HandoverNote[]
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): the moves, route edits and late warnings
+  // made on it.
+  basketMoves          BasketMove[]       @relation("BasketMoveDevice")
+  basketRouteEdits     BasketRouteEdit[]  @relation("BasketRouteEditDevice")
+  floorLateWarnings    FloorLateWarning[] @relation("FloorLateWarningDevice")
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -310,6 +315,11 @@ model Worker {
   cutLogOverrides         CutLog[]                @relation("CutLogOverrideLead")
   // The quality releases a floor inspector signed (B-W1-45).
   qualityReleases QualityRelease[]
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): the baskets they moved by hand, the
+  // route edits they made, the late warnings they gave (only where the site names workers).
+  basketMoves       BasketMove[]       @relation("BasketMoveWorker")
+  basketRouteEdits  BasketRouteEdit[]  @relation("BasketRouteEditWorker")
+  floorLateWarnings FloorLateWarning[] @relation("FloorLateWarningWorker")
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.

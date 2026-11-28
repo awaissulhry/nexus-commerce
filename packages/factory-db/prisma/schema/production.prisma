@@ -295,6 +295,11 @@ model WorkOrder {
   orderChanges        WorkOrderChange[]    @relation("WorkOrderChangeWorkOrder")
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked to land on it.
   fileAsks            FileAsk[]            @relation("FileAskWorkOrder")
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): its baskets' moves by hand and route
+  // edits, and the floor's "Will be late" about it.
+  basketMoves         BasketMove[]         @relation("BasketMoveWorkOrder")
+  basketRouteEdits    BasketRouteEdit[]    @relation("BasketRouteEditWorkOrder")
+  floorLateWarnings   FloorLateWarning[]   @relation("FloorLateWarningWorkOrder")
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -550,6 +555,11 @@ model WorkOrderOperation {
   scheduleSlots ScheduleSlot[]
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of whoever works it.
   fileAsks      FileAsk[]      @relation("FileAskStep")
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): the baskets moved by hand from and to
+  // it, the route edits of it.
+  basketMovesFrom  BasketMove[]      @relation("BasketMoveFrom")
+  basketMovesTo    BasketMove[]      @relation("BasketMoveTo")
+  basketRouteEdits BasketRouteEdit[] @relation("BasketRouteEditOperation")
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.
@@ -773,6 +783,11 @@ model Bundle {
   subcontractProgressReports SubcontractProgressReport[]
   // W2b inspection-plans.prisma (wave 10/16): the in-process checks of it.
   inProcessChecks         InProcessCheck[]
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): its moves by hand, its route edits, the
+  // floor's "Will be late" about it.
+  basketMoves             BasketMove[]       @relation("BasketMoveBundle")
+  basketRouteEdits        BasketRouteEdit[]  @relation("BasketRouteEditBundle")
+  floorLateWarnings       FloorLateWarning[] @relation("FloorLateWarningBundle")
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])

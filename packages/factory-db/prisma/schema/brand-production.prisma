@@ -25,6 +25,12 @@
 // escalation step 0 to 2; T-MS-001: …_brand_production_stage_set_guards redefines the row's function whole, + the stage set
 // by hand; T-SC-001: …_brand_production_stage_any_guards widens it to any of the five stages); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave) lives in
 // production.prisma.
+//
+// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 10; design R43 "teams own the work"):
+//   OrderTeam             a team of a site that owns an order's work: one team in charge, others sharing its baskets (a
+//                         share of the baskets, and the baskets themselves once printed in a split), given by a person or a
+//                         rule. Ended, never deleted. The office writes it (production.teams.assign); the floor reads its
+//                         site's rows (the leader's home, the board). The …_order_workflow_guards trigger holds its shape (G4).
 
 /// The production state of one sales order for its customer (B-PR-15): the plain stage, the health and what it waits on (the
 /// keeper's, B-PR-17), the factory's raise of the health, the customer's urgency and the factory's lock, the supervisor of
@@ -255,4 +261,56 @@ enum IssueStatus {
   OPEN
   ANSWERED
   CANCELLED
+}
+
+/// A team that owns an order's work (owb-b1, schema wave "order workflow 1/1"; PL-schema § 5A row 10; design R43): the team
+/// in charge (one open row per order), or a team sharing it with a number of its baskets (basketShare) and, from "Print and
+/// start the work" on, the baskets themselves (bundleIds, filled at Print in a split). Given by a person or by a rule (an
+/// order structure's, later). Among the open rows of an order: one in charge, a team once, a basket in at most one row, the
+/// baskets of the order's own work orders; an ended row never changes; never deleted (the …_order_workflow_guards trigger
+/// and its partial unique indexes, G4). The office writes it (production.teams.assign); the floor reads its site's rows.
+model OrderTeam {
+  id           String           @id @db.Uuid
+  tenantId     String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the order's foreign key).
+  companyId    String           @db.Uuid
+  partyId      String           @db.Uuid
+  /// The team's site (the floor role's policy key).
+  siteId       String           @db.Uuid
+  salesOrderId String           @db.Uuid
+  teamId       String           @db.Uuid
+  /// The team in charge of the order (one open row per order: G4).
+  inCharge     Boolean          @default(false)
+  /// How many of the order's baskets the team takes in a split, at least 1 (G4); null: no share (the team in charge alone,
+  /// or a share not said).
+  basketShare  Int?
+  /// The baskets (Bundle ids of the order's work orders) the team owns, filled at Print in a split; empty until then. A
+  /// basket is in at most one open row (G4). The default is the DATABASE's only (dbgenerated, as PortalOrderRequest.styleIds
+  /// since od-fx1): with `@default([])` Prisma would name the column in every insert.
+  bundleIds    String[]         @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
+  /// Given by a person (USER) or by a rule (RULE).
+  givenBy      OrderTeamGivenBy @default(USER)
+  version      Int              @default(1)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office person who gave it (null: a rule).
+  createdById  String?          @db.Uuid
+  /// Ended (taken off the order): when and by whom, both together, once; an ended row never changes (G4).
+  endedAt      DateTime?        @db.Timestamptz(3)
+  endedById    String?          @db.Uuid
+
+  // The order of the same company and customer; the team of the row's site.
+  salesOrder SalesOrder @relation("OrderTeamOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  team       Team       @relation("OrderTeamTeam", fields: [tenantId, siteId, teamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's teams; a team's orders (the leader's home); a site's (the board).
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, teamId])
+  @@index([tenantId, siteId])
+}
+
+/// Who gave a team an order's work (owb-b1): a person (USER) or a rule (RULE).
+enum OrderTeamGivenBy {
+  USER
+  RULE
 }
