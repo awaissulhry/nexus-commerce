@@ -31,6 +31,7 @@ import { healthWhyOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf
 import { ShowInThreadDoor } from '../Discuss'
 import { LineMenuButton } from '../LineMenu'
 import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
+import { RushButton } from './FlowProduction' // owb-of6 step 1: Rush (L4)
 
 /**
  * F-PT-102 / F-PT-103 (order PRODUCTION tab, 10-design §3; S5 §3; 18-lead-settles L3, L5, L7) — "Production now", the tab's top
@@ -68,6 +69,10 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
     ...depthMenuItems(order, model.depth, actions?.depth, d).filter((item) => item.id === 'depth-priority'),
   ]
   const more = items.length > 0 ? <LineMenuButton label={t('productionTab.more', { section: t('productionTab.now.title') })} items={items} /> : null
+  // owb-of6 step 1 (L4; design § 5k "Rush"): today's priority dialog opened on URGENT — drawn only where Set priority… may act (the
+  // depth's own rule: orders.manage, the order not final); never for the designer or a reader.
+  const priorityItem = depthMenuItems(order, model.depth, actions?.depth, d).find((item) => item.id === 'depth-priority')
+  const rush = priorityItem && !priorityItem.disabled && stateNow !== 'after' ? <RushButton key="rush" onRush={() => actions?.depth?.onDialog?.({ kind: 'priority', level: 'URGENT', reason: '' })} /> : null
 
   let body
   if (!state || state.status === 'loading') body = <PartReading rows={3} height={28} />
@@ -82,7 +87,7 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
     )
   }
   return (
-    <Section id="now" title={t('productionTab.now.title')} asOf={read?.asOf ?? null} more={more} info={<p>{t('productionTab.now.infoBody')}</p>}>
+    <Section id="now" title={t('productionTab.now.title')} asOf={read?.asOf ?? null} buttons={rush ? [rush] : []} more={more} info={<p>{t('productionTab.now.infoBody')}</p>}>
       {body}
       {health?.dialog ? <RaiseDialog model={health} actions={actions?.health} /> : null}
     </Section>

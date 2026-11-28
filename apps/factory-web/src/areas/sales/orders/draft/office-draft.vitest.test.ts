@@ -59,7 +59,7 @@ describe('the start and the draft, drawn (it, en)', () => {
       expect(sales, locale).not.toMatch(/€|EUR/)
     }
     // The Confirm window (a DS Modal: drawn only once hydrated, so pinned in its source): its price fields only with the grain.
-    expect(src('./view/OfficeDraftView.tsx').match(/record\.seesPrices \? \(\s*<Field label=\{[^}]*t\('cf\.unit'\)/g)).toHaveLength(2)
+    expect(src('./view/ConfirmOrderWindowView.tsx') /* owb-of5 step 4: the window moved to its own view */.match(/record\.seesPrices \? \(\s*<Field label=\{[^}]*t\('cf\.unit'\)/g)).toHaveLength(2)
     expect(src('./view/OfficeDraftView.tsx')).toContain("{record.seesPrices && rows.length > 0 ? <PriceCard")
   })
 
@@ -70,7 +70,7 @@ describe('the start and the draft, drawn (it, en)', () => {
     expect(owner).not.toContain(td('en')('cf.goQuote'))
     expect(owner).toContain(td('en')('cf.quote', { seq: 2 }))
     expect(draw('draft-order')).toContain(td('en')('cf.go'))
-    expect(src('./view/OfficeDraftView.tsx')).toContain("title={t(quote ? 'cf.windowQuote' : 'cf.window', { title })}")
+    expect(src('./view/ConfirmOrderWindowView.tsx') /* owb-of5 step 4 */).toContain("title={t(quote ? 'cf.windowQuote' : 'cf.window', { title })}")
   })
 })
 

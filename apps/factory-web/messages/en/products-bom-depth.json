@@ -13,7 +13,7 @@
   "hold": {
     "noManage": "Your role reads this BOM; changing it needs the BOM edit right.",
     "loading": "Wait until the BOM's structure is read.",
-    "archived": "The style is archived: reactivate it to change its BOM.",
+    "archived": "The product is archived: reactivate it to change its BOM.",
     "frozen": "This revision is not a draft: start a new revision to change it.",
     "offline": "Offline — nothing is sent until the connection is back.",
     "busy": "Wait for the change being saved."
@@ -207,7 +207,7 @@
     "ALTERNATE_BLOCKED": "Line {line}: the alternate {alternate} is blocked. Remove it or choose another.",
     "SUB_ASSEMBLY_NOT_RELEASED": "Line {line}: the sub-assembly {sub} is not released. Release it, or take its released revision.",
     "SUB_ASSEMBLY_NOT_MADE": "Line {line}: {material} is no longer a component we make in pieces, pairs or sets (or a customer sends it). Change the line or take the sub-assembly off.",
-    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the sub-assembly {sub} contains this style again (a circle). Take another sub-assembly.",
+    "SUB_ASSEMBLY_CIRCLE": "Line {line}: the sub-assembly {sub} contains this product again (a circle). Take another sub-assembly.",
     "SUB_ASSEMBLY_TOO_DEEP": "Line {line}: the sub-assemblies go deeper than 10 levels.",
     "SUB_ASSEMBLY_UNIT": "Line {line}: its unit does not count what the sub-assembly {sub} makes.",
     "SUB_ASSEMBLY_SIZE_MISSING": "Line {line}: the sub-assembly {sub} has no size for size {size}.",
@@ -215,7 +215,7 @@
     "GROUP_CIRCLE": "Line {line}: grouped under a line that is grouped under it (a circle). Ungroup one of them.",
     "PPE_MATERIAL_NOT_APPROVED": "Line {line}: {material} is used for protection and is not approved yet.",
     "ALTERNATE_ARCHIVED": "Line {line}: the alternate {alternate} is archived: it is never taken.",
-    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: the style of the sub-assembly {sub} is archived."
+    "SUB_ASSEMBLY_STYLE_ARCHIVED": "Line {line}: the product of the sub-assembly {sub} is archived."
   },
   "keyHint": {
     "open": "Open the line in depth",
@@ -255,16 +255,16 @@
       "title": "Sub-assembly",
       "none": "No sub-assembly.",
       "remove": "Take it off",
-      "another": "Take another revision or style",
+      "another": "Take another revision or product",
       "change": "Choose another",
-      "search": "Style of the sub-assembly",
-      "searchHint": "Another style's BOM that line {line} takes (a removable liner, an armour insert).",
+      "search": "Product of the sub-assembly",
+      "searchHint": "Another product's BOM that line {line} takes (a removable liner, an armour insert).",
       "placeholder": "Liner, insert, cuff…",
-      "reading": "Reading the style's revisions…",
-      "failed": "Couldn't read that style's revisions.",
+      "reading": "Reading the product's revisions…",
+      "failed": "Couldn't read that product's revisions.",
       "revision": "Revision",
       "revisionHint": "Released first; a draft stops this BOM's release until it is released.",
-      "noRevision": "That style has no revision yet.",
+      "noRevision": "That product has no revision yet.",
       "take": "Take revision {revision}",
       "held": {
         "notComponent": "Line {line} takes a bought material: a sub-assembly line takes the component we make. Choose that component as the line's material first.",
@@ -294,9 +294,9 @@
     "option": {
       "title": "Only for an option",
       "hint": "A line only for one option is taken only when that option is chosen.",
-      "none": "The style offers no options yet.",
-      "failed": "Couldn't read the style's options.",
-      "link": "Options & rules of this style"
+      "none": "The product offers no options yet.",
+      "failed": "Couldn't read the product's options.",
+      "link": "Options & rules of this product"
     }
   },
   "search": {
@@ -345,18 +345,18 @@
     },
     "empty": {
       "title": "No sub-assemblies",
-      "body": "A component we make (a liner, an armour insert) can take another style's revision: open its line and choose the sub-assembly."
+      "body": "A component we make (a liner, an armour insert) can take another product's revision: open its line and choose the sub-assembly."
     }
   },
   "usedIn": {
     "title": "Used as a sub-assembly in",
-    "intro": "The revisions of other styles that take {code} as a sub-assembly.",
+    "intro": "The revisions of other products that take {code} as a sub-assembly.",
     "loading": "Reading where it is used…",
     "failed": "Couldn't read where it is used.",
-    "none": "No other style takes it as a sub-assembly.",
+    "none": "No other product takes it as a sub-assembly.",
     "line": "Line {seq} · {qty} {unit}",
     "col": {
-      "style": "Style",
+      "style": "Product",
       "revision": "Its revision",
       "line": "Line",
       "takes": "Takes"
@@ -380,6 +380,86 @@
       "qty": "Per garment",
       "min": "Minimum grade",
       "sizes": "Sizes"
+    }
+  },
+  "mat": {
+    "top": {
+      "lines_one": "{count} material",
+      "lines_other": "{count} materials",
+      "leather": "the leather {code} {name}",
+      "customer_one": "{count} the customer sends",
+      "customer_other": "{count} the customer sends",
+      "wait_one": "the longest wait {count} day",
+      "wait_other": "the longest wait {count} days",
+      "cost": "materials of one piece {cost}"
+    },
+    "customer": "The customer sends it",
+    "ce": {
+      "title": "CE: check the certificate again",
+      "answer": "A part the CE certificate rests on changed in this draft.",
+      "info": "A protector or the CE label taken out, or now sent by the customer, can change the certified type. Compliance checks it with the notified body before the release.",
+      "tell": "Tell Compliance…",
+      "heldCompliance": "Your role does not read the certificates: ask Compliance or the owner.",
+      "heldTask": "Telling Compliance makes a task: your role cannot make tasks.",
+      "takenOut": "{code} {name} is taken out (the released revision has it).",
+      "customerSends": "{code} {name} is now sent by {customer}."
+    },
+    "main": {
+      "title": "Main material",
+      "answer": "{code} {name}.",
+      "none": "No main material is marked yet.",
+      "info": "The material the customer picks on an order line (the leathers to choose from hang on it). It cannot be taken out.",
+      "fixed": "It cannot be taken out of the list.",
+      "howTo": "Mark one in the list: ⋯ › Make it the main material.",
+      "noneRead": "The person who changes the materials marks one.",
+      "tag": "Main",
+      "make": "Make it the main material",
+      "held": "The main material cannot be taken out."
+    },
+    "before": {
+      "title": "Before the work starts",
+      "answer_one": "{code} takes the longest: {count} day. It decides when to order.",
+      "answer_other": "{code} takes the longest: {count} days. It decides when to order.",
+      "noWaits": "No wait is known yet for the materials the factory buys.",
+      "info": "The three materials that take longest to come (the material's wait, else its supplier's) and what the customer sends.",
+      "days_one": "{count} day",
+      "days_other": "{count} days",
+      "sentTitle_one": "{count} line the customer sends",
+      "sentTitle_other": "{count} lines the customer sends",
+      "sentBy": "Sent by {customer}"
+    },
+    "list": {
+      "title_one": "Material list ({count} line)",
+      "title_other": "Material list ({count} lines)",
+      "info": "One line per material: for one piece and its unit, waste, more for each size up, who brings it, the wait, and the cost of one piece for those who see costs. By size fills the sizes from the base and keeps every size typed by hand.",
+      "view": "List",
+      "step": "+{step} {unit}",
+      "waitCustomer": "The customer sends it",
+      "col": {
+        "step": "Each size up",
+        "wait": "Wait",
+        "cost": "One piece"
+      }
+    },
+    "need": {
+      "title": "What an order needs",
+      "answer": "Type the pieces and the size: each material's need, waste included. Nothing is saved.",
+      "info": "For one piece × (1 + waste) × pieces. A size without a quantity says so; the customer's lines are theirs to send.",
+      "pieces": "Pieces",
+      "piecesHeld": "Type a whole number from 1 to 100,000.",
+      "size": "Size",
+      "baseSize": "{size} (base)",
+      "col": {
+        "material": "Material",
+        "need": "Needed"
+      },
+      "unknown": "No quantity for this size"
+    },
+    "open": {
+      "title": "Open orders need",
+      "answer": "{pieces} open pieces in {orders} orders, counted at the base size {size}.",
+      "none": "No open order needs it now.",
+      "info": "The open pieces of the open orders with this product, all counted at the base size: the sizes of each order are not split here."
     }
   }
 }

@@ -71,6 +71,7 @@ import { dayBeforeAt } from '../../../shell/panels/remind-me/model'
 import { useLiveBus } from '../../../shell/live/use-live'
 import { fetchIncomingCounts } from './incoming/api'
 import { incomingLinesOf, incomingWants, mayReadIncoming, type IncomingToday } from './incoming/model'
+import { OrdersNow } from './orders-now/OrdersNow' // owb-of4 step 2: the orders on Today
 
 interface QueueState {
   readonly answer: TodayAnswer
@@ -562,6 +563,7 @@ export function Today() {
   return (
     <TodayView
       model={model}
+      top={permissions.has('orders.view') ? <OrdersNow /> : null /* owb-of4: the designer (orders.view.own) has no Today orders part */}
       actions={{
         onTile: (next) => {
           setNotice(null)

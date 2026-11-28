@@ -105,6 +105,15 @@ export const FLOOR_SYNC_KINDS = [
   // SKU, barcode or batch label, into the carton named or the bench's open one. Applied as the shipment and its cartons stand
   // when it arrives: a wrong garment, an extra piece or a shipment held since is refused in words.
   'shipping.carton.scan',
+  // owb-fl3 (order workflow S5): the team leader's Do this first and Will be late on baskets, and Tell the office WITH the name
+  // (one without the name never queues: this ledger keeps the worker and the device).
+  'production.baskets.flag',
+  'production.baskets.late',
+  'floor.suggestion',
+  // owb-fl2 (order workflow S5): a basket moved by hand (FORWARD, Take it here; BACK by the team leader) and a move undone. Route
+  // changes, Give to… and photos stay online-only.
+  'production.baskets.move',
+  'production.baskets.moveUndo',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -189,6 +198,13 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'inventory.substitute.issue': { kind: 'inventory.substitute.issue', permission: 'inventory.issue', numbers: null, what: 'Issue an approved substitute to a work order' },
   // B-W2b-384: packing is the packer's (shipping.pack at the tablet's site).
   'shipping.carton.scan': { kind: 'shipping.carton.scan', permission: 'shipping.pack', numbers: null, what: 'Scan a garment into a carton' },
+  // owb-fl3: leader acts (floor.lead, as help calls check it); a suggestion is every floor role's.
+  'production.baskets.flag': { kind: 'production.baskets.flag', permission: 'floor.lead', numbers: null, what: 'Mark baskets "Do this first" (or clear it)' },
+  'production.baskets.late': { kind: 'production.baskets.late', permission: 'floor.lead', numbers: null, what: 'Tell the office baskets will be late' },
+  'floor.suggestion': { kind: 'floor.suggestion', permission: 'floor.work', numbers: null, what: 'Tell the office (with your name)' },
+  // owb-fl2: the move's own right; a BACK also needs production.baskets.route (the module command checks it).
+  'production.baskets.move': { kind: 'production.baskets.move', permission: 'production.baskets.move', numbers: null, what: 'Move baskets by hand' },
+  'production.baskets.moveUndo': { kind: 'production.baskets.moveUndo', permission: 'production.baskets.move', numbers: null, what: 'Undo a move of baskets' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

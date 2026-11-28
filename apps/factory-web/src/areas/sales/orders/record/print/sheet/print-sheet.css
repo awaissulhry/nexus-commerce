@@ -1,0 +1,178 @@
+/*
+ * owb-ss4 step 4.2 — the ONE print sheet (sheet/view/PrintSheetView.tsx), full screen over the page (a portal on <body>, the root
+ * `.fw-psheet-root`). On screen: DS tokens (light and dark), the A4 papers one under the other. On paper (`@media print`): the only
+ * print-styled screen of the app — black on white, nothing but the papers, A4 portrait, one design page per sheet and the basket cards
+ * 2 × 4 per sheet (105 × 74.25 mm: the sheet split, measured).
+ */
+.fw-psheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: auto;
+  background: var(--nds-surface-sunken);
+}
+.fw-psheet {
+  min-height: 100%;
+  min-width: 0;
+}
+.fw-psheet-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding: var(--nds-space-10) var(--nds-space-16);
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.fw-psheet-bar-t {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--nds-text);
+}
+.fw-psheet-mu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.fw-psheet-pad { padding: var(--nds-space-16); }
+.fw-psheet-paper-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  /* A phone sees the A4 papers scaled down to its width: never a sideways scroll. */
+  overflow-x: hidden;
+}
+.fw-psheet-paper {
+  position: relative;
+  box-sizing: border-box;
+  width: 210mm;
+  height: 297mm;
+  max-width: 100%;
+  flex: none;
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  border: 1px solid var(--nds-border-subtle);
+  overflow: hidden;
+}
+@media (max-width: 840px) {
+  .fw-psheet-paper { width: 100%; height: auto; aspect-ratio: 210 / 297; }
+}
+
+/* A design page: the mockup page whole (an upright page keeps its shape), the code on top of it at its place. */
+.fw-psheet-mockup {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.fw-psheet-qr {
+  position: absolute;
+  background: var(--nds-surface);
+  image-rendering: pixelated;
+}
+.fw-psheet-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+.fw-psheet-foot {
+  position: absolute;
+  left: 8mm;
+  right: 8mm;
+  bottom: 4mm;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  font-size: 9pt;
+  color: var(--nds-text-2);
+}
+
+/* The basket cards: 2 × 4 on one A4 sheet. */
+.fw-psheet-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+.fw-psheet-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+  padding: 4mm;
+  border: 0.3mm dashed var(--nds-border-strong);
+  min-width: 0;
+  overflow: hidden;
+}
+.fw-psheet-card-top {
+  display: grid;
+  grid-template-columns: 24mm minmax(0, 1fr) auto;
+  gap: 3mm;
+  align-items: start;
+}
+.fw-psheet-card-qr { width: 24mm; height: 24mm; image-rendering: pixelated; }
+.fw-psheet-card-id { display: flex; flex-direction: column; gap: 1mm; min-width: 0; }
+.fw-psheet-basket { font-size: 20pt; font-weight: var(--nds-font-weight-extrabold); line-height: 1; letter-spacing: 0.02em; }
+.fw-psheet-card-l { font-size: 8pt; overflow-wrap: anywhere; }
+.fw-psheet-card-pic { width: 18mm; height: 24mm; object-fit: contain; }
+.fw-psheet-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1mm 3mm;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.fw-psheet-step { display: flex; align-items: center; gap: 1.5mm; min-width: 0; font-size: 8pt; }
+.fw-psheet-tick { flex: none; width: 3.5mm; height: 3.5mm; border: 0.3mm solid currentColor; }
+.fw-psheet-ur { font-size: 9pt; unicode-bidi: isolate; }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  /* Nothing of the page but the sheet goes on paper. */
+  body > :not(.fw-psheet-root) { display: none !important; }
+  .fw-psheet-root {
+    position: static;
+    overflow: visible;
+    background: #fff;
+  }
+  .fw-psheet-bar,
+  .fw-psheet-pad,
+  .fw-psheet-wait { display: none !important; }
+  .fw-psheet-paper-list { display: block; padding: 0; gap: 0; overflow: visible; }
+  .fw-psheet-paper {
+    width: 210mm;
+    height: 297mm;
+    max-width: none;
+    aspect-ratio: auto;
+    margin: 0;
+    border: 0;
+    background: #fff;
+    color: #000;
+    break-after: page;
+    page-break-after: always;
+  }
+  .fw-psheet-paper:last-child { break-after: auto; page-break-after: auto; }
+  .fw-psheet-foot { color: #000; }
+  .fw-psheet-card { border-color: #000; }
+  .fw-psheet-qr { background: #fff; }
+  .fw-psheet-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

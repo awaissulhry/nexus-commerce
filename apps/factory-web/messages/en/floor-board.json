@@ -1,0 +1,44 @@
+{
+  "leaderOnly": "The Board is the team leader's. Your baskets are on Home.",
+  "loading": "Opening…",
+  "failed": "It could not be read now.",
+  "retry": "Try again",
+  "offline": "No network: this is what the phone read last.",
+  "empty": "No basket here now.",
+  "scope": {
+    "label": "Whose baskets",
+    "team": "My team",
+    "floor": "Whole floor"
+  },
+  "chips": {
+    "label": "Departments",
+    "ready": "Ready to ship"
+  },
+  "list": {
+    "label": "Baskets"
+  },
+  "row": {
+    "first": "First",
+    "problem": "Problem",
+    "late": "Late",
+    "ready": "Ready to ship",
+    "WORKING": "Working",
+    "PAUSED": "Paused",
+    "WAITING": "Waiting"
+  },
+  "chain": {
+    "noLine": "This device belongs to no chain. Ask your team leader.",
+    "noSteps": "This chain has no steps yet.",
+    "steps": "Steps of the chain",
+    "slowest_one": "Slowest step · {count} piece waits",
+    "slowest_other": "Slowest step · {count} pieces wait",
+    "offline": "Needs the network",
+    "sending": "Sending…",
+    "waiting_one": "{count} waits from the step before",
+    "waiting_other": "{count} wait from the step before",
+    "full": "Every piece of this size is done here.",
+    "plusBundle": "+ a bundle",
+    "undoLabel": "Take back {count} pieces of {code}",
+    "failed": "It did not go. Try again."
+  }
+}

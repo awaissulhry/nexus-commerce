@@ -1,0 +1,177 @@
+{
+  "back": {
+    "orders": "Ordini",
+    "customer": "Cliente",
+    "customers": "Clienti",
+    "designDesk": "Scrivania design",
+    "incoming": "In arrivo",
+    "readyToShip": "Pronto da spedire",
+    "today": "Oggi",
+    "order": "Ordine",
+    "page": "Indietro"
+  },
+  "act": {
+    "confirm": "Conferma l’ordine…",
+    "printStart": "Stampa e avvia il lavoro…",
+    "ship": "Spedisci…",
+    "arrived": "È arrivato in magazzino",
+    "sendOn": "Invia al cliente"
+  },
+  "tag": {
+    "CUSTOMER_ON_HOLD": "Cliente in sospeso",
+    "DESIGN_WAITS": "Grafica: attende l’approvazione",
+    "DESIGN_APPROVED": "Grafica approvata",
+    "DESIGN_CHANGE": "Grafica: chiesta una modifica",
+    "RESTRICTED": "Riservato",
+    "PROBLEMS_one": "{count} problema",
+    "PROBLEMS_other": "{count} problemi",
+    "REMAKE": "Rifacimento"
+  },
+  "people": {
+    "button": "Persone",
+    "count_one": "Persone · {count}",
+    "count_other": "Persone · {count}",
+    "window": "Persone su {number}",
+    "add": "Aggiungi persone",
+    "designer": "Affida la grafica al designer"
+  },
+  "mockup": {
+    "alt": "Il mockup di {number}",
+    "none": "Nessun mockup ancora. La sua immagine compare qui."
+  },
+  "next": {
+    "title": "Cosa succede ora",
+    "yours": "Il tuo passo: {act}",
+    "DRAFT": "L’ordine è ancora una bozza. Confermalo quando ogni riga ha il suo prodotto.",
+    "SENT": "Il cliente l’ha inviato. Controllalo e conferma l’ordine.",
+    "CONFIRMED": "Confermato: attende la stampa. Stampa e avvia il lavoro, poi i cesti vanno in reparto.",
+    "IN_PRODUCTION": "I cesti sono in reparto. Ogni reparto li passa al successivo.",
+    "READY_TO_SHIP": "È tutto fatto. Spediscilo.",
+    "SHIPPED": "È uscito dalla fabbrica ed è in viaggio.",
+    "AT_OUR_WAREHOUSE": "Attende nel nostro magazzino. Invialo al cliente.",
+    "DELIVERED": "Il cliente l’ha ricevuto.",
+    "WITHDRAWN": "L’ordine è stato ritirato. Non succede altro."
+  },
+  "floor": {
+    "label": "In reparto",
+    "open": "Lo vede il reparto",
+    "restricted": "Solo operai nominati",
+    "by": "da {name} · {at}",
+    "restrict": "Riserva in reparto",
+    "lift": "Aprilo al reparto",
+    "busy": "Salvataggio…",
+    "failed": "Non è stato possibile salvare l’impostazione del reparto. Riprova."
+  },
+  "text": {
+    "title": "L’ordine come è stato scritto",
+    "lines": "Le righe con le parole del cliente",
+    "line": "Riga {seq}",
+    "files": "I file inviati con l’ordine",
+    "notice": "Questo ordine è arrivato come testo. Leggilo e scegli il prodotto di ogni riga. Poi puoi confermare."
+  },
+  "linked": {
+    "customer": "Cliente"
+  },
+  "cf": {
+    "windowTitle": "Conferma l’ordine",
+    "promised": "Promesso",
+    "promiseHint": "Prometti questo giorno. Il cliente lo vede. Cambialo poi da Produzione › Cambia la promessa….",
+    "promiseEmpty": "Scrivi il giorno che prometti.",
+    "promisePast": "Questo giorno è passato. Prometti oggi o un giorno successivo.",
+    "wanted": "Il cliente lo vuole per il",
+    "wantedNone": "Nessun giorno indicato",
+    "openTitle_one": "{count} dettaglio ancora aperto. Puoi confermare ora.",
+    "openTitle_other": "{count} dettagli ancora aperti. Puoi confermare ora.",
+    "openWhy": "Il lavoro grafico e il modello possono partire. Lo storico ricorda che hai confermato con dettagli aperti.",
+    "pickProduct": "Scegli prima il prodotto: riga {seq}",
+    "pickProductTitle": "Scegli prima il prodotto",
+    "pickProductWhy": "La riga {seq} non ha ancora un prodotto. Sceglilo qui o nel foglio; poi puoi confermare.",
+    "noProduct": "Ancora nessun prodotto",
+    "failed": "Non è stato possibile confermare l’ordine. Riprova.",
+    "readFailed": "Non è stato possibile leggere questo ordine. Chiudi e riprova."
+  },
+  "production": {
+    "rush": "Urgente…",
+    "printAgain": "Stampa di nuovo…",
+    "placeCode": "Posiziona il codice…"
+  },
+  "baskets": {
+    "label": "I cesti di questo ordine",
+    "ready": "Pronto da spedire",
+    "step": "Passo {done} di {total}",
+    "late_one": "In ritardo · {days} giorno",
+    "late_other": "In ritardo · {days} giorni",
+    "byHand": "Impostato a mano",
+    "state": {
+      "WORKING": "In lavorazione",
+      "PAUSED": "In pausa",
+      "WAITING": "In attesa",
+      "READY": "Pronto"
+    }
+  },
+  "log": {
+    "chipsLabel": "Mostra le modifiche di un tipo",
+    "chips": {
+      "all": "Tutte",
+      "asks": "Richieste",
+      "lines": "Righe",
+      "dates": "Date",
+      "design": "Grafica",
+      "status": "Stato"
+    },
+    "emptyChip": "Ancora nessuna modifica di questo tipo."
+  },
+  "notices": {
+    "title": "Il cliente dice di aver pagato",
+    "open_one": "{count} avviso ti aspetta",
+    "open_other": "{count} avvisi ti aspettano",
+    "none": "Ogni avviso ha una risposta.",
+    "info": "Il cliente dice alla fabbrica di aver pagato. Un avviso non cambia nulla del dovuto: registra il pagamento con Registra pagamento… quando è in banca.",
+    "failed": "Non è stato possibile rispondere all’avviso. Riprova.",
+    "row": "Pagato il {day} · {step}",
+    "noStep": "nessun passo indicato",
+    "state": {
+      "OPEN": "In attesa",
+      "RECORDED": "Registrato",
+      "DISMISSED": "Scartato"
+    },
+    "busy": "Salvataggio…",
+    "recorded": "Registrato",
+    "dismiss": "Scarta",
+    "thenRecord": "Registrato vuol dire che l’hai visto: registra il pagamento con Registra pagamento… (con il tuo codice).",
+    "waiting_one": "Il cliente dice di aver pagato · {count}",
+    "waiting_other": "Il cliente dice di aver pagato · {count}"
+  },
+  "money": {
+    "paidTooMuch": "{amount} pagati in più: il totale dell’ordine è sceso sotto quanto pagato."
+  },
+  "zip": {
+    "all": "Scarica tutto",
+    "busy": "Preparazione dello zip…",
+    "failed": "Non è stato possibile preparare lo zip. Riprova.",
+    "leftOut_one": "{count} file è rimasto fuori dallo zip: non puoi aprirlo.",
+    "leftOut_other": "{count} file sono rimasti fuori dallo zip: non puoi aprirli."
+  },
+  "design": {
+    "send": "Invia la grafica per l’approvazione",
+    "busy": "Invio…",
+    "noPicture": "Scegli prima l’immagine dell’ordine (il mockup): è ciò che il cliente approva.",
+    "waits": "Il cliente ha già la grafica da approvare.",
+    "failed": "Non è stato possibile inviare la grafica. Riprova.",
+    "question": "Vi chiediamo di approvare la grafica dell’ordine {number}. Il lavoro intanto va avanti; la vostra approvazione lo rende sicuro.",
+    "state": {
+      "WAITS": "Grafica: attende l’approvazione del cliente",
+      "APPROVED": "Grafica approvata",
+      "CHANGE": "Grafica: il cliente chiede una modifica"
+    }
+  },
+  "factoryPeople": {
+    "title": "Persone della fabbrica",
+    "count_one": "{count} persona della fabbrica lavora per questo cliente",
+    "count_other": "{count} persone della fabbrica lavorano per questo cliente",
+    "door": "Persone per cliente ›",
+    "info": "Le persone dell’ufficio affidate a questo cliente: sono messe sui suoi ordini, e il cliente legge i loro nomi.",
+    "none": "Ancora nessuno della fabbrica è affidato a questo cliente.",
+    "since": "dal {date}"
+  }
+}

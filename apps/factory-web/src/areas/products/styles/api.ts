@@ -11,6 +11,7 @@ import {
   duplicateOfferView,
   generatedSkus,
   revisionView,
+  styleOrdersView,
   styleRow,
   styleView,
   type ColourRow,
@@ -18,6 +19,8 @@ import {
   type DuplicateOfferView,
   type GeneratedSkus,
   type RevisionView,
+  type RouteSummaryStep,
+  type StyleOrdersView,
   type StyleRow,
   type StyleView,
 } from '@nexus/factory-domain/product/styles/contracts'
@@ -60,9 +63,18 @@ export interface StyleQuery {
   draftRevision?: boolean
   productType?: string
   ppeCategory?: string
+  /** owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" (the customer's party id). */
+  brandPartyId?: string
+  /** owb-pd5 (step 5.0; pd4s s.1): our range, or made for a customer. */
+  family?: 'OUR_RANGE' | 'FOR_CUSTOMER'
   limit?: number
   cursor?: string | null
 }
+
+// ---- owb-pd4 (step 4.1; S4 settle 1): the Products list's row — pd1 (#2054) put its extras in the contract (typeName, family,
+// openOrders, agreedRange: price grain, marginPct + marginFrom: margin grain); the list reads them under the product's name.
+export type ProductRow = StyleRow
+// ---- end owb-pd4
 
 const stylePage = z.object({ styles: z.array(styleRow), nextCursor: z.string().nullable(), count: z.number().int() })
 export type StylePage = z.infer<typeof stylePage>
@@ -75,6 +87,8 @@ export function listStyles(api: ApiClient, query: StyleQuery): Promise<StylePage
       draftRevision: query.draftRevision === undefined ? undefined : String(query.draftRevision),
       productType: query.productType || undefined,
       ppeCategory: query.ppeCategory || undefined,
+      brandPartyId: query.brandPartyId || undefined,
+      family: query.family || undefined,
       limit: query.limit ?? 50,
       cursor: query.cursor ?? undefined,
     },
@@ -89,9 +103,31 @@ export async function countStyles(api: ApiClient, query: StyleQuery): Promise<nu
 
 const oneStyle = z.object({ style: styleView })
 
-export function getStyle(api: ApiClient, styleId: string): Promise<StyleView> {
+// ---- owb-pd4 (step 4.3): "How it is made" — pd1 puts the route summary on every style answer (no minutes, product.styles.view).
+export type { RouteSummaryStep }
+export type ProductView = StyleView
+// ---- end owb-pd4
+
+export function getStyle(api: ApiClient, styleId: string): Promise<ProductView> {
   return api.get(stylePath(styleId), { schema: oneStyle }).then((answer) => answer.style)
 }
+
+// ---- owb-pd4 (steps 4.3, 4.4; pd1's contract styleOrdersView): the open order lines of a product — Where it is used, the riders'
+// measurement sheets. orders.view (or orders.view.own: only the orders the person is on); never a price.
+export const styleOrdersAnswer = styleOrdersView
+export type StyleOrders = StyleOrdersView
+export type StyleOrderLine = StyleOrders['lines'][number]
+
+export function listStyleOrders(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<StyleOrders> {
+  return api.get(`${stylePath(styleId)}/orders`, { schema: styleOrdersAnswer, signal })
+}
+
+/** The product's own list row (its agreed price range and margin come with the list's extras, not with the record). */
+export async function productRowOf(api: ApiClient, style: Pick<StyleView, 'id' | 'code'>, signal?: AbortSignal): Promise<ProductRow | null> {
+  const page = await api.get('/product/styles', { query: { q: style.code, status: 'ALL', limit: 20 }, schema: stylePage, signal })
+  return page.styles.find((row) => row.id === style.id) ?? null
+}
+// ---- end owb-pd4
 
 // ---- B-TH-261: the request a style draft was made from (Make style draft, B-TH-026), for the band's "Made from INQ-… — Open" ----
 const styleSourceSchema = z.object({ inquiry: z.object({ id: z.string(), number: z.string() }).nullable() })
@@ -355,11 +391,6 @@ export function getRouting(api: ApiClient, styleId: string, revisionId: string):
   return api.get(`${revisionPath(styleId, revisionId)}/routing`, { schema: oneRouting }).then((answer) => answer.routing)
 }
 
-export function addSteps(api: ApiClient, styleId: string, revision: { id: string; version: number }, operationIds: readonly string[]): Promise<RoutingView> {
-  return api
-    .post(`${revisionPath(styleId, revision.id)}/routing/steps`, { body: { version: revision.version, operations: operationIds.map((operationId) => ({ operationId })) }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
 /** A step's subcontract details (W2a, PRD-120): the workshop, its fee per piece (the cost grain) and the transit days. */
 export interface SubcontractPatch {
@@ -391,17 +422,7 @@ export function updateStep(
     .then((answer) => answer.routing)
 }
 
-export function removeStep(api: ApiClient, styleId: string, revision: { id: string; version: number }, stepId: string): Promise<RoutingView> {
-  return api
-    .request('DELETE', `${revisionPath(styleId, revision.id)}/routing/steps/${enc(stepId)}`, { query: { version: revision.version }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
-export function reorderSteps(api: ApiClient, styleId: string, revision: { id: string; version: number }, stepIds: readonly string[]): Promise<RoutingView> {
-  return api
-    .request('PUT', `${revisionPath(styleId, revision.id)}/routing/order`, { body: { version: revision.version, stepIds }, schema: oneRouting, ...key() })
-    .then((answer) => answer.routing)
-}
 
 // ---- the cost sheet (SCR-044) -------------------------------------------------------------------------------------------
 
@@ -500,40 +521,4 @@ export function listLabelTemplates(api: ApiClient): Promise<LabelTemplateRow[]> 
 
 export function assignLabel(api: ApiClient, styleId: string, revision: { id: string; version: number }, labelTemplateId: string | null): Promise<unknown> {
   return api.request('PUT', `${revisionPath(styleId, revision.id)}/label`, { body: { labelTemplateId, version: revision.version }, ...key() })
-}
-
-// ---- list prices (W2a, B-W2a-19: the base price list in force) --------------------------------------------------------
-
-/** A price list row (sales/pricelists contract, the fields read here). */
-const priceListRow = z.object({
-  id: z.string(),
-  companyId: z.string().nullable(),
-  code: z.string(),
-  name: z.string(),
-  kind: z.string(),
-  currency: z.string(),
-  state: z.string(),
-  shownVersion: z.object({ id: z.string(), revision: z.number().int() }).nullable(),
-})
-export type PriceListRow = z.infer<typeof priceListRow>
-const priceLists = z.object({ lists: z.array(priceListRow) })
-
-/** A price of a version: the style's own (colourwayId null) or a colourway's; money fields only with their grain. */
-const priceEntry = z.object({
-  styleId: z.string(),
-  colourwayId: z.string().nullable(),
-  unitPrice: z.string().optional(),
-  marginPct: z.string().nullable().optional(),
-  belowFloor: z.boolean().optional(),
-})
-export type PriceEntry = z.infer<typeof priceEntry>
-const versionEntries = z.object({ entries: z.array(priceEntry) })
-
-/** The BASE price lists in force for the company (its own and every company's). */
-export function basePriceLists(api: ApiClient, companyId: string | null): Promise<PriceListRow[]> {
-  return api.get('/sales/price-lists', { query: { companyId: companyId ?? undefined, kind: 'BASE', state: 'IN_FORCE' }, schema: priceLists }).then((answer) => answer.lists)
-}
-
-export function priceEntries(api: ApiClient, listId: string, versionId: string): Promise<PriceEntry[]> {
-  return api.get(`/sales/price-lists/${enc(listId)}/versions/${enc(versionId)}`, { schema: versionEntries }).then((answer) => answer.entries)
 }

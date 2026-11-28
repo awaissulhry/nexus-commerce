@@ -132,82 +132,14 @@
 }
 
 /* ── rail + page ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* owb-po4.2: the office's rail (the DS AppRail, app-rail.css): placed over a reserved 66 px strip, it opens over the page on hover or
+   focus without moving it — as `.fw-office-body` does. */
 .fw-pbody {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-}
-
-.fw-prail {
-  flex: 0 0 auto;
-  width: 240px;
-  overflow-y: auto;
-  background: var(--nds-surface);
-  border-right: 1px solid var(--nds-border);
-  padding: var(--nds-space-12) var(--nds-space-8);
-}
-
-.fw-prail-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-}
-
-.fw-prail-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-12);
-  min-height: 44px;
-  padding: var(--nds-space-6) var(--nds-space-12);
-  border-radius: var(--nds-radius-md);
-  color: var(--nds-text-2);
-  font-weight: var(--nds-font-weight-medium);
-  text-decoration: none;
-}
-
-.fw-prail-row:hover {
-  background: var(--nds-surface-hover);
-  color: var(--nds-text-strong);
-}
-
-.fw-prail-row.on {
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-strong);
-  font-weight: var(--nds-font-weight-semibold);
-  box-shadow: inset 3px 0 0 var(--nds-brand-accent, var(--nds-primary));
-}
-
-.fw-prail-ico {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-.fw-prail-badge {
-  position: absolute;
-  top: -6px;
-  right: -10px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 var(--nds-space-4);
-  border-radius: var(--nds-radius-full);
-  background: var(--nds-primary);
-  color: var(--nds-text-inverse);
-  font-size: var(--nds-font-size-micro);
-  font-weight: var(--nds-font-weight-bold);
-  line-height: 18px;
-  text-align: center;
-}
-
-/* A label is never cut: a long one ("Preventivi e campioni") takes a second line. */
-.fw-prail-lbl {
-  min-width: 0;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  padding-left: 66px;
 }
 
 .fw-ppage {
@@ -230,6 +162,40 @@
   align-items: center;
   gap: var(--nds-space-8);
   flex-wrap: wrap;
+}
+
+/* owb-po5.1: the order's picture in the band — its own button with the camera mark in its corner (design § 5zj A: "the picture is a
+   button"); a plain picture for a person who may not change it. */
+.fw-pband-pic {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--nds-radius-md);
+  cursor: pointer;
+}
+
+span.fw-pband-pic {
+  cursor: default;
+}
+
+.fw-pband-pic:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pband-pic-cam {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  box-shadow: 0 0 0 1px var(--nds-border);
 }
 
 .fw-pband-actions,
@@ -743,25 +709,8 @@
   padding: var(--nds-space-24) var(--nds-space-16);
 }
 
-/* ── tablet: the rail keeps its labels under the icons ───────────────────────────────────────────────────────────── */
+/* ── tablet ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 1023px) {
-  .fw-prail {
-    width: 96px;
-    padding: var(--nds-space-8) var(--nds-space-4);
-  }
-
-  .fw-prail-row {
-    flex-direction: column;
-    gap: var(--nds-space-4);
-    padding: var(--nds-space-8) var(--nds-space-4);
-    text-align: center;
-    font-size: var(--nds-font-size-xs);
-  }
-
-  .fw-prail-row.on {
-    box-shadow: inset 0 -3px 0 var(--nds-brand-accent, var(--nds-primary));
-  }
-
   .fw-ptop-party {
     max-width: 24ch;
   }
@@ -769,7 +718,11 @@
 
 /* ── phone: no rail, the bottom bar and the action bar instead ───────────────────────────────────────────────────── */
 @media (max-width: 719px) {
-  .fw-prail {
+  .fw-pbody {
+    padding-left: 0;
+  }
+
+  .fw-pbody > .h10-rail {
     display: none;
   }
 
@@ -875,10 +828,6 @@
   .fw-pband .nds-ref-value {
     overflow-wrap: normal;
     white-space: nowrap;
-  }
-
-  .fw-pband .nds-detailhdr.dense .fw-ppages {
-    order: 2;
   }
 
   /* Row 1's Messages: the thread button's icon alone (its name stays: aria-label). */

@@ -1,4 +1,4 @@
-import { isLocale, localeOf, type Locale } from '../lib/i18n/locales'
+import { FLOOR_LOCALES, floorLocaleOf, isFloorLocale, type FloorLocale } from '../lib/i18n/locales'
 
 /**
  * The floor app's rules that need no screen and no API (SCR-020, 021, 022, 024, 025; design 02-sections-floor):
@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-F37: Pick & issue before Move & put away, the design tree's order */ 'pick', /* B-W2b-308 */ 'move', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', /* B-W2b-121 */ 'fabriccut', 'bundles', 'receive', /* B-W2b-F37: Pick & issue before Move & put away, the design tree's order */ 'pick', /* B-W2b-308 */ 'move', /* B-W2b-310 */ 'count', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', /* B-W2b-115 */ 'incoming', 'final', /* B-W2b-105 */ 'inline', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-145 */ 'training', /* B-W2b-232 */ 'instructions', /* owb-fl5 */ 'baskets', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -115,6 +115,11 @@ export const TILE_RULES: readonly TileRule[] = [
   // Modes; tile family Work, before Call for help so an operator's first page keeps My work, Operation and Machine problem). Its API
   // asks production.scan (GET /production/instructions/floor/operation); Seen names the person, so the worker notice holds it.
   { key: 'instructions', permission: 'production.scan', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: true },
+  // owb-fl5 (lead settle 9): a tablet keeps today's screens and gets ONE new tile, Baskets, that opens the phone's basket home (the
+  // department's baskets, For you, Coming next). At the production stations; a phone has the basket home as its Home
+  // (app/(floor)/floor/page.tsx). Its reads ask production.scan (GET /production/baskets/home). Not a scan itself. After Spec &
+  // instructions, and not on a line tablet: every tablet's first page of tiles stays as it is today (the tile is on the More page).
+  { key: 'baskets', permission: 'production.scan', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: false },
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
   // (never held by the worker notice). The frame's Help button opens it from any screen too.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
@@ -211,9 +216,19 @@ export function tilePage(tiles: readonly HomeTile[], page: number): TilePage {
 
 // ---- language (PLT-062: the screen follows the signed-in person; before a sign-in the device's, or the one picked) ----
 
-/** The screen's language: the person's (when we speak it), else the one picked on this screen, else the tenant's, else Italian. */
-export function floorLocale(input: { person?: string | null; picked?: string | null; tenant?: string | null }): Locale {
-  return localeOf(input.person) ?? (isLocale(input.picked) ? input.picked : null) ?? localeOf(input.tenant) ?? 'it'
+/**
+ * The screen's language: the person's (when we speak it), else the one picked on this screen, else the tenant's, else Italian.
+ * owb-fl7 (pick J): Urdu only where the SITE's floor languages list it (`site`: Site.floorLocales; a site adds `ur` only with an Urdu
+ * worker notice in force, factory-domain privacy/floor-languages.ts); unknown (no list): never Urdu.
+ */
+export function floorLocale(input: { person?: string | null; picked?: string | null; tenant?: string | null; site?: readonly string[] | null }): FloorLocale {
+  const offered = (locale: FloorLocale | null): FloorLocale | null => (locale === 'ur' && !(input.site ?? []).includes('ur') ? null : locale)
+  return offered(floorLocaleOf(input.person)) ?? offered(isFloorLocale(input.picked) ? input.picked : null) ?? offered(floorLocaleOf(input.tenant)) ?? 'it'
+}
+
+/** The floor languages a site offers on its picker: Italian and English always (the app's own words), Urdu where the site lists it. */
+export function floorLocalesOf(site: readonly string[] | null | undefined): FloorLocale[] {
+  return FLOOR_LOCALES.filter((locale) => locale !== 'ur' || (site ?? []).includes('ur'))
 }
 
 // ---- badges (factory-domain auth/floor/badge: 128 bits as 26 Crockford base32 characters) ----

@@ -1,0 +1,108 @@
+{
+  "ways": {
+    "title": "Ship the whole order",
+    "subtitle_one": "{number} · {customer} · {count} piece ready",
+    "subtitle_other": "{number} · {customer} · {count} pieces ready",
+    "question": "How does it ship?",
+    "make": "Make the shipment",
+    "readFailed": "What is ready could not be read",
+    "draftOnly": "It makes a draft shipment. You pack it and send it in Warehouse: the weights, the transport document (DDT) and the holds stay there.",
+    "alone": {
+      "name": "Alone, in its own box",
+      "sub": "Straight to the customer."
+    },
+    "together": {
+      "name": "Together with the customer’s other ready orders",
+      "sub_one": "{count} ready order of this customer can go with it.",
+      "sub_other": "{count} ready orders of this customer can go with it.",
+      "none": "No other order is ready",
+      "list_one": "{count} ready order of this customer",
+      "list_other": "{count} ready orders of this customer",
+      "pieces_one": "{count} piece ready",
+      "pieces_other": "{count} pieces ready"
+    },
+    "warehouse": {
+      "name": "To our warehouse first",
+      "sub": "We send it on when the customer sends the shipping label.",
+      "none": "The company has no warehouse of its own",
+      "pick": "Which warehouse",
+      "customerReads": "The customer reads “At the factory’s warehouse”.",
+      "choose": "Choose a warehouse"
+    },
+    "held": {
+      "noRight": "Your role does not plan shipments",
+      "nothing": "Nothing of this order is ready to ship now",
+      "pick": "Choose how it ships",
+      "tick": "Tick at least one other order",
+      "tooMany": "At most {max} orders go in one shipment",
+      "warehouse": "Choose the warehouse",
+      "busy": "Working on it…"
+    },
+    "made": {
+      "title": "{number} is made: a draft shipment",
+      "next": "Pack it and send it in Warehouse.",
+      "warehouse": "Pack it and send it in Warehouse. When it arrives there, press “It arrived at the warehouse”.",
+      "open": "Open it in Warehouse to pack and send"
+    }
+  },
+  "leg": {
+    "held": {
+      "nothing": "Nothing to do here now",
+      "busy": "Working on it…",
+      "long": "At most {max} characters",
+      "deliveredFirst": "It goes to our warehouse first: Send on to the customer before it can be delivered"
+    },
+    "arrived": {
+      "title": "It arrived at the warehouse",
+      "act": "Confirm",
+      "line": "The garments are at {place} now. The customer reads “At the factory’s warehouse”."
+    },
+    "sendOn": {
+      "title": "Send on to the customer",
+      "act": "Send on",
+      "anyway": "Send it anyway",
+      "line": "The garments leave {place} for the customer’s address.",
+      "carrier": "Carrier",
+      "tracking": "Tracking number",
+      "optional": "You can leave it empty.",
+      "ddt": "A sale transport document (DDT) to the customer’s address travels with it: issue it in Warehouse first, unless this shipment travels without one."
+    },
+    "readFailed": "The shipment could not be read",
+    "none": {
+      "arrived": "No shipment of this order is on its way to our warehouse now.",
+      "sendOn": "No shipment of this order waits at our warehouse now."
+    },
+    "pick": "Which shipment",
+    "aShipment": "A shipment",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "noLabel": "No label from the customer yet",
+    "noLabelWhy": "You can send it on without it. The history keeps that it left without the customer’s label.",
+    "warningWhy": "You can go on. The history keeps “Left with a payment open”.",
+    "openInWarehouse": "Open {number} in Warehouse",
+    "chip": {
+      "planned": "To our warehouse first: {place}",
+      "onTheWay": "On the way to {place}",
+      "labelYes": "The customer’s label is here",
+      "labelNo": "Waits for the customer’s label",
+      "sentOn": "Sent on to the customer",
+      "sentOnNoLabel": "Sent on without the customer’s label"
+    },
+    "act": {
+      "arrived": "It arrived at the warehouse",
+      "sendOn": "Send on to the customer"
+    },
+    "record": {
+      "title": "This shipment goes to our warehouse first: {place}",
+      "transfer": "Goods to our own warehouse travel as a transfer."
+    },
+    "transferWhy": "Goods to our own warehouse travel as a transfer."
+  },
+  "warning": {
+    "paymentDueAtShip": "A payment due before shipping is still open"
+  },
+  "handOver": {
+    "anyway": "Ship it anyway",
+    "warningWhy": "You can go on. The history keeps “Left with a payment open”."
+  }
+}

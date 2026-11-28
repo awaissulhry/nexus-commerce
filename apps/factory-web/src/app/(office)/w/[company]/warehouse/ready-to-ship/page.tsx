@@ -1,13 +1,19 @@
 import type { Metadata } from 'next'
-import { NotBuiltYet } from '../../../../../../shell/office/NotBuiltYet'
+import { Suspense } from 'react'
+import { ReadyToShipPage } from '../../../../../../areas/warehouse/ready-to-ship/ReadyToShipPage'
 
 export const metadata: Metadata = { title: 'Ready to ship · Nexus Factory' }
 
 /**
- * Warehouse › Outbound › Ready to ship (owb- order workflow, base settle 7; areas/warehouse/nav.ts, permission shipping.view): a DECLARED page — its route, its nav row
- * and its place in the approved tree are placed by the base; S3 (ss3) replaces this file with the page. Its address joins
- * OFFICE_PAGES at that land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES), so until then no row shows it.
+ * Warehouse › Outbound › Ready to ship (owb- order workflow; areas/warehouse/nav.ts, permission shipping.view): every order with ready
+ * garments by customer, One shipment for the n orders, Add to SH-…, and every shipment with the chips Open · On the way · Arrived · All
+ * (owb-ss3 step 3.4, design plan § 5n). Its address joins OFFICE_PAGES at the lead's nav flip (shell/nav/office-nav.ts: DECLARED_PAGES →
+ * OFFICE_PAGES), so until then no row shows it.
  */
 export default function WarehouseReadyToShipPage() {
-  return <NotBuiltYet />
+  return (
+    <Suspense>
+      <ReadyToShipPage />
+    </Suspense>
+  )
 }

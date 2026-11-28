@@ -1,0 +1,155 @@
+/* owb-of3 — Sales › Orders, the Sheet: the band, the search and the office windows. Layout only, design-system tokens only. */
+
+.fw-osp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-osp-head,
+.fw-osp-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-osp-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-osp-grow {
+  flex: 1 1 auto;
+}
+.fw-osp-search {
+  flex: 1 1 220px;
+  max-width: 340px;
+  min-width: 0;
+}
+.fw-osp-more {
+  display: flex;
+  justify-content: center;
+}
+.fw-osp-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-osp-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.fw-osp-code {
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+.fw-osp-done {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: var(--nds-space-12) 0;
+  color: var(--nds-success-text);
+}
+
+/* the customer's asks */
+.fw-osp-asks,
+.fw-osp-pick,
+.fw-osp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-osp-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-warning-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-warning-soft);
+}
+.fw-osp-ask-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-warning-text);
+}
+.fw-osp-ask-body {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-osp-ask-body p {
+  margin: 0;
+}
+.fw-osp-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-osp-fromto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+.fw-osp-from {
+  color: var(--nds-text-2);
+  text-decoration: line-through;
+}
+.fw-osp-to {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* pick a customer */
+.fw-osp-pick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-osp-pick-row:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-osp-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-osp-review p {
+  margin: 0;
+}
+
+/* owb-of4: Give to the designer — the picked person */
+.fw-osp-pick-row.is-picked {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+}
+.fw-osp-pick-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

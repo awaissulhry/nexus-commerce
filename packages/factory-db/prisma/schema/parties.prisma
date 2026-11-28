@@ -321,6 +321,8 @@ model Party {
   officePeople            PartyOfficePerson[] @relation("PartyOfficePersonParty")
   // owb-ssw structures.prisma (S3 schema wave "structures + units"): the order structure rules that name it.
   orderStructureRules     OrderStructureRule[] @relation("OrderStructureRuleParty")
+  // owb-pd2w product.prisma (S4 schema wave "routes"): the style routes made for it (its own, or a model "Only for" it).
+  styleRoutes             StyleRoute[]         @relation("StyleRouteParty")
 
   @@unique([tenantId, code])
   // W2b-6 (wave 48/57): one sealed carrier account per party (a secret is never shared).

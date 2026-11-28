@@ -4,6 +4,8 @@ import { PROBLEM_PARTS } from '@nexus/factory-domain/sales/portal-ordering/offic
 import { MEASURE_BY } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { CUSTOM_LINE_KINDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { PROBLEM_CODES } from '@nexus/factory-domain/sales/portal-ordering/rules' // B-CP-075: the domain's codes, one source
+// owb-po3: the ONE lines table's shapes (own columns, a line taken out) — read as optional until the server's owb-po1 lands.
+import { recordOwnColumnsSchema, removedLineSchema } from '../order-lines/schema'
 
 /**
  * The ONE draft order's record (THE SIMPLE ORDER START, od-w1.1): the shapes both doors read — the portal's
@@ -133,6 +135,8 @@ export const lineSchema = z.object({
   // od- R1: Standard sizes · Custom size · null = Not decided yet; the line's open options (names only).
   sizing: sizingSchema,
   choices: choicesSchema,
+  /** owb-po1 (settle 4): the line's material in words — its colourway or its "Material" option; absent from an older answer. */
+  material: z.string().nullable().optional().catch(undefined),
 })
 export type DraftLine = z.infer<typeof lineSchema>
 
@@ -183,6 +187,8 @@ export const customLineSchema = z.object({
   // od- R1: Standard sizes · Custom size (made to measure) · null = Not decided yet; the line's open options (names only).
   sizing: sizingSchema,
   choices: choicesSchema,
+  /** owb-po1 (settle 4): the line's material in words; absent from an older answer. */
+  material: z.string().nullable().optional().catch(undefined),
 })
 export type CustomLine = z.infer<typeof customLineSchema>
 
@@ -216,7 +222,7 @@ export const requestSchema = z.object({
   // never sends; a draft is discarded by one who may order or by the colleague who started it) — absent from an older answer: as
   // before (the Buyer's page). The parts marked "we send it later" and who changed it last come with B-CP-075 (PA2): read as
   // optional until then (the band says "Saved 10:42" without a name).
-  may: z.object({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }).optional(),
+  may: z.object({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean(), takeBack: z.boolean().optional() /* owb-po1: Take it back */ }).optional(),
   laterParts: z.array(z.string()).optional(),
   lastEditedBy: z.string().nullable().optional(),
   lastEditedAt: z.string().nullable().optional(),
@@ -238,6 +244,12 @@ export const requestSchema = z.object({
   stillOpen: stillOpenSchema.optional().catch(undefined),
   designStarted: z.boolean().optional().catch(undefined),
   // ---- end od-
+  // ---- owb-po3 (owb-po-server § Shape "DRAFT RECORD", built by the server's owb-po1): the record's own columns and values, the lines
+  // taken out (DRAFT only; "Put it back"), the picture of the order. Every one optional: an older answer says less, never something false.
+  ownColumns: recordOwnColumnsSchema.optional().catch(undefined),
+  removedLines: z.array(removedLineSchema).optional().catch(undefined),
+  picture: z.object({ fileId: z.string().nullable(), setAt: z.string().nullable().default(null), contentType: z.string().nullable().default(null) }).optional().catch(undefined),
+  // ---- end owb-po3
   // ---- end F-CP-154
 })
 export type DraftRequest = z.infer<typeof requestSchema>

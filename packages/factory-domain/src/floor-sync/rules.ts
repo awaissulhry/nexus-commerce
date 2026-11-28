@@ -309,6 +309,18 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-384: what was scanned and the shipment; never who.
     case 'shipping.carton.scan':
       return { code: text(p.code), target: text(p.shipmentId, 40) }
+    // owb-fl3: the kind (a flag cleared: CLEAR; a late's reason) and how many baskets; never who, never a suggestion's words.
+    case 'production.baskets.flag':
+      return { code: p.on === false ? 'CLEAR' : text(p.kind, 20), ...(Array.isArray(p.bundleIds) ? { quantity: p.bundleIds.length } : {}) }
+    case 'production.baskets.late':
+      return { code: text(p.reason, 20), ...(Array.isArray(p.bundleIds) ? { quantity: p.bundleIds.length } : {}) }
+    case 'floor.suggestion':
+      return { code: text(p.kind, 20) }
+    // owb-fl2: how it moved (FORWARD, BACK, TAKEN_HERE) and how many baskets; an undo its move group; never who.
+    case 'production.baskets.move':
+      return { code: text(p.kind, 20), ...(Array.isArray(p.bundleIds) ? { quantity: p.bundleIds.length } : {}) }
+    case 'production.baskets.moveUndo':
+      return { target: text(p.groupId, 40) }
   }
 }
 

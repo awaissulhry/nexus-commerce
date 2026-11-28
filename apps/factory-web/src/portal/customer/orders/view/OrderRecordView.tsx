@@ -34,6 +34,7 @@ import { LinesTab } from './LinesTab'
 import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
 import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & progress
+import { MoneyTab } from './MoneyTab' // owb-po5.2
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -153,6 +154,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onOpenOrderFile?: (file: { fileId: string; name: string; contentType: string; library: boolean }) => void
   onRetryFiles?: () => void
   onDismissNotice?: () => void
+  /** owb-po5.3: Asks & changes › All changes (the ONE log's window). */
+  onChanges?: () => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void
@@ -233,7 +236,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
     >
       <div className="fw-pord">
         {/* pp-w1 (w1.3; D2 a, D6 a): Overview · Lines · Shipments · Files in the body, `sm`, scrolling with its › arrow on a phone. */}
-        <OrderTabs label={t('tabs.label')} tabs={orderTabsOf({ words, record, prefix: model.prefix, toConfirm: record.order.reconfirmNeeded && model.revision.state === 'ready' && !!model.revision.page?.content.revisedOrder, files: model.files?.read?.total ?? null })} active={model.tab} />
+        <OrderTabs label={t('tabs.label')} tabs={orderTabsOf({ words, record, prefix: model.prefix, toConfirm: record.order.reconfirmNeeded && model.revision.state === 'ready' && !!model.revision.page?.content.revisedOrder, files: model.files?.read?.total ?? null, money: record.seesPrices })} active={model.tab} />
         {/* pp-w1 (w1.4): the order's notices in the office's ONE notice slot (lib/record-frame RecordNotices): the most serious shows,
             the rest wait behind "N more notices" — a failure first, then the lost connection, then what was just sent. */}
         <RecordNotices>
@@ -243,6 +246,7 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
         </RecordNotices>
         {model.tab === 'overview' ? <OverviewTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'money' ? <MoneyTab model={model} record={record} actions={actions} /> : null}
         {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
         {model.tab === 'files' ? <DocumentsTab model={model} actions={actions} /> : null}
         {/* pp-fx4 (walk W-05): ONE Ask pop-up — a change is its steps 2 and 3 (the same Modal stays open as the steps move). */}

@@ -14,6 +14,8 @@ import { defineEvent } from '../events/define'
  *   portal_order_request.refused    the office refused it in words
  *   portal_order_request.withdrawn  the customer withdrew it before the office decided
  *   portal_order_request.draft_changed  B-CP-071: a customer changed one of its drafts (the office reads drafts, read-only)
+ *   portal_order_request.taken_back  owb- po1.2: the customer took a sent request back to its draft (number kept) before the
+ *                                    office decided it
  *   delivery_address.checked        the office approved or refused an address the customer added (B-W2b-F15)
  *
  * Reach the office's Home › Approvals and sales screens (orders.view over the request's company and customer): ids,
@@ -64,6 +66,17 @@ export const events = [
     live: { permission: 'orders.view', fields: ['requestId'] },
   }),
   // ---- end B-CP-071
+  // ---- owb- po1.2 (order workflow, "Take it back"; design § 5zi): a SENT request went back to its DRAFT before the office decided it
+  // (its number kept). The office's Incoming reads it again (it lists no draft) and the customer's sheet and draft page read again.
+  // Ids only; the party only ROUTES the message (as draft_changed).
+  defineEvent({
+    type: 'portal_order_request.taken_back',
+    context: 'portal-ordering',
+    description: 'The customer took a sent order request back to its draft before the office decided it: it leaves Incoming and is edited again; a later Send keeps its number.',
+    payload: z.strictObject({ requestId: z.uuid(), partyId: z.uuid() }),
+    live: { permission: 'orders.view', fields: ['requestId'] },
+  }),
+  // ---- end owb- po1.2
   // B-W2b-F15: the office decided a delivery address a customer added in the portal (sales/portal-ordering address-check.ts:
   // approved or refused by hand, or approved by accepting a request that names it). The customer's person who asked hears it
   // (platform/portal/notifications rules/addresses.ts). Ids and the decision only: never the address, the reason or a name.

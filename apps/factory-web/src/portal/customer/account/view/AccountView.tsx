@@ -4,7 +4,7 @@ import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { ColleaguesSection, type ColleaguesActions, type ColleaguesModel } from '../../../shared/account/view/ColleaguesSection'
+import { AccountCard } from '../../../shared/account/view/AccountCard'
 import { EmailCard, SecurityCard, type EmailCardActions, type EmailCardModel, type SecurityCardModel } from '../../../shared/account/view/SettingsCards'
 import { CompanyCard, ProfileCard, type CompanyCardModel, type ProfileCardActions, type ProfileCardModel } from './AccountCards'
 import { AccountDialogs, type AccountDialog, type AccountDialogActions } from './AccountDialogs'
@@ -13,11 +13,11 @@ import '../../../shared/account/account.css'
 
 /**
  * SCR-188 — the customer's Account (B-W2b-196; design portal.customer.account, archetype §2.8 portal page): the person's own
- * profile and e-mail settings, the organisation's colleagues and roles (its admin invites, changes roles and deactivates
- * within our limits; everyone else reads names and roles), the delivery addresses (with our check), the company data we
- * hold for invoicing (read-only; "Something wrong? Ask us"), and their own sign-in and sessions. The page fills the main
- * area: cards two by two on a wide screen, the two lists across the whole width; one column on a phone. The frame draws
- * the band (title, the save status, Invite a colleague, ⋯ Ask a question).
+ * profile and e-mail settings, the delivery addresses (with our check), the company data we hold for invoicing (read-only;
+ * "Something wrong? Ask us"), and their own sign-in and sessions. owb-po4.3 (order workflow plan § 5): the colleagues and
+ * their roles moved to People › Your people — the Account's "Your team" card says so and opens it. The page fills the main
+ * area: cards two by two on a wide screen, the lists across the whole width; one column on a phone. The frame draws the band
+ * (title, the save status, ⋯ Ask a question).
  */
 
 export interface AccountViewModel {
@@ -25,12 +25,11 @@ export interface AccountViewModel {
   slow: boolean
   profile: ProfileCardModel
   emails: EmailCardModel
-  colleagues: ColleaguesModel
+  /** owb-po4.3: where the colleagues are now (Your people); null: that page is not built (the card says so without a link). */
+  peopleHref: string | null
   addresses: AddressesModel
   company: CompanyCardModel
   security: SecurityCardModel
-  /** Why "Invite a colleague" waits (seats, a preview), or null. */
-  inviteHeld: string | null
   /** What just happened, in words ("We e-mailed an invitation to …"). */
   receipt: { tone: 'success' | 'warning'; text: string } | null
   dialog: AccountDialog | null
@@ -39,7 +38,6 @@ export interface AccountViewModel {
 export interface AccountActions {
   profile?: ProfileCardActions
   emails?: EmailCardActions
-  colleagues?: ColleaguesActions
   addresses?: AddressesActions
   dialogs?: AccountDialogActions
   onAskCompany?: () => void
@@ -79,7 +77,20 @@ function AccountBody({ model, actions }: { model: AccountViewModel; actions?: Ac
         <ProfileCard model={model.profile} slow={model.slow} actions={actions?.profile} />
         <EmailCard model={model.emails} slow={model.slow} actions={actions?.emails} />
         <div className="fw-pacc-wide">
-          <ColleaguesSection model={model.colleagues} slow={model.slow} actions={actions?.colleagues} inviteHeld={model.inviteHeld} />
+          {/* owb-po4.3: the team is on Your people now; the card keeps its place (and its #users anchor) and opens it. */}
+          <AccountCard
+            id="users"
+            title={t('team.title')}
+            description={t('people.moved')}
+            state="ready"
+            action={
+              model.peopleHref ? (
+                <Button size="sm" asChild>
+                  <a href={model.peopleHref}>{t('people.open')}</a>
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
         <div className="fw-pacc-wide">
           <AddressesSection model={model.addresses} slow={model.slow} actions={actions?.addresses} />

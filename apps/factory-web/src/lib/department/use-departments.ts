@@ -28,6 +28,8 @@ const departmentSchema = z.object({
   seq: z.number().optional(),
   floorReady: z.boolean().optional(),
   status: z.enum(['ACTIVE', 'CLOSED']).nullable().optional(),
+  // owb-pd6 (S4): the route builder's Manage sends it back with a rename, a close or an open.
+  version: z.number().int().optional(),
 })
 export const departmentsAnswerSchema = z.object({ departments: z.array(departmentSchema) })
 export type DepartmentsAnswer = z.infer<typeof departmentsAnswerSchema>

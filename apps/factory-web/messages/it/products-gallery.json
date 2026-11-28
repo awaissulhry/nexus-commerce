@@ -10,33 +10,33 @@
     "add": {
       "button": "Aggiungi immagini",
       "title": "Aggiungi immagini",
-      "subtitle": "Allo stile {code}: JPEG, PNG o WebP, fino a 15 MB ciascuna",
+      "subtitle": "Allo prodotto {code}: JPEG, PNG o WebP, fino a 15 MB ciascuna",
       "send_one": "Aggiungi {count} immagine",
       "send_other": "Aggiungi {count} immagini",
       "pickFirst": "Scegli prima un’immagine",
       "hint": "Trascina qui immagini JPEG, PNG o WebP, oppure sceglile. Una foto HEIC: salvala prima come JPEG.",
       "sending": "Invio {done} di {of}…",
       "failed": "Un’immagine non è stata aggiunta: quelle prima sono nella galleria. Riprova.",
-      "unused_one": "{count} immagine già tra i file dello stile",
-      "unused_other": "{count} immagini già tra i file dello stile",
+      "unused_one": "{count} immagine già tra i file del prodotto",
+      "unused_other": "{count} immagini già tra i file del prodotto",
       "useFile": "Aggiungi alla galleria",
       "wrongType": "Si possono aggiungere solo immagini JPEG, PNG o WebP.",
       "tooBig": "Un’immagine può arrivare a 15 MB."
     },
     "held": {
       "noRight": "Il tuo ruolo può vedere le immagini, non modificarle",
-      "noUpload": "Il tuo ruolo non può inviare file: scegline uno già tra i file dello stile",
-      "archived": "Lo stile è archiviato: riattivalo prima",
-      "rule": "La regola di modifica dello stile non lo consente in questo stato",
+      "noUpload": "Il tuo ruolo non può inviare file: scegline uno già tra i file del prodotto",
+      "archived": "Lo prodotto è archiviato: riattivalo prima",
+      "rule": "La regola di modifica del prodotto non lo consente in questo stato",
       "offline": "Offline: le immagini si modificano quando torna la connessione",
       "busy": "Attendi: si sta salvando una modifica",
-      "full": "Lo stile tiene al massimo {max} immagini: rimuovine una prima"
+      "full": "Lo prodotto tiene al massimo {max} immagini: rimuovine una prima"
     },
     "banner": {
       "noRight": "Puoi vedere le immagini, non modificarle.",
-      "noUpload": "Il tuo ruolo non può inviare file: puoi ordinare le immagini e aggiungere i file immagine dello stile.",
-      "archived": "Lo stile è archiviato: le sue immagini sono in sola lettura finché non viene riattivato.",
-      "rule": "La regola di modifica dello stile non consente modifiche nel suo stato: sposta lo stile o avvia prima una revisione."
+      "noUpload": "Il tuo ruolo non può inviare file: puoi ordinare le immagini e aggiungere i file immagine del prodotto.",
+      "archived": "Lo prodotto è archiviato: le sue immagini sono in sola lettura finché non viene riattivato.",
+      "rule": "La regola di modifica del prodotto non consente modifiche nel suo stato: sposta il prodotto o avvia prima una revisione."
     },
     "empty": {
       "title": "Nessuna immagine",
@@ -44,7 +44,7 @@
     },
     "count_one": "{count} immagine · {printable} vanno nel PDF della scheda tecnica",
     "count_other": "{count} immagini · {printable} vanno nel PDF della scheda tecnica",
-    "listLabel": "Immagini dello stile, in ordine",
+    "listLabel": "Immagini del prodotto, in ordine",
     "open": "Apri {name} a dimensione piena",
     "noLook": "L’immagine non si può mostrare ora",
     "notAvailable": "Il file non è ancora disponibile",
@@ -74,7 +74,7 @@
     },
     "kindHint": {
       "SKETCH": "Un figurino: davanti, dietro o un dettaglio.",
-      "PHOTO": "Una foto del capo, per una variante o per lo stile.",
+      "PHOTO": "Una foto del capo, per una variante o per il prodotto.",
       "PAGE": "Una pagina della scheda tecnica con richiami numerati (dettagli di costruzione)."
     },
     "field": {
@@ -83,7 +83,7 @@
       "noColourway": "Nessuna variante in particolare",
       "revision": "Revisione",
       "revisionHint": "Un’immagine di una revisione in bozza si blocca con essa al rilascio.",
-      "noRevision": "Lo stile, qualunque revisione",
+      "noRevision": "Lo prodotto, qualunque revisione",
       "draftRevision": "Revisione {revision} (bozza)",
       "caption": "Didascalia",
       "captionHint": "Cosa mostra, fino a {max} caratteri."
@@ -125,17 +125,17 @@
     "remove": {
       "title": "Rimuovere questa immagine?",
       "confirm": "Rimuovi l’immagine",
-      "body": "{name} esce dalla galleria; il suo file resta tra i file dello stile.",
+      "body": "{name} esce dalla galleria; il suo file resta tra i file del prodotto.",
       "heir": "{name} diventa l’immagine principale.",
-      "noHeir": "Lo stile non avrà un’immagine principale."
+      "noHeir": "Lo prodotto non avrà un’immagine principale."
     },
     "notice": {
-      "held_one": "{count} immagine attende il controllo: aggiungila dai file dello stile quando è pronta.",
-      "held_other": "{count} immagini attendono il controllo: aggiungile dai file dello stile quando sono pronte.",
+      "held_one": "{count} immagine attende il controllo: aggiungila dai file del prodotto quando è pronta.",
+      "held_other": "{count} immagini attendono il controllo: aggiungile dai file del prodotto quando sono pronte.",
       "added_one": "{count} immagine aggiunta.",
       "added_other": "{count} immagini aggiunte.",
       "main": "L’immagine principale è cambiata: la mostrano l’elenco, la galleria e la pagina pubblica della DoC.",
-      "removed": "Immagine rimossa; il suo file resta tra i file dello stile.",
+      "removed": "Immagine rimossa; il suo file resta tra i file del prodotto.",
       "removedMain": "Immagine rimossa; ora la successiva è l’immagine principale."
     },
     "problem": {
@@ -146,7 +146,7 @@
       "gone": "L’immagine non c’è più: la galleria è stata riletta.",
       "offline": "Nessuna connessione: riprova quando torna.",
       "read": "Le immagini non si sono potute leggere. Riprova.",
-      "readForbidden": "Il tuo ruolo non legge le immagini di questo stile."
+      "readForbidden": "Il tuo ruolo non legge le immagini di questo prodotto."
     }
   },
   "styles": {
@@ -243,15 +243,15 @@
     "banner": {
       "noRight": "Puoi vedere i file dei cartamodelli, non modificarli.",
       "noUpload": "Il tuo ruolo non può inviare file: puoi modificare e rimuovere i file dei cartamodelli.",
-      "archived": "Lo stile è archiviato: i suoi file sono in sola lettura finché non viene riattivato.",
-      "rule": "La regola di modifica dello stile non consente modifiche nel suo stato."
+      "archived": "Lo prodotto è archiviato: i suoi file sono in sola lettura finché non viene riattivato.",
+      "rule": "La regola di modifica del prodotto non consente modifiche nel suo stato."
     },
     "frozenKinds": "La revisione {revision} è rilasciata: i cartamodelli e i file CAD restano come sono; si possono ancora aggiungere piazzamenti e altri file.",
     "held": {
       "noRight": "Il tuo ruolo può vedere i file, non modificarli",
       "noUpload": "Il tuo ruolo non può inviare file",
-      "archived": "Lo stile è archiviato: riattivalo prima",
-      "rule": "La regola di modifica dello stile non lo consente in questo stato",
+      "archived": "Lo prodotto è archiviato: riattivalo prima",
+      "rule": "La regola di modifica del prodotto non lo consente in questo stato",
       "offline": "Offline: i file si modificano quando torna la connessione",
       "frozen": "La revisione {revision} è rilasciata: nessun nuovo cartamodello o file CAD"
     },

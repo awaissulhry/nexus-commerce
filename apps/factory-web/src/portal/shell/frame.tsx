@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useSyncExter
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { TabItem } from '@nexus/ui/components'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
-import type { CustomerOrderStatus } from '@nexus/factory-domain/sales/portal-orders/status' // pp-w1 (L4)
+import type { LifeNote, OrderLife } from '@nexus/factory-domain/sales/order-life' // owb-po5.1: the nine life words
 import { browserApi } from '../../lib/api/browser'
 import type { HealthState } from '../../lib/production/model'
 import type { ApiClient } from '../../lib/api/client'
@@ -96,10 +96,10 @@ export interface PortalBand {
   /** Their reference first, ours second (RefPair). */
   refs?: { theirs?: string | null; ours?: string | null } | null
   /**
-   * The lifecycle pill. pp-w1 (L4): a customer's order also names its status (`order`): the shell draws the SHARED status chip
-   * (lib/order-cells StateChip: the office's tone, its group's mark — the same chip as the orders list); absent: the pill as before.
+   * The lifecycle pill. owb-po5.1: an order (or a draft / sent request) names its life (`life` + `note`, the nine words): the shell
+   * draws the SHARED StateChip (lib/order-cells, `{ life, note }`: the same chip as the orders sheet and the office); absent: the pill.
    */
-  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'; order?: CustomerOrderStatus } | null
+  status?: { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'; life?: OrderLife; note?: LifeNote | null } | null
   /** At most two; the primary last (on a phone it moves to the action bar above the bottom bar). */
   actions?: readonly PortalBandAction[]
   /** The ⋯ items; the frame ends them with "Ask a question" (about `ask`, else the account). */
@@ -122,6 +122,22 @@ export interface PortalBand {
    * screen (hidden, or narrower with its view closed). Set by PortalRecordFrame (`usePortalBandThread`), never by a page.
    */
   thread?: PortalBandThread | null
+  /**
+   * owb-po5.1 (plan § 5i band: back · picture · title · chip · Chat · People · ONE primary): the order's picture before the title — the
+   * shared RecordPicture from the frame's batch read; `onOpen` opens "The picture of the order" (null: a plain picture, no right to
+   * change it). Data only; absent: no picture.
+   */
+  picture?: PortalBandPicture | null
+  /** owb-po5.1: People — the order's people; absent or null: no button (no read of them yet: never a door to nowhere). */
+  people?: { readonly count: number; readonly onOpen: () => void } | null
+}
+
+/** owb-po5.1: the band's picture button: whose picture (its record id, read by `customerOrder`), its name, and what a press does. */
+export interface PortalBandPicture {
+  readonly recordId: string
+  /** The record's name in words ("Your order 12"): the picture's name. */
+  readonly number: string
+  readonly onOpen: (() => void) | null
 }
 
 /** pp-w1 (w1.1): the band's thread button: the person's own new messages and what a click does (shows or opens the conversation). */
@@ -209,6 +225,9 @@ export function bandCalling(latest: { readonly current: PortalBand | null }): Po
     ...band,
     ...(band.actions ? { actions: band.actions.map((action) => (action.onClick ? { ...action, onClick: () => latest.current?.actions?.find((next) => next.id === action.id)?.onClick?.() } : action)) } : {}),
     ...(band.more ? { more: band.more.map((item) => (item.onSelect ? { ...item, onSelect: () => latest.current?.more?.find((next) => next.id === item.id)?.onSelect?.() } : item)) } : {}),
+    // owb-po5.1: the picture's and People's presses reach the page's latest ones too.
+    ...(band.picture?.onOpen ? { picture: { ...band.picture, onOpen: () => latest.current?.picture?.onOpen?.() } } : {}),
+    ...(band.people ? { people: { ...band.people, onOpen: () => latest.current?.people?.onOpen() } } : {}),
   }
 }
 

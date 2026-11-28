@@ -1,0 +1,629 @@
+/*
+ * owb-fl5 — the basket on a phone (design § 4.3–4.5, § 5zf A–B, § 5zg C): layout only, inside the DS FloorFrame. Sizes read the floor
+ * tier's `--nds-density-*` tokens, colours are semantic `--nds-*` roles and the department's DS group tone (`--fw-dept-*`, lib/department).
+ * Logical properties only (the floor reads right to left in Urdu, fl7). Nothing to tap under 48 px; the dock's buttons are the main
+ * action's height (64 px on the floor tier). 360 / 390 / 430 px: no sideways scroll (every row may shrink: min-width 0).
+ */
+
+.fw-bk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* ── a section's heading: the words and the count ─────────────────────────────────────────────────────────────────── */
+.fw-bk-sec {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bk-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.75em;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+}
+
+/* ── the department pick in the top bar ───────────────────────────────────────────────────────────────────────────── */
+.fw-bk-dept {
+  min-width: 0;
+  max-width: 100%;
+}
+.fw-bk-dept .nds-floor-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-bk-dept .fw-dept-chip {
+  min-width: 0;
+}
+.fw-bk-dept .fw-dept-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fw-bk-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-bk-picks > .nds-floor-btn {
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+/* ── lists: the picture rows of a department, For you, Coming next ────────────────────────────────────────────────── */
+.fw-bk-list .nds-floor-row-icon:has(.fw-rpic) {
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: none;
+}
+.fw-bk-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-bk-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-bk-flag svg {
+  width: 1em;
+  height: 1em;
+}
+.fw-bk-flag[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-bk-flag[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.fw-bk-flag[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.fw-bk-flag[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-bk-flag[data-tone='primary'] {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.fw-bk-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bk-jobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-bk-jobs > .nds-floor-btn {
+  min-width: 0;
+}
+
+/* ── the basket page: the head ────────────────────────────────────────────────────────────────────────────────────── */
+.fw-bk-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-bk-head .fw-rpic.fw-rpic-board {
+  --fw-rpic-size: 6.5rem;
+}
+.fw-bk-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bk-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bk-id {
+  margin: 0;
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1.1;
+}
+.fw-bk-head-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+/* ── the step bar: "Step 3 / 6 · Change", the route's colours, "3 Patch & print → 4 Stitching" ───────────────────────── */
+.fw-bk-stepbar {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: 100%;
+  min-height: var(--nds-density-control-h-primary);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+button.fw-bk-stepbar {
+  cursor: pointer;
+}
+button.fw-bk-stepbar:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.fw-bk-sb-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.fw-bk-sb-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-inline-start: auto;
+  min-height: 48px;
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bk-sb-go svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+.fw-bk-seg {
+  display: flex;
+  gap: var(--nds-space-4);
+}
+.fw-bk-seg > span {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 0.6rem;
+  border-radius: var(--nds-radius-pill);
+  background: var(--fw-dept-bg, var(--nds-surface-sunken));
+  box-shadow: inset 0 0 0 1px var(--fw-dept-rule, var(--nds-border));
+}
+.fw-bk-seg > span[data-state='DONE'] {
+  background: var(--fw-dept-fg, var(--nds-text-muted));
+}
+.fw-bk-seg > span[data-state='HERE'] {
+  background: var(--fw-dept-fg, var(--nds-text));
+  outline: 2px solid var(--fw-dept-fg, var(--nds-text));
+  outline-offset: 2px;
+}
+.fw-bk-seg > span[data-state='SKIPPED'] {
+  opacity: 0.35;
+}
+.fw-bk-seg > span.is-end {
+  flex: 0 0 0.6rem;
+  background: var(--nds-success-soft);
+  box-shadow: inset 0 0 0 1px var(--nds-success);
+}
+.fw-bk-seg > span.is-end[data-state='HERE'] {
+  background: var(--nds-success);
+  outline-color: var(--nds-success);
+}
+.fw-bk-sb-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+}
+.fw-bk-sb-next {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-bk-sb-next > svg {
+  flex: none;
+  width: 1.2em;
+  height: 1.2em;
+}
+.fw-bk-plain {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── facts, what needs you ────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-bk-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-bk-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: 2.25rem;
+  max-width: 100%;
+  padding: var(--nds-space-4) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.fw-bk-fact > svg {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--nds-text-2);
+}
+.fw-bk-needs {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: flex-start;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-bk-needs[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+}
+.fw-bk-needs[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+}
+.fw-bk-needs[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+  background: var(--nds-info-soft);
+}
+.fw-bk-needs > svg {
+  flex: none;
+  width: 1.4em;
+  height: 1.4em;
+}
+.fw-bk-needs-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-bk-needs-title {
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── the four tiles in one row (Problem · Ask · Photo · Notes) and the leader's row ───────────────────────────────── */
+.fw-bk-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-bk-tiles > * {
+  min-width: 0;
+}
+
+/* ── the dock: ONE next action under the thumb; Pause beside Done (one row of 64 px) ──────────────────────────────── */
+.fw-bk-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bk-dock-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-target-gap);
+}
+.fw-bk-dock-row.is-two {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.fw-bk-dock-row > .nds-floor-btn {
+  min-width: 0;
+  width: 100%;
+}
+.fw-bk-dock-main .nds-floor-btn-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-bk-dock-note {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.fw-bk-dock-note[data-tone='warning'] {
+  color: var(--nds-warning-text);
+}
+.fw-bk-dock-note[data-tone='danger'] {
+  color: var(--nds-danger-text);
+}
+
+/* ── another department ───────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-bk-else {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 4px solid var(--nds-warning);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-warning-soft);
+}
+.fw-bk-else-title {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── the quality check: the points to tick, the photos ────────────────────────────────────────────────────────────── */
+.fw-bk-qc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-bk-qc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bk-qc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-bk-qc-grid > .nds-floor-btn {
+  min-width: 0;
+  justify-content: flex-start;
+}
+.fw-bk-qc-done {
+  min-height: var(--nds-density-control-h);
+  padding-inline: var(--nds-space-12);
+  border-radius: var(--nds-density-radius);
+  white-space: normal;
+}
+.fw-bk-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+}
+
+@container nds-floor-frame (max-width: 389.98px) {
+  .fw-bk-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fw-bk-head .fw-rpic.fw-rpic-board {
+    --fw-rpic-size: 5rem;
+  }
+}
+
+/* An arrow or a chevron that points the reading way (it turns in a right-to-left page; a digit, a tick or a photo never does). */
+[dir='rtl'] .fw-bk-mirror {
+  transform: scaleX(-1);
+}
+
+/* ── owb-fl6: the Undo bar (ONE, at the foot of every floor page, above the dock) ─────────────────────────────────────── */
+.fw-bk-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin-block-end: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.fw-bk-undo-what {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bk-undo-way {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-bk-undo-way > svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+.fw-bk-undo-said {
+  flex: 1 1 100%;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-warning-text);
+}
+.fw-bk-undo-acts {
+  display: inline-flex;
+  gap: var(--nds-space-8);
+  margin-inline-start: auto;
+}
+
+/* ── owb-fl6: the Steps window and the route editor (a centred window; a sheet on a phone) ────────────────────────────── */
+.fw-bk-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-bk-steps-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+.fw-bk-srows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-bk-srow {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+.fw-bk-srow .nds-floor-btn-label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bk-srow-end {
+  margin-inline-start: auto;
+}
+.fw-bk-srow[data-state='here'] {
+  box-shadow: inset 0 0 0 2px var(--nds-primary);
+}
+.fw-bk-srow-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-density-control-h);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-density-radius);
+  box-shadow: inset 0 0 0 2px var(--nds-primary);
+  background: var(--nds-primary-soft);
+}
+.fw-bk-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.fw-bk-choice > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-bk-why {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-bk-why > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-bk-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+.fw-bk-foot.is-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fw-bk-foot > .nds-floor-btn {
+  min-width: 0;
+  width: 100%;
+}
+.fw-bk-rrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-density-control-h);
+  padding: var(--nds-space-4) var(--nds-space-4) var(--nds-space-4) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+}
+.fw-bk-rrow[data-skipped='true'] .fw-dept-chip,
+.fw-bk-rrow[data-skipped='true'] .fw-bk-plain {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.fw-bk-rrow-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* ── owb-fl6: the leader's row on a basket (Give to… · Do this first · Will be late) ──────────────────────────────────── */
+.fw-bk-lead {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-bk-lead > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-bk-days {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-bk-days > .nds-floor-btn {
+  min-width: 0;
+}
+.fw-bk-people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-bk-people > .nds-floor-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+.fw-bk-people .nds-floor-btn-label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

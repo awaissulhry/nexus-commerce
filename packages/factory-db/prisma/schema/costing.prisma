@@ -31,6 +31,13 @@ model LabourRate {
   validFrom            DateTime       @db.Date
   /// Where the figure comes from (a payroll month, an accountant's sheet), as the office writes it.
   note                 String?
+  /// owb-pd2w (order workflow build, S4 schema wave "routes"; build brief owb-pd-server 2.1, 2.5): the department the rate is
+  /// for; when set, it wins over its kind's rate for a route step in that department (the cost sheet's LABOUR line). A
+  /// department of the tenant, of the rate's company or the whole factory (a tenant-wide rate: one of the whole factory), of
+  /// the rate's kind of work centre; never changes (…_product_routes_guards: LabourRate_department_check). Null: the kind's
+  /// rate (every rate before the wave). One rate per company (or the whole factory), kind, department and day: the unique key
+  /// below and the partial uniques of …_costing_guards and …_product_routes_guards.
+  departmentId         String?        @db.Uuid
   status               MasterStatus   @default(ACTIVE)
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
@@ -38,9 +45,15 @@ model LabourRate {
   createdById          String?        @db.Uuid
 
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // owb-pd2w: its department (product.prisma; Restrict, not Prisma's SetNull default for an optional relation: that would also
+  // clear tenantId).
+  department Department? @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
-  // One company rate per kind and day (a tenant-wide one: the …_costing_guards partial unique index).
-  @@unique([tenantId, companyId, workCentreKind, validFrom])
+  // One company rate per kind, department and day. owb-pd2w: the department joined the key (two departments of one kind, as
+  // Pattern and Cutting, have their own rates on the same day); a NULL department does not count in it, so a company's kind
+  // rate per day is the partial unique LabourRate_one_company_rate_per_kind_and_day and a tenant-wide one
+  // LabourRate_one_tenant_rate_per_kind_and_day / …_per_department_and_day (…_costing_guards, …_product_routes_guards).
+  @@unique([tenantId, companyId, workCentreKind, departmentId, validFrom])
   // The sheet's read: the rates of a kind for a company and the tenant-wide ones.
   @@index([tenantId, workCentreKind, validFrom])
 }
@@ -77,6 +90,13 @@ model CostingSettings {
   pieceRateLabour     Boolean   @default(false)
   pieceRateLabourAt   DateTime? @db.Timestamptz(3)
   pieceRateLabourById String?   @db.Uuid
+  /// owb-pd2w (order workflow build, S4 "cost Keep"; S4 settle 9, plan § 5 I, R59; build brief owb-pd-server 3.2): "one
+  /// person may keep a cost". ON: Keep makes and approves a cost version in ONE command by the same person, with a reason
+  /// (CostSheet.keptAloneReason; the API logs it); OFF (the default): Keep sends it for approval (four eyes, as before). Read
+  /// on the company's own row only (the cost-sheet guard, redefined in …_product_routes_guards); switched on only there
+  /// (CostingSettings_one_keeper_check). The default is the database's (dbgenerated, as Operation.departmentDefault's), so a
+  /// Prisma insert leaves the column out.
+  oneKeeperAllowed    Boolean   @default(dbgenerated("('false'::text)::boolean"))
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)

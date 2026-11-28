@@ -22,6 +22,8 @@ import { dayTimeOf, WAITING_ALIASES } from '../layout'
 import { askWordsOf, stillGroupsOf, type StillGroup } from '../model'
 import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, stillWordsOf, waitingAnswerOf, waitingItemOf, type StillItem, type WaitingAnswer, type WaitingItem } from '../waiting'
 import { RowMenu } from './RowMenu' // F-OC-302: the ONE row ⋯
+import { NoticesWaitingRow } from '../../money/view/FlowMoney' // owb-of6 step 3: the customer's "I paid" notices in Waiting
+import { openNoticesOf } from '../../band/model'
 import './changes.css'
 
 /** The catalogues Waiting's rows say their words in (Your turn, an approval's state, the old change's approval body). */
@@ -92,6 +94,10 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
   }
   const counts = countsOf(waiting.card)
   const answer = waitingAnswerOf(counts)
+  // owb-of6 step 3 (design § 5m "an open payment and the customer's notice are in Waiting"): the open "I paid" notices, a door to Money
+  // (never for the designer: no Money tab).
+  const openNotices = openNoticesOf(model.flow?.notices.rows)
+  const noticesRow = openNotices > 0 && !model.can.viewOwn ? <NoticesWaitingRow count={openNotices} href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}#payment-notices`} /> : null
   if (answer.kind === 'nothing') {
     // Nothing waits: the whole section is its head's one line — the last change and, L4, where holds and dates are.
     const last = lastRevisionOf(model.depth?.changes?.value?.changes ?? model.amendments?.value?.amendments ?? null)
@@ -109,6 +115,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
         more={stamp}
       >
         {aliases(false)}
+        {noticesRow}
       </Section>
     )
   }
@@ -140,6 +147,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
     >
       {aliases(waiting.card.still.length > 0)}
       <div className="fw-oc-groups">
+        {noticesRow}
         {onUs.length > 0 && (
           <div className="fw-oc-grp" role="group" aria-labelledby="fw-oc-g-us">
             <div className="fw-oc-grp-h">
