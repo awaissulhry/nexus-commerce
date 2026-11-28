@@ -130,10 +130,12 @@ describe('model and customer routes (owb-pd2 2.3)', () => {
 })
 
 describe('ready-made routes (owb-pd2 2.3)', () => {
-  it('saves, refuses a second open one of the same name, closes (kept) and opens again', async () => {
-    const made = (await ok('manager', 'POST', '/product/route-templates', { name: 'Leather garment', steps: STEPS }, 201)).template
-    expect(made).toMatchObject({ name: 'Leather garment', status: 'OPEN', version: 1 })
-    const twice = await call('manager', 'POST', '/product/route-templates', { name: 'leather garment', steps: STEPS })
+  it('lists the seed’s four, saves one, refuses a second open one of the same name, closes (kept) and opens again', async () => {
+    const seeded = (await ok('manager', 'GET', '/product/route-templates')).templates.map((entry: Json) => entry.name)
+    expect(seeded).toEqual(expect.arrayContaining(['Leather garment', 'Textile, on a line', 'Molded part', 'Molded and assembled']))
+    const made = (await ok('manager', 'POST', '/product/route-templates', { name: 'Patched garment', steps: STEPS }, 201)).template
+    expect(made).toMatchObject({ name: 'Patched garment', status: 'OPEN', version: 1 })
+    const twice = await call('manager', 'POST', '/product/route-templates', { name: 'patched GARMENT', steps: STEPS })
     expect(twice.statusCode).toBe(409)
     expect(codesOf(twice.json())).toEqual(['NAME_TAKEN'])
     const closed = (await ok('manager', 'POST', `/product/route-templates/${made.id}/close`, { version: made.version })).template
