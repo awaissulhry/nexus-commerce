@@ -186,13 +186,13 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
     }
   }
 
-  const templateOpen = async (templateId: string, open: boolean) => {
+  const templateOpen = async (templateId: string, reopen: boolean) => {
     const entry = templates.list.find((each) => each.id === templateId)
     if (!entry || templateBusy) return
     setTemplateBusy(true)
     setTemplateProblem(null)
     try {
-      await setTemplateOpen(api, entry, open)
+      await setTemplateOpen(api, entry, reopen)
       setTemplatesRound((round) => round + 1)
     } catch (error) {
       setTemplateProblem(refusalOf(error))
@@ -348,7 +348,7 @@ export function RouteBuilderWindow({ api, open, departments, fixedParty = null, 
           setTemplateDone(null)
         },
         onSaveTemplate: () => void saveTemplate(),
-        onTemplateOpen: (templateId, open) => void templateOpen(templateId, open),
+        onTemplateOpen: (templateId, reopen) => void templateOpen(templateId, reopen),
         onSave: () => void save(),
         onClose,
       }}

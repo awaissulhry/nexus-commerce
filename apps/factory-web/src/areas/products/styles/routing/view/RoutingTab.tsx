@@ -103,7 +103,7 @@ function Routing({ style, model, actions }: { style: StyleView; model: StyleReco
         busy={model.busy}
         routingVersion={routing.revision.version}
         onChanged={() => actions?.onReload?.()}
-        onStartRevision={actions?.onDialog && startRevisionHeld(style, model.can) === null ? () => actions.onDialog?.({ kind: 'startRevision' }) : null}
+        onStartRevision={actions?.onDialog && startRevisionHeld(style, model.can) === null ? () => actions?.onDialog?.({ kind: 'startRevision' }) : null}
       />
 
       {/* owb-pd6 step 6.1: today's depth of the steps, under one closed section ("More"). */}
