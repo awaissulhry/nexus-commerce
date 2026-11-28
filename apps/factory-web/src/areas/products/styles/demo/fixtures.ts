@@ -507,6 +507,8 @@ export function demoRouting(options: { revision?: Revision; differs?: boolean; e
         instructions: code === 'CUC-MAN' ? 'Ago 110, punto 3,5 mm; fermare a 1 cm dal fondo.' : null,
         parallelGroup: options.parallel ? (PARALLEL[options.parallel][code] ?? null) : null,
         subcontract: null,
+        // owb-pd8 (pd2 2.2): the step's department — the kind's (production/departments/kinds departmentOfKind), as an old step reads.
+        department: { id: uid('6666', KIND_DEPARTMENT[kind]), number: KIND_DEPARTMENT[kind] },
         version: 1,
         createdAt: at(16, 9),
         updatedAt: at(27, 9),
@@ -536,8 +538,15 @@ export function demoRouting(options: { revision?: Revision; differs?: boolean; e
     issues: options.empty ? [{ code: 'NO_STEPS', stepId: null, message: 'x' }] : options.parallel === 'split' ? [{ code: 'PARALLEL_GROUP_SPLIT', stepId: uid('2222', 4), message: 'x' }] : [],
     warnings: [],
     editable: rev.status === 'DRAFT',
+    // owb-pd8 (pd2 2.2, 2.3): the route rules on these steps (no Packing step: the last is not Packing; none: too few) and the
+    // revision's model and customer routes (none in this made-up revision).
+    rules: { errors: steps.length < 2 ? ['TOO_FEW' as const] : ['LAST_NOT_PACKING' as const], warnings: [] },
+    routes: [],
   }
 }
+
+/** owb-pd8: the department number of each kind of the made-up steps (production/departments/kinds departmentOfKind; seed numbers). */
+const KIND_DEPARTMENT: Record<RoutingView['steps'][number]['workCentreKind'], number> = { CUTTING: 2, SEWING: 4, ASSEMBLY: 9, FINISHING: 3, INSPECTION: 5, PACKING: 6, SUBCONTRACT: 4 }
 
 // ---- compliance of the style (certificate DEMO-0001 covers 46–56 in every colourway; 58 is not covered) ------------------
 

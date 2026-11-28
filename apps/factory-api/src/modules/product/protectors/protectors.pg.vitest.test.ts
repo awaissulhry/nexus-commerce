@@ -37,7 +37,7 @@ const tenant = idOf('tenant')
 const PEOPLE: Record<string, { tenantId: string; permissions: readonly Permission[]; companies: ScopeSet }> = {
   maker: { tenantId: tenant, permissions: ['product.styles.view', 'product.bom.view', 'product.bom.manage', 'audit.read'], companies: 'all' },
   viewer: { tenantId: tenant, permissions: ['product.styles.view', 'product.bom.view'], companies: 'all' },
-  // Sales reads the style, not its BOM: the section's API is not theirs.
+  // Sales reads the style, not its BOM; owb-pd4s s.2: it reads the protectors of the Sizes tab too (product.styles.view), never writes them.
   sales: { tenantId: tenant, permissions: ['product.styles.view', 'product.prepacks.manage'], companies: 'all' },
   otherTenant: { tenantId: newId(), permissions: ['product.styles.view', 'product.bom.view', 'product.bom.manage'], companies: 'all' },
 }
@@ -108,7 +108,9 @@ describe('the placement and what to look at (PRD-074)', () => {
     expect(view.choices.map((choice: Json) => [choice.code, choice.inBom])).toEqual(expect.arrayContaining([['SEED-PRO-300', true], ['SEED-PRO-330', false]]))
     expect(view.choices.find((choice: Json) => choice.code === 'SEED-PRO-300')).toMatchObject({ standard: 'EN 1621-1:2012', level: '2' })
     expect(view).toMatchObject({ editable: true, refusal: null, words: '3 placement(s) in 3 pocket(s) · 5 thing(s) to look at', style: { code: 'SEED-JKT-01', sizes: ['50', '52', '54'] } })
-    await refused('sales', 'GET', jacket(), undefined, 403)
+    // owb-pd4s s.2 (pin moved with its code): Sales reads the placement with product.styles.view; a write is still refused.
+    expect((await read('sales')).placements.map((placement: Json) => placement.pocket)).toEqual(view.placements.map((placement: Json) => placement.pocket))
+    await refused('sales', 'POST', jacket(), { pocket: 'KNEE', protectorItemId: seed.protectorIds.limb }, 403)
     await refused('otherTenant', 'GET', jacket(), undefined, 404)
   })
 

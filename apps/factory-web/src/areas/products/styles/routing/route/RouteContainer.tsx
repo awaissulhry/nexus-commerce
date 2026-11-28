@@ -152,7 +152,7 @@ export function RouteContainer({ style, revisionId, manage, busy, routingVersion
         again()
         onChanged()
       }
-      return refusalOf(error)
+      return refusalOf(error, 'route') // owb-pd8: NAME_TAKEN = another route of this revision
     }
   }
 
