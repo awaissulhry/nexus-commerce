@@ -583,6 +583,10 @@ model Site {
   // and, as our warehouse, the legs that go through it.
   warehouseLegs         ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegSite")
   warehouseLegsThrough  ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegWarehouse")
+  // owb-fl0 baskets.prisma (order workflow build, schema wave "floor baskets 2"): the "Do this first" marks of its baskets,
+  // the suggestions told at it.
+  basketFlags           BasketFlag[]           @relation("BasketFlagSite")
+  floorSuggestions      FloorSuggestion[]      @relation("FloorSuggestionSite")
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -788,6 +792,9 @@ model Station {
   dispatchAssignments    DispatchAssignment[]
   // floor-sync.prisma: the refused queued actions of its tablets.
   refusedActions         FloorRefusedAction[]
+  // owb-fl0 floor-auth.prisma (order workflow build, schema wave "floor baskets 2"): the phone sessions whose department
+  // pick took it.
+  floorSessions          FloorSession[]       @relation("FloorSessionStation")
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the station's rows (a device at a station).
