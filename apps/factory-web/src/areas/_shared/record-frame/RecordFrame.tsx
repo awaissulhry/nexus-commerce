@@ -28,6 +28,7 @@ import { takesAsk } from './model' // F-OO-135: a count is kept only for the pag
 import { currentAddress, keptScopeOf, withThread, writeSearch } from './address' // F-OP-209: the ONE writer of `thread=`
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
+import { bandSlotsOf } from './model' // owb-b5 (w5.2): the design band's slots
 import './record-frame.css'
 // pp-k1 k1.2: the one notice's rules moved with RecordNotices to the lib; loaded right after the frame's, where they stood in
 // record-frame.css (the same cascade on every office record page; RecordNotices loads them itself where no office frame is).
@@ -57,6 +58,20 @@ export interface RecordBand {
   // lot's c / r), listed first in the frame's Keyboard window, in the page's words — no second keys line, no "?" overlay.
   readonly keys?: readonly { readonly keys: readonly string[]; readonly label: string }[]
   // ---- end TH-6 part B
+  // ---- owb-b5 (w5.2; design plan § 5i "ONE frame for every record page": back · picture · title · ONE pill · tags · Chat · People · ONE
+  // main button): the design band's three slots. Each is a part the page passes whole (never words: no text prop); absent, null or
+  // false draws nothing and the band is today's, node for node (model.ts bandSlotsOf). Owner after the base: S2 (of5).
+  /** The record's picture, before the title (the order's: lib/record-picture, a button that opens its window where the reader may change it). */
+  readonly picture?: ReactNode
+  /**
+   * The band's Chat door ("Chat · 2 new"), drawn IN PLACE of the frame's own Thread button — ONE chat door in a band, and only where the
+   * page has a thread for this person. Its button shows the conversation with `useRecordFrame().showThread()` (docked: shows it;
+   * narrower: the full-width view); ⌘J and the thread head's Hide still hide it. Absent: the frame's Thread button, as today.
+   */
+  readonly chat?: ReactNode
+  /** The people who work on the record (their faces and "3 people", or "Add people"), after the Chat door. */
+  readonly people?: ReactNode
+  // ---- end owb-b5
 }
 
 export interface RecordFrameProps {
@@ -587,6 +602,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229
+  const slots = bandSlotsOf(band) // owb-b5 (w5.2): the slots the page filled; none: today's band
   const threadButton = hasThread ? (
     // The tonal tint says "open" (aria-pressed for screen readers); not `active`, whose primary hover would darken the tonal words.
     <Button
@@ -614,6 +630,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       className={viewOpen ? 'fw-rcf-hdr is-thread' : 'fw-rcf-hdr'}
       backAsChild
       backLabel={band.back}
+      badge={slots.includes('picture') ? <span className="fw-rcf-pic">{band.picture}</span> : undefined /* owb-b5 (w5.2): the picture before the title */}
       title={band.title}
       meta={
         band.status || band.meta || band.save /* F-OP-302 follow-up */ ? (
@@ -638,7 +655,8 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       actions={
         <span className="fw-rcf-actions">
           {band.primary && <span className="fw-rcf-primary">{band.primary}</span>}
-          {threadButton}
+          {hasThread && slots.includes('chat') ? <span className="fw-rcf-chat">{band.chat}</span> : threadButton /* owb-b5 (w5.2): the Chat door takes the Thread button's place */}
+          {slots.includes('people') ? <span className="fw-rcf-people">{band.people}</span> : null /* owb-b5 (w5.2) */}
           <Menu
             label={<MoreHorizontal size={16} aria-label={band.moreLabel ?? t('more')} />}
             items={[...(band.more ?? []), ...(band.more?.length ? [{ id: 'sep-keys', separator: true }] : []), { id: 'keys', label: t('keys.line'), icon: <Keyboard size={15} aria-hidden />, description: t('keys.lineHint'), onSelect: () => setKeys(true) }]}
