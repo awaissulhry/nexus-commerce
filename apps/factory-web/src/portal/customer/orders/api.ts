@@ -1,3 +1,4 @@
+import { recordOwnColumnsSchema } from '../../../lib/order-lines/schema' // owb-po6.1
 import { z } from 'zod'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
@@ -292,6 +293,8 @@ export const orderRecordSchema = z.object({
     // owb-po5.1 (settle 3): the subject of the order when the read names it ("Your order 12 · <subject>"); absent: the number alone.
     subject: z.string().nullable().optional(),
   }),
+  // owb-po1.4: the order's own columns and their values (lib/order-lines' ONE schema); absent from an older answer.
+  ownColumns: recordOwnColumnsSchema.optional().catch(undefined),
   // owb-po1.5: the picture of the order (null file: the design of the first line); absent from an older answer.
   picture: z.object({ fileId: z.string().nullable(), setAt: z.string().nullable().default(null), contentType: z.string().nullable().default(null) }).optional().catch(undefined),
   milestones: z.array(milestoneSchema),

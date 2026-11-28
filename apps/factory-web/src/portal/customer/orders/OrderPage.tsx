@@ -106,10 +106,14 @@ import { useOrderWords } from './words'
 import { orderLogPath, orderLogReader } from '../../../lib/change-log/api'
 import { orderPicturePath, orderPictureSaver, pictureReader } from '../../../lib/record-picture/api'
 import { OrderPictureWindow } from '../../../lib/record-picture/OrderPictureWindow'
-import { ORDER_PAGE_NS } from './page-words'
+import { ORDER_PAGE_NS, usePageWords } from './page-words'
 import { pictureChoicesOf } from './picture'
 import { AllChangesWindow } from './view/AllChangesWindow'
 // ---- end owb-po5
+// ---- owb-po6.1: the ONE lines table (web A's lib/order-lines) and the asks after Confirm
+import { ownColumnsPort, type OwnValue } from '../../../lib/order-lines'
+import { askNoteOf, askTyped, NO_ASKS, orderLineRowsOf, undoAsk, type LineAsks } from './order-lines'
+// ---- end owb-po6.1
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
 import { usePortalPriceCheck } from './use-price-check' // F-CP-143: the customer's own price check (a price holder's)
@@ -195,6 +199,8 @@ function OrderContainer({ id }: { id: string }) {
   const seesPrices = frame.access?.role?.seesPrices ?? false // F-PR-13: a cancel's fee in the impact, only with prices
 
   const [record, setRecord] = useState<OrderRecord | null>(null)
+  // owb-po6.1: the lines' asks typed after Confirm (kept until the change request is sent).
+  const [lineAsks, setLineAsks] = useState<LineAsks>(NO_ASKS)
   // owb-po5.2: Money only for a person who sees prices (the record's own grain); the customer's Designer lands on Overview.
   const tab = askedTab === 'money' && record && !record.seesPrices ? 'overview' : askedTab
   const [state, setState] = useState<OrderRecordViewModel['state'] | 'forbidden'>('loading')
@@ -728,7 +734,10 @@ function OrderContainer({ id }: { id: string }) {
     const body = changeBodyOf(rules.read, dialog.draft)
     setDialog({ ...dialog, busy: true, problem: null })
     askRequest(api, id, body, keyFor(body))
-      .then(() => sent('notice.changeSent'))
+      .then(() => {
+        setLineAsks(NO_ASKS) // owb-po6.1: the asks went with it
+        sent('notice.changeSent')
+      })
       .catch((error: unknown) => {
         const refusal = productionAskRefusal(error) // F-PR-13: a part frozen since is said too
         setDialog((current) => (current?.kind === 'change' ? { ...current, busy: false, problem: refusal.key, draft: refusal.reread ? { ...current.draft, step: 'edit' } : current.draft } : current))
@@ -947,6 +956,34 @@ function OrderContainer({ id }: { id: string }) {
       .catch((error: unknown) => setNotice({ tone: 'danger', key: isApiError(error) && error.kind === 'conflict' ? 'shipments.copyLinkTooMany' : 'shipments.copyLinkFailed' }))
   }
 
+  // ── owb-po6.1: the ONE lines table — asks after Confirm (through today's change request) and own values (at once) ─────────
+  const pageT = usePageWords()
+  const lineRows = useMemo(() => (record ? orderLineRowsOf(record) : []), [record])
+  const ownPort = useMemo(() => ownColumnsPort(api, 'portal'), [api])
+  usePortalUnsaved('order-line-asks', { dirty: lineAsks.order.length > 0, what: pageT('lines.unsaved', { count: lineAsks.order.length }) })
+  const reviewAsks = () => {
+    if (!record || lineAsks.order.length === 0) return
+    // A line of one named size takes the asked pieces as its cell; every ask is in the note (the factory reads it whole).
+    const cells = Object.fromEntries(
+      lineAsks.order.flatMap((lineId) => {
+        const line = record.lines.find((entry) => entry.id === lineId)
+        const pieces = lineAsks.pieces[lineId]
+        const size = line && line.sizes.length === 1 ? line.sizes[0]!.size : null
+        return size !== null && pieces !== undefined ? [[lineId, { [size]: pieces }]] : []
+      }),
+    ) as ChangeDraft['cells']
+    const note = askNoteOf(lineAsks, lineRows, (ask) => pageT('lines.askLine', ask))
+    writeKey.current = null
+    setDialog({ kind: 'change', draft: { ...EMPTY_CHANGE, cells, note, focusLine: lineAsks.order[0] ?? null }, busy: false, problem: null, discard: false })
+    void loadRules()
+  }
+  const saveOwnValue = (lineId: string, columnId: string, value: OwnValue['value'], version: number | null) => {
+    ownPort
+      .putValue({ line: { kind: 'ORDER_LINE', id: lineId }, columnId, value, ...(version !== null ? { version } : {}) })
+      .then(() => void load())
+      .catch(() => setNotice({ tone: 'danger', key: 'lines.ownFailed' }))
+  }
+
   // ── owb-po5: the picture of the order and All changes ───────────────────────────────────────────────────────────────
   const [pictureOpen, setPictureOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
@@ -1129,6 +1166,7 @@ function OrderContainer({ id }: { id: string }) {
         problem: productionReady && production.read ? { chip: problemChipOf(production.read.problem, productionWords.t, productionWords.day), report: reportFacts } : null,
         report: problemDialog.model,
         priceCheck: priceCheck.model, // F-CP-143
+        lineAsks, // owb-po6.1
       }}
       actions={{
         priceCheck: priceCheck.actions, // F-CP-143
@@ -1170,6 +1208,12 @@ function OrderContainer({ id }: { id: string }) {
         onDownload: download,
         onDismissNotice: () => setNotice(null),
         onChanges: () => setChangesOpen(true), // owb-po5.3: Asks & changes › All changes
+        // ---- owb-po6.1
+        onLineAsk: (lineId, text) => setLineAsks((current) => askTyped(current, lineRows, lineId, text)),
+        onUndoAsk: () => setLineAsks((current) => undoAsk(current)),
+        onDiscardAsks: () => setLineAsks(NO_ASKS),
+        onReviewAsks: reviewAsks,
+        onOwnValue: saveOwnValue,
         // ---- F-PR-12a
         onRetryProduction: () => {
           setProduction({ state: 'loading', read: null })

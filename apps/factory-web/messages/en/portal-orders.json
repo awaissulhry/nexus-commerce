@@ -312,7 +312,8 @@
     "askChange": "Ask for a change on this line",
     "sizesTitle": "Sizes of each line",
     "sizesOf": "Line {seq} · {style} {colour}",
-    "reorder": "Reorder this line"
+    "reorder": "Reorder this line",
+    "ownFailed": "Your value was not saved. Try again in a moment."
   },
   "sizes": {
     "size": "Size",

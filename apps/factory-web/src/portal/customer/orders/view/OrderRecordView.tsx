@@ -35,6 +35,8 @@ import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
 import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & progress
 import { MoneyTab } from './MoneyTab' // owb-po5.2
+import type { OwnValue } from '../../../../lib/order-lines' // owb-po6.1
+import type { LineAsks } from '../order-lines' // owb-po6.1
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -131,6 +133,8 @@ export interface OrderRecordViewModel {
   // Admin); absent or null: none (anyone else reads "Prices are not part of your access.", and no call is made).
   priceCheck?: PriceCheckModel | null
   // ---- end F-CP-143
+  /** owb-po6.1: the lines' asks typed after Confirm and not sent yet (the save bar); absent: none. */
+  lineAsks?: LineAsks
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -156,6 +160,12 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onDismissNotice?: () => void
   /** owb-po5.3: Asks & changes › All changes (the ONE log's window). */
   onChanges?: () => void
+  // ---- owb-po6.1: the ONE lines table — an ask typed on a confirmed line, its save bar, an own column's value (at once)
+  onLineAsk?: (lineId: string, text: string) => void
+  onUndoAsk?: () => void
+  onDiscardAsks?: () => void
+  onReviewAsks?: () => void
+  onOwnValue?: (lineId: string, columnId: string, value: OwnValue['value'], version: number | null) => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void

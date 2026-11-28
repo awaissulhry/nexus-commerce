@@ -93,5 +93,16 @@
     "busy": "Ci stiamo lavorando…",
     "mayOrder": "Gli ordini li invia un Buyer o il vostro amministratore: chiedete a loro.",
     "takeBack": "Questo ordine non si può più ritirare: chiedete alla fabbrica."
+  },
+  "lines": {
+    "notes": "Note sull'ordine: la fabbrica le vede.",
+    "asked_one": "{count} modifica non ancora chiesta",
+    "asked_other": "{count} modifiche non ancora chieste",
+    "undo": "Annullate",
+    "review": "Controllate e chiedete…",
+    "askLine": "Riga {seq}: {pieces} pezzi (ora {now})",
+    "unsaved_one": "{count} modifica alle righe non è ancora chiesta.",
+    "unsaved_other": "{count} modifiche alle righe non sono ancora chieste.",
+    "draftHeld": "Le righe di una bozza si modificano nella finestra dell'ordine."
   }
 }

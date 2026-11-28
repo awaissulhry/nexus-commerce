@@ -312,7 +312,8 @@
     "askChange": "Chiedete una modifica su questa riga",
     "sizesTitle": "Taglie di ogni riga",
     "sizesOf": "Riga {seq} · {style} {colour}",
-    "reorder": "Riordina questa riga"
+    "reorder": "Riordina questa riga",
+    "ownFailed": "Il vostro valore non è stato salvato. Riprovate tra un momento."
   },
   "sizes": {
     "size": "Taglia",

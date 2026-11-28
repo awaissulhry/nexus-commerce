@@ -93,5 +93,16 @@
     "busy": "Working on it…",
     "mayOrder": "A Buyer or your admin sends orders: ask them.",
     "takeBack": "This order can no longer be taken back: ask the factory."
+  },
+  "lines": {
+    "notes": "Notes on the order: the factory sees them.",
+    "asked_one": "{count} change not asked yet",
+    "asked_other": "{count} changes not asked yet",
+    "undo": "Undo",
+    "review": "Review and ask…",
+    "askLine": "Line {seq}: {pieces} pieces (now {now})",
+    "unsaved_one": "{count} change to the lines is not asked yet.",
+    "unsaved_other": "{count} changes to the lines are not asked yet.",
+    "draftHeld": "You change the lines of a draft in the order window."
   }
 }
