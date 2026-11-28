@@ -45,6 +45,11 @@ export interface StepFields {
   readonly instructions: string | null
   /** B-W2b-88: steps with the same number run side by side and count as one step (./parallel); left out or null: in sequence. */
   readonly parallelGroup?: number | null | undefined
+  /**
+   * owb-pd2: the department the step is in (RoutingOperation.departmentId, owb-b1 G3): copied from its library operation when the
+   * step is made, kept by a copy, changed by the route builder; left out or null: its kind's department (production/departments/kinds).
+   */
+  readonly departmentId?: string | null | undefined
 }
 
 export interface StepData extends StepFields {
@@ -61,6 +66,8 @@ export interface LibraryOperation {
   readonly standardMinutes: string
   readonly instructions: string | null
   readonly status: OperationStatus
+  /** owb-pd2: the department the operation belongs to (Operation.departmentId); a step made from it is in that department. */
+  readonly departmentId?: string | null | undefined
 }
 
 /** A step as typed: on a new step what is left out comes from the library; on a change, what is left out stays. */
@@ -116,7 +123,7 @@ export function planNewStep(operation: LibraryOperation, change: StepChange, seq
   if (issues.length > 0) return { ok: false, issues }
   return {
     ok: true,
-    step: { seq, operationId: operation.id, code: operation.code, name: operation.name, nameI18n: operation.nameI18n, workCentreKind: operation.workCentreKind, ...fields },
+    step: { seq, operationId: operation.id, code: operation.code, name: operation.name, nameI18n: operation.nameI18n, workCentreKind: operation.workCentreKind, departmentId: operation.departmentId ?? null, ...fields },
   }
 }
 
@@ -258,3 +265,62 @@ export function copySourceRefusal(source: { readonly revision: number; readonly 
   if (source.status !== 'RELEASED') return `Revision ${source.revision} is ${source.status.toLowerCase()}: steps are copied only from a released routing.`
   return null
 }
+
+// ---- owb-pd2 (S4 products, step 2.2; design § 5w "the route builder", prototype prod.js `rbErrors`): the rules of a route ---------
+/**
+ * A route = the departments a product goes through, in order (the product's route on its revision, a model or customer route,
+ * one order line's exception). The same rules for every one, read by the API (a save is refused on an error) and the web (the
+ * builder shows them live):
+ *
+ *   errors    TOO_FEW            fewer than 2 steps
+ *             LAST_NOT_PACKING   the last step's department is not of kind PACKING ("the last step is Packing", S4 settle 7)
+ *             DEPARTMENT_CLOSED  a CLOSED department added new (a step that keeps a closed department where it was may stay:
+ *                                closing changes no product, S4 settle 8)
+ *   warnings  NO_QUALITY         no step of kind INSPECTION ("no quality check" is a note, never a stop)
+ *
+ * Each code is said once, errors and warnings in this order.
+ */
+export const ROUTE_ERRORS = ['TOO_FEW', 'LAST_NOT_PACKING', 'DEPARTMENT_CLOSED'] as const
+export type RouteError = (typeof ROUTE_ERRORS)[number]
+export const ROUTE_WARNINGS = ['NO_QUALITY'] as const
+export type RouteWarning = (typeof ROUTE_WARNINGS)[number]
+export const MIN_ROUTE_STEPS = 2
+
+export interface RouteRules {
+  readonly errors: readonly RouteError[]
+  readonly warnings: readonly RouteWarning[]
+}
+
+/** A step as the rules read it: its department, and whether it is added new (or moved to that department) by this change. */
+export interface RouteRuleStep {
+  readonly departmentId: string
+  readonly isNew?: boolean | undefined
+}
+
+/** A department as the rules read it. */
+export interface RouteRuleDepartment {
+  readonly id: string
+  readonly workCentreKind: WorkCentreKind
+  readonly status: 'ACTIVE' | 'CLOSED'
+}
+
+/** What a route breaks (errors: a save is refused) and what it points out (warnings). */
+export function routeProblems(steps: readonly RouteRuleStep[], departments: readonly RouteRuleDepartment[]): RouteRules {
+  const byId = new Map(departments.map((department) => [department.id, department]))
+  const errors: RouteError[] = []
+  if (steps.length < MIN_ROUTE_STEPS) errors.push('TOO_FEW')
+  const last = steps.at(-1)
+  if (last && byId.get(last.departmentId)?.workCentreKind !== 'PACKING') errors.push('LAST_NOT_PACKING')
+  if (steps.some((step) => step.isNew === true && byId.get(step.departmentId)?.status === 'CLOSED')) errors.push('DEPARTMENT_CLOSED')
+  const warnings: RouteWarning[] = steps.length > 0 && !steps.some((step) => byId.get(step.departmentId)?.workCentreKind === 'INSPECTION') ? ['NO_QUALITY'] : []
+  return { errors, warnings }
+}
+
+/** The words of each rule (English, Italian): the API sends the English ones with a refused save (`refusal/<code>`). */
+export const ROUTE_RULE_WORDS: Readonly<Record<RouteError | RouteWarning, { readonly en: string; readonly it: string }>> = Object.freeze({
+  TOO_FEW: { en: 'A route has 2 steps or more.', it: 'Un percorso ha 2 passaggi o più.' },
+  LAST_NOT_PACKING: { en: 'The last step of a route is Packing.', it: 'L’ultimo passaggio di un percorso è l’Imballaggio.' },
+  DEPARTMENT_CLOSED: { en: 'A closed department cannot be added to a route: open it again first.', it: 'Un reparto chiuso non si aggiunge a un percorso: riaprilo prima.' },
+  NO_QUALITY: { en: 'This route has no quality check.', it: 'Questo percorso non ha un controllo qualità.' },
+})
+// ---- end owb-pd2 2.2
