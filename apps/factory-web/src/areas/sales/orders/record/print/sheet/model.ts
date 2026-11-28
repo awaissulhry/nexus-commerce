@@ -1,5 +1,6 @@
 import { departmentToneOf, type Department } from '../../../../../../lib/department/model'
 import type { PrintSheetAnswer, SheetCard, SheetPage } from '../api'
+import { clampPlace, MIN_CODE_MM, usualPlaceOf, type PageMm, type Place } from '../place/model'
 
 /**
  * owb-ss4 step 4.2 (design plan § 4.1 the card, § 5f the code on every page, § 5zj B "Print 2 · date"; settles L6, L8) — the ONE print
@@ -11,10 +12,8 @@ import type { PrintSheetAnswer, SheetCard, SheetPage } from '../api'
 
 /** An A4 sheet, portrait (mm). */
 export const A4 = Object.freeze({ widthMm: 210, heightMm: 297 })
-/** A scan code is never smaller than this (a phone reads it): § 5f. */
-export const CODE_MIN_MM = 20
-/** The usual place of the code: top right, this far from the edges. */
-export const USUAL_INSET_MM = 8
+/** A scan code is never smaller than this (a phone reads it): § 5f — the domain's number. */
+export const CODE_MIN_MM = MIN_CODE_MM
 /** Basket cards on one A4 sheet: 2 columns × 4 rows. */
 export const CARD_COLUMNS = 2
 export const CARD_ROWS = 4
@@ -22,20 +21,44 @@ export const CARDS_PER_SHEET = CARD_COLUMNS * CARD_ROWS
 /** One card (mm): the sheet split 2 × 4 — measured, not guessed. */
 export const CARD_MM = Object.freeze({ widthMm: A4.widthMm / CARD_COLUMNS, heightMm: A4.heightMm / CARD_ROWS })
 
-export interface CodePlace {
-  readonly xMm: number
-  readonly yMm: number
-  readonly sizeMm: number
+export type CodePlace = Place
+
+/**
+ * owb-ss4b: the code's place ON THE DESIGN PAGE, in the page's own millimetres (a PDF page's size, an image's by its shape — the SAME
+ * rule as "Place the scan code"): the saved placement kept on the page and never under 20 mm; none: the usual place, top right, 20 mm,
+ * 10 mm from the edges (the domain's).
+ */
+export function codePlaceOf(placement: SheetPage['placement'], page: PageMm = A4): CodePlace {
+  return placement ? clampPlace(placement, page) : usualPlaceOf(page)
 }
 
-/** The code's place on an A4 page: the placement kept inside the page and never under 20 mm; none: top right, 20 mm. */
-export function codePlaceOf(placement: SheetPage['placement']): CodePlace {
-  if (!placement) return { xMm: A4.widthMm - CODE_MIN_MM - USUAL_INSET_MM, yMm: USUAL_INSET_MM, sizeMm: CODE_MIN_MM }
-  const sizeMm = Math.min(Math.max(CODE_MIN_MM, placement.sizeMm), Math.min(A4.widthMm, A4.heightMm))
-  const xMm = Math.min(Math.max(0, placement.xMm), A4.widthMm - sizeMm)
-  const yMm = Math.min(Math.max(0, placement.yMm), A4.heightMm - sizeMm)
-  return { xMm, yMm, sizeMm }
+/** A box in per cent of its parent. */
+export interface PercentBox {
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
 }
+
+/** The design page drawn whole and centred on the A4 paper (its own shape kept): its box in per cent of the paper. */
+export function frameOf(page: PageMm): PercentBox {
+  const paper = A4.widthMm / A4.heightMm
+  const ratio = page.widthMm / Math.max(0.0001, page.heightMm)
+  if (ratio >= paper) {
+    const height = (((A4.widthMm / ratio) / A4.heightMm) * 100)
+    return { left: 0, top: (100 - height) / 2, width: 100, height }
+  }
+  const width = (((A4.heightMm * ratio) / A4.widthMm) * 100)
+  return { left: (100 - width) / 2, top: 0, width, height: 100 }
+}
+
+/** The code's square in per cent of the design page's box. */
+export const codeBoxOf = (place: CodePlace, page: PageMm): PercentBox => ({
+  left: (place.xMm / page.widthMm) * 100,
+  top: (place.yMm / page.heightMm) * 100,
+  width: (place.sizeMm / page.widthMm) * 100,
+  height: (place.sizeMm / page.heightMm) * 100,
+})
 
 /** "Print N · date" only from the second print on (the first print carries no mark). */
 export const printMarkOf = (printNo: number, printedAt: string): { readonly printNo: number; readonly at: string } | null => (printNo >= 2 ? { printNo, at: printedAt } : null)
@@ -51,7 +74,8 @@ export interface SheetPageModel {
   /** The QR's text: the work order number. */
   readonly qr: string
   readonly workOrderNumber: string
-  readonly code: CodePlace
+  /** The saved placement (null: the usual place); placed on the page once its size is known (codePlaceOf). */
+  readonly placement: SheetPage['placement']
   readonly mark: { readonly printNo: number; readonly at: string } | null
 }
 
@@ -68,7 +92,7 @@ export function sheetPagesOf(answer: Pick<PrintSheetAnswer, 'pages' | 'printedAt
     styleCode: page.styleCode,
     qr: page.qr,
     workOrderNumber: page.workOrderNumber,
-    code: codePlaceOf(page.placement),
+    placement: page.placement,
     mark: printMarkOf(page.printNo, answer.printedAt),
   }))
 }

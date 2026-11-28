@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import type { ApiClient } from '../../../../../../lib/api/client'
-import { pdfPageImage } from '../../../../../../lib/pdf/pdf-page'
 import { readProblem } from '../../../../../warehouse/shipments/model'
 import { fileAddress, fileBytes, printSheet, type PrintSheetAnswer } from '../api'
+import { imageDrawn, pdfPageDrawn } from '../page-image' // owb-ss4b: the page's own mm size, as Place the scan code reads it
 import { cardSheetsOf, qrTextsOf, sheetPagesOf, sheetTitleOf } from './model'
 import { PrintSheetView, type PrintSheetViewModel } from './view/PrintSheetView'
 
-/** A picture as it is drawn: its address, or failed. */
-type Drawn = { readonly src: string } | { readonly failed: true }
+/** A picture as it is drawn: its address (a design page: and its size in mm), or failed. */
+type Drawn = { readonly src: string; readonly widthMm?: number; readonly heightMm?: number } | { readonly failed: true }
 
 /**
  * owb-ss4 step 4.2 — the print sheet's container: reads `GET /production/orders/:orderId/print-sheet?printId=`, draws each design page
@@ -71,8 +71,8 @@ export function PrintSheet({ api, orderId, printId, onClose }: { api: ApiClient;
       return bytes.get(fileId)!
     }
     for (const page of pages) {
-      const draw = page.pdf ? bytesOf(page.fileId).then((data) => pdfPageImage(data, page.page, 1600)).then((image) => image.src) : fileAddress(api, page.fileId)
-      draw.then((src) => put(page.key, { src })).catch(() => put(page.key, { failed: true }))
+      const draw = page.pdf ? bytesOf(page.fileId).then((data) => pdfPageDrawn(data, page.page, 1600)) : fileAddress(api, page.fileId).then((src) => imageDrawn(src))
+      draw.then((drawn) => put(page.key, { src: drawn.src, widthMm: drawn.widthMm, heightMm: drawn.heightMm })).catch(() => put(page.key, { failed: true }))
     }
     const pictureIds = [...new Set(cardSheets.flat().flatMap((card) => (card.pictureFileId ? [card.pictureFileId] : [])))]
     for (const fileId of pictureIds) fileAddress(api, fileId).then((src) => put(`picture:${fileId}`, { src })).catch(() => put(`picture:${fileId}`, { failed: true }))
@@ -104,11 +104,15 @@ export function PrintSheet({ api, orderId, printId, onClose }: { api: ApiClient;
     const drawn = pictures.get(key)
     return drawn && 'src' in drawn ? drawn.src : null
   }
+  const pageMmOf = (key: string): { widthMm: number; heightMm: number } | null => {
+    const drawn = pictures.get(key)
+    return drawn && 'src' in drawn && drawn.widthMm && drawn.heightMm ? { widthMm: drawn.widthMm, heightMm: drawn.heightMm } : null
+  }
   const model: PrintSheetViewModel = {
     state: problem ? 'failed' : answer ? 'ready' : 'reading',
     problem,
     title: answer ? sheetTitleOf(answer) : null,
-    pages: pages.map((page) => ({ ...page, src: srcOf(page.key), failed: (pictures.get(page.key) ?? null) !== null && !srcOf(page.key), qrSrc: codes.get(page.qr) ?? null })),
+    pages: pages.map((page) => ({ ...page, src: srcOf(page.key), pageMm: pageMmOf(page.key), failed: (pictures.get(page.key) ?? null) !== null && !srcOf(page.key), qrSrc: codes.get(page.qr) ?? null })),
     cardSheets: cardSheets.map((sheet) => sheet.map((card) => ({ ...card, pictureSrc: card.pictureFileId ? srcOf(`picture:${card.pictureFileId}`) : null, qrSrc: codes.get(card.code) ?? null }))),
     drawing,
   }

@@ -86,3 +86,65 @@
 @container fwroom (min-width: 560px) {
   .fw-print-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* owb-ss4b — "Place the scan code" (place/view/PlaceScanCodeView.tsx): the page big beside the size, the place and the quick places; a
+   narrow window stacks them. The square follows the pointer (touch-action none) and the keys; its corner resizes it. */
+.fw-place-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+.fw-place-step { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.fw-place-label { flex: 1 1 160px; min-width: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); overflow-wrap: anywhere; }
+.fw-place {
+  display: grid;
+  gap: var(--nds-space-16);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+@container fwroom (min-width: 760px) {
+  .fw-place { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); align-items: start; }
+}
+.fw-place-stage { display: flex; flex-direction: column; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.fw-place-page {
+  position: relative;
+  max-width: 100%;
+  border: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+  overflow: hidden;
+  user-select: none;
+}
+.fw-place-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.fw-place-code {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--nds-primary);
+  background: var(--nds-primary-soft);
+  color: var(--nds-text);
+  cursor: grab;
+  touch-action: none;
+}
+.fw-place-code:active { cursor: grabbing; }
+.fw-place-code:focus-visible { outline: 3px solid var(--nds-primary); outline-offset: 2px; }
+.fw-place-qr { width: 70%; height: 70%; }
+.fw-place-corner {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--nds-radius-xs);
+  background: var(--nds-primary);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.fw-place-side { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.fw-place-size { display: flex; flex-direction: column; gap: var(--nds-space-6); }
+.fw-place-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); }
+.fw-place-range { width: 100%; min-height: 32px; accent-color: var(--nds-primary); }
+.fw-place-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nds-space-6); }
