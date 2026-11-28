@@ -3,11 +3,11 @@
     "title": "Assortimenti prepack",
     "loading": "Caricamento degli assortimenti…",
     "failed": "Impossibile caricare gli assortimenti",
-    "intro": "Mix fissi di taglie che i rivenditori ordinano come un'unica confezione: quelli di questo modello e quelli di tutti i modelli della scala taglie {scale}.",
+    "intro": "Mix fissi di taglie che i rivenditori ordinano come un'unica confezione: quelli di questo prodotto e quelli di tutti i prodotti della scala taglie {scale}.",
     "rule": "Un assortimento non fa parte di una revisione: rilasciare o avviare una revisione non lo cambia. Una taglia senza capi si legge “—”.",
     "add": "Nuovo assortimento",
     "table": "Assortimenti prepack",
-    "count": "{count} attivi · {usable} vendibili per questo modello",
+    "count": "{count} attivi · {usable} vendibili per questo prodotto",
     "showArchived": "Mostra archiviati ({count})",
     "unit": "pz",
     "cell": "{code}, capi della taglia {size}",
@@ -18,16 +18,16 @@
       "prepack": "Assortimento",
       "for": "Per",
       "pieces": "Capi per confezione",
-      "fit": "Questo modello",
+      "fit": "Questo prodotto",
       "more": "Altro",
       "code": "Codice",
       "name": "Nome"
     },
     "for": {
-      "style": "Questo modello",
+      "style": "Questo prodotto",
       "scale": "Scala {scale}",
-      "styleLong": "Solo questo modello ({style})",
-      "scaleLong": "Tutti i modelli della scala taglie {scale}"
+      "styleLong": "Solo questo prodotto ({style})",
+      "scaleLong": "Tutti i prodotti della scala taglie {scale}"
     },
     "fit": {
       "usable": "Vendibile",
@@ -53,17 +53,17 @@
     },
     "held": {
       "noManage": "Il tuo ruolo può vedere gli assortimenti, non modificarli.",
-      "archivedStyle": "Questo modello è archiviato: riattivalo prima di modificarne gli assortimenti.",
-      "rule": "Lo stato del ciclo di vita del modello blocca ogni modifica: i suoi assortimenti attendono (quelli della scala si modificano ancora).",
+      "archivedStyle": "Questo prodotto è archiviato: riattivalo prima di modificarne gli assortimenti.",
+      "rule": "Lo stato del ciclo di vita del prodotto blocca ogni modifica: i suoi assortimenti attendono (quelli della scala si modificano ancora).",
       "archived": "Questo assortimento è archiviato: ripristinalo per modificarlo."
     },
     "readOnly": {
       "noManage": "Sola lettura: il tuo ruolo può vedere gli assortimenti, non modificarli.",
-      "rule": "Lo stato del ciclo di vita del modello blocca ogni modifica: gli assortimenti di questo modello sono in sola lettura; quelli della scala si modificano ancora."
+      "rule": "Lo stato del ciclo di vita del prodotto blocca ogni modifica: gli assortimenti di questo prodotto sono in sola lettura; quelli della scala si modificano ancora."
     },
     "empty": {
       "title": "Nessun assortimento",
-      "body": "Aggiungi un mix fisso di taglie che i rivenditori possono ordinare come una confezione, per questo modello o per tutti i modelli della sua scala."
+      "body": "Aggiungi un mix fisso di taglie che i rivenditori possono ordinare come una confezione, per questo prodotto o per tutti i prodotti della sua scala."
     },
     "problem": {
       "write": "La modifica non è stata salvata.",
@@ -84,7 +84,7 @@
       "add": "Aggiungi assortimento",
       "save": "Salva",
       "codeHint": "Unico nella scala taglie, senza spazi (“PP-7”).",
-      "forHint": "Un assortimento della scala serve ogni modello prodotto in tutte le sue taglie.",
+      "forHint": "Un assortimento della scala serve ogni prodotto fatto in tutte le sue taglie.",
       "forFixed": "A chi è destinato un assortimento non cambia: creane uno nuovo.",
       "byColour": "Capi per variante colore",
       "grid": "Capi per taglia",
@@ -113,7 +113,7 @@
     "title": "Posizionamento protezioni",
     "loading": "Caricamento del posizionamento protezioni…",
     "failed": "Impossibile caricare il posizionamento protezioni",
-    "noRevision": "Il modello non ha ancora una revisione: avvia la revisione 1 per posizionare le protezioni.",
+    "noRevision": "Il prodotto non ha ancora una revisione: avvia la revisione 1 per posizionare le protezioni.",
     "intro": "Quale protezione va in quale tasca della revisione {revision}, per quali taglie, con la norma e il livello richiesti dal tipo certificato.",
     "rule": "Ogni tasca accoglie una protezione per taglia. L'elenco è confrontato con la distinta base della revisione e con i certificati; ciò che non concorda è segnalato qui, senza mai bloccare.",
     "add": "Aggiungi posizionamento",
@@ -162,7 +162,7 @@
       "all": "Tutte le taglie",
       "run": "{from}–{to}",
       "some": "{sizes}",
-      "every": "Ogni taglia (segue la gamma del modello)",
+      "every": "Ogni taglia (segue la gamma del prodotto)",
       "only": "Solo queste taglie",
       "hint": "Due posizionamenti della stessa tasca non condividono mai una taglia.",
       "pickOne": "Seleziona almeno una taglia.",
@@ -193,13 +193,13 @@
     "held": {
       "noManage": "Il tuo ruolo può vedere il posizionamento protezioni, non modificarlo.",
       "frozen": "La revisione visualizzata è congelata: modifica il posizionamento in una revisione bozza.",
-      "archived": "Questo modello è archiviato: riattivalo prima di modificarne il posizionamento protezioni.",
-      "rule": "Lo stato del ciclo di vita del modello non consente ora modifiche alla bozza (vedi Panoramica).",
+      "archived": "Questo prodotto è archiviato: riattivalo prima di modificarne il posizionamento protezioni.",
+      "rule": "Lo stato del ciclo di vita del prodotto non consente ora modifiche alla bozza (vedi Panoramica).",
       "noChoice": "Nessun materiale protezione posizionabile: aggiungi prima un materiale PROTEZIONE in Materiali e accessori."
     },
     "readOnly": {
       "noManage": "Sola lettura: il tuo ruolo può vedere il posizionamento protezioni, non modificarlo.",
-      "rule": "Sola lettura: lo stato del ciclo di vita del modello non consente ora modifiche alla bozza (vedi Panoramica)."
+      "rule": "Sola lettura: lo stato del ciclo di vita del prodotto non consente ora modifiche alla bozza (vedi Panoramica)."
     },
     "findings": {
       "title": "{count} punto/i da verificare",
@@ -228,10 +228,10 @@
       "write": "La modifica non è stata salvata.",
       "pocket": "Scegli una tasca.",
       "overlap": "Quella tasca ha già una protezione per una di queste taglie.",
-      "protector": "Scegli un materiale protezione attivo dell'azienda del modello.",
+      "protector": "Scegli un materiale protezione attivo dell'azienda del prodotto.",
       "standard": "Scrivi la norma con la sua edizione (“EN 1621-1:2012”), al massimo 60 caratteri.",
       "level": "Il livello è 1 o 2.",
-      "size": "Solo una taglia della gamma del modello.",
+      "size": "Solo una taglia della gamma del prodotto.",
       "note": "Al massimo 500 caratteri.",
       "moved": "Qualcuno ha modificato questo posizionamento nel frattempo: è stato riletto.",
       "state": "Il posizionamento non si può modificare ora: è stato riletto.",

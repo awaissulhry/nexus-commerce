@@ -12,11 +12,10 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { hasOwnWords, KNOWN_IMPORTERS } from '../../admin/import/model'
 import { designScreen as operationsScreen } from '../operations/fixtures'
 import { designScreen as bomScreen } from './bom/fixtures'
-import { DEMO_PRICES, demoDuplicated, demoOffer, demoSheetImport, demoStyle, demoSubcontractedRouting, GRAINS, ROWS, STYLE_ID, WORKSHOPS } from './demo/fixtures'
+import { demoDuplicated, demoOffer, demoSheetImport, demoStyle, demoSubcontractedRouting, GRAINS, STYLE_ID, WORKSHOPS } from './demo/fixtures'
 import { blankDraft, draftFor, duplicateBody, duplicateHeld, duplicateProblemKey, noteWords, partWords, refusedAt, togglePart, type DuplicateModel } from './duplicate/duplicate-model'
 import { SheetImportDialog } from './import/view/SheetImportDialog'
 import { designScreen as listScreen } from './list/fixtures'
-import { pickBaseList, pricesByStyle } from './list/list-model'
 import { abilitiesOf } from './model'
 import { customsDraftOf, customsErrors, customsPatch, hsCodeText, refusedCustoms } from './record/customs'
 import { designScreen as recordScreen } from './record/fixtures'
@@ -174,23 +173,8 @@ describe('subcontracted routing steps', () => {
   })
 })
 
-describe('list prices from the base list in force', () => {
-  const list = (id: string, companyId: string | null, currency = 'EUR', state = 'IN_FORCE') => ({ id, companyId, code: id, name: id, kind: 'BASE', currency, state, shownVersion: { id: `${id}-v`, revision: 1 } })
-  it('the company\'s own list first, then every company\'s; euros first; never one without a version in force', () => {
-    expect(pickBaseList([list('ALL', null), list('OWN', 'c1')], 'c1')?.id).toBe('OWN')
-    expect(pickBaseList([list('OTHER', 'c2'), list('ALL', null)], 'c1')?.id).toBe('ALL')
-    expect(pickBaseList([list('USD', 'c1', 'USD'), list('EUR', 'c1')], 'c1')?.id).toBe('EUR')
-    expect(pickBaseList([{ ...list('NONE', 'c1'), shownVersion: null }], 'c1')).toBeNull()
-  })
-  it('a style\'s own price wins; else the lowest colourway price, said "from"', () => {
-    const prices = pricesByStyle(DEMO_PRICES.entries)
-    expect(prices[STYLE_ID]).toEqual({ price: '389', from: false, marginPct: '41.2', belowFloor: false })
-    expect(prices[ROWS[2]!.id]).toEqual({ price: '279', from: true, marginPct: '22.4', belowFloor: true })
-    expect(prices[ROWS[4]!.id]).toBeUndefined()
-    // Without the price grain the API leaves unitPrice out: no price at all.
-    expect(pricesByStyle([{ styleId: 's', colourwayId: null, marginPct: '40' }])).toEqual({})
-  })
-})
+// owb-pd4 (step 4.1): the list's prices are the agreed price range of the row's extras now (list/products-list.vitest.test.ts);
+// the base price list read and its tests went with it.
 
 describe('the importers have their own words', () => {
   it('product.bom and product.operations are known to the import screen', () => {
@@ -273,10 +257,11 @@ describe('every W2a design case draws in both languages with no key left on scre
 
 describe('money by grain in the W2a parts (A1 §2.6)', () => {
   const phone = listScreen.cases.find((item) => item.id === 'phone')!
-  it('the phone list shows the list price with the price grain, nothing without it', () => {
+  // owb-pd4 (step 4.1): the agreed price range of the row's extras (DEMO-JKT-01: €250 – €315), only with the price grain.
+  it('the phone list shows the agreed price with the price grain, nothing without it', () => {
     const html = render(listScreen.view as ComponentType<{ model: unknown }>, phone.model, 'en')
-    expect(html).toContain('€389.00')
-    const production = { ...(phone.model as object), grains: GRAINS.production, prices: { state: 'hidden' } }
+    expect(html).toContain('€250.00')
+    const production = { ...(phone.model as object), grains: GRAINS.production }
     expect(render(listScreen.view as ComponentType<{ model: unknown }>, production, 'en')).not.toContain('€')
   })
   it('the routing shows the workshop\'s fee with the cost grain, "Not in your role" without', () => {
