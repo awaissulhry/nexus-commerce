@@ -95,6 +95,9 @@
 --   not DRAFT, departmentId included: a step's department is frozen with its revision.
 --   factory_sales_order_guard (…_delivery_customs_w2b_guards) freezes a CLOSED or CANCELLED order whole (its picture and its
 --   floor restriction too) and leaves an open order's new columns free.
+--   No FileCategory list of an earlier guard is one the customer's label or the order's picture must pass (g.10: the
+--   lists are the floor's maintenance photos, a change's photos, the supplier vault's categories and the made-to-measure
+--   photos), so CUSTOMER_LABEL joins none.
 -- USED FROM EARLIER WAVES, as they are: "factory_refuse_production_ledger_change" (…_production_guards),
 -- "factory_file_record_party" (…_files_record_party_th_guards), "factory_files_type_of" and "factory_files_is_design_type"
 -- (…_files_measurements_th_guards), "factory_money_rome_day" (…_money_w2a_guards, in the request guard as before).
