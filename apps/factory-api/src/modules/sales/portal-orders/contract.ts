@@ -204,6 +204,8 @@ export const recordContract = defineContract({
       shipments: output({ shown: z.number().int(), onTheWay: z.number().int() }),
       /** owb- po1.4: the customer's own columns ON this order (in order) and their values (lineId → columnId → value). */
       ownColumns: recordOwnColumns,
+      /** owb- po1.5: the order's chosen picture (fileId null: none — the first line's design), when, and the file's type when the customer opens it. */
+      picture: output({ fileId: id().nullable(), setAt: instant().nullable(), contentType: z.string().nullable() }),
       live,
     }),
   },

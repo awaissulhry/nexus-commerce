@@ -58,6 +58,9 @@ export const ORDER_SELECT = {
   reapprovalNeededAt: true,
   closedAt: true,
   version: true,
+  // owb- po1.5 (order workflow): the order's chosen picture and when (partner-readable; who set it is hidden from the partner role).
+  pictureFileId: true,
+  pictureSetAt: true,
 } as const satisfies Prisma.SalesOrderSelect
 export type PortalOrderRow = Prisma.SalesOrderGetPayload<{ select: typeof ORDER_SELECT }>
 

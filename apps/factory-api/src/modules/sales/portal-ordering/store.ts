@@ -39,6 +39,9 @@ export const REQUEST_COLUMNS = {
   // od-s s.3 (addendum R2): the draft's subject (its title), partner-readable. NEVER `styleIds` here: the partner role cannot read it
   // (every portal read would fail); the office reads it on its own (./office.ts, ./style-draft.ts), the portal only as a yes/no.
   subject: true,
+  // owb- po1.5 (order workflow): the order's chosen picture and when (partner-readable; who set it is not read here).
+  pictureFileId: true,
+  pictureSetAt: true,
 } as const satisfies Prisma.PortalOrderRequestSelect
 
 export const LINE_COLUMNS = {

@@ -276,6 +276,8 @@ const requestBody = output({
   removedLines: z.array(removedLine),
   /** owb- po1.4: the customer's own columns ON this draft (in order) and their values on its live lines (lineId → columnId → value). */
   ownColumns: recordOwnColumns,
+  /** owb- po1.5: the order's chosen picture (fileId null: none — the first line's design), when, and the file's type when the reader opens it. */
+  picture: output({ fileId: id().nullable(), setAt: at.nullable(), contentType: z.string().nullable() }),
   // ---- B-CP-075: the lines in the customer's own words (described, made to measure; with `lines`, one draft by seq), the parts it
   // sends later, who of the customer saved it last (a display name, never an id or an e-mail), and made to measure for it.
   customLines: z.array(customLine),

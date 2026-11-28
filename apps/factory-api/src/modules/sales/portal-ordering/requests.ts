@@ -340,6 +340,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
   const removedLines = draft ? await removedLinesOf(writer, row) : []
   // owb- po1.4: the customer's own columns on it and their values on its live lines (the writer's scope: its party's rows).
   const ownColumns = (await writer.scoped((client) => ownColumnsOf(client, { requestIds: [row.id] }))).get(row.id) ?? NO_OWN_COLUMNS
+  // owb- po1.5: its chosen picture (the base added the columns, not the read): the file, when, and its type when the reader opens it.
+  const picture = await pictureOf(writer.scoped, row.pictureFileId, row.pictureSetAt)
   const shipTo = row.shipToAddressId ? addresses.find((address) => address.id === row.shipToAddressId) : undefined
   const problems = draft
     ? [
@@ -390,6 +392,7 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       uploads: { open: closed === null, words: closed },
       removedLines, // owb- po1.3
       ownColumns, // owb- po1.4
+      picture, // owb- po1.5
       // ---- B-CP-075
       customLines: customViews,
       laterParts: [...row.laterParts],
@@ -879,6 +882,18 @@ export async function removeLine(writer: DraftWriter, requestId: string, lineId:
   })
   return requestView(writer, (await ownRequest(writer, requestId))!)
 }
+
+// ---- owb- po1.5 (order workflow; design § 5zi E, § 5zj A): the order's chosen picture on its record ------------------------------------
+/**
+ * A record's chosen picture as the Shape says it: its file (null: none chosen — the default, the first line's design), when it was
+ * chosen, and the file's type read in the reader's scope (a portal session: a file shared with its party; null when it cannot open it).
+ */
+export async function pictureOf(scoped: DraftWriter['scoped'], fileId: string | null, setAt: Date | null): Promise<{ fileId: string | null; setAt: string | null; contentType: string | null }> {
+  if (fileId === null) return { fileId: null, setAt: null, contentType: null }
+  const file = await scoped((client) => client.storedFile.findFirst({ where: { id: fileId }, select: { contentType: true } }))
+  return { fileId, setAt: iso(setAt), contentType: file?.contentType ?? null }
+}
+// ---- end owb- po1.5
 
 // ---- owb- po1.3 (order workflow; design § 5zi B "Copy · take away … Put it back") ----------------------------------------------------
 /** A draft's lines taken out, as the "Put it back" rows show them (the style's name in the tenant's scope, else the line's words). */

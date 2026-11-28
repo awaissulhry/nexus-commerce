@@ -18,6 +18,7 @@ import { orderMoneyFactsOf } from '../orders/later-columns'
 import { progressFor } from './progress'
 // owb- po1.4 (order workflow): the customer's own columns on its order (the ONE reader).
 import { NO_OWN_COLUMNS, ownColumnsOf } from '../own-columns/read'
+import { pictureOf } from '../portal-ordering/requests' // owb- po1.5: the chosen picture as the Shape says it
 import {
   dayOf,
   dayOrNull,
@@ -326,6 +327,8 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     const ownColumns = (await ownColumnsOf(client, { orderIds: [order.id] })).get(order.id) ?? NO_OWN_COLUMNS
     return { lines, shipments, shipped, deposits, profiles, sent, ownColumns }
   })
+  // owb- po1.5: its chosen picture (a file shared with the party: its type; none chosen: the first line's design).
+  const picture = await pictureOf((work) => request.withClient(work), order.pictureFileId, order.pictureSetAt)
   const tenant = await reader.inTenant(async (client) => ({
     history: await orderHistory(client, order.id),
     names: await namesOf(client, [...new Set(read.lines.map((line) => line.styleId))], [...new Set(read.lines.map((line) => line.colourwayId))]),
@@ -429,6 +432,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     productionLevel: tenant.level,
     shipments: { shown: read.shipments.length, onTheWay: read.shipments.filter((row) => isOnTheWay(row.status)).length },
     ownColumns: read.ownColumns, // owb- po1.4
+    picture, // owb- po1.5
     live: LIVE,
   }
 }

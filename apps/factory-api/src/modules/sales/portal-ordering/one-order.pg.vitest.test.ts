@@ -30,6 +30,8 @@ import { officeCopyLine, officePutBackLine } from './office-drafts' // po1.3: th
  *   - the office's Confirm of a taken-back draft keeps its number too
  *   - po1.3: a line copied (even the same style and colour), taken out (soft: its choices stay) and put back as it was; a line taken out
  *     counts nowhere (the record's lines and totals, the Send); the office's twins; the Designer copies too (a draft's right)
+ *   - po1.5: the accept carries the own columns (uses in place, values by the line map); a line taken out is not copied; the chosen
+ *     picture is on both records
  */
 
 let h: Harness
@@ -291,5 +293,35 @@ describe('the ONE lines table: copy, take out, put back, material (owb- po1.3)',
     expect(copied.request.lines).toHaveLength(2)
     const back = await officePutBackLine(h.app, office() as never, draft.id, draft.describedId, copied.request.version)
     expect(back.request.customLines.map((line) => line.id)).toEqual([draft.describedId])
+  })
+})
+
+describe('the accept carries the own columns; the picture on both records (owb- po1.5)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('uses and values go to the order lines by the line map; a line taken out is not copied', async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up carried columns' }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    const added = await ok(browsers.buyer, 'POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 2 }] }] })
+    const kept = added.request.lines[0].id as string
+    const copied = await ok(browsers.buyer, 'POST', `${url}/lines/${kept}/copy`, { version: added.request.version })
+    const gone = copied.request.lines.find((line: Json) => line.id !== kept).id as string
+    const column = await ok(browsers.buyer, 'POST', '/portal/own-columns', { name: 'Remake of (made up)', kind: 'TEXT' }, 201)
+    const used = await ok(browsers.buyer, 'PUT', `${url}/own-columns`, { version: copied.request.version, columnIds: [column.id] })
+    await ok(browsers.buyer, 'PUT', '/portal/own-values', { line: { kind: 'REQUEST_LINE', id: kept }, columnId: column.id, value: 'Made-up kept' })
+    await ok(browsers.buyer, 'PUT', '/portal/own-values', { line: { kind: 'REQUEST_LINE', id: gone }, columnId: column.id, value: 'Made-up gone' })
+    const out = await ok(browsers.buyer, 'DELETE', `${url}/lines/${gone}?version=${used.request.version}`)
+    expect(out.request.picture).toEqual({ fileId: null, setAt: null, contentType: null })
+    const sent = await ok(browsers.buyer, 'POST', `${url}/send`, { version: out.request.version })
+    const accepted = await acceptRequest(office(), made.request.id, { version: sent.request.version, as: 'ORDER' })
+    const orderId = accepted.made.salesOrderId as string
+    const orderLines = await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq', [orderId])
+    expect(orderLines).toHaveLength(1)
+    expect(await admin('SELECT "columnId", seq FROM "OrderLineColumnUse" WHERE "salesOrderId" = $1', [orderId])).toEqual([{ columnId: column.id, seq: 1 }])
+    expect(await admin('SELECT "valueText" FROM "OrderLineOwnValue" WHERE "salesOrderLineId" = $1', [orderLines[0]!.id])).toEqual([{ valueText: 'Made-up kept' }])
+    // The customer reads them on its order, with the order's picture (none chosen: the first line's design).
+    const record = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${orderId}`)
+    expect(record.ownColumns.used.map((entry: Json) => entry.id)).toEqual([column.id])
+    expect(record.ownColumns.values[orderLines[0]!.id][column.id].value).toBe('Made-up kept')
+    expect(record.picture).toEqual({ fileId: null, setAt: null, contentType: null })
+    expect(JSON.stringify(record)).not.toContain('Made-up gone')
   })
 })
