@@ -1,3 +1,5 @@
+// owb- (order workflow, S3 ss2 step 2.1 (b)): the print command's own right.
+import { PRODUCTION_PRINT_START } from '@nexus/factory-domain/production/print-start/permissions'
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
@@ -466,7 +468,7 @@ async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Prom
  * B-OP-012: for an office change of the order, the person who may change that order (orders.manage over its company and customer).
  */
 function reachedLines(context: ReturnType<typeof officeContextOf>, lines: Map<string, LineRow>, lineIds: readonly string[], right: DraftRight = 'WORK_ORDER'): Map<string, LineRow> {
-  const permission = right === 'ORDER' ? ORDERS_MANAGE : WORKORDERS_VIEW
+  const permission = right === 'ORDER' ? ORDERS_MANAGE : right === 'PRINT' ? PRODUCTION_PRINT_START : WORKORDERS_VIEW
   for (const lineId of lineIds) {
     const line = lines.get(lineId)
     if (!line || !can(actorOf(context), permission, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
@@ -480,7 +482,10 @@ function reachedLines(context: ReturnType<typeof officeContextOf>, lines: Map<st
  * carries its DRAFT work orders along for the person who may change that order (orders.manage over its company and customer,
  * checked by the caller): nothing is on the floor yet. A released work order always asks workorders.manage (the caller's rule).
  */
-export type DraftRight = 'WORK_ORDER' | 'ORDER'
+// owb- (order workflow, S3 ss2 step 2.1 (b)): 'PRINT' — "Print and start the work" makes the order's missing DRAFTs for the person who
+// may print and start it (production.print.start over its company and customer: Sales, the Owner), inside its own command on the
+// order (createWorkOrderInCommand with a no-op `change`: its changeId is never read, its inCommand does nothing).
+export type DraftRight = 'WORK_ORDER' | 'ORDER' | 'PRINT'
 // ── end B-OP-012 ──
 
 /** The requests' problems against the lines as read under their locks: 400 with every one. */
@@ -664,6 +669,9 @@ async function draftPlanOf(db: Reader, context: ReturnType<typeof officeContextO
   // B-OP-012 (D1): an office change's new DRAFT is made for the person who may change the order (nothing is on the floor yet).
   if (right === 'ORDER') {
     if (!can(actorOf(context), ORDERS_MANAGE, { companyId: site.companyId, partyId: first.partyId })) throw new ForbiddenError()
+  } else if (right === 'PRINT') {
+    // owb- (S3 ss2): the person who prints and starts the order's work.
+    if (!can(actorOf(context), PRODUCTION_PRINT_START, { companyId: site.companyId, partyId: first.partyId })) throw new ForbiddenError()
   } else assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
   const askedId = sample?.revisionId ?? body.styleRevisionId
   const asked = askedId ? await revisionOf(db, style.id, askedId, 'body/styleRevisionId') : null
