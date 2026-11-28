@@ -1,0 +1,26 @@
+{
+  "chain": {
+    "pick": "Catena",
+    "none": "Scegli una catena",
+    "loading": "Lettura della catena…",
+    "retry": "Riprova",
+    "noLines": "Ancora nessuna catena.",
+    "noLinesHint": "Una catena è una linea di produzione con i suoi ordini di lavoro. Appare qui quando ci sono ordini di lavoro su una linea.",
+    "noLots": "Questa catena non ha ancora modelli e taglie.",
+    "caption": "{name}: ogni modello e taglia, a ogni passo",
+    "lot": "Modello · taglia",
+    "done": "{count} fatti",
+    "waiting_one": "{count} aspetta",
+    "waiting_other": "{count} aspettano",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "slowWord_one": "Il più lento · {count} aspetta",
+    "slowWord_other": "Il più lento · {count} aspettano",
+    "slowest_one": "Passo più lento: {no} {step} · {count} pezzo aspetta",
+    "slowest_other": "Passo più lento: {no} {step} · {count} pezzi aspettano"
+  },
+  "error": {
+    "read": "La catena non si può leggere ora.",
+    "forbidden": "Non puoi vedere le catene."
+  }
+}

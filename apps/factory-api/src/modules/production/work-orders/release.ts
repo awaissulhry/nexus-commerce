@@ -6,7 +6,7 @@ import { WORKORDERS_RELEASE } from '@nexus/factory-domain/production/work-orders
 import { releaseRefusal, type MaterialLine, type ReleaseCheckCode, type ReleaseChecklist } from '@nexus/factory-domain/production/work-orders/release'
 import { beforeRelease, blockingCodes } from '@nexus/factory-domain/production/work-orders/bulk'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import type { CommandCaller, CommandTx } from '../../../core/command'
+import type { CommandCaller, CommandTools, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { checklistOf, readBasics, readReleaseFacts, type ReleaseFacts } from './facts'
 import { officeContextOf } from './access'
@@ -98,7 +98,25 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
   const { tenantId } = officeContextOf(caller)
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_RELEASE)
   if (!beforeRelease(workOrder)) throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; it was released already.`)
-  return withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
+  return withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, (tools) => releaseInCommand(tools, { tenantId }, workOrder.id, body))))
+}
+
+// ── owb- (order workflow, S3 ss2 step 2.1 (a)): the release's body, MOVED (not changed) into the one in-command seam ──────────────
+/**
+ * The release of one work order inside a command that is open already: today's route (above, on the work order: its version bump
+ * locks the row) and "Print and start the work" (modules/production/print-start, ONE command on the order: `bumpVersion` locks the
+ * work order's row and bumps its version here, as the route's command does). Every check, write, audit row and event of the release,
+ * as before; the caller checks its own right (workorders.release, or production.print.start) and wraps the command in
+ * withCreditHolds + withGateRecords (their records are written after a rollback).
+ */
+export async function releaseInCommand(tools: CommandTools, context: { readonly tenantId: string }, workOrderId: string, body: ReleaseInput, options: { readonly bumpVersion?: boolean } = {}): Promise<{ workOrder: WorkOrderView }> {
+  const { tenantId } = context
+  const workOrder = (await readWorkOrder(tools.tx, workOrderId))!
+  if (options.bumpVersion) {
+    await tools.tx.$queryRaw`SELECT 1 FROM "WorkOrder" WHERE "id" = ${workOrder.id}::uuid FOR UPDATE`
+    await tools.tx.workOrder.update({ where: { id: workOrder.id }, data: { version: { increment: 1 } }, select: { id: true } })
+  }
+  {
     const { tx, now } = tools
     await lockSiteReleases(tx, tenantId, workOrder.siteId)
     await tx.$queryRaw`SELECT 1 FROM "Style" WHERE "id" = ${workOrder.styleId}::uuid FOR SHARE`
@@ -212,5 +230,6 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const view = await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools))
     const release = view.release && materialOverride ? { ...view.release, materialOverride: { ...materialOverride, byId: actorId, at: toUtcIso(now) } } : view.release
     return { workOrder: { ...view, release } }
-  })))
+  }
 }
+// ── end owb- (S3 ss2) ──

@@ -517,6 +517,23 @@ function OfficeDraftContainer() {
     },
   })
   const confirm = confirmOrder.state
+  // ---- owb-of6 (lead S2, shared-asks 09:04): `/sales/orders/new?draft=<id>&confirm=1` — the orders sheet's "Confirm the order…" lands
+  // here and the ONE Confirm window opens on arrival, once, for one who may confirm (the office read's may.confirm, else orders.manage)
+  // on a Draft or Sent order; the term then leaves the address (a reload does not open it again). Anyone else: the draft page only.
+  const confirmAsked = search?.get('confirm') === '1'
+  const arrivedConfirm = useRef(false)
+  useEffect(() => {
+    if (!confirmAsked || arrivedConfirm.current || load !== 'ready' || !record) return
+    if (record.request.status !== 'DRAFT' && record.request.status !== 'SENT') return
+    const mayConfirm = office ? office.may.confirm ?? manages : null
+    if (mayConfirm === null) return // the office read is not in yet: wait for it
+    arrivedConfirm.current = true
+    if (mayConfirm) confirmOrder.actions.onOpen?.()
+    const next = new URLSearchParams(window.location.search)
+    next.delete('confirm')
+    router.replace(`${window.location.pathname}${next.toString() ? `?${next.toString()}` : ''}`, { scroll: false })
+  }, [confirmAsked, load, record, office, manages, confirmOrder.actions, router])
+  // ---- end owb-of6
 
   // ── Design work: Make style draft (today's Incoming window) ───────────────────────────────────────────────────────────
   const openStyle = () => {

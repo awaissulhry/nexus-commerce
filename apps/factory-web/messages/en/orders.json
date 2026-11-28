@@ -1,4 +1,7 @@
 {
+  "kit": {
+    "goOn": "Go on"
+  },
   "common": {
     "retry": "Try again",
     "dismiss": "Dismiss",
@@ -2067,7 +2070,7 @@
     "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
     "act": {
       "note": "Note…",
-      "hold": "Hold…",
+      "hold": "Put on hold…",
       "lift": "Lift the hold…",
       "release": "Release…",
       "split": "Split…",
@@ -2494,7 +2497,7 @@
       "noSupervisor": "No supervisor yet: the production managers get it after 1 working day"
     },
     "wo": {
-      "title": "Work orders",
+      "title": "Baskets",
       "summary_one": "{count} work order",
       "summary_other": "{count} work orders",
       "pieces_one": "{count} piece for this order",

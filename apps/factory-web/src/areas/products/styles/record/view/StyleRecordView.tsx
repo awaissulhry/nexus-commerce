@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, Inbox, Lock, ShieldOff } from 'lucide-react'
+import { FileText, FileX, Inbox, Lock, ShieldOff, Undo2 } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatTime } from '../../../../../lib/i18n/format'
@@ -12,31 +12,33 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { BomView, StyleView } from '../../api'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
-import { draftOf, editableRevision, isRoutingBlocker, isWideTab, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, VARIANTS_ANCHOR, type StyleTab } from '../../model'
+import { bandPrimaryOf, draftOf, editableRevision, isRoutingBlocker, isWideTab, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, type StyleTab } from '../../model'
+// ---- owb-pd4 (step 4.2): the band by right, the Product sheet, the held tabs ----
+import { bandPictureOf, madeForOf, sheetHref } from '../product-model'
+import { PRODUCT_NS, useProductWords } from '../product-words'
+import { HeldCompliance, RevisionsOnly } from './HeldTabs'
+// ---- end owb-pd4
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
-import { PrepacksSection } from '../prepacks/view/PrepacksSection'
-import { ProtectorsSection } from '../protectors/view/ProtectorsSection'
 // B-W2b-241: the BOM tab's problem mark from THE check.
 import { bomMarkCount } from '../../bom/depth/model'
-// B-W2b-236: Overview & variants › Sketches and pictures; Patterns › Pattern files.
-import { GallerySection } from '../gallery/view/GallerySection'
+// B-W2b-236: Patterns › Pattern files (owb-pd4: Sketches and pictures moved into the Overview's "Variants and markets").
 import { PatternFilesSection } from '../files-w2b/view/PatternFilesSection'
-// B-W2b-240: Sizes & measurements › Measurement spec.
-import { SpecSection } from '../spec/view/SpecSection'
+// owb-pd4 (step 4.4): Sizes & measurements in the section kit (the spec, protectors and prepacks inside).
+import { SizesTab } from './SizesTab'
 import { TabBody } from './TabBody'
 // B-W2b-245: Versions & changes, Compare revisions, and the Release modal on B-W2b-231's gate.
 import { VersionsTab } from '../../versions/view/VersionsTab'
 import { CompareDialog } from '../../versions/view/CompareDialog'
 import { ReleaseGateDialog } from '../../release/view/ReleaseGateDialog'
-import { VariantsTab } from './VariantsTab'
 // B-W2b-237: the depth's parts at their places (identity, side panel, the matrix's GTINs).
 import type { StyleDepthSlots } from '../overview/slots'
 // ---- B-TH-261: the style on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../../lib/record-frame/RecordNotices'
 import '../../styles.css'
+import '../product.css' // owb-pd4
 
 export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
 
@@ -80,7 +82,7 @@ export function StyleRecordView({
   costSheets?: ReactNode
 }) {
   return (
-    <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions', /* B-W2b-283 */ 'products-followups-w2b4']}>
+    <WithMessages namespaces={['products', /* owb-pd4 */ PRODUCT_NS, 'orders', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions', /* B-W2b-283 */ 'products-followups-w2b4']}>
       <StyleRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} techPack={techPack} depth={depth} costSheets={costSheets} />
     </WithMessages>
   )
@@ -173,8 +175,11 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
   const held = releaseHeld(style, revision, bom, model.can)
   const startHeld = startRevisionHeld(style, model.can)
   const next = nextRevisionNumber(style.revisions)
-  const tabs = tabsFor(model.can)
+  // owb-pd4 (step 4.2; design § 5q "Who"): the tabs per person — Cost only with the cost grain too.
+  const tabs = tabsFor(model.can, model.grains)
   const tab: StyleTab = tabs.includes(model.tab) ? model.tab : 'overview'
+  const { t: to, say } = useProductWords()
+  const bandPicture = bandPictureOf(model.gallery?.part.status === 'ready' ? model.gallery.part.value : null)
   const tabHref = (to: StyleTab) => `${recordHref}?tab=${to}${model.revisionId ? `&rev=${model.revisionId}` : ''}`
 
   // Keys (00 §3.17 + the page's own): r the release check, [ ] the revisions — never while typing. ⌘J is the frame's (the thread);
@@ -220,23 +225,37 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
     count: item === 'overview' ? style.skuCount : item === 'bom' && bom ? bom.lines.length : item === 'patterns' && model.pieces?.part.status === 'ready' ? model.pieces.part.value.pieces.length : null,
   }))
 
-  const primary =
-    revision && revision.status === 'DRAFT' ? (
-      <Button size="sm" variant="primary" heldReason={held ? t(held.key, held.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'release' })} aria-keyshortcuts="r">
-        {t('action.release', { revision: revision.revision })}
+  // owb-pd4 (step 4.2; design prodBand): "Product sheet" + ONE main button by right — Release revision n (product.bom.release), Start
+  // revision n (product.styles.manage, or the designer's product.drafts.edit), Take it back (an archived product; product.styles.manage).
+  const primaryKind = bandPrimaryOf(style, revision, model.can)
+  const primary = (
+    <>
+      <Button size="sm" asChild>
+        <a href={sheetHref(model.prefix, style.id, model.revisionId)} target="_blank" rel="noopener">
+          <FileText size={14} aria-hidden /> {to('band.sheet')}
+        </a>
       </Button>
-    ) : (
-      <Button size="sm" variant={revision ? 'secondary' : 'primary'} heldReason={startHeld ? t(startHeld, { revision: draft?.revision ?? next }) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'startRevision' })}>
-        {t('action.startRevision', { revision: next })}
-      </Button>
-    )
+      {primaryKind === 'release' && revision ? (
+        <Button size="sm" variant="primary" heldReason={held ? t(held.key, held.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'release' })} aria-keyshortcuts="r">
+          {t('action.release', { revision: revision.revision })}
+        </Button>
+      ) : primaryKind === 'start' ? (
+        <Button size="sm" variant="primary" heldReason={startHeld ? t(startHeld, { revision: draft?.revision ?? next }) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'startRevision' })}>
+          {t('action.startRevision', { revision: next })}
+        </Button>
+      ) : primaryKind === 'takeBack' ? (
+        <Button size="sm" variant="primary" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onReactivate?.()}>
+          <Undo2 size={14} aria-hidden /> {to('band.takeBack')}
+        </Button>
+      ) : null}
+    </>
+  )
 
+  // owb-pd4 (step 4.2): ⋯ keeps today's acts the person may do (S4 settle 6: the designer never abandons, duplicates or archives); Start
+  // revision n and Take it back are the main button now (one path per act).
   const more: MenuItemDef[] = [
-    ...(revision?.status === 'DRAFT' && draft
-      ? [{ id: 'abandon', label: t('action.abandon', { revision: draft.revision }), disabled: !model.can.bomManage, description: model.can.bomManage ? undefined : t('held.noManage'), onSelect: () => actions?.onDialog?.({ kind: 'abandon' }) }]
-      : []),
-    ...(revision && revision.status !== 'DRAFT' && !startHeld ? [{ id: 'start', label: t('action.startRevision', { revision: next }), onSelect: () => actions?.onDialog?.({ kind: 'startRevision' }) }] : []),
-    { id: 'duplicate', label: t('action.duplicate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicate?.() },
+    ...(revision?.status === 'DRAFT' && draft && model.can.bomManage ? [{ id: 'abandon', label: t('action.abandon', { revision: draft.revision }), onSelect: () => actions?.onDialog?.({ kind: 'abandon' }) }] : []),
+    ...(model.can.manage ? [{ id: 'duplicate', label: t('action.duplicate'), onSelect: () => actions?.onDuplicate?.() }] : []),
     // B-W2b-243 (design pop:styles.techpackPdf "Tech pack tab · band overflow").
     ...(tabs.includes('techpack') && revision ? [{ id: 'techpack', label: tt('techpack.band.make'), href: `${tabHref('techpack')}&make=1` }] : []),
     // B-W2b-261 (design products.styles conn "Samples & prototypes (rounds pinned to a revision)"; pop:samples.new "Style record").
@@ -272,9 +291,7 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
       },
     },
     // B-TH-261: the destructive lines last (band-F03: danger items last and red, never next to the primary).
-    ...(style.status === 'ARCHIVED'
-      ? [{ id: 'reactivate', label: t('action.reactivate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onReactivate?.() }]
-      : [{ id: 'archive', label: t('action.archive'), tone: 'danger' as const, disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDialog?.({ kind: 'archive' }) }]),
+    ...(style.status !== 'ARCHIVED' && model.can.manage ? [{ id: 'archive', label: t('action.archive'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'archive' }) }] : []),
   ]
 
   // B-TH-261 (PR-14): the page's own keys, listed first in the band menu's ONE Keyboard line (⌘J and the thread's keys follow).
@@ -297,7 +314,7 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
       <span className="fw-st-save" role="status" />
     )
 
-  const frozenTab = (tab === 'bom' || tab === 'routing' || tab === 'compliance' || tab === 'patterns') && revision && !editableRevision(style, revision)
+  const frozenTab = (tab === 'bom' || tab === 'routing' || (tab === 'compliance' && model.can.complianceView) || tab === 'patterns') && revision && !editableRevision(style, revision)
   const ppe = style.ppeCategory !== 'NOT_PPE'
   const madeFrom = model.madeFrom ?? null
 
@@ -313,6 +330,8 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
         defaultWidth={isWideTab(tab) ? 'grid' : undefined /* F-SA-263 */}
         band={{
           back: <Link href={`${model.prefix}/products/styles`}>{t('record.back')}</Link>,
+          // owb-pd4 (step 4.2; design prodBand): the main design picture before the title (none: nothing drawn).
+          picture: bandPicture ? <img className="fw-pd-bandpic" src={bandPicture} alt={to('band.picture', { code: style.code })} /> : null,
           title: (
             <span className="fw-st-title">
               {style.code} <span className="fw-st-title-name">· {style.name}</span>
@@ -321,6 +340,8 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
           status: <Pill tone={STATUS_TONE[style.status]}>{t(`status.${style.status}`)}</Pill>,
           meta: (
             <span className="fw-st-meta">
+              {/* owb-pd4 (step 4.2): who it is made for — "Made for ⟨customer⟩" / "Our range". */}
+              <Tag tone="neutral">{say(madeForOf(style))}</Tag>
               {style.revisions.length > 0 ? (
                 <label className="fw-st-scope">
                   <span className="fw-st-hint">{t('record.viewing')}</span>
@@ -419,15 +440,9 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
           </RecordNotices>
 
           {tab === 'overview' ? (
-            // B-W2b-236 + B-TH-261: Overview & variants — the identity and its side, Sketches and pictures, then the size range, the
-            // colourways and the SKU matrix (Colourways & sizes, merged here: every action kept).
-            <div className="fw-st-stack-lg">
-              <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
-              <GallerySection model={model.gallery} actions={actions?.gallery} />
-              <section id={VARIANTS_ANCHOR} className="fw-st-variants" aria-label={t('record.variantsLabel')}>
-                <VariantsTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
-              </section>
-            </div>
+            // owb-pd4 (step 4.3): the Overview in the section kit — its last, closed section "Variants and markets" holds Sketches and
+            // pictures, the colourways and the SKU matrix (B-W2b-236 + B-TH-261: every action kept).
+            <OverviewTab style={style} model={model} actions={actions} depth={depth /* B-W2b-237 */} />
           ) : tab === 'patterns' ? (
             // B-W2b-236: Patterns' sections — Pattern files per revision and size range, then the pattern pieces.
             <div className="fw-st-stack-lg">
@@ -435,16 +450,18 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
               <TabBody tab={tab} style={style} model={model} actions={actions} />
             </div>
           ) : tab === 'sizes' ? (
-            // B-W2b-233: the Sizes & measurements tab's sections, in the design's order (the Measurement spec joins with B-W2b-240).
-            <div className="fw-st-stack-lg">
-              {/* B-W2b-240: the Measurement spec, after the size range (Overview) and before the prepacks. */}
-              {model.can.bomView && <SpecSection style={style} model={model} spec={model.spec} actions={actions?.spec} recordActions={actions} />}
-              <PrepacksSection model={model} actions={actions?.prepacks} />
-              {model.can.bomView && <ProtectorsSection style={style} model={model} actions={actions?.protectors} recordActions={actions} />}
-            </div>
+            // owb-pd4 (step 4.4; design § 5r): Sizes & measurements in the section kit — sizes, size table (B-W2b-240's spec), riders'
+            // sheets, how to measure, protectors (B-W2b-233), prepacks.
+            <SizesTab style={style} model={model} actions={actions} />
           ) : tab === 'versions' && model.versions ? (
             // B-W2b-245: Versions & changes (revisions, Compare revisions, change requests and orders, orders on older revisions).
             <VersionsTab style={style} model={model.versions} record={model} actions={actions?.versions} recordActions={actions} />
+          ) : tab === 'versions' ? (
+            // owb-pd4 (step 4.2): a reader without the BOM's right (sales) reads the revisions from the product's own read.
+            <RevisionsOnly style={style} />
+          ) : tab === 'compliance' && !model.can.complianceView ? (
+            // owb-pd4 (step 4.2): a reader without the certificates' right (the designer; Sales holds it since owb-b6) — the tab says why.
+            <HeldCompliance />
           ) : tab === 'techpack' ? (
             // B-W2b-243: the Tech pack tab (SCR-305), mounted by the container.
             (techPack ?? null)

@@ -15,6 +15,7 @@ import type { StyleDetail } from '../../../inquiries/api'
 import { useFlowWords } from '../../record/flow-words'
 import { cellsOf, confirmAsOf, confirmHeldOf, missingOf, openDetailsOf, productHeldOf, promiseProblemOf, sizesTextOf } from '../confirm-model'
 import type { ConfirmActions, ConfirmState } from '../use-confirm-order'
+import { YellowLine } from '../../../../../lib/record-sections/YellowLine' // owb-of7 step 4
 import './office-draft.css'
 
 export interface ConfirmWindowModel {
@@ -97,8 +98,10 @@ export function ConfirmOrderWindowView({ model, actions }: { model: ConfirmWindo
         </div>
         {/* The open details: yellow lines — what is still open and does NOT stop the confirm (the history keeps it). */}
         {open.length > 0 ? (
-          <Banner tone="warning" title={f('cf.openTitle', { count: open.length })}>
-            <p className="fw-od-quiet">{f('cf.openWhy')}</p>
+          // owb-of7 step 4: the open details are THE yellow line (lib/record-sections YellowLine): the words, then "Go on" = confirm
+          // with them open (the same act and the same held words as the window's main button).
+          <YellowLine onGoOn={() => actions?.onSend?.()} held={actHeld}>
+            <strong>{f('cf.openTitle', { count: open.length })}</strong>
             <ul className="fw-od-notes">
               {open.map((entry) => (
                 <li key={entry.id}>
@@ -107,7 +110,8 @@ export function ConfirmOrderWindowView({ model, actions }: { model: ConfirmWindo
                 </li>
               ))}
             </ul>
-          </Banner>
+            <p className="fw-od-quiet">{f('cf.openWhy')}</p>
+          </YellowLine>
         ) : null}
         {rows.map((row) => {
           const entry = confirm.entries[row.id]

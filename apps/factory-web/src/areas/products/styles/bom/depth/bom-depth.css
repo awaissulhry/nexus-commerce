@@ -187,3 +187,11 @@
 .fw-bmd-sheet .ag-layout-auto-height .ag-grid-scrolling-rows {
   min-height: 0;
 }
+
+/* owb-pd5 (step 5.1; design § 5zc): the Materials tab in the section kit — the views switch, the short rows of waits and of what
+   the customer sends, the order-need inputs. DS tokens only (no raw colour); each part follows the room the section has. */
+.fw-pd-mat-views { display: inline-flex; align-items: center; gap: var(--nds-space-6); color: var(--nds-text-muted); flex-wrap: wrap; }
+.fw-pd-mat-rows { margin: 0; padding-left: var(--nds-space-20); display: grid; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); }
+.fw-pd-mat-rows li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--nds-space-2) var(--nds-space-12); }
+ul.fw-pd-mat-rows { list-style: none; padding-left: 0; }
+.fw-pd-mat-need { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--nds-space-12); max-width: 420px; }

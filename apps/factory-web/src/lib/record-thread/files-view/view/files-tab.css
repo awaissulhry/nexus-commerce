@@ -81,3 +81,22 @@
 .fw-of-act-lines p { margin: 0; display: flex; align-items: baseline; gap: var(--nds-space-6); }
 .fw-of-act-lines p > svg { flex: none; transform: translateY(2px); }
 .fw-of-act-never { color: var(--nds-text-muted); }
+
+/* owb-of6 step 4 (design § 5p point 1 "We hover over it, and the download button appears"): on a screen with a pointer the office card's
+   Download shows when the card is pointed at or anything in it has the focus (the keyboard reaches it: it stays in the tab order); a
+   touch screen has no hover, so it always shows. The portal's face draws no such button. */
+@media (hover: hover) {
+  .fw-of-card .fw-of-dl {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .fw-of-card:hover .fw-of-dl,
+  .fw-of-card:focus-within .fw-of-dl {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: reduce) {
+  .fw-of-card .fw-of-dl {
+    transition: none;
+  }
+}

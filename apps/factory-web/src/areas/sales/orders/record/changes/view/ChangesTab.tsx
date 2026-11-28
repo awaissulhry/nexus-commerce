@@ -19,8 +19,9 @@ export function ChangesTab({ order, model, actions }: { order: Order; model: Ord
     <div className="fw-pt fw-oc">
       <WaitingSection order={order} model={model} actions={actions} />
       <FreezeSection order={order} model={model} actions={actions} />
-      <HistorySection order={order} model={model} actions={actions} />
+      {/* owb-of6 step 2 (design § 5l): the Customer's agreement comes BEFORE What changed. */}
       <AgreementSection order={order} model={model} actions={actions} />
+      <HistorySection order={order} model={model} actions={actions} />
     </div>
   )
 }

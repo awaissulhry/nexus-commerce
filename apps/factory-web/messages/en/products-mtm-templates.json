@@ -8,7 +8,7 @@
     "code": "Garment type",
     "type": "Product type",
     "points": "Points",
-    "used": "Used by styles and rider profiles",
+    "used": "Used by products and rider profiles",
     "mtm": "Made-to-measure",
     "status": "Status",
     "more": "Actions"
@@ -85,7 +85,7 @@
     "tolerances": "Inspection tolerances",
     "tolerancesCount_one": "On {count} point",
     "tolerancesCount_other": "On {count} points",
-    "styles": "Styles",
+    "styles": "Products",
     "done": {
       "on": "Made-to-measure started for {code}.",
       "off": "Made-to-measure stopped for {code}: nothing of it is checked now."
@@ -95,7 +95,7 @@
     "titleOn": "Start made-to-measure for {code}?",
     "titleOff": "Stop made-to-measure for {code}?",
     "on1": "The measures of {code} are checked against its rules from now on (the rider's link and the office's form).",
-    "on2": "Made-to-measure units of styles measured with {code} may be quoted and ordered, and fittings booked.",
+    "on2": "Made-to-measure units of products measured with {code} may be quoted and ordered, and fittings booked.",
     "on3": "It can be stopped again here; what was made meanwhile stays.",
     "off1": "Nothing of {code} is checked any more: no rule, no base size suggestion, no alteration limit.",
     "off2": "No new made-to-measure unit of {code} is quoted or ordered and no fitting is booked; a booked one may still be cancelled.",
@@ -104,7 +104,7 @@
     "reasonHint": "For example: the first made-to-measure order of this garment type."
   },
   "held": {
-    "noManage": "Changing measurement templates needs the right to keep the style library (product library).",
+    "noManage": "Changing measurement templates needs the right to keep the product library (product library).",
     "noSwitch": "Only the Owner starts or stops made-to-measure (the right to start made-to-measure).",
     "archivedOn": "An archived template is not started: restore it first.",
     "archived": "The template is archived: restore it to change it.",
@@ -112,8 +112,8 @@
     "alreadyArchived": "The template is archived already.",
     "alreadyActive": "The template is active already.",
     "rulesOn": "Its made-to-measure is on: the Owner stops it first.",
-    "stylesUse_one": "{count} style is measured with it: give it another template first.",
-    "stylesUse_other": "{count} styles are measured with it: give them another template first.",
+    "stylesUse_one": "{count} product is measured with it: give it another template first.",
+    "stylesUse_other": "{count} products are measured with it: give them another template first.",
     "busy": "Working…"
   },
   "list": {
@@ -137,8 +137,8 @@
     "points_other": "{count} points",
     "required_one": "{count} required",
     "required_other": "{count} required",
-    "styles_one": "{count} style, {mtm} made to measure",
-    "styles_other": "{count} styles, {mtm} made to measure",
+    "styles_one": "{count} product, {mtm} made to measure",
+    "styles_other": "{count} products, {mtm} made to measure",
     "profiles_one": "{count} rider profile revision",
     "profiles_other": "{count} rider profile revisions",
     "factsFailed": "Could not read how it is used",
@@ -165,7 +165,7 @@
     },
     "forbidden": {
       "title": "You don't have access to measurement templates",
-      "body": "Reading them needs the right to see the style library (product developers, sales, the production manager)."
+      "body": "Reading them needs the right to see the product library (product developers, sales, the production manager)."
     }
   },
   "new": {
@@ -178,7 +178,7 @@
     "codeHint": "Capital letters, digits, _ and - (\"JACKET\", \"RACE_SUIT\"). It stays once a rider is measured for it.",
     "name": "Name",
     "type": "Product type",
-    "typeHint": "The kind of garment its styles are.",
+    "typeHint": "The kind of garment its products are.",
     "typePick": "Pick a type",
     "start": "Its points start",
     "startBlank": "Blank",
@@ -291,7 +291,7 @@
     "everyCompany": "Every company's",
     "changed": "Someone changed this template meanwhile.",
     "reload": "Reload",
-    "archivedBanner": "Archived: kept with its riders' measures, not offered for new styles."
+    "archivedBanner": "Archived: kept with its riders' measures, not offered for new products."
   },
   "rename": {
     "title": "Rename {code}",
@@ -303,22 +303,22 @@
     "archiveTitle": "Archive {code}?",
     "restoreTitle": "Restore {code}?",
     "archive1": "It is kept with its points; {profiles} rider profile revisions measured for it stay readable.",
-    "archive2": "It is no longer offered for new styles; restore it to use it again.",
-    "restore1": "It is offered for styles again; made-to-measure stays off until the Owner starts it.",
+    "archive2": "It is no longer offered for new products; restore it to use it again.",
+    "restore1": "It is offered for products again; made-to-measure stays off until the Owner starts it.",
     "archived": "Template archived.",
     "restored": "Template restored."
   },
   "used": {
     "title": "Where used",
     "empty": "Not used yet",
-    "emptyBody": "No style is measured with {code} and no rider was measured for it.",
-    "styles": "Styles measured with it",
-    "stylesValue_one": "{count} style, {mtm} made to measure",
-    "stylesValue_other": "{count} styles, {mtm} made to measure",
+    "emptyBody": "No product is measured with {code} and no rider was measured for it.",
+    "styles": "Products measured with it",
+    "stylesValue_one": "{count} product, {mtm} made to measure",
+    "stylesValue_other": "{count} products, {mtm} made to measure",
     "profiles": "Rider profiles",
     "profilesValue_one": "{count} revision measured for it",
     "profilesValue_other": "{count} revisions measured for it",
-    "kept": "A style names its template on its record; a rider's profile keeps the garment type it was measured for.",
+    "kept": "A product names its template on its record; a rider's profile keeps the garment type it was measured for.",
     "openRiders": "Riders measured for {code} in Sales › Made-to-measure"
   },
   "problem": {

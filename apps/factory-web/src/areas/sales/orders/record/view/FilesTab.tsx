@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { FileText, ShieldAlert, Upload } from 'lucide-react'
+import { FileArchive, FileText, ShieldAlert, Upload } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
@@ -23,6 +23,8 @@ import { Section } from '../../../../../lib/record-sections/Kit' // F-OF-101: th
 import { useSearchParams } from 'next/navigation'
 import { ASKS_NS, AskButton, AsksBody, useAsksAnswer } from '../../../../../lib/record-thread/files-view/asks/view/AsksBody'
 import type { AsksState } from '../../../../../lib/record-thread/files-view/asks/asks'
+import type { OrderFlowActions, OrderFlowModel } from '../band/model' // owb-of6 step 4: Download all (of1's zip)
+import { useFlowWords } from '../flow-words'
 
 /**
  * F-SA-237 (sales page plan N9, picks P14, R7; 10-order-page §2.7) — Files: every file of the order by where it comes from, the SAME
@@ -39,7 +41,7 @@ import type { AsksState } from '../../../../../lib/record-thread/files-view/asks
  * keys, nowhere else); the counted line, the groups and the upload window are the body's (the same in the order's thread window).
  * Draws its model; reads nothing.
  */
-export function FilesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly files?: FilesViewActions } }) {
+export function FilesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly files?: FilesViewActions; /* owb-of6 */ readonly flow?: OrderFlowActions } }) {
   const frame = useRecordFrame()
   const files: OrderFilesModel = model.files ?? { read: null, problem: null, selected: [], canShare: false }
   const showMessage = (messageId: string) => {
@@ -61,7 +63,7 @@ export function FilesTab({ order, model, actions }: { order: Order; model: Order
         {files.read && !files.problem && <FilesHead read={files.read} />}
         <div className={`fw-of-z${asks ? ' has-asks' : ''}`}>
           {asks && <AsksSection read={asks.read} state={asks.state} actions={actions?.files} customer={party?.name ?? null} />}
-          <FilesSection files={files} party={party} actions={actions?.files}>
+          <FilesSection files={files} party={party} actions={actions?.files} zip={model.flow?.zip ?? null} onZip={actions?.flow?.onZip}>
             <OrderFilesBody model={files} party={party} actions={{ ...actions?.files, onOrderMessage: showMessage }} />
           </FilesSection>
         </div>
@@ -111,8 +113,9 @@ function FilesHead({ read }: { read: OrderFilesRead }) {
  * F-OF-101 (10-design §5): the Files section (#files) — its answer in the reader's own numbers, its ⋯ and its ⓘ; the body below. The
  * menu's acts are the body's own (choose, download): one path per job.
  */
-function FilesSection({ files, party, actions, children }: { files: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined; children: ReactNode }) {
+function FilesSection({ files, party, actions, zip = null, onZip, children }: { files: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined; /* owb-of6 step 4 */ zip?: OrderFlowModel['zip'] | null; onZip?: (() => void) | undefined; children: ReactNode }) {
   const t = useT(FILES_VIEW_NS)
+  const f = useFlowWords() // owb-of6
   const o = useT('orders')
   const locale = useLocale()
   const read = files.problem ? null : files.read
@@ -128,16 +131,28 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
   } else if (answer) words.push(counted && counted.locked > 0 ? t('answer.noneOpen') : files.may?.upload ? t('answer.emptyAdd') : t('order.empty.title'))
   const items: MenuItemDef[] = []
   if (choosable.length > 0) items.push({ id: 'choose-all', label: t('select.all', { count: choosable.length }), onSelect: () => actions?.onOrderSelect?.(choosable) })
-  if (choosable.length > 1) items.push({ id: 'download-all', label: t('menu.downloadAll', { count: choosable.length }), onSelect: () => actions?.onOrderBulk?.('download', choosable) })
+  // owb-of6 step 4 (design § 5p point 1; L5): Download all is ONE zip of what this reader may open (of1) — the head's button; the ⋯ keeps
+  // today's file-by-file download only where the page has no zip door (a design case).
+  const zipping = !!onZip && choosable.length > 0
+  if (choosable.length > 1 && !zipping) items.push({ id: 'download-all', label: t('menu.downloadAll', { count: choosable.length }), onSelect: () => actions?.onOrderBulk?.('download', choosable) })
   items.push({ id: 'copy-link', label: t('menu.copyLink'), onSelect: () => copyLinkTo('files') })
   // F-OF-103: "Add files…" — hidden without the right (the read's `may`, else the session's); allowed on a closed order (L2: a late paper lands).
-  const buttons = files.may?.upload && actions?.onOrderAdd && !files.problem
-    ? [
-        <Button key="add" size="sm" onClick={() => actions?.onOrderAdd?.([])}>
-          <Upload size={14} aria-hidden /> {t('files.add')}
-        </Button>,
-      ]
-    : []
+  const buttons = [
+    ...(files.may?.upload && actions?.onOrderAdd && !files.problem
+      ? [
+          <Button key="add" size="sm" onClick={() => actions?.onOrderAdd?.([])}>
+            <Upload size={14} aria-hidden /> {t('files.add')}
+          </Button>,
+        ]
+      : []),
+    ...(zipping
+      ? [
+          <Button key="zip" size="sm" variant="quiet" heldReason={zip?.busy ? f('zip.busy') : null} onClick={() => onZip?.()}>
+            <FileArchive size={14} aria-hidden /> {f('zip.all')}
+          </Button>,
+        ]
+      : []),
+  ]
   const info = (
     <>
       <p>{t('info.files')}</p>
@@ -147,6 +162,9 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
   )
   return (
     <Section id={filesKitId('files')} title={o('files.title')} answer={words.length > 0 ? words.join(' · ') : null} buttons={buttons} more={<LineMenuButton label={t('menu.label')} items={items} />} info={info}>
+      {/* owb-of6 step 4: the zip's own line — the files it left out (x-left-out: priced without the grain, locked body data), a refusal. */}
+      {zip?.problem ? <Banner tone="danger" title={zip.problem === 'zip.failed' ? f('zip.failed') : zip.problem} /> : null}
+      {zip && zip.leftOut !== null && zip.leftOut > 0 ? <p className="fw-pt-quiet">{f('zip.leftOut', { count: zip.leftOut })}</p> : null}
       {children}
     </Section>
   )

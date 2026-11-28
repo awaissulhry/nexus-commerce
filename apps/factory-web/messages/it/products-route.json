@@ -1,0 +1,243 @@
+{
+  "routes": {
+    "title": "Percorsi",
+    "which": "Quale percorso",
+    "product": "Percorso del prodotto",
+    "answerSteps_one": "Il percorso del prodotto ha {count} passaggio.",
+    "answerSteps_other": "Il percorso del prodotto ha {count} passaggi.",
+    "answerOthers_one": "{count} altro percorso per un modello o un cliente.",
+    "answerOthers_other": "{count} altri percorsi per un modello o un cliente.",
+    "forProduct": "Ogni ordine lo usa quando non è scelto un altro percorso.",
+    "forModel": "Un modello: le vendite lo scelgono sulla riga d'ordine.",
+    "forModelOnly": "Un modello solo per {customer}: le vendite lo scelgono sulle righe d'ordine di quel cliente.",
+    "forCustomer": "Solo per {customer}: si usa da solo sugli ordini di quel cliente.",
+    "tableOf": "I passaggi di {name}",
+    "empty": "Questo percorso non ha ancora passaggi. \"Modifica questo percorso…\" lo costruisce.",
+    "noDepartment": "Nessun reparto",
+    "total": "{minutes} minuti per un pezzo.",
+    "noMinutes": "Nessun minuto ancora inserito.",
+    "rulesTitle_one": "{count} cosa da sistemare in questo percorso",
+    "rulesTitle_other": "{count} cose da sistemare in questo percorso",
+    "outside": "I percorsi si leggono dal server della fabbrica.",
+    "failed": "Non è stato possibile leggere il percorso"
+  },
+  "col": {
+    "step": "Passaggio",
+    "department": "Reparto",
+    "minutes": "Minuti"
+  },
+  "rule": {
+    "TOO_FEW": "Un percorso ha due passaggi o più.",
+    "LAST_NOT_PACKING": "Un percorso finisce con l'Imballaggio.",
+    "DEPARTMENT_CLOSED": "È stato aggiunto un reparto chiuso: toglilo, o riaprilo in Gestisci.",
+    "other": "Il server della fabbrica non accetta questo percorso così com'è.",
+    "NO_QUALITY": "Nessun controllo qualità in questo percorso.",
+    "otherWarning": "Il server della fabbrica ha una nota su questo percorso."
+  },
+  "action": {
+    "edit": "Modifica questo percorso…",
+    "new": "Nuovo percorso…",
+    "takeOut": "Togli",
+    "takeOutOf": "Togli il percorso {name}",
+    "startRevision": "Avvia la revisione {revision}…"
+  },
+  "held": {
+    "noRight": "Solo il responsabile di produzione cambia un percorso.",
+    "archived": "Questo prodotto è archiviato: il suo percorso resta com'è.",
+    "noRevision": "Questo prodotto non ha ancora una revisione.",
+    "draftOpen": "La revisione {revision} è rilasciata e la revisione {draft} è la bozza: apri la revisione {draft} per cambiare il percorso.",
+    "released": "La revisione {revision} è rilasciata. Avvia la revisione {next} per cambiare il percorso.",
+    "busy": "In corso…",
+    "departmentsReading": "Lettura dei reparti…",
+    "departmentsFailed": "Non è stato possibile leggere i reparti: riprova."
+  },
+  "who": {
+    "title": "Chi decide il percorso",
+    "answer": "Vince il livello più preciso. Un prodotto non si fa mai in due modi per sbaglio.",
+    "product": {
+      "label": "1 · Il prodotto",
+      "value": "Il suo percorso normale. Lo costruisce il responsabile di produzione, su una bozza."
+    },
+    "model": {
+      "label": "2 · Un modello o un cliente",
+      "value": "Un percorso proprio per lo stesso prodotto. Lo costruisce il responsabile di produzione; le vendite scelgono il modello sulla riga d'ordine; il percorso di un cliente si usa da solo."
+    },
+    "line": {
+      "label": "3 · Una riga d'ordine",
+      "value": "Un'eccezione, con un motivo. La fa solo il responsabile di produzione, finché non sono stampate le schede dei cesti."
+    }
+  },
+  "more": {
+    "summary_one": "Altro: il dettaglio di {count} passaggio (punti di scansione, in parallelo, laboratori esterni, tempi, controlli, impostazioni macchina)",
+    "summary_other": "Altro: il dettaglio di {count} passaggi (punti di scansione, in parallelo, laboratori esterni, tempi, controlli, impostazioni macchina)",
+    "stepsTitle_one": "{count} passaggio nel dettaglio",
+    "stepsTitle_other": "{count} passaggi nel dettaglio",
+    "stepsIntro": "Revisione {revision}: cosa serve a ogni passaggio in reparto.",
+    "minutesInBuilder": "I passaggi, il loro ordine, i reparti e i minuti si cambiano nel costruttore del percorso (\"Modifica questo percorso…\")."
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "problem": {
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controlla e riprova.",
+    "invalid": "Qualcosa di scritto non è accettato: controlla i campi.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "rateLimited": "Troppe richieste: aspetta un momento.",
+    "offline": "Il server della fabbrica non risponde: non è cambiato nulla.",
+    "unavailable": "Qualcosa è andato storto sul server: non è cambiato nulla."
+  },
+  "builder": {
+    "title": {
+      "product": "Costruttore del percorso · Modifica il percorso",
+      "route": "Costruttore del percorso · Modifica il percorso",
+      "new": "Costruttore del percorso · Un nuovo percorso per un modello o un cliente",
+      "line": "Costruttore del percorso · Un altro percorso per questo ordine"
+    },
+    "save": {
+      "product": "Salva il percorso",
+      "route": "Salva il percorso",
+      "new": "Salva il nuovo percorso",
+      "line": "Usa questo percorso per l'ordine"
+    },
+    "subtitle": {
+      "product": "{product} · il percorso del prodotto",
+      "route": "{product} · {route}",
+      "new": "{product} · un nuovo percorso",
+      "line": "Riga {line} · {product} · solo questa riga, solo questo ordine"
+    },
+    "departments": "Reparti",
+    "departmentsHint": "Trascinane uno nel percorso, o premi +.",
+    "noDepartments": "Nessun reparto aperto. Riaprine uno in Gestisci, o aggiungine uno.",
+    "new": "nuovo",
+    "times_one": "{count} ×",
+    "times_other": "{count} ×",
+    "addOf": "Aggiungi {name} al percorso",
+    "route": "Il percorso",
+    "routeHint": "Trascina un passaggio in un altro posto, o usa le frecce. Un reparto può esserci due volte.",
+    "keysLabel": "Tasti del costruttore del percorso",
+    "keys": {
+      "add": "Un reparto: trascinalo nel percorso, o premi il suo +.",
+      "move": "Un passaggio: trascinalo, premi le sue ↑ ↓, o Alt + ↑ / Alt + ↓ in un punto qualsiasi della sua riga.",
+      "save": "⌘ Invio (Ctrl Invio) salva; Esc esce senza salvare."
+    },
+    "stepOf": "Passaggio {no}, {name}",
+    "minutesOf": "Minuti per il passaggio {no}, {name}",
+    "min": "min",
+    "removeOf": "Togli il passaggio {no}, {name}",
+    "dropEnd": "Lascia qui un reparto: va in fondo.",
+    "empty": "Il percorso è vuoto. Trascina qui un reparto, o premi il suo +.",
+    "errorsTitle_one": "{count} cosa blocca Salva",
+    "errorsTitle_other": "{count} cose bloccano Salva",
+    "error": {
+      "NO_DEPARTMENT": "Il passaggio {no} non ha un reparto: toglilo.",
+      "MINUTES_BAD": "Passaggio {no}: i minuti sono un numero, come 12 o 12,5.",
+      "NAME_NEEDED": "Dai un nome al percorso.",
+      "CUSTOMER_NEEDED": "Scegli il cliente per cui è questo percorso.",
+      "REASON_NEEDED": "Scrivi perché questo ordine è diverso."
+    },
+    "note": {
+      "NO_QUALITY": "Questo percorso non ha un controllo qualità. Puoi salvarlo.",
+      "twice": "{name} c'è due volte di fila. Puoi salvarlo."
+    },
+    "copy": {
+      "label": "Parti da una copia, poi cambiala",
+      "choose": "Scegli un percorso da copiare…",
+      "templates": "Percorsi pronti",
+      "products": "Percorsi dei prodotti",
+      "option_one": "{name} · {count} passaggio",
+      "option_other": "{name} · {count} passaggi",
+      "steps_one": "{count} passaggio",
+      "steps_other": "{count} passaggi",
+      "find": "Cerca un prodotto da cui copiare",
+      "reading": "Lettura dei percorsi da copiare…",
+      "failed": "Non è stato possibile leggere i percorsi da copiare."
+    },
+    "name": "Il nome di questo percorso",
+    "namePlaceholder": "Per esempio: con slider stampati",
+    "forWhom": "Per chi è",
+    "forModel": "Un modello: per qualsiasi cliente",
+    "forCustomer": "Solo per un cliente",
+    "forOnly": "Solo per {customer}",
+    "customer": "Il cliente",
+    "customerPick": "Scegli il cliente…",
+    "customersReading": "Lettura dei clienti…",
+    "customersFailed": "Non è stato possibile leggere i clienti: questo percorso può essere un modello.",
+    "reason": "Perché questo ordine è diverso?",
+    "reasonHint": "La storia dell'ordine lo conserva (solo dentro la fabbrica).",
+    "reasonPlaceholder": "Per esempio: il cliente manda i gusci finiti",
+    "template": {
+      "label": "Salvalo anche come percorso pronto (ogni prodotto può copiarlo)",
+      "placeholder": "Per esempio: Stampato, controllato due volte",
+      "save": "Salva come percorso pronto",
+      "done": "“{name}” è ora un percorso pronto: ogni prodotto può copiarlo.",
+      "list_one": "Percorsi pronti ({count})",
+      "list_other": "Percorsi pronti ({count})",
+      "takeOut": "Togli il percorso pronto {name} dalla lista (resta conservato)",
+      "closed": "Percorsi chiusi",
+      "openAgain": "Riapri",
+      "nameNeeded": "Scrivi prima un nome per il percorso pronto.",
+      "nameTaken": "C'è già un percorso pronto con questo nome. Scrivi un altro nome.",
+      "nameClosed": "Un percorso pronto chiuso ha questo nome. Riaprilo in “Percorsi chiusi”, o scrivi un altro nome."
+    }
+  },
+  "refusal": {
+    "NAME_EMPTY": "Un reparto ha bisogno di un nome.",
+    "NAME_TAKEN": "Questo nome è già usato da un altro reparto.",
+    "FLOOR_FIXED": "Questo reparto ha schermate in produzione: il nome resta e non si può chiudere.",
+    "FROZEN": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
+    "PRINTED": "Le schede dei cesti di questo ordine sono stampate: il percorso di una riga ora è fisso.",
+    "NOT_DRAFT": "Questa revisione non è più una bozza: i suoi percorsi sono congelati.",
+    "CLOSED": "Questo reparto è chiuso: riaprilo prima di cambiarne il nome.",
+    "CODE_TAKEN": "Il codice operazione di questo reparto è già usato da un’altra operazione della libreria: dai prima un altro codice a quella."
+  },
+  "manage": {
+    "switch": "Gestisci",
+    "hint": "Aggiungi un reparto, cambiane il nome o chiudilo. I reparti con schermate in produzione tengono il loro nome e restano aperti. Premi di nuovo Gestisci quando hai finito.",
+    "listLabel": "I reparti della fabbrica",
+    "nameOf": "Il nome del reparto {name}",
+    "onFloor": "in produzione",
+    "closed": "chiuso",
+    "closeOf": "Chiudi il reparto {name}",
+    "closeHint": "Esce dalla lista. I percorsi che lo usano lo tengono. Non si cancella nulla.",
+    "openOf": "Riapri il reparto {name}",
+    "openHint": "Torna nella lista.",
+    "newLabel": "Il nome di un nuovo reparto",
+    "newPlaceholder": "Un nuovo reparto",
+    "add": "Aggiungi",
+    "nameFirst": "Scrivi prima il nome del nuovo reparto.",
+    "done": {
+      "added": "{name} è un nuovo reparto: trascinalo nel percorso, o premi il suo +.",
+      "renamed": "Il reparto ora si chiama {name}: ogni percorso lo mostra.",
+      "closed": "{name} è chiuso. Esce dalla lista; i percorsi che lo usano lo tengono.",
+      "opened": "{name} è di nuovo aperto."
+    }
+  },
+  "line": {
+    "section": "Percorso di ogni riga",
+    "info": "Quali reparti attraversa ogni riga e da dove viene il percorso: il prodotto, un modello, il cliente, la struttura dell'ordine o solo questo ordine. Lo vedono solo le persone della fabbrica; il cliente non vede mai un percorso.",
+    "answer": {
+      "open": "Le vendite scelgono il modello di una riga; il percorso viene con lui. Un altro percorso è un'eccezione del responsabile di produzione.",
+      "frozen": "Fissato alla stampa delle schede dei cesti: il percorso di ogni riga qui non cambia più."
+    },
+    "source": {
+      "REVISION": "Dal prodotto",
+      "MODEL": "Modello",
+      "CUSTOMER": "Per questo cliente",
+      "STRUCTURE": "Struttura dell'ordine",
+      "EXCEPTION": "Solo questo ordine",
+      "other": "Il suo percorso"
+    },
+    "title": "{seq} · {product}",
+    "titleNoProduct": "{seq} · Ancora nessun prodotto",
+    "why": "Perché: {reason}",
+    "whenBy": "{by}, {date}",
+    "when": "{date}",
+    "pickOf": "Il modello di {line}",
+    "normal": "Normale (il percorso del prodotto)",
+    "another": "Un altro percorso per questo ordine…",
+    "back": "Torna al percorso normale",
+    "none": "Ancora nessuna riga con un prodotto."
+  }
+}

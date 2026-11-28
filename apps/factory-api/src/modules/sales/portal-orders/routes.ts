@@ -41,7 +41,8 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   // ---- end B-TH-061
 
   // pg-s2 S2.1 (portal grid D4, Z12): the small pictures of the customer's own orders among the ids (another's: absent).
-  app.post('/portal/sales-orders/pictures', { schema: picturesContract }, async (request) => orderPictures(app, request, request.body.orderIds, appClock(app).now()))
+  // owb- po1.1: + the party's Draft and Sent orders (`requestIds`).
+  app.post('/portal/sales-orders/pictures', { schema: picturesContract }, async (request) => orderPictures(app, request, request.body, appClock(app).now()))
 
   app.get('/portal/sales-orders/:orderId', { schema: recordContract }, async (request) => orderRecord(app, request, request.params.orderId, appClock(app).now()))
 

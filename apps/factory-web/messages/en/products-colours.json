@@ -24,10 +24,10 @@
       "remove": "Remove the filter"
     },
     "brands": {
-      "title_one": "{count} private-label brand makes styles without a branding set",
-      "title_other": "{count} private-label brands make styles without a branding set",
-      "one_one": "{code} {name} ({count} style)",
-      "one_other": "{code} {name} ({count} styles)"
+      "title_one": "{count} private-label brand makes products without a branding set",
+      "title_other": "{count} private-label brands make products without a branding set",
+      "one_one": "{code} {name} ({count} product)",
+      "one_other": "{code} {name} ({count} products)"
     },
     "noHex": {
       "title_one": "{count} colour has no hex",
@@ -117,7 +117,7 @@
   },
   "forbidden": {
     "title": "You don't have access to colours",
-    "body": "Colours & artwork needs the right to see the styles: every role that works with styles has it (production manager, sales, quality, planner)."
+    "body": "Colours & artwork needs the right to see the products: every role that works with products has it (production manager, sales, quality, planner)."
   },
   "empty": {
     "title": "No colours yet",
@@ -142,7 +142,7 @@
     "newTitle": "New colour",
     "editTitle": "Edit colour {code}",
     "company": "For",
-    "companyHint": "Only this company's styles and materials can pick it.",
+    "companyHint": "Only this company's products and materials can pick it.",
     "everyCompany": "Every company",
     "everyCompanyHint": "One library colour for every company.",
     "code": "Code",
@@ -203,8 +203,8 @@
     "files_other": "{count} files",
     "moreColours_one": "+{count}",
     "moreColours_other": "+{count}",
-    "styles_one": "{count} style",
-    "styles_other": "{count} styles",
+    "styles_one": "{count} product",
+    "styles_other": "{count} products",
     "notInUse": "Not in use",
     "archivedRow": "An archived set: open it to restore it.",
     "col": {
@@ -213,7 +213,7 @@
       "logos": "Logos",
       "artwork": "Label artwork",
       "colours": "Brand colours",
-      "styles": "Styles linked",
+      "styles": "Products linked",
       "status": "Status"
     },
     "bulk": {
@@ -288,11 +288,11 @@
     "noMoreColours": "Every active colour is in the set",
     "readingColours": "Reading the library…",
     "removeColour": "Remove {code}",
-    "styles": "Styles",
-    "noStyles": "No style of this brand in this company.",
+    "styles": "Products",
+    "noStyles": "No product of this brand in this company.",
     "moreStyles": "And more: the first 50 by code.",
-    "stylesHint": "The brand's styles of this company (and those of every company): their labels and tech packs read this set.",
-    "stylesArchivedHint": "The brand's styles: they would read this set again once restored."
+    "stylesHint": "The brand's products of this company (and those of every company): their labels and tech packs read this set.",
+    "stylesArchivedHint": "The brand's products: they would read this set again once restored."
   },
   "newSet": {
     "title": "New branding set",

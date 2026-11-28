@@ -24,10 +24,10 @@
       "remove": "Togli il filtro"
     },
     "brands": {
-      "title_one": "{count} marchio private label ha modelli senza kit di marca",
-      "title_other": "{count} marchi private label hanno modelli senza kit di marca",
-      "one_one": "{code} {name} ({count} modello)",
-      "one_other": "{code} {name} ({count} modelli)"
+      "title_one": "{count} marchio private label ha prodotti senza kit di marca",
+      "title_other": "{count} marchi private label hanno prodotti senza kit di marca",
+      "one_one": "{code} {name} ({count} prodotto)",
+      "one_other": "{code} {name} ({count} prodotti)"
     },
     "noHex": {
       "title_one": "{count} colore non ha l'esadecimale",
@@ -117,7 +117,7 @@
   },
   "forbidden": {
     "title": "Non hai accesso ai colori",
-    "body": "Colori e grafiche richiede il permesso di vedere gli articoli: ce l'ha ogni ruolo che lavora con i modelli (responsabile di produzione, vendite, qualità, pianificazione)."
+    "body": "Colori e grafiche richiede il permesso di vedere gli articoli: ce l'ha ogni ruolo che lavora con i prodotti (responsabile di produzione, vendite, qualità, pianificazione)."
   },
   "empty": {
     "title": "Ancora nessun colore",
@@ -142,7 +142,7 @@
     "newTitle": "Nuovo colore",
     "editTitle": "Modifica colore {code}",
     "company": "Per",
-    "companyHint": "Solo i modelli e i materiali di questa azienda possono sceglierlo.",
+    "companyHint": "Solo i prodotti e i materiali di questa azienda possono sceglierlo.",
     "everyCompany": "Tutte le aziende",
     "everyCompanyHint": "Un colore di libreria per tutte le aziende.",
     "code": "Codice",
@@ -203,8 +203,8 @@
     "files_other": "{count} file",
     "moreColours_one": "+{count}",
     "moreColours_other": "+{count}",
-    "styles_one": "{count} modello",
-    "styles_other": "{count} modelli",
+    "styles_one": "{count} prodotto",
+    "styles_other": "{count} prodotti",
     "notInUse": "Non in uso",
     "archivedRow": "Un kit archiviato: aprilo per ripristinarlo.",
     "col": {
@@ -213,7 +213,7 @@
       "logos": "Loghi",
       "artwork": "Grafiche etichette",
       "colours": "Colori del marchio",
-      "styles": "Modelli collegati",
+      "styles": "Prodotti collegati",
       "status": "Stato"
     },
     "bulk": {
@@ -288,11 +288,11 @@
     "noMoreColours": "Ogni colore attivo è già nel kit",
     "readingColours": "Lettura della libreria…",
     "removeColour": "Togli {code}",
-    "styles": "Modelli",
-    "noStyles": "Nessun modello di questo marchio in questa azienda.",
+    "styles": "Prodotti",
+    "noStyles": "Nessun prodotto di questo marchio in questa azienda.",
     "moreStyles": "E altri: i primi 50 per codice.",
-    "stylesHint": "I modelli del marchio di questa azienda (e quelli di tutte le aziende): le loro etichette e schede tecniche leggono questo kit.",
-    "stylesArchivedHint": "I modelli del marchio: leggerebbero di nuovo questo kit una volta ripristinato."
+    "stylesHint": "I prodotti del marchio di questa azienda (e quelli di tutte le aziende): le loro etichette e schede tecniche leggono questo kit.",
+    "stylesArchivedHint": "I prodotti del marchio: leggerebbero di nuovo questo kit una volta ripristinato."
   },
   "newSet": {
     "title": "Nuovo kit di marca",

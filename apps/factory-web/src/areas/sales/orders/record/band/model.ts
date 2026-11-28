@@ -3,6 +3,9 @@ import type { ReadPictures } from '../../../../../lib/record-picture/cache'
 import type { SaveOrderPicture } from '../../../../../lib/record-picture/api'
 import type { PictureChoice } from '../../../../../lib/record-picture/order-picture'
 import type { Department } from '../../../../../lib/department/model'
+import type { BasketCard } from '../../../../../lib/production/baskets-board'
+import type { ReadOrderLog } from '../../../../../lib/change-log/api'
+import type { PaymentNotice } from './api'
 
 /**
  * owb-of5 step 1 (design plan § 5i "ONE frame for every record page"; prototype rec.js orderBand, office.js officeNext) — the order
@@ -186,9 +189,60 @@ export interface OrderFlowModel {
   readonly text: TextCard | null
   /** The order's baskets per department (S5's board read; null before it is read or where it is not on the server). */
   readonly departments: readonly { readonly dept: Department; readonly count: number }[] | null
+  // ---- owb-of6 ----
+  /** Every basket of the order (S5's board read, L8); null: not read (the Baskets section keeps today's work-order rows). */
+  readonly baskets: readonly { readonly card: BasketCard; readonly dept: Department | null }[] | null
+  /** The ONE order log's read port (Changes › What changed; the base's `GET /sales/orders/:id/log`). */
+  readonly log: ReadOrderLog | null
+  /** The customer's "I paid" notices (of1): the rows (null before read or before of1), the one being answered, a refusal, who may answer. */
+  readonly notices: { readonly rows: readonly PaymentNotice[] | null; readonly busy: string | null; readonly problem: string | null; readonly may: boolean }
+  /** Download all (of1's zip): running, the files it left out (null: not run yet), a refusal in words. */
+  readonly zip: { readonly busy: boolean; readonly leftOut: number | null; readonly problem: string | null }
+  // ---- end owb-of6
+  /**
+   * owb-of7 step 2: the design's approval — its state (the latest ARTWORK / PROOF request on the order: the band's Design tag), the
+   * door "Send the design for approval" (drawn only for who may: partners.approvals.ask + orders.manage), why it waits (a key), a send
+   * running, a refusal in words.
+   */
+  readonly design: { readonly state: DesignState | null; readonly may: boolean; readonly held: string | null; readonly busy: boolean; readonly problem: string | null }
 }
 
 export interface OrderFlowActions {
   onPictureSaved?: () => void
   onRestrict?: (restricted: boolean) => void
+  /** owb-of6: answer a customer's "I paid" notice (Recorded: seen — the payment is then recorded with Record a payment…; Dismissed). */
+  onNotice?: (noticeId: string, state: 'RECORDED' | 'DISMISSED') => void
+  /** owb-of6: Download all — ONE zip of what this reader may open. */
+  onZip?: () => void
+  /** owb-of7: Send the design for approval (ONE `POST /approvals-out`, kind ARTWORK, the order's picture as the mockup). */
+  onSendDesign?: () => void
+}
+
+/** owb-of7 step 2: the design's state from the order's approval requests — the latest ARTWORK or PROOF one (withdrawn, expired: none). */
+export function designStateOf(requests: readonly { readonly kind: string; readonly status: string; readonly createdAt: string }[] | null | undefined): DesignState | null {
+  const latest = [...(requests ?? [])].filter((request) => request.kind === 'ARTWORK' || request.kind === 'PROOF').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  if (!latest) return null
+  if (latest.status === 'OPEN') return 'WAITS'
+  if (latest.status === 'APPROVED') return 'APPROVED'
+  if (latest.status === 'APPROVED_WITH_CHANGES' || latest.status === 'REFUSED') return 'CHANGE'
+  return null
+}
+
+/** owb-of7 step 2: who may send the design for approval (the designer may not today: shared-asks line of owb-of7). */
+export const maySendDesign = (permissions: readonly string[]): boolean => permissions.includes('partners.approvals.ask') && permissions.includes('orders.manage')
+
+/** The ask's due day: the ARTWORK rule's default, 7 days (YYYY-MM-DD plus 7, as an instant at noon UTC). */
+export function designDueOf(today: string): string {
+  const day = new Date(`${today}T12:00:00Z`)
+  day.setUTCDate(day.getUTCDate() + 7)
+  return day.toISOString()
+}
+
+/** The open notices (the Waiting entry and the Money row count them). */
+export const openNoticesOf = (rows: readonly { readonly state: string }[] | null | undefined): number => (rows ?? []).filter((row) => row.state === 'OPEN').length
+
+/** "Paid too much" when the order's total went below what is paid (price grain only): the amount over, in minor units; else null. */
+export function paidTooMuchOf(input: { readonly total: number | null | undefined; readonly paid: number | null | undefined }): number | null {
+  if (input.total == null || input.paid == null) return null
+  return input.paid > input.total ? input.paid - input.total : null
 }

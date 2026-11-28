@@ -63,3 +63,36 @@ export interface LocaleSources {
 export function pickLocale({ person, cookie, acceptLanguage }: LocaleSources): Locale {
   return localeOf(person) ?? localeOf(cookie) ?? localeFromAcceptLanguage(acceptLanguage) ?? DEFAULT_LOCALE
 }
+
+// ---- owb-fl7 (pick J): the floor's own languages — Urdu on the floor only, never in the office ----------------------------
+
+/**
+ * The languages a floor screen may speak: the interface languages and Urdu. The office keeps `LOCALES` (it, en): `ur` exists only
+ * here. Urdu's words are drafts until a native reader checks them, and a site turns Urdu on only with an Urdu worker notice in force
+ * (factory-domain privacy/floor-languages.ts): `floorLocale` (floor/model.ts) takes `ur` only when the site's floor languages list it.
+ */
+export const FLOOR_LOCALES = ['it', 'en', 'ur'] as const
+export type FloorLocale = (typeof FLOOR_LOCALES)[number]
+
+/** Each floor language in its own words (the picker's buttons). */
+export const FLOOR_LOCALE_NAMES: Readonly<Record<FloorLocale, string>> = { ...LOCALE_NAMES, ur: 'اردو' }
+
+export function isFloorLocale(value: unknown): value is FloorLocale {
+  return typeof value === 'string' && (FLOOR_LOCALES as readonly string[]).includes(value)
+}
+
+/** A language tag (`ur-PK`, `UR`, `it-IT`) as a floor language, or null. */
+export function floorLocaleOf(value: string | null | undefined): FloorLocale | null {
+  if (typeof value !== 'string') return null
+  const base = value.trim().toLowerCase().split(/[-_]/)[0]
+  return isFloorLocale(base) ? base : null
+}
+
+/**
+ * The words' base of a floor language: Urdu reads its own words over the English ones (a key it lacks shows in English), and English's
+ * plural rules and number and date formats (digits are never turned). Italian and English are their own base.
+ */
+export const baseLocaleOf = (locale: FloorLocale): Locale => (locale === 'ur' ? 'en' : locale)
+
+/** The reading direction of a language: Urdu right to left. */
+export const dirOf = (locale: string): 'rtl' | 'ltr' => (floorLocaleOf(locale) === 'ur' ? 'rtl' : 'ltr')

@@ -119,7 +119,7 @@ const page = (over: Partial<TeamsBoardViewModel> = {}): TeamsBoardViewModel => (
   sites: [],
   filter: 'all',
   notice: null,
-  newTeamHref: `${PREFIX}/people/structure`,
+  newTeamHref: `${PREFIX}/people/structure?new=team`,
   ...over,
 })
 

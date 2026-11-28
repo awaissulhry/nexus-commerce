@@ -128,6 +128,11 @@ const reason = output({
 })
 
 const scanAnswer = output({ scan, replayed: z.boolean() })
+/**
+ * owb-fl2 (S5): a report's answer. A second Done at a step where a hand move put the basket back writes a FORWARD move and no
+ * scan: `scan` null, `moved` true, `to` the next step of the basket's route (null: Ready to ship). Else the scan, `moved` false.
+ */
+const reportAnswer = output({ scan: scan.nullable(), replayed: z.boolean(), moved: z.boolean(), to: id().nullable() })
 const requestAnswer = output({ request, replayed: z.boolean() })
 
 const report = {
@@ -237,7 +242,7 @@ export const mineContract = defineContract({
 
 export const reportContract = defineContract({
   body: input({ ...timed, ...report }),
-  response: { 200: scanAnswer, 201: scanAnswer },
+  response: { 200: reportAnswer, 201: reportAnswer },
 })
 
 export const undoContract = defineContract({
@@ -277,6 +282,9 @@ export const batchContract = defineContract({
           scan: scan.nullable(),
           request: request.nullable(),
           refusal: refusal.extend({ refusalId: id() }).nullable(),
+          // owb-fl2: a queued Done that was a second Done (a FORWARD move of the basket, no scan), and that move's group.
+          moved: z.boolean().optional(),
+          movedGroupId: id().nullable().optional(),
         }),
       ),
     }),

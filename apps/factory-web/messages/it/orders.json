@@ -1,4 +1,7 @@
 {
+  "kit": {
+    "goOn": "Procedi"
+  },
   "common": {
     "retry": "Riprova",
     "dismiss": "Chiudi",
@@ -2494,7 +2497,7 @@
       "noSupervisor": "Nessun responsabile ancora: lo ricevono i responsabili di produzione dopo 1 giorno lavorativo"
     },
     "wo": {
-      "title": "Ordini di lavoro",
+      "title": "Cesti",
       "summary_one": "{count} ordine di lavoro",
       "summary_other": "{count} ordini di lavoro",
       "pieces_one": "{count} capo per questo ordine",

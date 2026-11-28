@@ -1,13 +1,19 @@
 import type { Metadata } from 'next'
-import { NotBuiltYet } from '../../../../../../shell/office/NotBuiltYet'
+import { Suspense } from 'react'
+import { StructurePage } from '../../../../../../areas/people/structure/StructurePage'
 
 export const metadata: Metadata = { title: 'Factory structure · Nexus Factory' }
 
 /**
- * People › Factory structure (owb- order workflow, base settle 7; areas/people/nav.ts, permission people.view): a DECLARED page — its route, its nav row
- * and its place in the approved tree are placed by the base; S3 (ss8) replaces this file with the page. Its address joins
- * OFFICE_PAGES at that land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES), so until then no row shows it.
+ * People › Factory structure (owb-ss8 8.1 + 8.2; design plan § 5zb; areas/people/nav.ts, permission people.view): the chart and the list of
+ * units and people, a unit's and a person's profile (`?unit=` / `?person=`, no route of their own) and their windows. The company layout
+ * above loaded the session and draws the Office shell; the page is the client container, which reads GET /people/structure through the
+ * API. Its address joins OFFICE_PAGES at the S3 land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES, lead 88's flip).
  */
 export default function PeopleStructurePage() {
-  return <NotBuiltYet />
+  return (
+    <Suspense>
+      <StructurePage />
+    </Suspense>
+  )
 }

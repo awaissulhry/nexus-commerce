@@ -91,7 +91,8 @@ describe('B-TH-273 — where the conversation sits, and how wide', () => {
       const words = CATALOGUE[locale].portal ?? {}
       for (const key of ['record.frame.messages', 'record.frame.messagesNew_one', 'record.frame.messagesNew_other', 'record.frame.messagesMany', 'record.frame.messagesNewLabel_other', 'record.frame.back', 'email.defaultInstant']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
-    expect(CATALOGUE.en.portal!['record.frame.messagesNew_other']).toBe('Messages ({count} new)')
+    // owb-po5.1 (plan § 5d): the band's button is Chat now ("Chat · 2 new"), the same in every portal record page.
+    expect(CATALOGUE.en.portal!['record.frame.messagesNew_other']).toBe('Chat · {count} new')
   })
 })
 

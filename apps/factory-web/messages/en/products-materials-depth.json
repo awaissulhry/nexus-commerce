@@ -20,7 +20,7 @@
     "ALTERNATE": "Alternate {priority}"
   },
   "csv": {
-    "style": "Style",
+    "style": "Product",
     "revision": "Revision",
     "status": "Status",
     "line": "Line",
@@ -69,8 +69,8 @@
     },
     "reach": {
       "noStyles": "Where it is used is not in your role.",
-      "none": "No BOM names it now: a decision changes no style.",
-      "words": "Used now in {styles} style(s): {drafts} draft and {released} released revision(s).",
+      "none": "No BOM names it now: a decision changes no product.",
+      "words": "Used now in {styles} product(s): {drafts} draft and {released} released revision(s).",
       "noWorkOrders": "Open work orders are not in your role.",
       "workOrders_one": "{count} open work order makes a released one.",
       "workOrders_other": "{count} open work orders make released ones.",
@@ -168,7 +168,7 @@
     "noOrders": "None open",
     "moreOrders": "+{count}",
     "col": {
-      "style": "Style",
+      "style": "Product",
       "revision": "Revision and status",
       "line": "Line",
       "placement": "Placement",
@@ -177,11 +177,11 @@
     },
     "failed": "Couldn't load where used",
     "noStyles": {
-      "title": "Styles are not in your role",
-      "body": "Where the material is used is shown to people who read styles."
+      "title": "Products are not in your role",
+      "body": "Where the material is used is shown to people who read products."
     },
     "empty": "Not used in any BOM",
-    "emptyBody": "No revision of any style names this material, as a line or an alternate.",
+    "emptyBody": "No revision of any product names this material, as a line or an alternate.",
     "emptyColour": "No BOM uses this colour",
     "emptyColourBody": "Pick another colour, or every colour.",
     "more": "Showing the first {count} lines.",
@@ -193,13 +193,13 @@
     "export_one": "Export {count}",
     "export_other": "Export {count}",
     "tile": {
-      "styles": "Styles",
+      "styles": "Products",
       "drafts": "Draft revisions",
       "released": "Released revisions",
       "orders": "Open work orders"
     },
     "tileHint": {
-      "styles": "Styles whose draft or released BOM names it",
+      "styles": "Products whose draft or released BOM names it",
       "drafts": "A block holds their release",
       "released": "They keep it as it is",
       "orders": "Of the released revisions"
@@ -239,8 +239,8 @@
       "unused": "No draft or released BOM names it"
     },
     "notUsed": "Not used",
-    "usedIn_one": "{count} style",
-    "usedIn_other": "{count} styles",
+    "usedIn_one": "{count} product",
+    "usedIn_other": "{count} products",
     "col": {
       "approval": "Approval",
       "usedIn": "Used in"

@@ -21,7 +21,7 @@
     "audienceHint": {
       "INTERNAL": "Tutto ciò che l'ufficio può vedere. Il PDF non riporta mai un costo: la carta viaggia.",
       "SUBCONTRACTOR": "Nessun costo, margine o compenso, nessun minuto standard, nessun nome di fornitore o laboratorio, nessuna alternativa, stato di approvazione o nome di persona. Si segna cosa arriva con il kit.",
-      "BRAND": "Come la copia per il terzista, e senza note d'ufficio né segno del kit. La copia di un modello a marchio privato va solo al suo marchio."
+      "BRAND": "Come la copia per il terzista, e senza note d'ufficio né segno del kit. La copia di un prodotto a marchio privato va solo al suo marchio."
     },
     "language": {
       "it": "Italiano",
@@ -61,13 +61,13 @@
     },
     "held": {
       "noMake": "Il tuo ruolo non crea PDF delle schede tecniche: lo fa il responsabile di produzione o il buyer.",
-      "noRevision": "Il modello non ha ancora una revisione.",
+      "noRevision": "Il prodotto non ha ancora una revisione.",
       "offline": "Non in linea: il PDF lo crea il server. Riprova quando torna la connessione.",
       "busy": "Il PDF è in preparazione.",
       "noSections": "Spunta almeno una sezione.",
       "sectionNotYours": "Una sezione spuntata non è tra quelle che il tuo ruolo può vedere.",
       "internalParty": "Una copia interna non è per nessuno fuori dall'azienda.",
-      "privateLabel": "La copia per il cliente di questo modello a marchio privato è solo per il suo marchio."
+      "privateLabel": "La copia per il cliente di questo prodotto a marchio privato è solo per il suo marchio."
     },
     "tab": {
       "audience": "Per chi è",
@@ -85,7 +85,7 @@
       "failed": "Impossibile leggere la scheda tecnica",
       "noRevision": {
         "title": "Ancora nessuna revisione",
-        "body": "La scheda tecnica è una vista di una revisione: avvia la prima sul modello."
+        "body": "La scheda tecnica è una vista di una revisione: avvia la prima sul prodotto."
       },
       "nothing": {
         "title": "Nessuna sezione scelta",
@@ -94,7 +94,7 @@
     },
     "contents": {
       "title": "Indice",
-      "intro": "Una vista del modello attuale, sezione per sezione. Spunta cosa mostrare e stampare.",
+      "intro": "Una vista del prodotto attuale, sezione per sezione. Spunta cosa mostrare e stampare.",
       "all": "Spunta tutte",
       "none": "Togli tutte",
       "livesIn": "Modifica in {tab}"
@@ -125,11 +125,11 @@
       "subtitle": "{code} · revisione {revision} ({status})",
       "audience": "Per chi è",
       "language": "Lingua",
-      "languageHint": "Le parole del PDF, e i testi del modello dove sono scritti in quella lingua.",
+      "languageHint": "Le parole del PDF, e i testi del prodotto dove sono scritti in quella lingua.",
       "forWorkshop": "Laboratorio",
       "forBrand": "Cliente o marchio",
       "partyHint": "Stampato sulla copertina. Lascia vuoto per una copia valida per chiunque di questo tipo.",
-      "privateLabelHint": "Modello a marchio privato: la sua copia per il cliente è solo per {brand}.",
+      "privateLabelHint": "Prodotto a marchio privato: la sua copia per il cliente è solo per {brand}.",
       "noPartiesRight": "Il tuo ruolo non legge le anagrafiche: la copia non nomina nessuno.",
       "partiesLoading": "Lettura delle anagrafiche…",
       "nobody": "Nessuno indicato",
@@ -145,20 +145,20 @@
       "read": {
         "signed_out": "La sessione è scaduta: accedi di nuovo.",
         "forbidden": "Il tuo ruolo non può leggere questa scheda tecnica.",
-        "not_found": "Questo modello o questa revisione non esiste più.",
+        "not_found": "Questo prodotto o questa revisione non esiste più.",
         "unavailable": "Il server non ha risposto. Riprova tra poco.",
         "rate_limited": "Troppe richieste: attendi un momento e riprova.",
         "contract": "La risposta non corrisponde a questa schermata: ricarica la pagina.",
         "internal": "Qualcosa è andato storto. Riprova."
       },
       "make": {
-        "party": "Questa copia non può andare a quell'anagrafica: la copia per il terzista va a un laboratorio o a un fornitore, quella per il cliente a un cliente o a un marchio, mai a uno bloccato o archiviato, e la copia di un modello a marchio privato solo al suo marchio.",
+        "party": "Questa copia non può andare a quell'anagrafica: la copia per il terzista va a un laboratorio o a un fornitore, quella per il cliente a un cliente o a un marchio, mai a uno bloccato o archiviato, e la copia di un prodotto a marchio privato solo al suo marchio.",
         "sections": "Una sezione richiesta non è tra quelle che il tuo ruolo può vedere, oppure è richiesta due volte.",
-        "company": "Indica quale azienda conserva questa copia: il modello è di tutte le aziende.",
+        "company": "Indica quale azienda conserva questa copia: il prodotto è di tutte le aziende.",
         "invalid": "Il PDF è stato rifiutato così com'è: controlla per chi è e le sezioni.",
         "meanwhile": "Nel frattempo è stata creata un'altra versione di questa revisione: crea di nuovo il PDF.",
         "forbidden": "Il tuo ruolo non crea PDF delle schede tecniche per questa azienda.",
-        "notFound": "Questo modello o questa revisione non esiste più.",
+        "notFound": "Questo prodotto o questa revisione non esiste più.",
         "signed_out": "La sessione è scaduta: accedi di nuovo.",
         "rate_limited": "Troppe richieste: attendi un momento e riprova.",
         "unavailable": "Il server non ha risposto: nessun PDF è stato creato. Riprova tra poco.",
@@ -166,7 +166,7 @@
       }
     },
     "cover": {
-      "style": "Modello",
+      "style": "Prodotto",
       "type": "Tipo di prodotto",
       "season": "Stagione",
       "brand": "Marchio",
@@ -400,7 +400,7 @@
       "artwork": "File",
       "artworkCount": "{logos} loghi · {artwork} grafiche di etichetta",
       "rules": "Regole di confezionamento",
-      "noBranding": "Nessuna confezione di marchio per questo modello.",
+      "noBranding": "Nessuna confezione di marchio per questo prodotto.",
       "col": {
         "rule": "Regola",
         "material": "Materiale",
@@ -415,7 +415,7 @@
       "noPlacements": "Nessuna protezione posizionata.",
       "protectors": "Righe delle protezioni nella distinta",
       "certificates": "Certificati",
-      "noCertificates": "Nessun certificato copre il modello.",
+      "noCertificates": "Nessun certificato copre il prodotto.",
       "tests": "Prove di controllo della produzione",
       "noTests": "Nessuna prova di controllo della produzione.",
       "notTested": "Non ancora provata",
@@ -489,7 +489,7 @@
       "print": "Stampa",
       "printHeld": "Il PDF non è ancora aperto.",
       "made": "{audience} · {code} · creata il {at} da {by}",
-      "failed": "Impossibile aprire il modello",
+      "failed": "Impossibile aprire il prodotto",
       "versionsFailed": "Impossibile leggere le versioni",
       "pdfFailed": "Impossibile aprire questo PDF",
       "forbidden": {
@@ -516,7 +516,7 @@
       "failed": "Impossibile verificare questa pagina",
       "notFound": {
         "title": "Nessuna pagina di scheda tecnica ha questo codice",
-        "body": "Il codice potrebbe essere scritto male, oppure la pagina è di un modello che il tuo ruolo non vede."
+        "body": "Il codice potrebbe essere scritto male, oppure la pagina è di un prodotto che il tuo ruolo non vede."
       },
       "type": {
         "title": "Verifica una pagina stampata",

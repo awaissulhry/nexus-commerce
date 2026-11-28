@@ -7,7 +7,7 @@ import { overviewOf, pairsOf } from '../overview/model'
 import { useOrderWords } from '../words'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
 import { ProductionQualityCard } from './QualityCard'
-import { DatesCard, FactsCard, PayCard, ProgressCard, RequestsCard } from './overview/Cards'
+import { DatesCard, DesignerCard, FactsCard, LinkedCard, PayCard, ProgressCard, RequestsCard } from './overview/Cards'
 import { WhereCard } from './overview/WhereCard'
 
 /**
@@ -29,12 +29,17 @@ export function OverviewTab({ model, record, actions }: { model: OrderRecordView
   const dates = cards.dates ? <DatesCard key="dates" model={cards.dates} /> : null
   const requests = cards.requests ? <RequestsCard key="requests" model={cards.requests} items={model.requests.items} actions={actions} /> : null
   const pay = cards.pay ? <PayCard key="pay" model={cards.pay} /> : null
+  // owb-po5.3 (plan § 5i portal Overview): + Linked records (what the order was made from) and "Ask the factory designer" (the chat).
+  const made = model.madeFrom ?? null
+  const madeLabel = made ? words.t(made.kind === 'request' ? (made.label ? 'status.madeFromRequest' : 'status.madeFromRequestNone') : made.label ? 'status.madeFromQuote' : 'status.madeFromQuoteNone', made.label ? { label: made.label } : undefined) : null
+  const linked = made && madeLabel ? <LinkedCard key="linked" madeFrom={{ href: made.href, label: madeLabel }} /> : null
+  const designer = actions?.onAsk ? <DesignerCard key="designer" onAsk={actions.onAsk} held={model.offlineSince ? words.t('held.offline') : null} /> : null
   return (
     <Overview>
       <WhereCard model={cards.where} page={model.revision.page} actions={actions} />
       {cards.progress ? <ProgressCard model={cards.progress} onRetry={cards.progress.from === 'progress' ? actions?.onRetryProgress : actions?.onRetryProduction} /> : null}
       {/* pp-fx4 (walk W-08): the pairs are built from the cards that are present, in the picture's order (no lone card beside dead space). */}
-      {pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />]).map((pair, index) => (
+      {pairsOf([dates, requests, quality, pay, <FactsCard key="facts" model={cards.facts} />, linked, designer]).map((pair, index) => (
         <OverviewPair key={index}>{pair}</OverviewPair>
       ))}
     </Overview>
