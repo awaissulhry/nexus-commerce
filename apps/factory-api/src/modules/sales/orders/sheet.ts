@@ -23,6 +23,8 @@ import { draftStillOpen, piecesOfLine, sheetLinesOf, shipToInUseOf } from '../po
 import { readDraftFiles, readLines, readPeople, type LineRow, type PersonRow } from '../portal-ordering/store'
 import { mayOn, officeContextOf, seenOrdersWhere, seenRequestsWhere } from './access'
 import { ownOrdersOf } from './on-the-order'
+// owb-of2: the customer's own columns only through S1's ONE reader.
+import { ownColumnsOf, type RecordOwnColumns } from '../own-columns/read'
 import { lateWhere } from './orders'
 import { orderProductionColumns, type ProductionColumns } from './production-columns'
 import type { OrderSheetQuery, SheetLineView, SheetRowView } from './sheet-contract'
@@ -289,38 +291,14 @@ async function rowsOf(client: Reader, context: OfficeContext, actor: Actor, own:
   })
 }
 
-// ---- the own columns (R62) of a page's lines: the columns the record uses, in its order, each line's value -----------------------
+// ---- the own columns (R62) of a page's lines — read ONLY through S1's ONE reader (own-columns/read.ts ownColumnsOf: a column switched
+// off keeps its use row from USE_OFF_FROM on and is not "on" the record; a draft line taken out counts nowhere). owb-of2. ----------------
 
-type OwnUse = { readonly columnId: string; readonly name: string; readonly kind: SheetLineView['own'][number]['kind'] }
-type OwnValueRow = { readonly columnId: string; readonly lineId: string; readonly valueText: string | null; readonly valueNumber: Prisma.Decimal | null; readonly valueDate: Date | null; readonly valueBool: boolean | null }
-
-function ownOf(uses: readonly OwnUse[], values: readonly OwnValueRow[], lineId: string): SheetLineView['own'] {
-  return uses.map((use) => {
-    const found = values.find((value) => value.lineId === lineId && value.columnId === use.columnId)
-    const value = !found
-      ? null
-      : use.kind === 'NUMBER'
-        ? found.valueNumber === null
-          ? null
-          : Number(found.valueNumber.toString())
-        : use.kind === 'DATE'
-          ? dayText(found.valueDate)
-          : use.kind === 'YES_NO'
-            ? found.valueBool
-            : found.valueText
-    return { columnId: use.columnId, name: use.name, kind: use.kind, value }
-  })
-}
-
-async function ownUsesOf(client: Reader, where: { salesOrderId: { in: string[] } } | { portalOrderRequestId: { in: string[] } }): Promise<Map<string, OwnUse[]>> {
-  const rows = await client.orderLineColumnUse.findMany({ where, select: { salesOrderId: true, portalOrderRequestId: true, seq: true, column: { select: { id: true, name: true, kind: true } } }, orderBy: [{ seq: 'asc' }, { id: 'asc' }] })
-  const out = new Map<string, OwnUse[]>()
-  for (const row of rows) {
-    const recordId = row.salesOrderId ?? row.portalOrderRequestId
-    if (!recordId) continue
-    out.set(recordId, [...(out.get(recordId) ?? []), { columnId: row.column.id, name: row.column.name, kind: row.column.kind }])
-  }
-  return out
+/** A line's own values in the record's column order (the Shape's `own`: a NUMBER as decimal text, a DATE as 'YYYY-MM-DD', unset null). */
+function ownOf(record: RecordOwnColumns | undefined, lineId: string): SheetLineView['own'] {
+  if (!record) return []
+  const values = record.values[lineId] ?? {}
+  return record.used.map((column) => ({ columnId: column.id, name: column.name, kind: column.kind, value: values[column.id]?.value ?? null }))
 }
 
 // ---- ORDER rows -------------------------------------------------------------------------------------------------------------
@@ -368,11 +346,8 @@ async function orderFactsOf(client: Reader, context: OfficeContext, actor: Actor
   const askedColours = unique(changes.flatMap((change) => change.lines.flatMap((line) => (line.colourwayId ? [line.colourwayId] : []))))
   const styleCode = new Map(askedStyles.length > 0 ? (await client.style.findMany({ where: { id: { in: askedStyles } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]) : [])
   const colourName = new Map(askedColours.length > 0 ? (await client.colourway.findMany({ where: { id: { in: askedColours } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]) : [])
-  const uses = await ownUsesOf(client, { salesOrderId: { in: ids } })
+  const ownColumns = await ownColumnsOf(client, { orderIds: ids })
   const lineIds = lineRows.map((line) => line.id)
-  const values: OwnValueRow[] = lineIds.length > 0
-    ? (await client.orderLineOwnValue.findMany({ where: { salesOrderLineId: { in: lineIds } }, select: { columnId: true, salesOrderLineId: true, valueText: true, valueNumber: true, valueDate: true, valueBool: true } })).map((row) => ({ ...row, lineId: row.salesOrderLineId! }))
-    : []
   for (const row of rows) {
     const mine = lineRows.filter((line) => line.orderId === row.id)
     const left = shipments.filter((shipment) => shipment.salesOrderId === row.id)
@@ -406,7 +381,7 @@ async function orderFactsOf(client: Reader, context: OfficeContext, actor: Actor
       label: atWarehouse.length === 0 ? null : atWarehouse.every((leg) => leg.customerLabelFileId !== null) ? 'RECEIVED' : 'WAITS',
       production: production.get(row.id) ?? null,
     })
-    const columns = uses.get(row.id) ?? []
+    const columns = ownColumns.get(row.id)
     lines.set(
       row.id,
       mine.flatMap((line) => {
@@ -422,7 +397,7 @@ async function orderFactsOf(client: Reader, context: OfficeContext, actor: Actor
           sizes: sizesWords(line.sizes),
           sizeFileId: null,
           pieces: line.quantity,
-          own: ownOf(columns, values, line.id),
+          own: ownOf(columns, line.id),
           asks: asks.get(line.id) ?? [],
         }]
       }),
@@ -486,11 +461,7 @@ async function requestFactsOf(client: Reader, actor: Actor, rows: readonly Reque
   const colourIds = unique(lineRows.flatMap((line) => (line.colourwayId ? [line.colourwayId] : [])))
   const styles = new Map(styleIds.length > 0 ? (await client.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]) : [])
   const colours = new Map(colourIds.length > 0 ? (await client.colourway.findMany({ where: { id: { in: colourIds } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]) : [])
-  const uses = await ownUsesOf(client, { portalOrderRequestId: { in: ids } })
-  const lineIds = lineRows.map((line) => line.id)
-  const values: OwnValueRow[] = lineIds.length > 0
-    ? (await client.orderLineOwnValue.findMany({ where: { portalOrderRequestLineId: { in: lineIds } }, select: { columnId: true, portalOrderRequestLineId: true, valueText: true, valueNumber: true, valueDate: true, valueBool: true } })).map((row) => ({ ...row, lineId: row.portalOrderRequestLineId! }))
-    : []
+  const ownColumns = await ownColumnsOf(client, { requestIds: ids })
   for (const row of rows) {
     const mine = lineRows.filter((line) => line.requestId === row.id).sort((a, b) => a.seq - b.seq)
     const roster = people.filter((person) => person.requestId === row.id)
@@ -499,7 +470,7 @@ async function requestFactsOf(client: Reader, actor: Actor, rows: readonly Reque
     const open = draftStillOpen(mine, roster, row, shipToInUseOf(row, addresses.filter((address) => address.partyId === row.partyId)), today, undefined, sheetLines)
     // A size sheet is body data: named only to a reader of measurements over the customer.
     const seesSheets = can(actor, SALES_MEASUREMENTS_VIEW, { companyId: row.companyId, partyId: row.partyId })
-    const columns = uses.get(row.id) ?? []
+    const columns = ownColumns.get(row.id)
     const lines: SheetLineView[] = mine.flatMap((line) => {
       const kind = sheetLineKindOf(line.kind)
       if (!kind) return []
@@ -515,7 +486,7 @@ async function requestFactsOf(client: Reader, actor: Actor, rows: readonly Reque
         sizes: sizesWords(line.sizes),
         sizeFileId: sheet?.id ?? null,
         pieces: piecesOfLine(line, roster),
-        own: ownOf(columns, values, line.id),
+        own: ownOf(columns, line.id),
         asks: [],
       }]
     })
