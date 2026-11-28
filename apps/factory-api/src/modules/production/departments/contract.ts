@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { defineContract, id, output } from '@nexus/factory-domain/core/contracts'
+import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { createDepartmentBody, departmentMoveBody, updateDepartmentBody } from '@nexus/factory-domain/production/departments/contracts'
 
 /** owb- (b3.3): GET /production/departments — the Shapes of owb-b23.md (ordered by seq). */
 export const departmentView = output({
@@ -17,7 +18,16 @@ export const departmentView = output({
   seq: z.number().int(),
   floorReady: z.boolean(),
   status: z.enum(['ACTIVE', 'CLOSED']),
+  /** owb-pd1 1.3: the row's version, sent back by a rename, a close or an open (a stale one is a 409). */
+  version: z.number().int(),
 })
 export type DepartmentView = z.infer<typeof departmentView>
 
 export const departmentsContract = defineContract({ response: { 200: output({ departments: z.array(departmentView) }) } })
+
+// ---- owb-pd1 1.3: keeping the departments (./manage.ts) -----------------------------------------------------------------
+const oneDepartment = output({ department: departmentView })
+const department = input({ departmentId: id() })
+export const createDepartmentContract = defineContract({ body: createDepartmentBody, response: { 201: oneDepartment } })
+export const updateDepartmentContract = defineContract({ params: department, body: updateDepartmentBody, response: { 200: oneDepartment } })
+export const moveDepartmentContract = defineContract({ params: department, body: departmentMoveBody, response: { 200: oneDepartment } })
