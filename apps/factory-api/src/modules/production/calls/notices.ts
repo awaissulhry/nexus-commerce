@@ -61,8 +61,8 @@ export const CALL_RULES: readonly FanOutRule[] = Object.freeze([
   // When the job escalates a call nobody came to (`help_call.escalated`, ./escalation.ts), the office is told: the people who keep
   // the site's help calls (production.calls.manage: the production manager) and, again, the type's responders, each only if they
   // still reach Home and may answer calls at the site now, and the call's work order (the brand wall). Anchored to the call's
-  // escalation (a replay tells nobody twice). The words reuse the raise's message with the minutes in its title (a message key of
-  // its own is asked in LF/shared-asks.md: the notification templates are not S5's file).
+  // escalation (a replay tells nobody twice). Its own message key `notifications.calls.escalated` (lead 88's yes, shared-asks
+  // 09:15), the minutes in its title.
   {
     name: 'calls.escalated',
     events: ['help_call.escalated'],
@@ -91,7 +91,7 @@ export const CALL_RULES: readonly FanOutRule[] = Object.freeze([
           record: { type: 'HelpCall', id: payload.callId, label: call.station.code },
           companyId: scope.companyId,
           anchor: `call-escalated:${payload.callId}`,
-          messageKey: 'notifications.calls.raised',
+          messageKey: 'notifications.calls.escalated',
           params: { title, callId: payload.callId, code: payload.code },
           actorId: null,
         })
