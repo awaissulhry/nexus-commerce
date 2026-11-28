@@ -24,6 +24,11 @@ import { OrderCard } from '../../../../lib/order-cells/view/OrderCard'
 import { useRoomWidth } from '../../../../lib/order-cells/use-room-width'
 import { useCellWords } from '../../../../lib/order-cells/words'
 import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
+// owb-po7.3: the picture as a button, the life word, Waits · news and Details (the customer's own columns as chips).
+import type { OrderRow } from '../api'
+import { detailsOf, lifeOf, pictureDoorOf, waitChipsOf, type WaitChip } from '../sheet/model'
+import { PictureButton, SHEET_NS, WaitsChips } from '../sheet/view/SheetParts'
+import { OwnChips } from '../../../../lib/order-lines/own-columns/OwnChips'
 import type { ReadPictures } from '../../../../lib/record-picture/cache'
 import { LAST_MESSAGE_NS } from '../../../../lib/last-message-cell/view/LastMessageCell'
 import { MessagesHeader, NewMessagesBubble } from '../../../../lib/last-message-cell/view/NewMessagesBubble'
@@ -82,6 +87,10 @@ export interface OrdersListViewModel {
 }
 
 export interface OrdersListActions {
+  /** owb-po7.3: the picture of a row was pressed (a reader who may change it): the window "The picture of the order" opens here. */
+  onPicture?: (row: OrderRow) => void
+  /** owb-po7.3: a "Waits · news" chip was pressed: the chat, the design window or the order. */
+  onWait?: (row: OrderRow, chip: WaitChip) => void
   /** A group's door (pressed again: everything open); null: everything open. */
   onGroup?: (group: CustomerGroup | null) => void
   onSearch?: (q: string) => void
@@ -97,10 +106,10 @@ export interface OrdersListActions {
   onDownloadAll?: () => void
 }
 
-export function OrdersListView({ model, actions }: { model: OrdersListViewModel; actions?: OrdersListActions }) {
+export function OrdersListView({ model, actions, above }: { model: OrdersListViewModel; actions?: OrdersListActions; above?: ReactNode }) {
   return (
-    <WithMessages namespaces={[LAST_MESSAGE_NS]}>
-      <List model={model} actions={actions} />
+    <WithMessages namespaces={[LAST_MESSAGE_NS, SHEET_NS]}>
+      <List model={model} actions={actions} above={above} />
     </WithMessages>
   )
 }
@@ -111,7 +120,8 @@ type CardField = NonNullable<ListCards<ListRow>['fields']>[string]
 /** The grid's room: the list's own width less the card's edges (never the window: the room rule of the Work tab). */
 const roomOf = (width: number): number => Math.max(0, Math.floor(width) - LIST_CARD_EDGES)
 
-function List({ model, actions }: { model: OrdersListViewModel; actions?: OrdersListActions }) {
+function List({ model, actions, above }: { model: OrdersListViewModel; actions?: OrdersListActions; above?: ReactNode }) {
+  const ts = useT(SHEET_NS) // owb-po7
   const l = useT(LAST_MESSAGE_NS) // B-TH-230: the shared message cell's words (the portal's "voi" in outside-words)
   const words = useOrderWords()
   const cells = useCellWords()
@@ -140,6 +150,10 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       const view = viewOf(data)
       if (!view?.picture) return null
       const picture = <RecordPicture source="customerOrder" recordId={view.id} number={view.number.text} size="cell" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
+      // owb-po7.3 (§ 5zj A): for a reader who may change it, the picture is a button (a camera on hover): the window opens here.
+      const order = data?.kind === 'order' ? data.order : null
+      const onPicture = latest.current.actions?.onPicture
+      if (order && onPicture && pictureDoorOf(order)) return <PictureButton picture={picture} label={ts('ordersSheet.picture')} onPress={() => onPicture(order)} />
       return view.href ? (
         <Link className="fw-pgl-pic" href={view.href} title={t('row.open')} data-door="">
           {picture}
@@ -175,9 +189,10 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
     const WhereCell = ({ data }: ICellRendererParams<ListRow>) => {
       const view = viewOf(data)
       if (!view) return null
+      const life = data?.kind === 'order' ? lifeOf(data.order) : null
       const chips = (
         <span className="fw-sheet-wi">
-          <StateChip chip={view.state} />
+          {life ? <StateChip life={life} /> : <StateChip chip={view.state} />}
           {view.mark ? <MarkChip chip={view.mark} /> : null}
         </span>
       )
@@ -189,6 +204,16 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       ) : (
         chips
       )
+    }
+    const WaitsCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (data?.kind !== 'order') return null
+      const order = data.order
+      return <WaitsChips chips={waitChipsOf(order.waits)} onChip={(chip) => latest.current.actions?.onWait?.(order, chip)} />
+    }
+    const DetailsCell = ({ data }: ICellRendererParams<ListRow>) => {
+      if (data?.kind !== 'order') return null
+      const details = detailsOf(data.order, latest.current.model.read?.ownColumns ?? [])
+      return details.columns.length > 0 ? <OwnChips columns={details.columns} lines={details.lines} /> : <span className="fw-ocl-sub">—</span>
     }
     const PromisedCell = ({ data }: ICellRendererParams<ListRow>) => {
       const view = viewOf(data)
@@ -233,6 +258,9 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       // The phone card's title is the column's text: the customer's own number, else their PO, else the kind.
       column('number', t('col.number'), NumberCell, { minWidth: LIST_WIDTHS.number, flex: 0.8 }, (view) => view.number.text),
       column('whereItIs', t('col.whereItIs'), WhereCell, { minWidth: LIST_WIDTHS.whereItIs, flex: 1.4 }, (view) => view.state.words, snug),
+      // owb-po7.3: Waits · news (each chip a door) and Details (the customer's own columns: two chips, then "+ n"); no price column.
+      column('waits', ts('ordersSheet.col.waits'), WaitsCell, { minWidth: 180, flex: 1 }),
+      ...((read?.ownColumns ?? []).length > 0 ? [column('details', ts('ordersSheet.col.details'), DetailsCell, { minWidth: 160, flex: 0.9 })] : []),
       column('promised', t('col.promised'), PromisedCell, fixed(LIST_WIDTHS.promised), (view) => view.promise.day ?? '', { ...snug, ...plainHead }),
       ...(fit.ordered ? [column('ordered', t('col.orderedOn'), OrderedCell, fixed(LIST_WIDTHS.ordered), (view) => view.ordered.day ?? '', { ...snug, ...plainHead })] : []),
       column('shipped', t('col.shipped'), ShippedColumn, fixed(LIST_WIDTHS.shipped), (view) => ('bar' in view.shipped ? cells.sheet('shippedOf', { shipped: view.shipped.bar.shipped, units: view.shipped.bar.units }) : view.shipped.asked)),
@@ -264,7 +292,7 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
         return { ...column(entry.columnId, label, Cell, fixed(LIST_WIDTHS.portal)), wrapHeaderText: true, headerClass: 'fw-pgl-hwrap', headerTooltip: `${label} · ${t('sheet.columnHint')}`, valueGetter: ({ data }: { data?: ListRow }) => text(data) ?? '' }
       }),
     ]
-  }, [t, l, cells, locale, words, seesPrices, model.unread ? 1 : 0, read?.columns, fit.ordered, fit.portal])
+  }, [t, l, ts, cells, locale, words, seesPrices, model.unread ? 1 : 0, read?.columns, read?.ownColumns, fit.ordered, fit.portal])
 
   // The phone (D3): the shared Work card — the number (a door) and the bubble on top; the picture at the left (orders only); the PO or
   // the request's subject; the chips; Promised (+ "was …") and the pieces.
@@ -286,17 +314,24 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
         </span>
       )
     }
+    // owb-po7.4: on a phone the picture is its OWN button (the camera always shows); the card's title stays the order's link.
+    const cardPicture = (row: ListRow, view: ListRowView): ReactNode => {
+      const picture = <RecordPicture source="customerOrder" recordId={view.id} number={view.number.text} size="phone" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
+      const onPicture = latest.current.actions?.onPicture
+      return row.kind === 'order' && onPicture && pictureDoorOf(row.order) ? <PictureButton picture={picture} label={ts('ordersSheet.picture')} onPress={() => onPicture(row.order)} /> : picture
+    }
     const block = (row: ListRow): ReactNode => {
       const view = viewOf(row)
       if (!view) return null
       return (
         <OrderCard
-          {...(view.picture ? { picture: <RecordPicture source="customerOrder" recordId={view.id} number={view.number.text} size="phone" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} /> } : {})}
+          {...(view.picture ? { picture: cardPicture(row, view) } : {})}
           sub={view.number.sub ? <span className="fw-ocl-sub fw-pgl-wrap">{view.number.sub}</span> : null}
           chips={
             <>
-              <StateChip chip={view.state} />
+              {row.kind === 'order' && lifeOf(row.order) ? <StateChip life={lifeOf(row.order)!} /> : <StateChip chip={view.state} />}
               {view.mark ? <MarkChip chip={view.mark} /> : null}
+              {row.kind === 'order' ? <WaitsChips chips={waitChipsOf(row.order.waits)} onChip={(chip) => latest.current.actions?.onWait?.(row.order, chip)} /> : null}
             </>
           }
           promise={
@@ -315,7 +350,7 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
     fields.whereItIs = { role: 'subtitle', draw: block }
     fields.newMessages = { role: 'aside', draw: (row) => <NewMessagesBubble unread={latest.current.model.unread?.[row.id]} href={viewOf(row)?.messages.href ?? null} record={viewOf(row)?.messages.record ?? ''} l={l} /> }
     return fields
-  }, [columns, cells, t, l])
+  }, [columns, cells, t, l, ts])
 
   const band = bandOf(read, model.state, model.group)
   const searching = model.q.trim() !== ''
@@ -355,6 +390,8 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
           ...(actions?.onRetry ? { onRetry: actions.onRetry } : {}),
         }}
       />
+      {/* owb-po7.2: the drafts bar, the line after Send, the Withdrawn chip (the host's). */}
+      {above ? <div className="fw-pos-top">{above}</div> : null}
       {read && !read.seesPrices ? <PricesNote /> : null}
       {/* B-TH-246: the file could not be made — in words, with Try again. */}
       {model.downloadFailed ? <Banner tone="danger" title={t('sheet.downloadFailed')} action={actions?.onDownloadAll ? <Button size="sm" onClick={actions.onDownloadAll}>{t('state.retry')}</Button> : undefined} /> : null}
