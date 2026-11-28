@@ -123,6 +123,7 @@
     "label": "Order",
     "overview": "Overview",
     "lines": "Lines",
+    "money": "Money",
     "shipments": "Shipments",
     "files": "Files",
     "toConfirm": "to confirm"
@@ -954,8 +955,8 @@
     "progress": "Progress by line",
     "piecesAsOf": "Pieces as of {time}",
     "dates": "Next dates",
-    "requests": "Requests & changes",
-    "nothing": "No request or change waits",
+    "requests": "Asks & changes",
+    "nothing": "No ask or change waits",
     "groupYou": "Waiting on you · {count}",
     "groupUs": "Waiting on us · {count}",
     "groupAnswered": "Answered · {count}",

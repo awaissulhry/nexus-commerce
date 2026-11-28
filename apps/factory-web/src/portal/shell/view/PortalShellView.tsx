@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type Ref, type UIEvent } from 'react'
 import Link from 'next/link'
-import { Bell, Keyboard, LogOut, MessageCircleQuestion, MessageSquare, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Mail, ChevronDown, ChevronRight } from 'lucide-react'
+import { Bell, Camera, Keyboard, LogOut, MessageCircleQuestion, MessageSquare, MoreHorizontal, Palette, Search, ShieldCheck, UserRound, Users, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { Banner, Menu, SearchTrigger, Tabs, type MenuItemDef } from '@nexus/ui/components'
 import { BottomBar, type BottomBarLinkProps } from '@nexus/ui/components/BottomBar/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
@@ -18,8 +18,10 @@ import '@nexus/ui/styles/branding.css'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import { HealthPill } from '../../../lib/production/view/HealthPill'
-import { customerStateChipOf } from '../../../lib/order-cells/model' // pp-w1 (L4): the shared status chip
-import { StateChip } from '../../../lib/order-cells/view/StateChip'
+import { StateChip } from '../../../lib/order-cells/view/StateChip' // owb-po5.1: `{ life, note }`, the nine words
+// owb-po5.1: the order's picture in the band (the shared part, read by the frame's batch reader).
+import type { ReadPictures } from '../../../lib/record-picture/cache'
+import { RecordPicture } from '../../../lib/record-picture/view/RecordPicture'
 import type { LiveState } from '../../../shell/live/bus'
 import type { PortalBand } from '../frame'
 import { badgeOf, type BadgeWords, type PortalNotice } from '../model'
@@ -81,9 +83,13 @@ export interface PortalShellViewModel {
   preview: boolean
   /** The person may search (portal.search). */
   canSearch: boolean
+  /** owb-po5.1: the frame's batch picture reader (the band's order picture); absent: no picture read (a placeholder). */
+  pictures?: ReadPictures | null
+  /** owb-po5.4: the top bar's Chat — the new messages of every chat (null: not read: no number); absent: no Chat button. */
+  chat?: { readonly count: number | null; readonly open: boolean } | null
 }
 
-export type PortalDialog = 'search' | 'notifications' | 'email' | 'shortcuts' | 'access' | 'display'
+export type PortalDialog = 'search' | 'notifications' | 'email' | 'shortcuts' | 'access' | 'display' | 'chat' /* owb-po5.4 */
 
 export interface PortalShellViewProps {
   model: PortalShellViewModel
@@ -193,6 +199,21 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
       </span>
     ) : undefined
 
+  // owb-po5.1: the order's picture before the title — a button with the camera when the person may change it, else the picture.
+  const picture = band.picture ?? null
+  const pictureFace = picture ? <RecordPicture source="customerOrder" recordId={picture.recordId} number={picture.number} size="cell" read={model.pictures ?? null} /> : null
+  const bandPicture = picture ? (
+    picture.onOpen ? (
+      <button type="button" className="fw-pband-pic" aria-label={t('band.pictureChange')} onClick={picture.onOpen}>
+        {pictureFace}
+        <span className="fw-pband-pic-cam" aria-hidden="true">
+          <Camera size={12} />
+        </span>
+      </button>
+    ) : (
+      <span className="fw-pband-pic">{pictureFace}</span>
+    )
+  ) : undefined
   const bandHeader = (
     <DetailHeader
       dense
@@ -204,12 +225,13 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
           </Link>
         ) : undefined
       }
+      badge={bandPicture}
       title={title}
       meta={
         band.refs || band.status || band.chips ? (
           <span className="fw-pband-meta">
             {band.refs ? <RefPair theirs={band.refs.theirs ?? null} ours={band.refs.ours ?? null} size="sm" labels={ds.refPair} /> : null}
-            {band.status ? band.status.order ? <StateChip chip={customerStateChipOf(band.status.order, band.status.label)} /> : <Pill tone={band.status.tone}>{band.status.label}</Pill> : null}
+            {band.status ? band.status.life ? <StateChip life={band.status.life} note={band.status.note ?? null} /> : <Pill tone={band.status.tone}>{band.status.label}</Pill> : null}
             {/* pp-w1 (w1.2): the office band's twins after the status — health (Late / At risk), urgency, made from. */}
             {band.chips?.health ? <HealthPill face="customer" computed={band.chips.health.computed} raised={band.chips.health.raised ?? null} /> : null}
             {band.chips?.urgent ? <Tag tone="warning">{band.chips.urgent}</Tag> : null}
@@ -242,6 +264,11 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
               ),
             )}
           </span>
+          {band.people ? (
+            <Button size="sm" variant="tonal" className="fw-pband-people" aria-label={`${t('band.peopleLabel')}: ${t('band.people', { count: band.people.count })}`} onClick={band.people.onOpen}>
+              <Users size={14} aria-hidden /> <span className="fw-pband-thread-words">{t('band.people', { count: band.people.count })}</span>
+            </Button>
+          ) : null}
           {band.thread && threadWords ? (
             <Button size="sm" variant="tonal" className="fw-pband-thread" aria-controls="messages" aria-keyshortcuts="Meta+J Control+J" aria-label={threadWords.label ? t(threadWords.label.key, { count: threadWords.label.count }) : t(threadWords.key)} onClick={band.thread.onClick}>
               <MessageSquare size={14} aria-hidden /> <span className="fw-pband-thread-words">{t(threadWords.key, threadWords.count === undefined ? undefined : { count: threadWords.count })}</span>
@@ -287,6 +314,16 @@ export function PortalShellView({ model, children, onNavigate, onOpen, onAsk, on
           </div>
         ) : null}
         <div className="fw-ptop-utility">
+          {model.chat ? (
+            <ToolbarButton
+              icon={<MessageSquare size={18} />}
+              label={model.chat.count ? t('chat.labelNew', { count: model.chat.count }) : t('chat.title')}
+              description={t('chat.open')}
+              badge={model.chat.count ? model.chat.count : undefined}
+              active={model.chat.open}
+              onClick={() => onOpen?.('chat')}
+            />
+          ) : null}
           <span ref={bellRef} className="fw-ptop-bell">
             <ToolbarButton icon={<Bell size={18} />} label={bellLabel} description={t('bell.open')} badge={bell && bell.unread > 0 ? bell.unread : undefined} onClick={() => onOpen?.('notifications')} />
           </span>

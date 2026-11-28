@@ -1,0 +1,212 @@
+{
+  "head": {
+    "structures_one": "{count} struttura",
+    "structures_other": "{count} strutture",
+    "rules_one": "{count} regola",
+    "rules_other": "{count} regole",
+    "neverUsed_one": "{count} regola mai usata",
+    "neverUsed_other": "{count} regole mai usate",
+    "newRule": "Nuova regola…",
+    "infoLabel": "Su questa pagina",
+    "info": "Una struttura è un modo con un nome di gestire un ordine: i suoi passi, la sua squadra, le sue persone in ufficio. Una regola dice quali ordini la usano: l'elenco si legge dall'alto e vince la prima regola che va bene, quindi un'eccezione è una regola più precisa sopra. Un ordine non iniziato segue le regole; alla prima stampa tiene ciò che ha."
+  },
+  "notice": {
+    "dismiss": "Chiudi",
+    "rule": {
+      "added": "La regola è aggiunta al suo posto.",
+      "saved": "La regola è salvata.",
+      "closed": "La regola è chiusa e tenuta.",
+      "reopened": "La regola è di nuovo aperta."
+    },
+    "structure": {
+      "added": "La struttura {name} è aggiunta.",
+      "saved": "La struttura {name} è salvata.",
+      "closed": "La struttura {name} è chiusa e tenuta.",
+      "reopened": "La struttura {name} è di nuovo aperta."
+    }
+  },
+  "failed": "Non è stato possibile leggere le strutture d'ordine.",
+  "rules": {
+    "title": "Regole",
+    "answer": "Vince la prima regola che va bene. Un nuovo ordine prende la sua struttura da solo. Un ordine in lavorazione non cambia mai.",
+    "closedStructure": "La sua struttura è chiusa",
+    "neverUsed": "Mai usata",
+    "fits_one": "{count} ordine aperto",
+    "fits_other": "{count} ordini aperti",
+    "up": "Sposta su la regola {n}",
+    "upHint": "Su: si legge prima",
+    "down": "Sposta giù la regola {n}",
+    "downHint": "Giù: si legge dopo",
+    "edit": "Cambia la regola {n}",
+    "first": "È già la prima regola.",
+    "last": "È già l'ultima regola.",
+    "moving": "Si sta spostando una regola.",
+    "dead": "Una regola sopra prende tutti i suoi ordini. Quindi questa regola non va mai bene.",
+    "deadBecause": "La regola {n} sopra prende tutti i suoi ordini. Quindi questa regola non va mai bene.",
+    "moveUp": "Spostala sopra la regola {n}",
+    "everythingElse": "Tutto il resto",
+    "normalWay": "Il modo normale",
+    "normalWayHint": "il percorso del prodotto · la squadra a mano, come oggi",
+    "alwaysLast": "sempre l'ultima riga",
+    "readOnly": "Il titolare e le vendite cambiano le regole."
+  },
+  "rule": {
+    "when": "Quando una riga d'ordine è di",
+    "andIs": "ed è",
+    "handleAs": "gestiscila come",
+    "anyCustomer": "Qualsiasi cliente",
+    "anyCategory": "qualsiasi categoria",
+    "whenCustomer": "Quando una riga d'ordine è di",
+    "andIsCategory": "ed è",
+    "pickStructure": "Scegli una struttura",
+    "thisCustomer": "Questo cliente",
+    "title": "Regola {n}",
+    "newTitle": "Una nuova regola",
+    "save": "Salva la regola",
+    "add": "Aggiungi la regola",
+    "close": "Chiudi questa regola",
+    "chooseStructure": "Scegli una struttura.",
+    "makeOneFirst": "Oppure creane prima una: Strutture › Nuova struttura….",
+    "managerMakes": "Il responsabile di produzione crea una struttura.",
+    "doesNow": "Cosa fa ora questa regola",
+    "fitsNow_one": "Va bene per {count} ordine aperto: {orders}.",
+    "fitsNow_other": "Va bene per {count} ordini aperti: {orders}.",
+    "fitsNone": "Ora nessun ordine aperto va bene. Aspetta il prossimo ordine.",
+    "place": "Va al posto {n}, sopra la prima regola che prenderebbe i suoi ordini.",
+    "placeLast": "Va al posto {n}, l'ultimo prima di «Tutto il resto».",
+    "keptNote": "Un ordine in lavorazione tiene ciò con cui è iniziato. Solo gli ordini non iniziati prendono un cambiamento.",
+    "note": "Una nota per i colleghi (facoltativa)",
+    "noteHint": "Per esempio: concordato con il cliente a marzo",
+    "held": {
+      "structure": "Scegli prima una struttura.",
+      "closed": "Questa struttura è chiusa: scegline una aperta.",
+      "same": "La regola {n} è esattamente per questi ordini: cambia quella regola."
+    }
+  },
+  "category": {
+    "JACKET": "Giacche",
+    "TROUSERS": "Pantaloni",
+    "SUIT": "Tute",
+    "GLOVES": "Guanti",
+    "VEST": "Gilet",
+    "OTHER": "Altro"
+  },
+  "try": {
+    "title": "Prova un ordine",
+    "answer": "Scegli un cliente e una categoria: la regola che vince, e perché le altre no. Non si salva niente.",
+    "customer": "Cliente",
+    "category": "Categoria",
+    "wins": "Vince la regola {n}",
+    "noRule": "Nessuna regola va bene: il modo normale"
+  },
+  "how": {
+    "title": "Come funziona",
+    "structure": "Una struttura è un modo con un nome di gestire un ordine: il suo percorso, la sua squadra, le sue persone in ufficio.",
+    "rule": "Una regola dice «gli ordini così usano quella struttura». Vince la prima regola che va bene. Un'eccezione è una regola più precisa sopra.",
+    "order": "Un ordine a mano: sull'ordine, Produzione › Struttura d'ordine › «Un'altra struttura per questo ordine…», con un motivo.",
+    "kept": "Un ordine non iniziato segue le regole. Alla prima stampa tiene ciò che ha."
+  },
+  "structures": {
+    "title": "Strutture",
+    "answer": "Una regola punta a una struttura. Il responsabile di produzione crea una struttura.",
+    "new": "Nuova struttura…",
+    "none": "Ancora nessuna struttura.",
+    "steps": "Passi: come dice il prodotto",
+    "noTeam": "Nessuna squadra: assegnata a mano, come oggi",
+    "used_one": "Usata da {count} regola",
+    "used_other": "Usata da {count} regole",
+    "unused": "Nessuna regola la usa",
+    "readOnly": "Il responsabile di produzione crea e cambia una struttura. Tu scegli quali ordini la usano.",
+    "closed": "Chiuse, e tenute",
+    "reopen": "Apri di nuovo"
+  },
+  "structure": {
+    "title": "Struttura · {name}",
+    "newTitle": "Una nuova struttura",
+    "save": "Salva la struttura",
+    "add": "Aggiungi la struttura",
+    "close": "Chiudi questa struttura",
+    "copy": "Copia",
+    "newRule": "Nuova regola con questa…",
+    "readOnly": "Puoi solo leggere questa struttura. Il responsabile di produzione cambia la sua squadra e le sue persone. Tu scegli quali ordini la usano: con una regola, o su un ordine.",
+    "name": "Il suo nome",
+    "nameHint": "Per esempio: Giacche da club",
+    "steps": "1 · I passi",
+    "stepsHint": "Ogni riga segue il percorso del suo prodotto (prodotto › Percorso).",
+    "teamsLabel": "2 · La squadra",
+    "inCharge": "responsabile",
+    "teamsUnread": "Non è stato possibile leggere le squadre.",
+    "teams": {
+      "none": "Nessuna squadra: il responsabile di produzione assegna l'ordine a una squadra a mano, come oggi.",
+      "one": "L'ordine va a questa squadra alla conferma.",
+      "many": "Queste squadre lavorano insieme. La prima che hai scelto è responsabile."
+    },
+    "peopleLabel": "3 · Le persone in ufficio",
+    "peopleUnread": "Non è stato possibile leggere le persone dell'ufficio.",
+    "peopleHint": "Si aggiungono all'ordine e alla sua chat alla conferma. Una persona si aggiunge solo agli ordini di un cliente per cui lavora.",
+    "note": "Una nota (facoltativa)",
+    "noteHint": "Perché c'è questa struttura",
+    "keptNote": "Un cambiamento va agli ordini non iniziati.",
+    "held": {
+      "name": "Scrivi prima un nome.",
+      "taken": "C'è già una struttura con questo nome. Scrivi un altro nome."
+    }
+  },
+  "order": {
+    "title": "Struttura d'ordine",
+    "failed": "Non è stato possibile leggere la struttura d'ordine.",
+    "noLines": "Questo ordine non ha ancora righe.",
+    "one": "{name}.",
+    "oneKept": "{name}. Tenuta da quando è iniziato il lavoro.",
+    "normal": "Il modo normale.",
+    "normalKept": "Il modo normale. Tenuto da quando è iniziato il lavoro.",
+    "many_one": "{count} struttura su questo ordine: ogni riga segue la sua.",
+    "many_other": "{count} strutture su questo ordine: ogni riga segue la sua.",
+    "manyKept_one": "{count} struttura su questo ordine, tenuta da quando è iniziato il lavoro.",
+    "manyKept_other": "{count} strutture su questo ordine, tenute da quando è iniziato il lavoro.",
+    "another": "Un'altra struttura per questo ordine…",
+    "back": "Torna alle regole",
+    "page": "Strutture d'ordine",
+    "windowTitle": "Un'altra struttura per questo ordine",
+    "howRead": "Come lo leggono le regole",
+    "byHand": "Oppure scegli a mano, solo per questo ordine",
+    "why": "Perché questo ordine è diverso? (obbligatorio)",
+    "whyHint": "Per esempio: un pezzo da esposizione, lo fa la squadra corse",
+    "use": "Usala per questo ordine",
+    "held": {
+      "pick": "Scegli una struttura o il modo normale.",
+      "why": "Di' perché questo ordine è diverso."
+    }
+  },
+  "from": {
+    "rule": "Da una regola",
+    "ruleN": "Dalla regola {n}",
+    "order": "A mano, per questo ordine",
+    "orderWhy": "A mano, per questo ordine: {why}",
+    "normal": "Nessuna regola va bene"
+  },
+  "customer": {
+    "title": "Come si gestiscono i suoi ordini",
+    "newRule": "Nuova regola per questo cliente…",
+    "rules_one": "{count} regola nomina questo cliente.",
+    "rules_other": "{count} regole nominano questo cliente.",
+    "none": "Nessuna regola nomina questo cliente.",
+    "noneHint": "I suoi ordini vanno nel modo normale, o seguono una regola per ogni cliente.",
+    "failed": "Non è stato possibile leggere le regole di questo cliente."
+  },
+  "held": {
+    "long": "Al massimo {count} caratteri."
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "error": {
+    "read": "Qualcosa è andato storto durante la lettura.",
+    "write": "Non è stato salvato. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "offline": "Nessuna risposta dalla fabbrica: controlla la rete e riprova.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "È stato rifiutato così com'è: controlla cosa hai scelto."
+  }
+}

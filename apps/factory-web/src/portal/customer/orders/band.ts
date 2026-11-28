@@ -1,9 +1,9 @@
 import type { MenuItemDef, TabItem } from '@nexus/ui/components'
-import type { PortalBand, PortalBandAction, PortalBandChips } from '../../shell/frame'
+import type { PortalBand, PortalBandAction, PortalBandChips, PortalBandPicture } from '../../shell/frame'
 import type { ProductionHealth, ProductionOrder } from '../production/api'
 import { healthInputOf } from '../production/model'
 import type { OrderRecord } from './api'
-import { customerStatusTone } from '../../../lib/order-cells/model' // pp-w1 (L4)
+import { customerStatusTone, lifeOfStatus } from '../../../lib/order-cells/model' // pp-w1 (L4); owb-po5.1: the nine life words
 import { recordHref, shownLinesOf, type RecordTab } from './model'
 // B-TH-275: the order named by the customer's own number (plan §0.5).
 import { orderNameOf } from './model'
@@ -95,12 +95,14 @@ export function bandChipsOf(words: OrderWords, facts: Pick<OrderBandFacts, 'prod
  * supplier and job pages keep theirs in the band for now) — Overview ("to confirm" while a revised version waits) · Lines · Shipments
  * · Files, each with its count (0 too; null while unknown: no pill, never a made-up 0).
  */
-export function orderTabsOf(input: { words: OrderWords; record: OrderRecord; prefix: string; toConfirm: boolean; files: number | null }): TabItem[] {
+export function orderTabsOf(input: { words: OrderWords; record: OrderRecord; prefix: string; toConfirm: boolean; files: number | null; /** owb-po5.2: the price grain (Money's tab). */ money?: boolean }): TabItem[] {
   const { t } = input.words
   const href = (tab: RecordTab) => recordHref(input.prefix, input.record.order.id, tab)
   return [
     { id: 'overview', label: t('tabs.overview'), href: href('overview'), ...(input.toConfirm ? { badge: t('tabs.toConfirm') } : {}) },
     { id: 'lines', label: t('tabs.lines'), count: shownLinesOf(input.record.lines).length, href: href('lines') }, // w1.4: a charge line is not counted
+    // owb-po5.2: Money for a person who sees prices only (the customer's Designer has no tab).
+    ...(input.money ? [{ id: 'money', label: t('tabs.money'), href: href('money') }] : []),
     { id: 'shipments', label: t('tabs.shipments'), count: input.record.shipments.shown, href: href('shipments') },
     { id: 'files', label: t('tabs.files'), count: input.files, href: href('files') },
   ]
@@ -118,13 +120,16 @@ export function orderBandOf(input: {
   onConfirmation?: () => void
   onPay?: () => void
   onProblem?: () => void // F-PR-24
+  /** owb-po5.1: the picture button (null: none); its `onOpen` null = a plain picture. */
+  picture?: Omit<PortalBandPicture, 'recordId' | 'number'> | null
 }): PortalBand {
   const { t, locale } = input.words
   const { record, facts } = input
   const order = record.order
   // pp-w1 (w1.2; O1-B1, O1-B2): ONE "Ask for a change…" — the Ask dialog at its first step (the line ⋯ opens the same dialog at its
-  // line); none on a cancelled or delivered order. The ⋯ keeps the real acts; the promise's history is the tracker's own popover.
-  const open = order.status !== 'CANCELLED' && order.status !== 'DELIVERED'
+  // line). owb-po5.1 (settle 2: Confirmed…Ready "Ask for a change…"): only while pieces are still at the factory — none once it all
+  // left (shipped, delivered) or when cancelled. The ⋯ keeps the real acts; the promise's history is the tracker's own popover.
+  const open = order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && order.status !== 'SHIPPED'
   const actions: PortalBandAction[] = open ? [{ id: 'ask', label: t('band.change'), variant: 'primary', heldReason: facts.ask.held, onClick: () => input.onAsk?.() }] : []
   const more: MenuItemDef[] = [
     ...(facts.reconfirm ? [{ id: 'reconfirm', label: t('band.reconfirm', { version: facts.reconfirm.revision }), disabled: facts.reconfirm.held !== null, description: facts.reconfirm.held ?? undefined, onSelect: () => input.onReconfirm?.() }] : []),
@@ -138,12 +143,17 @@ export function orderBandOf(input: {
   // ---- B-TH-275 (P-CUS-ORD.band; plan §0.5, B-TH-303): "Your order 12" — the customer's own number, never the office's SO- series;
   // their PO first in the band's references. The conversation docks beside the body (no Messages tab, no Ask modal).
   const name = orderNameOf(order, locale, t)
+  // owb-po5.1 (settle 3): "Your order 12 · <subject>" — the customer's own number, never an office series; the subject when the read
+  // names one (the request it was made from).
+  const title = order.subject ? `${name} · ${order.subject}` : name
+  const life = lifeOfStatus(order.status, { shipped: record.pieces.shipped, total: record.pieces.ordered })
   return {
-    title: name,
+    title,
     back: { href: `${input.prefix}/orders`, label: t('list.title') },
     refs: order.customerRef ? { theirs: order.customerRef, ours: null } : null,
-    // pp-w1 (L4): the shared status chip (the shell draws lib/order-cells StateChip from `order`: the list's chip, the office's tone).
-    status: { label: order.words[locale], tone: customerStatusTone(order.status), order: order.status },
+    // owb-po5.1: the shared StateChip with `{ life, note }` (the nine words: the orders sheet's and the office's chip).
+    status: { label: order.words[locale], tone: customerStatusTone(order.status), life: life.life, note: life.note },
+    ...(input.picture ? { picture: { recordId: order.id, number: name, onOpen: input.picture.onOpen } } : {}),
     actions,
     more,
     ask: { type: 'SalesOrder', id: order.id, label: name },
