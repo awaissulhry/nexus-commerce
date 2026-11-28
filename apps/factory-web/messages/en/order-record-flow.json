@@ -120,5 +120,29 @@
       "status": "Status"
     },
     "emptyChip": "No change of this kind yet."
+  },
+  "notices": {
+    "title": "The customer says it paid",
+    "open_one": "{count} notice waits for you",
+    "open_other": "{count} notices wait for you",
+    "none": "Every notice is answered.",
+    "info": "The customer tells the factory it paid. A notice changes nothing that is owed: record the payment with Record payment… when it is in the bank.",
+    "failed": "The notice could not be answered. Try again.",
+    "row": "Paid on {day} · {step}",
+    "noStep": "no step named",
+    "state": {
+      "OPEN": "Waits",
+      "RECORDED": "Recorded",
+      "DISMISSED": "Dismissed"
+    },
+    "busy": "Saving…",
+    "recorded": "Recorded",
+    "dismiss": "Dismiss",
+    "thenRecord": "Recorded means you saw it: record the payment itself with Record payment… (with your code).",
+    "waiting_one": "The customer says it paid · {count}",
+    "waiting_other": "The customer says it paid · {count}"
+  },
+  "money": {
+    "paidTooMuch": "{amount} is paid too much: the order’s total went below what is paid."
   }
 }
