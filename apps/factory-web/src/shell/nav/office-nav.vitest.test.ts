@@ -5,6 +5,8 @@ import { createScopedTranslator, messagesFor } from '../../lib/i18n/messages'
 import { permissionCheck } from '../../lib/session/session'
 import { OWNER_PERMISSIONS, SALES_PERMISSIONS } from '../design-data'
 import { navPages, navPermissions, OFFICE_NAV, officeAreaDeclarations, officeCrumbs, officeNavFor, PENDING_PERMISSIONS, translateNav } from './office-nav'
+import { builtRowsOnly, DECLARED_PAGES, navLabelKeys, OFFICE_PAGES } from './office-nav' // owb- (base settle 7)
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // owb-
 
 const ids = (nav: typeof OFFICE_NAV) => nav.areas.map((area) => [area.id, (area.sections ?? []).flatMap((s) => s.items.map((i) => i.id))])
 const en = createScopedTranslator('en', messagesFor('en', ['shell']), 'shell')
@@ -174,3 +176,50 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(bottomBarLayout(nav, '/sales/customers/0190f0e2-6666-7000-8000-000000000001').current).toBe('sales')
   })
 })
+
+// ── owb- order workflow (base settle 7): declared-not-built rows ──
+describe('owb-: the order workflow\'s declared rows stay hidden until their pages are built', () => {
+  const declarations = { view: 'office' as const, areas: officeAreaDeclarations().map((declaration) => declaration.area) }
+  const declaredRows = declarations.areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.filter((item) => DECLARED_PAGES.has(item.href)).map((item) => ({ area: area.id, section: section.id, item }))))
+
+  it('every declared address has exactly one row, with a declared permission', () => {
+    expect(declaredRows.map((row) => row.item.href).sort()).toEqual([...DECLARED_PAGES].sort())
+    const declared = new Set<string>(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name))
+    expect(declaredRows.filter((row) => !row.item.permission || !declared.has(row.item.permission)).map((row) => row.item.id)).toEqual([])
+    expect(Object.fromEntries(declaredRows.map((row) => [row.item.id, [row.area, row.section, row.item.permission]]))).toEqual({
+      'home-design-desk': ['home', 'home-top', 'orders.view.own'],
+      'warehouse-ready-to-ship': ['warehouse', 'warehouse-outbound', 'shipping.view'],
+      'warehouse-our-warehouses': ['warehouse', 'warehouse-outbound', 'shipping.view'],
+      'production-baskets': ['production', 'production-main', 'workorders.view'],
+      'production-chains': ['production', 'production-main', 'workorders.view'],
+      'production-teams': ['production', 'production-main', 'workorders.view'],
+      'production-order-structures': ['production', 'production-settings', 'workorders.view'],
+      'people-structure': ['people', 'people-main', 'people.view'],
+      'people-by-customer': ['people', 'people-main', 'roles.assign'],
+    })
+  })
+
+  it('no person sees one today — not the owner with every permission — and the manifest names none', () => {
+    const everything = officeNavFor(permissionCheck(templateOf('owner')!.permissions))
+    const hrefs = everything.areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.map((item) => item.href)))
+    expect(hrefs.filter((href) => DECLARED_PAGES.has(href))).toEqual([])
+    expect(navPages(OFFICE_NAV).map((page) => page.href).filter((href) => DECLARED_PAGES.has(href))).toEqual([])
+    for (const address of DECLARED_PAGES) expect(OFFICE_PAGES.has(address), address).toBe(false)
+  })
+
+  it('built (the land\'s flip), each row shows for its permission and its words exist in en and it', () => {
+    const flipped = builtRowsOnly(declarations, new Set([...OFFICE_PAGES, ...DECLARED_PAGES]))
+    const sees = (permissions: string[]) => officeNavFor(permissionCheck(permissions), flipped).areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.map((item) => item.id)))
+    expect(sees(['home.view', 'orders.view.own'])).toContain('home-design-desk')
+    expect(sees(['home.view'])).not.toContain('home-design-desk')
+    expect(sees(['roles.assign'])).toEqual(['people-by-customer'])
+    expect(sees(['workorders.view'])).toEqual(expect.arrayContaining(['production-baskets', 'production-chains', 'production-teams', 'production-order-structures']))
+    const it = createScopedTranslator('it', messagesFor('it', ['shell']), 'shell')
+    for (const key of navLabelKeys(flipped)) {
+      expect(en(key), `en ${key}`).not.toBe(key.slice(key.indexOf(':') + 1))
+      expect(it(key), `it ${key}`).not.toBe(key.slice(key.indexOf(':') + 1))
+    }
+    expect(translateNav(flipped, en).areas.find((area) => area.id === 'production')?.sections?.[0]?.items.slice(-3).map((item) => item.label)).toEqual(['Baskets board', 'Chains', 'Teams'])
+  })
+})
+// ── end owb- ──

@@ -19,7 +19,8 @@
       "dashboards": "Cruscotti",
       "reports": "Report",
       "alerts": "Avvisi",
-      "kpis": "Indicatori"
+      "kpis": "Indicatori",
+      "designDesk": "Scrivania design"
     },
     "products": {
       "area": "Prodotti",
@@ -89,7 +90,9 @@
       "reportsGroup": "Report",
       "reports": "Report persone",
       "settingsGroup": "Impostazioni",
-      "settings": "Impostazioni persone"
+      "settings": "Impostazioni persone",
+      "structure": "Struttura della fabbrica",
+      "byCustomer": "Persone per cliente"
     },
     "plant": {
       "area": "Stabilimento",
@@ -148,7 +151,11 @@
       "scrap": "Scarti e rilavorazioni",
       "calls": "Chiamate di aiuto",
       "labour": "Manodopera e rettifiche",
-      "instructions": "Istruzioni di lavoro"
+      "instructions": "Istruzioni di lavoro",
+      "baskets": "Tabellone dei cesti",
+      "chains": "Catene",
+      "teams": "Squadre",
+      "orderStructures": "Strutture d’ordine"
     },
     "quality": {
       "area": "Qualità",
@@ -243,7 +250,9 @@
       "reportsGroup": "Report",
       "reports": "Report magazzino",
       "transfers": "Trasferimenti",
-      "rules": "Regole di magazzino"
+      "rules": "Regole di magazzino",
+      "readyToShip": "Pronto da spedire",
+      "ourWarehouses": "I nostri magazzini"
     },
     "frame": {
       "topBar": "Barra superiore"
@@ -488,6 +497,10 @@
       "title": "Nexus Factory non risponde",
       "body": "Il servizio non ha risposto come dovrebbe (codice {code}). Riprova tra un momento.",
       "action": "Riprova"
+    },
+    "notBuilt": {
+      "title": "Questa pagina sta arrivando",
+      "body": "La stiamo costruendo ora. La sua voce nel menu compare quando è pronta."
     }
   },
   "live": {
