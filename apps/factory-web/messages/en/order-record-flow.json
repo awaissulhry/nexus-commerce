@@ -164,5 +164,14 @@
       "APPROVED": "Design approved",
       "CHANGE": "Design: the customer asks a change"
     }
+  },
+  "factoryPeople": {
+    "title": "Factory people",
+    "count_one": "{count} person of the factory works for this customer",
+    "count_other": "{count} people of the factory work for this customer",
+    "door": "People by customer ›",
+    "info": "The office people given to this customer: they are put on its orders, and the customer reads their names.",
+    "none": "Nobody of the factory is given to this customer yet.",
+    "since": "since {date}"
   }
 }

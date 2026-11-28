@@ -164,5 +164,14 @@
       "APPROVED": "Grafica approvata",
       "CHANGE": "Grafica: il cliente chiede una modifica"
     }
+  },
+  "factoryPeople": {
+    "title": "Persone della fabbrica",
+    "count_one": "{count} persona della fabbrica lavora per questo cliente",
+    "count_other": "{count} persone della fabbrica lavorano per questo cliente",
+    "door": "Persone per cliente ›",
+    "info": "Le persone dell’ufficio affidate a questo cliente: sono messe sui suoi ordini, e il cliente legge i loro nomi.",
+    "none": "Ancora nessuno della fabbrica è affidato a questo cliente.",
+    "since": "dal {date}"
   }
 }

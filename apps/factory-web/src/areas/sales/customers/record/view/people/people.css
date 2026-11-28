@@ -184,3 +184,21 @@
 .fw-ca-warns > li.is-warning { background: var(--nds-warning-soft); color: var(--nds-warning-text); }
 .fw-ca-warns > li.is-warning > svg { color: var(--nds-warning); }
 .fw-ca-warns > li.is-danger > svg { color: var(--nds-danger); }
+
+/* owb-of7 step 3 — "Factory people": one line per person given to this customer; the words wrap at 375 px. */
+.fw-ca-factory {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-ca-factory li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
