@@ -81,9 +81,9 @@ describe('owb-po4.3 — Your people', () => {
     expect(calls).toEqual(['/portal/factory-people'])
     expect(JSON.stringify(answer)).not.toMatch(/phone|email|team|Cutting/)
     // An unknown picture kind falls back to letters, never a hole.
-    expect(factoryRowsOf(answer, 'en')).toEqual([{ id: 'p1', name: 'Sam Esempio', role: 'Sales for your brand', picture: { kind: 'LETTERS', icon: null, colour: 'blue' } }])
+    expect(factoryRowsOf(answer, 'en')).toEqual([{ id: 'p1', name: 'Sam Esempio', role: 'Sales for your brand', picture: { kind: 'LETTERS', icon: null, colour: 'blue', letters: null } }])
     expect(factoryRowsOf(answer, 'it')![0]!.role).toBe('Vendite per il vostro marchio')
-    expect(factoryRowsOf({ people: [{ id: 'p2', name: 'Dina', role: { en: 'Designer', it: 'Designer' } }] }, 'en')![0]!.picture).toEqual({ kind: 'LETTERS', icon: null, colour: null })
+    expect(factoryRowsOf({ people: [{ id: 'p2', name: 'Dina', role: { en: 'Designer', it: 'Designer' } }] }, 'en')![0]!.picture).toEqual({ kind: 'LETTERS', icon: null, colour: null, letters: null })
     expect(factoryRowsOf(null, 'en')).toBeNull()
   })
 

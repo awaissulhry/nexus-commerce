@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
+import { pictureSchema } from '../../../lib/people-picture/schema'
 
 /**
  * owb-po4.3 — Your people's own read: the factory people for this customer's brand (`GET /portal/factory-people`, server step
@@ -11,13 +12,8 @@ const factoryPerson = z.object({
   id: z.string(),
   name: z.string(),
   role: z.object({ en: z.string(), it: z.string() }),
-  picture: z
-    .object({
-      kind: z.enum(['LETTERS', 'ICON']).catch('LETTERS'),
-      icon: z.string().nullable().optional(),
-      colour: z.string().nullable().optional(),
-    })
-    .optional(),
+  // The ONE picture reader (lib/people-picture/schema.ts): letters · 12 icons · 10 tones; an unknown kind reads as letters.
+  picture: pictureSchema.optional(),
 })
 export const factoryPeopleSchema = z.object({ people: z.array(factoryPerson) })
 export type FactoryPeople = z.infer<typeof factoryPeopleSchema>

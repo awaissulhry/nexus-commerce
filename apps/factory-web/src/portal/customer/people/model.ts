@@ -10,7 +10,7 @@ export interface FactoryPersonRow {
   id: string
   name: string
   role: string
-  picture: { kind: 'LETTERS' | 'ICON'; icon: string | null; colour: string | null }
+  picture: { kind: 'LETTERS' | 'ICON'; icon: string | null; colour: string | null; letters: string | null }
 }
 
 /** The card's rows, or null when the read did not answer (not built yet, or failed): then the card is not drawn. */
@@ -20,6 +20,6 @@ export function factoryRowsOf(answer: FactoryPeople | null, locale: Locale): Fac
     id: person.id,
     name: person.name,
     role: locale === 'it' ? person.role.it : person.role.en,
-    picture: { kind: person.picture?.kind ?? 'LETTERS', icon: person.picture?.icon ?? null, colour: person.picture?.colour ?? null },
+    picture: { kind: person.picture?.kind ?? 'LETTERS', icon: person.picture?.icon ?? null, colour: person.picture?.colour ?? null, letters: person.picture?.letters || null },
   }))
 }

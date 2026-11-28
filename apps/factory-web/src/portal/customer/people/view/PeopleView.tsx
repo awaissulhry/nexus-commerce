@@ -77,7 +77,7 @@ function PeopleBody({ model, actions }: { model: PeopleViewModel; actions?: Peop
                 <ul className="fw-ppeople-list">
                   {model.factory.map((person) => (
                     <li key={person.id} className="fw-ppeople-person">
-                      <PeoplePicture source={{ name: person.name, kind: person.picture.kind, icon: person.picture.icon, colour: person.picture.colour }} nameBeside />
+                      <PeoplePicture source={{ name: person.name, kind: person.picture.kind, icon: person.picture.icon, colour: person.picture.colour, letters: person.picture.letters }} nameBeside />
                       <span className="fw-ppeople-text">
                         <span className="fw-pacc-strong">{person.name}</span>
                         <span className="fw-pacc-muted">{person.role}</span>

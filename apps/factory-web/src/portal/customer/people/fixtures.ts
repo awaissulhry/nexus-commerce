@@ -121,8 +121,8 @@ function colleaguesOf(locale: Locale, people: readonly Colleague[], admin: boole
 // The factory's people for the brand (made up): office people the factory gave this customer — names and role words, letters or an icon.
 const FACTORY = {
   people: [
-    { id: id(801), name: 'Sam Esempio', role: { en: 'Sales for your brand', it: 'Vendite per il vostro marchio' }, picture: { kind: 'LETTERS' as const, icon: null, colour: 'blue' } },
-    { id: id(802), name: 'Dina Prova', role: { en: 'Factory designer', it: 'Designer della fabbrica' }, picture: { kind: 'ICON' as const, icon: 'image', colour: 'violet' } },
+    { id: id(801), name: 'Sam Esempio', role: { en: 'Sales for your brand', it: 'Vendite per il vostro marchio' }, picture: { kind: 'LETTERS' as const, icon: null, colour: 'blue', letters: '' } },
+    { id: id(802), name: 'Dina Prova', role: { en: 'Factory designer', it: 'Designer della fabbrica' }, picture: { kind: 'ICON' as const, icon: 'image', colour: 'violet', letters: '' } },
   ],
 }
 
