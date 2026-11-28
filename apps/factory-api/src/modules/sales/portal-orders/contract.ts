@@ -12,6 +12,8 @@ import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/trackin
 import { PICTURES_MAX } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids); owb- po1.1: of both kinds
 // owb- po1.4 (order workflow): the customer's own columns (the shared answer shapes).
 import { ownColumn, ownValue, recordOwnColumns } from '../own-columns/schemas'
+// owb- po2.2 (order workflow): the customer's Money tab and its "I paid" notice.
+import { ADDS_UP_KEYS, MONEY_DOCUMENT_KINDS, NOTICE_STATES, PLAN_STATES, PLAN_STEP_KINDS } from '@nexus/factory-domain/sales/portal-orders/money'
 // owb- po1.1 (order workflow): the sheet's row kinds and waits, the nine life words, the line model kinds.
 import { SHEET_ROW_KINDS, SHEET_WAITS } from '@nexus/factory-domain/sales/portal-orders/sheet-rows'
 import { LIFE_NOTE_KINDS, ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
@@ -371,6 +373,43 @@ export const sheetDownloadContract = defineContract({
   response: {},
 })
 // ---- end B-TH-061
+
+// ---- owb- po2.2 (order workflow; design § 5m; the S1 Shape "MONEY"): the customer's Money tab — the price grain only (403 without) —
+// and "I paid: tell the factory…" (a notice: nothing owed changes). Amounts in minor units, marked price.
+const amount = money.price(z.number().int())
+const notice = output({ id: id(), stepId: id().nullable(), amount, paidOn: day, state: z.enum(NOTICE_STATES) })
+export const moneyContract = defineContract({
+  params: orderParams,
+  response: {
+    200: output({
+      currency: z.string(),
+      totals: output({ order: amount, invoiced: amount, paid: amount, stillToPay: amount }),
+      /** How it adds up: lines, charges, VAT, credit notes (negative), paid (negative). */
+      addsUp: z.array(output({ key: z.enum(ADDS_UP_KEYS), amount })),
+      /** The payment plan: its milestones (else its deposit requests) and the rest (`id` 'REST': no deposit request, no milestone). */
+      plan: z.array(output({ id: z.string(), kind: z.enum(PLAN_STEP_KINDS), percent: z.number().nullable(), amount, due: day.nullable(), state: z.enum(PLAN_STATES), paid: amount, noticeOpen: z.boolean() })),
+      /** The order's invoices and their credit notes (the customer's own documents: their numbers shown). */
+      invoices: z.array(output({ id: id(), kind: z.enum(MONEY_DOCUMENT_KINDS), number: z.string(), date: z.string(), amount, open: amount, documentId: id().nullable() })),
+      notices: z.array(notice),
+      may: output({ notify: z.boolean() }),
+    }),
+  },
+})
+export const paymentNoticeContract = defineContract({
+  params: orderParams,
+  body: input({
+    /** A step of the plan (a milestone or a deposit request of this order); null: none (the rest). */
+    stepId: id().nullable(),
+    amount: money.price(z.number().int().min(1)),
+    paidOn: day,
+    method: z.string().trim().max(60).optional(),
+    note: z.string().trim().max(1000).optional(),
+    /** A receipt the customer sent (one of its own files). */
+    fileId: id().optional(),
+  }),
+  response: { 200: notice },
+})
+// ---- end owb- po2.2
 
 // ---- pg-s2 S2.1 (portal grid D4, Z12, H6): the small pictures of the customer's own orders (the list's picture column) -----------
 /**
