@@ -76,10 +76,10 @@ function ShipmentCard({ shipment, seq, model, actions }: { shipment: ShipmentRea
             {line}
           </p>
         ))}
-        <MilestoneTracker steps={shipmentSteps(shipment, locale, at)} label={t('shipments.steps', { number: shipment.number })} labels={ds.milestoneTracker} />
+        <MilestoneTracker steps={shipmentSteps(shipment, locale, at)} label={t('shipments.steps', { number: seq })} labels={ds.milestoneTracker} />
         {/* B-W2b-170: our branded tracking page (links.tracking), to pass on to whoever receives the goods. */}
         <div className="fw-pord-tracking">
-          <Button size="sm" variant="secondary" heldReason={model.linkHeld ?? null} onClick={() => actions?.onCopyTrackingLink?.(shipment.id)} aria-label={t('shipments.copyLinkOf', { number: shipment.number })}>
+          <Button size="sm" variant="secondary" heldReason={model.linkHeld ?? null} onClick={() => actions?.onCopyTrackingLink?.(shipment.id)} aria-label={t('shipments.copyLinkOf', { number: seq })}>
             <Link2 size={13} aria-hidden /> {model.copied === `link:${shipment.id}` ? t('shipments.linkCopied') : t('shipments.copyLink')}
           </Button>
           <span className="fw-pord-sub">{t('shipments.copyLinkHint')}</span>
@@ -96,7 +96,7 @@ function ShipmentCard({ shipment, seq, model, actions }: { shipment: ShipmentRea
             {/* F-OP-135: the carrier's page typed beside the number (https only), in a new tab. */}
             {typedLink ? (
               <Button asChild size="sm" variant="quiet" className="fw-pord-push">
-                <a href={typedLink} target="_blank" rel="noopener noreferrer" aria-label={t('shipments.typed.trackOf', { number: shipment.number })}>
+                <a href={typedLink} target="_blank" rel="noopener noreferrer" aria-label={t('shipments.typed.trackOf', { number: seq })}>
                   <ExternalLink size={13} aria-hidden /> {t('shipments.typed.track')}
                 </a>
               </Button>
@@ -104,7 +104,7 @@ function ShipmentCard({ shipment, seq, model, actions }: { shipment: ShipmentRea
           </div>
         ) : null}
         {shipment.parcels.length > 0 ? (
-          <ul className="fw-pord-parcels" aria-label={t('shipments.parcelsOf', { number: shipment.number })}>
+          <ul className="fw-pord-parcels" aria-label={t('shipments.parcelsOf', { number: seq })}>
             {shipment.parcels.map((parcel) => (
               <li key={parcel.seq} className="fw-pord-parcel">
                 <span className="fw-pord-strong">{t('shipments.parcel', { seq: parcel.seq })}</span>
@@ -134,7 +134,7 @@ function ShipmentCard({ shipment, seq, model, actions }: { shipment: ShipmentRea
         {shipment.lines.length > 0 ? (
           <Disclosure summary={t('shipments.contents', { count: pieces })}>
             <SummaryTable
-              label={t('shipments.contentsOf', { number: shipment.number })}
+              label={t('shipments.contentsOf', { number: seq })}
               columns={[t('shipments.col.line'), t('shipments.col.style'), t('shipments.col.colour'), t('sizes.size'), t('shipments.col.pieces')]}
               rows={shipment.lines.map((line, index) => ({ id: `${line.lineSeq}-${line.size ?? ''}-${index}`, cells: [String(line.lineSeq), line.style ? `${line.style.code} · ${line.style.name}` : '—', line.colourway?.name ?? '—', line.size ?? '—', String(line.quantity)] }))}
               stackOnPhone

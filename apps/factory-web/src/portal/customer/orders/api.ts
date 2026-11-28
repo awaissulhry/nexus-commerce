@@ -328,7 +328,8 @@ export const fetchProgress = (api: ApiClient, id: string, signal?: AbortSignal):
 
 export const shipmentSchema = z.object({
   id: z.string(),
-  number: z.string(),
+  // owb-po6.3 (WALL): the office's SH- series — never drawn, never read (the server drops it after owb-po2c); optional for that day.
+  number: z.string().optional(),
   status: z.enum(CUSTOMER_SHIPMENT_STATUSES),
   words,
   transportBy: z.string(),
