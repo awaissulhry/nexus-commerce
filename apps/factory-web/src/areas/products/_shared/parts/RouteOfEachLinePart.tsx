@@ -102,7 +102,7 @@ function LineRoutesPart({ api, manage, companyId, orderId }: { api: ApiClient; m
     try {
       await write()
     } catch (error) {
-      setActProblem(refusalOf(error))
+      setActProblem(refusalOf(error, 'line'))
     } finally {
       setBusyLine(null)
       again()
@@ -135,7 +135,7 @@ function LineRoutesPart({ api, manage, companyId, orderId }: { api: ApiClient; m
     } catch (error) {
       // The line moved meanwhile (another person, the print): read again; the window says why.
       if ((error as { kind?: string } | null)?.kind === 'conflict') again()
-      return refusalOf(error)
+      return refusalOf(error, 'line')
     }
   }
 
