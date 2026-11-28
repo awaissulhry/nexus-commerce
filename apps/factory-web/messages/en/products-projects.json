@@ -14,7 +14,7 @@
     "today": "Due today"
   },
   "group": {
-    "STYLES": "Styles",
+    "STYLES": "Products",
     "SAMPLES": "Samples",
     "QUOTES": "Quotes",
     "ORDERS": "Orders",
@@ -34,7 +34,7 @@
     "NOT_OUTSIDE": "A project is shared with a customer, a brand, a supplier or a subcontractor, or with nobody outside.",
     "LEAD": "A project is led by an active office person who may read it.",
     "SEASON": "This season is not a season of the project’s company.",
-    "LINK_TYPE": "A project links styles, sample rounds, quotes, orders, purchase and subcontract orders, changes, certificates, requests, shipments and measurement profiles.",
+    "LINK_TYPE": "A project links products, sample rounds, quotes, orders, purchase and subcontract orders, changes, certificates, requests, shipments and measurement profiles.",
     "LINK_COMPANY": "This record belongs to another company of the group: a project links records of its own company only.",
     "LINK_PARTY": "This record belongs to another outside company: it cannot join this project. A project links records of its own outside company, or of none.",
     "LINK_OFFICE_ONLY": "This project is office-only: it links only records that belong to no outside company.",
@@ -99,7 +99,7 @@
     "openToOffice": "Everyone in the company who reads threads can open this project."
   },
   "list": {
-    "intro": "A project groups work on several styles, samples and orders, or work that has no record yet. About one record, write in its thread.",
+    "intro": "A project groups work on several products, samples and orders, or work that has no record yet. About one record, write in its thread.",
     "new": "New project",
     "tableLabel": "Projects",
     "search": "Search by number or name",
@@ -114,7 +114,7 @@
     "hiddenBy": "Hidden by: {filters}.",
     "clearFilters": "Clear filters",
     "empty": "No projects yet",
-    "emptyBody": "A project groups work on several styles, samples and orders, or work with no record yet.",
+    "emptyBody": "A project groups work on several products, samples and orders, or work with no record yet.",
     "updated": "Updated {time}",
     "notYet": "Not read yet",
     "foot": "A closed project leaves My projects but stays in Closed and in search.",
@@ -251,7 +251,7 @@
   "new": {
     "title": "New project",
     "submit": "Create project",
-    "rule": "A project is for work on several styles, samples or orders, or work with no record yet. About one order? Write on that order.",
+    "rule": "A project is for work on several products, samples or orders, or work with no record yet. About one order? Write on that order.",
     "willLink": "Will link: {record}",
     "namePlaceholder": "For example: FW27 airbag jacket line",
     "nameHint": "One line: what the office calls it.",
@@ -283,7 +283,7 @@
     "similarOpen": "Open {project} (new tab)"
   },
   "linkType": {
-    "Style": "this style",
+    "Style": "this product",
     "SampleRound": "this sample round",
     "Quote": "this quote",
     "SalesOrder": "this order",

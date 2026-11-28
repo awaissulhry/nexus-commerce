@@ -1,0 +1,121 @@
+{
+  "board": {
+    "label": "Cesti per reparto",
+    "count_one": "{count} cesto",
+    "count_other": "{count} cesti",
+    "keys": "Tab passa da un cesto all'altro · Invio apre il cesto · Esc chiude la sua finestra",
+    "loading": "Lettura dei cesti…",
+    "retry": "Riprova",
+    "empty": "Nessun cesto è in reparto ora.",
+    "emptyHint": "Un cesto appare qui quando il suo ordine è stampato e il lavoro parte. Cambia un filtro per vederne di più."
+  },
+  "filter": {
+    "team": "Squadra",
+    "allTeams": "Tutte le squadre",
+    "department": "Reparto",
+    "allDepartments": "Tutti i reparti",
+    "order": "Ordine",
+    "allOrders": "Tutti gli ordini"
+  },
+  "column": {
+    "ready": "Pronto da spedire",
+    "none": "—"
+  },
+  "card": {
+    "open": "Apri il cesto {code}",
+    "progress": "{done} di {total} passi",
+    "first": "Prima",
+    "problem": "Problema",
+    "late": "In ritardo",
+    "lateDays_one": "In ritardo di {count} giorno",
+    "lateDays_other": "In ritardo di {count} giorni"
+  },
+  "state": {
+    "WAITING": "In attesa",
+    "WORKING": "In lavorazione",
+    "PAUSED": "In pausa",
+    "READY": "Pronto da spedire"
+  },
+  "window": {
+    "title": "Cesto {code}",
+    "busy": "In corso…",
+    "loading": "Lettura del suo percorso…",
+    "routeFailed": "Il suo percorso non si può leggere ora. Chiudi e riapri il cesto.",
+    "readOnly": "Puoi leggere questo cesto. Lo sposta il responsabile di produzione o il caposquadra.",
+    "has": "Ce l'ha {name}",
+    "designPage": "Pagina del disegno",
+    "openOrder": "Apri l'ordine",
+    "solved": "Problema risolto",
+    "solvedDone": "Il problema è risolto. Il reparto è avvisato.",
+    "moveTo": "Spostalo a",
+    "moveHint": "Avanti o indietro, a un passo del suo percorso. Indietro chiede perché. Lo storico tiene chi l'ha spostato.",
+    "back": "indietro",
+    "why": "Perché indietro?",
+    "packFirst": "Prima imballalo: Imballato in Imballaggio lo rende pronto da spedire.",
+    "backLeader": "Solo il responsabile di produzione o il caposquadra riporta indietro un cesto.",
+    "moved": "Spostato. Il reparto lo vede subito.",
+    "stayed": "Il cesto resta dov'è.",
+    "giveTo": "Dallo a",
+    "given": "Assegnato. La persona lo vede per primo.",
+    "printAgain": "Ristampa la sua scheda e le pagine…",
+    "failed": "Non è andato. Riprova."
+  },
+  "reason": {
+    "REDO": "Da rifare",
+    "MISTAKE": "Spostato per errore",
+    "OTHER": "Altro"
+  },
+  "floor": {
+    "title": "Dal reparto",
+    "loading": "Lettura di ciò che il reparto ha inviato…",
+    "failed": "Ciò che il reparto ha inviato non si può leggere ora.",
+    "empty": "Ancora niente dal reparto per questo ordine.",
+    "late": "Sarà in ritardo",
+    "lateDays_one": "{count} giorno di ritardo",
+    "lateDays_other": "{count} giorni di ritardo",
+    "lateNote": "Il cliente lo sa dalle vendite, mai dal reparto.",
+    "holds": "La data regge",
+    "changePromise": "Cambia la promessa…",
+    "photos": "Foto dal reparto",
+    "share": "Condividi con il cliente",
+    "keep": "Tieni interna",
+    "shared": "Condivisa con il cliente",
+    "kept": "Tenuta interna",
+    "inside": "Interna alla fabbrica",
+    "changed": "Cambiato in reparto",
+    "why": "Perché: {why}"
+  },
+  "lateReason": {
+    "MATERIAL": "Manca il materiale",
+    "MACHINE": "Problema alla macchina",
+    "PEOPLE": "Mancano persone",
+    "REDO": "Da rifare"
+  },
+  "lateState": {
+    "OPEN": "Aspetta una risposta",
+    "KEPT": "La data regge",
+    "CHANGED": "Promessa cambiata"
+  },
+  "changeReason": {
+    "REDO": "Da rifare",
+    "MISTAKE": "Spostato per errore",
+    "OTHER": "Altro",
+    "NOT_NEEDED": "Non serve qui",
+    "CUSTOMER": "L'ha chiesto il cliente"
+  },
+  "promise": {
+    "title": "Cambia la promessa",
+    "current": "La promessa ora: {date}",
+    "none": "L'ordine non ha ancora una promessa.",
+    "date": "La nuova promessa",
+    "reason": "Perché (il cliente lo legge)",
+    "note": "Il cliente vede la nuova data e il suo motivo. L'avviso del reparto viene poi risposto.",
+    "save": "Cambia la promessa",
+    "pickDate": "Prima scegli la nuova data.",
+    "readFailed": "L'ordine non si può leggere ora. Chiudi e riprova."
+  },
+  "error": {
+    "read": "I cesti non si possono leggere ora.",
+    "forbidden": "Non puoi vedere il tabellone dei cesti."
+  }
+}

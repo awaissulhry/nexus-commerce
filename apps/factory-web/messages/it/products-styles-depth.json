@@ -6,24 +6,24 @@
     "cancel": "Annulla",
     "close": "Chiudi",
     "reason": "Motivo",
-    "reasonHint": "Facoltativo: resta nella storia del modello."
+    "reasonHint": "Facoltativo: resta nella storia del prodotto."
   },
   "hold": {
     "loading": "Ancora in caricamento.",
     "busy": "Si sta salvando una modifica: attendi un momento.",
     "offline": "Senza connessione: attende che la connessione torni.",
-    "noManage": "Il tuo ruolo non modifica i modelli.",
-    "archived": "Il modello è archiviato: riattivalo prima.",
+    "noManage": "Il tuo ruolo non modifica i prodotti.",
+    "archived": "Il prodotto è archiviato: riattivalo prima.",
     "long": "Al massimo 500 caratteri."
   },
   "fault": {
     "internal": "Qualcosa non ha funzionato da parte nostra. Riprova.",
-    "moved": "Qualcuno ha modificato questo modello nel frattempo: è stato riletto. Controlla e riprova.",
-    "state": "Lo stato del modello non lo consente più: è stato riletto.",
+    "moved": "Qualcuno ha modificato questo prodotto nel frattempo: è stato riletto. Controlla e riprova.",
+    "state": "Lo stato del prodotto non lo consente più: è stato riletto.",
     "invalid": "Non è stato accettato così: controlla i campi.",
     "forbidden": "Il tuo ruolo non lo consente.",
     "signed_out": "Sei uscito. Accedi di nuovo.",
-    "not_found": "Questo modello non c'è più.",
+    "not_found": "Questo prodotto non c'è più.",
     "rate_limited": "Troppi tentativi: attendi un momento.",
     "unavailable": "Il server non risponde ora. Riprova.",
     "step_up": "Conferma prima la tua identità.",
@@ -36,16 +36,16 @@
     "MOVE_NOT_ALLOWED": "Questo passaggio non è consentito dal suo stato.",
     "NEEDS_RELEASED_REVISION": "Prima rilascia una revisione: la produzione richiede una revisione rilasciata.",
     "REASON_NEEDED": "Un passaggio all'indietro richiede il motivo.",
-    "STYLE_ARCHIVED": "Il modello è archiviato: riattivalo prima.",
-    "REPLACEMENT_NOT_HERE": "Solo un modello in uscita o dismesso indica il modello che lo sostituisce.",
-    "REPLACEMENT_SELF": "Un modello non sostituisce sé stesso.",
-    "REPLACEMENT_UNUSABLE": "Quel modello non può sostituirlo: è archiviato, dismesso o di un'altra azienda.",
-    "REPLACEMENT_CIRCLE": "Quel modello è a sua volta sostituito da questo: niente sostituzioni in cerchio.",
+    "STYLE_ARCHIVED": "Il prodotto è archiviato: riattivalo prima.",
+    "REPLACEMENT_NOT_HERE": "Solo un prodotto in uscita o dismesso indica il prodotto che lo sostituisce.",
+    "REPLACEMENT_SELF": "Un prodotto non sostituisce sé stesso.",
+    "REPLACEMENT_UNUSABLE": "Quel prodotto non può sostituirlo: è archiviato, dismesso o di un'altra azienda.",
+    "REPLACEMENT_CIRCLE": "Quel prodotto è a sua volta sostituito da questo: niente sostituzioni in cerchio.",
     "EDIT_BLOCKED": "In questo stato non cambia nulla: portalo prima in un altro stato.",
     "NEEDS_NEW_REVISION": "La sua scheda cambia solo con una nuova revisione: avviane una prima.",
     "NEEDS_CHANGE_ORDER": "Solo con un ordine di modifica approvato, con una nuova revisione.",
     "DRAFT_UNDER_CHANGE_ORDER": "La sua bozza è la modifica proposta da un ordine di modifica: ora non cambia.",
-    "other": "Le regole del modello ora non lo consentono."
+    "other": "Le regole del prodotto ora non lo consentono."
   },
   "lifecycle": {
     "title": "Ciclo di vita",
@@ -56,8 +56,8 @@
     "allows": "Cosa può cambiare ora",
     "replacedBy": "Sostituito da",
     "replaces": "Sostituisce",
-    "nameReplacement": "Indica il modello sostitutivo…",
-    "changeReplacement": "Cambia il modello sostitutivo…",
+    "nameReplacement": "Indica il prodotto sostitutivo…",
+    "changeReplacement": "Cambia il prodotto sostitutivo…",
     "rulesLink": "Regole di modifica per stato (Impostazioni prodotto)",
     "state": {
       "CONCEPT": "Idea",
@@ -74,7 +74,7 @@
       "SAMPLING": "Si fanno e si valutano i campioni.",
       "APPROVED": "Approvato: va in produzione quando una revisione è rilasciata.",
       "IN_PRODUCTION": "In produzione: gli ordini di lavoro usano la sua revisione rilasciata.",
-      "PHASE_OUT": "In uscita: il lavoro aperto si conclude; indica il modello che lo sostituisce.",
+      "PHASE_OUT": "In uscita: il lavoro aperto si conclude; indica il prodotto che lo sostituisce.",
       "DISCONTINUED": "Dismesso: in questo stato non cambia nulla."
     },
     "rule": {
@@ -96,13 +96,13 @@
       "RELEASE": "Rilasciare una revisione"
     },
     "held": {
-      "noRight": "Il tuo ruolo non sposta i modelli nel loro ciclo di vita.",
-      "archived": "Il modello è archiviato: riattivalo prima di spostarlo.",
+      "noRight": "Il tuo ruolo non sposta i prodotti nel loro ciclo di vita.",
+      "archived": "Il prodotto è archiviato: riattivalo prima di spostarlo.",
       "noMove": "Nessun passaggio da questo stato."
     },
     "notice": {
       "moved": "Portato a {state}.",
-      "replacement": "Il modello sostitutivo è stato salvato."
+      "replacement": "Il prodotto sostitutivo è stato salvato."
     }
   },
   "move": {
@@ -110,19 +110,19 @@
     "confirm": "Porta a {state}",
     "after": "Dopo il passaggio la sua regola di modifica è: {rule}.",
     "production": "Da ora i suoi ordini di lavoro usano la revisione rilasciata.",
-    "reasonBack": "Un passaggio all'indietro richiede il motivo: resta nella storia del modello.",
+    "reasonBack": "Un passaggio all'indietro richiede il motivo: resta nella storia del prodotto.",
     "held": {
       "reason": "Scrivi perché torna indietro."
     }
   },
   "replacement": {
-    "title": "Il modello che sostituisce {code}",
-    "intro": "Proposto al posto di questo modello mentre è in uscita o dismesso.",
-    "find": "Cerca un modello",
+    "title": "Il prodotto che sostituisce {code}",
+    "intro": "Proposto al posto di questo prodotto mentre è in uscita o dismesso.",
+    "find": "Cerca un prodotto",
     "findHint": "Il suo codice o nome, almeno 2 lettere.",
     "field": "Sostituito da",
-    "none": "Nessun modello sostitutivo",
-    "noneFound": "Nessun modello trovato.",
+    "none": "Nessun prodotto sostitutivo",
+    "noneFound": "Nessun prodotto trovato.",
     "save": "Salva",
     "held": {
       "same": "Nulla è cambiato finora."
@@ -144,18 +144,18 @@
     "noneRequired": "Il tipo non chiede alcun campo",
     "differs": "Diverso dai valori predefiniti del tipo (restano i suoi valori): {fields}.",
     "dialogTitle": "Tipo di prodotto di {code}",
-    "dialogIntro": "I tipi di questo genere di capo che l'azienda del modello può usare.",
+    "dialogIntro": "I tipi di questo genere di capo che l'azienda del prodotto può usare.",
     "field": "Tipo di prodotto",
     "fieldHint": "I suoi campi obbligatori contano nel controllo di rilascio.",
     "noType": "Nessun tipo",
-    "rule": "Un nuovo tipo non cambia i valori del modello: i suoi predefiniti compilano solo un modello nuovo.",
+    "rule": "Un nuovo tipo non cambia i valori del prodotto: i suoi predefiniti compilano solo un prodotto nuovo.",
     "save": "Salva",
     "held": {
       "same": "Nulla è cambiato finora."
     },
     "notice": {
       "set": "Il tipo di prodotto è stato salvato.",
-      "cleared": "Il modello ora non ha un tipo di prodotto."
+      "cleared": "Il prodotto ora non ha un tipo di prodotto."
     },
     "default": {
       "sizeScaleId": "scala taglie",
@@ -175,7 +175,7 @@
     "baseSize": "Taglia base",
     "ppeStandard": "Norma DPI",
     "ppeClass": "Classe DPI",
-    "measurementTemplateId": "Modello di misure",
+    "measurementTemplateId": "Prodotto di misure",
     "hsCode": "Codice doganale",
     "originCountry": "Paese di origine",
     "netMassKg": "Massa netta",
@@ -184,18 +184,18 @@
   },
   "names": {
     "title": "Nomi per lingua",
-    "intro": "Etichette, scheda tecnica, portale e ricerca li leggono. Una lingua senza un nome proprio riceve {language}, poi il nome del modello.",
+    "intro": "Etichette, scheda tecnica, portale e ricerca li leggono. Una lingua senza un nome proprio riceve {language}, poi il nome del prodotto.",
     "introShort": "Etichette, scheda tecnica, portale e ricerca li leggono.",
     "add": "Aggiungi una lingua",
     "refused": "I nomi ora non possono cambiare: {why}",
     "companyLanguage": "la lingua dell'azienda",
-    "fromStyle": "Dai nomi del modello (non ancora scritto qui)",
+    "fromStyle": "Dai nomi del prodotto (non ancora scritto qui)",
     "editOne": "Modifica i nomi in {language}",
     "removeOne": "Rimuovi i nomi in {language}",
     "write": "Scrivilo qui",
     "empty": {
       "title": "Ancora nessun nome in altre lingue",
-      "body": "Ogni lettore riceve il nome del modello, {name}, finché non si aggiunge una lingua."
+      "body": "Ogni lettore riceve il nome del prodotto, {name}, finché non si aggiunge una lingua."
     },
     "col": {
       "language": "Lingua",
@@ -237,9 +237,9 @@
     "remove": {
       "title": "Rimuovere i nomi in {language}?",
       "confirm": "Rimuovi",
-      "toStyleName": "Un lettore in questa lingua riceve allora il nome del modello in essa: {name}.",
-      "toStyle": "Un lettore in questa lingua riceve allora il nome del modello: {name}.",
-      "toCompany": "Un lettore in questa lingua riceve allora {language}, poi il nome del modello."
+      "toStyleName": "Un lettore in questa lingua riceve allora il nome del prodotto in essa: {name}.",
+      "toStyle": "Un lettore in questa lingua riceve allora il nome del prodotto: {name}.",
+      "toCompany": "Un lettore in questa lingua riceve allora {language}, poi il nome del prodotto."
     },
     "notice": {
       "added": "I nomi in {language} sono stati aggiunti.",
@@ -249,7 +249,7 @@
   },
   "label": {
     "title": "Marchio privato",
-    "intro": "Chi vede il modello, con quale nome è venduto, chi invia la sua dichiarazione.",
+    "intro": "Chi vede il prodotto, con quale nome è venduto, chi invia la sua dichiarazione.",
     "mark": "Marchio privato · {brand}",
     "own": "Collezione propria",
     "shownToLabel": "Chi lo vede nel portale",
@@ -269,11 +269,11 @@
       "BRAND": "{brand}",
       "COMPANY": "La nostra azienda"
     },
-    "others": "Preventivi ({quotes}) e ordini ({orders}) aperti di altri clienti indicano questo modello: proseguono, mentre il portale lo offre solo al suo marchio.",
+    "others": "Preventivi ({quotes}) e ordini ({orders}) aperti di altri clienti indicano questo prodotto: proseguono, mentre il portale lo offre solo al suo marchio.",
     "brandInIdentity": "Il marchio si sceglie in Identità qui sopra.",
     "makeForBrand": "Per farlo per un marchio, scegli il marchio in Identità qui sopra.",
     "held": {
-      "noBrand": "Venduto con il nostro nome solo come modello di un marchio: scegli prima il marchio in Identità.",
+      "noBrand": "Venduto con il nostro nome solo come prodotto di un marchio: scegli prima il marchio in Identità.",
       "same": "Nulla è cambiato finora."
     },
     "dialog": {
@@ -437,7 +437,7 @@
     "why": {
       "has": "{sku} ha già un GTIN.",
       "off": "{sku} è spento.",
-      "other": "{sku} non è uno SKU di questo modello."
+      "other": "{sku} non è uno SKU di questo prodotto."
     },
     "held": {
       "noRight": "Il tuo ruolo non assegna GTIN.",
@@ -448,7 +448,7 @@
     },
     "problem": {
       "again": "L'intervallo o gli SKU sono cambiati nel frattempo: l'anteprima è stata rifatta. Controllala e conferma.",
-      "range": "Questo modello prende GTIN solo dagli intervalli della propria azienda."
+      "range": "Questo prodotto prende GTIN solo dagli intervalli della propria azienda."
     },
     "notice": {
       "given_one": "È stato assegnato {count} GTIN.",
@@ -467,35 +467,35 @@
   },
   "season": {
     "bulk": "Imposta stagione ({count})",
-    "title_one": "Imposta la stagione di {count} modello",
-    "title_other": "Imposta la stagione di {count} modelli",
-    "intro": "Il testo della stagione di ogni modello (al massimo 20 caratteri). Vuoto la toglie.",
+    "title_one": "Imposta la stagione di {count} prodotto",
+    "title_other": "Imposta la stagione di {count} prodotti",
+    "intro": "Il testo della stagione di ogni prodotto (al massimo 20 caratteri). Vuoto la toglie.",
     "field": "Stagione",
     "hint": "Come \"SS27\" o \"FW26\"; al massimo {max} caratteri.",
     "inUse": "Usate in questo elenco:",
     "none": "nessuna stagione",
-    "apply_one": "Imposta per {count} modello",
-    "apply_other": "Imposta per {count} modelli",
-    "clear_one": "Togli per {count} modello",
-    "clear_other": "Togli per {count} modelli",
-    "same_one": "{count} modello è già in questa stagione.",
-    "same_other": "{count} modelli sono già in questa stagione.",
-    "archived_one": "{count} modello archiviato resta fuori (riattivalo prima):",
-    "archived_other": "{count} modelli archiviati restano fuori (riattivali prima):",
-    "done_one": "La stagione è stata impostata per {count} modello.",
-    "done_other": "La stagione è stata impostata per {count} modelli.",
-    "refused_one": "{count} modello non è stato cambiato:",
-    "refused_other": "{count} modelli non sono stati cambiati:",
+    "apply_one": "Imposta per {count} prodotto",
+    "apply_other": "Imposta per {count} prodotti",
+    "clear_one": "Togli per {count} prodotto",
+    "clear_other": "Togli per {count} prodotti",
+    "same_one": "{count} prodotto è già in questa stagione.",
+    "same_other": "{count} prodotti sono già in questa stagione.",
+    "archived_one": "{count} prodotto archiviato resta fuori (riattivalo prima):",
+    "archived_other": "{count} prodotti archiviati restano fuori (riattivali prima):",
+    "done_one": "La stagione è stata impostata per {count} prodotto.",
+    "done_other": "La stagione è stata impostata per {count} prodotti.",
+    "refused_one": "{count} prodotto non è stato cambiato:",
+    "refused_other": "{count} prodotti non sono stati cambiati:",
     "held": {
-      "nothing": "Nulla cambia: ogni modello scelto è già in questa stagione, o archiviato.",
-      "allArchived": "Ogni modello scelto è archiviato.",
+      "nothing": "Nulla cambia: ogni prodotto scelto è già in questa stagione, o archiviato.",
+      "allArchived": "Ogni prodotto scelto è archiviato.",
       "empty": "Scrivi la stagione, oppure scegli di toglierla."
     },
     "problem": {
       "long": "Al massimo {max} caratteri.",
       "oneLine": "Una riga, senza tabulazioni."
     },
-    "clearHint": "Toglie la stagione dai modelli scelti.",
+    "clearHint": "Toglie la stagione dai prodotti scelti.",
     "clearToggle": "Togli la stagione"
   }
 }
