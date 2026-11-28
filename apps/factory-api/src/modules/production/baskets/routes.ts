@@ -2,8 +2,10 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { manifest } from './manifest'
 // ---- server A (owb-fl1/fl2) imports ----
-import { basketContract, homeContract, photoAnnounceContract, photoCompleteContract, sessionDepartmentContract } from './contract'
+import { basketContract, homeContract, moveContract, photoAnnounceContract, photoCompleteContract, routeContract, routeNormalContract, sessionDepartmentContract, undoMovesContract } from './contract'
 import { basketHome } from './home'
+import { moveBaskets, undoMoves } from './moves'
+import { changeRoute, normalRoute } from './route-edits'
 import { announcePhoto, completePhoto } from './photo'
 import { readBasket } from './read'
 import { pickDepartment } from './session'
@@ -36,6 +38,27 @@ export default defineRoutes('production.baskets', manifest, async (app) => {
   )
 
   app.post('/production/baskets/:bundleId/checklist/:stepCode/photo/:fileId/complete', { schema: photoCompleteContract }, async (request) => completePhoto(request, request.params, request.body))
+
+  // owb-fl2: moves by hand, their undo, route edits (201 a new act; 200 a resend of its key).
+  app.post('/production/baskets/move', { schema: moveContract }, async (request, reply) => {
+    const { replayed, ...answer } = await moveBaskets(request, request.body, idempotencyKeyFrom(request))
+    return reply.code(replayed ? 200 : 201).send(answer)
+  })
+
+  app.post('/production/baskets/moves/:groupId/undo', { schema: undoMovesContract }, async (request, reply) => {
+    const { replayed, ...answer } = await undoMoves(request, request.params.groupId, request.body, idempotencyKeyFrom(request))
+    return reply.code(replayed ? 200 : 201).send(answer)
+  })
+
+  app.post('/production/baskets/route', { schema: routeContract }, async (request) => {
+    const { replayed: _replayed, ...answer } = await changeRoute(request, request.body, idempotencyKeyFrom(request))
+    return answer
+  })
+
+  app.post('/production/baskets/route/normal', { schema: routeNormalContract }, async (request) => {
+    const { replayed: _replayed, ...answer } = await normalRoute(request, request.body, idempotencyKeyFrom(request))
+    return answer
+  })
   // ---- end server A ----
 
   // ---- server B (owb-fl3/fl4): flags, late, team, board, from the floor ----

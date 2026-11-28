@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { CLIENT_SCAN_ID } from '@nexus/factory-domain/production/scans/rules'
 import { STEP_STATES } from '@nexus/factory-domain/production/baskets/steps'
+import { MAX_BASKETS_PER_ACT, MOVE_KINDS, MOVE_NOTE_MAX, MOVE_REASONS, ROUTE_EDIT_KINDS, ROUTE_REASONS } from '@nexus/factory-domain/production/baskets/moves'
 import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
@@ -188,4 +189,64 @@ export const photoCompleteContract = defineContract({
     occurredAt: instant().optional(),
   }),
   response: { 200: output({ file: fileView, tick: output({ id: id(), stepCode: z.string(), outcome: z.string(), fileId: id(), at: instant() }) }) },
+})
+
+// ---- owb-fl2: moves by hand, undo, route edits -------------------------------------------------------------------------------
+
+const clientEventId = z.string().regex(CLIENT_SCAN_ID, 'Expected 8 to 64 letters, digits, dots, colons, underscores or hyphens.')
+
+/** POST /production/baskets/move (also the offline kind production.baskets.move's payload). */
+export const moveBody = input({
+  bundleIds: z.array(id()).min(1).max(MAX_BASKETS_PER_ACT),
+  /** The step it goes to (a step of the baskets' work order); null: Ready to ship. */
+  toOperationId: id().nullable(),
+  kind: z.enum(MOVE_KINDS),
+  /** Required on BACK. */
+  reason: z.enum(MOVE_REASONS).optional(),
+  note: z.string().trim().min(1).max(MOVE_NOTE_MAX).optional(),
+  clientEventId,
+  occurredAt: instant().optional(),
+})
+
+export const moveContract = defineContract({
+  body: moveBody,
+  response: {
+    200: output({ groupId: id(), moved: z.number().int(), stay: z.number().int(), stayWords: z.array(z.string()), baskets: z.array(output({ bundleId: id(), to: id().nullable() })) }),
+    201: output({ groupId: id(), moved: z.number().int(), stay: z.number().int(), stayWords: z.array(z.string()), baskets: z.array(output({ bundleId: id(), to: id().nullable() })) }),
+  },
+})
+
+/** POST /production/baskets/moves/:groupId/undo (the offline kind production.baskets.moveUndo carries the groupId too). */
+export const undoBody = input({ clientEventId, occurredAt: instant().optional() })
+export const undoQueuedBody = input({ groupId: id(), clientEventId, occurredAt: instant().optional() })
+
+export const undoMovesContract = defineContract({
+  params: input({ groupId: id() }),
+  body: undoBody,
+  response: {
+    200: output({ groupId: id(), undone: z.number().int(), stay: z.number().int(), stayWords: z.array(z.string()) }),
+    201: output({ groupId: id(), undone: z.number().int(), stay: z.number().int(), stayWords: z.array(z.string()) }),
+  },
+})
+
+const targets = {
+  bundleIds: z.array(id()).min(1).max(MAX_BASKETS_PER_ACT).optional(),
+  /** Every open basket of the order (at most 50). */
+  salesOrderId: id().optional(),
+}
+
+export const routeContract = defineContract({
+  body: input({
+    ...targets,
+    /** SKIP / PUT_BACK name the step and its department (the department's step is taken in each basket's own route); ADD the department. */
+    edits: z.array(input({ kind: z.enum(ROUTE_EDIT_KINDS), operationId: id().optional(), departmentId: id().optional() })).min(1).max(10),
+    reason: z.enum(ROUTE_REASONS),
+    note: z.string().trim().min(1).max(MOVE_NOTE_MAX).optional(),
+  }),
+  response: { 200: output({ groupId: id(), changed: z.number().int(), stay: z.number().int(), stayWords: z.array(z.string()), warnings: z.array(z.enum(['NO_QUALITY_LEFT'])) }) },
+})
+
+export const routeNormalContract = defineContract({
+  body: input({ ...targets }),
+  response: { 200: output({ groupId: id(), changed: z.number().int() }) },
 })

@@ -16,6 +16,13 @@ export const manifest = defineManifest({
   // The quality step's photo: the scans' right at the device's own site (handlers check the work order with can()).
   'POST /production/baskets/:bundleId/checklist/:stepCode/photo': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
   'POST /production/baskets/:bundleId/checklist/:stepCode/photo/:fileId/complete': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
+  // owb-fl2: a move by hand (FORWARD and Take it here: production.baskets.move; BACK: production.baskets.route) and its undo (own:
+  // move; another person's: route) — the kind decides the right, so the handler asks it (`SIGNED_IN`); the work orders with can().
+  'POST /production/baskets/move': { audiences: ['office', 'floor'], permission: SIGNED_IN, scope: 'record' },
+  'POST /production/baskets/moves/:groupId/undo': { audiences: ['office', 'floor'], permission: SIGNED_IN, scope: 'record' },
+  // owb-fl2: a basket's route changed, and back to normal (the team leader; the office's production manager and floor supervisor).
+  'POST /production/baskets/route': { audiences: ['office', 'floor'], permission: 'production.baskets.route', scope: 'record' },
+  'POST /production/baskets/route/normal': { audiences: ['office', 'floor'], permission: 'production.baskets.route', scope: 'record' },
   // ---- end server A ----
   // ---- server B (owb-fl3/fl4): flags, late, team, board, from the floor ----
   // Do this first and Will be late are the team leader's (floor.lead, `_owb-fl-common.md` § 1 D), at the device's own site.

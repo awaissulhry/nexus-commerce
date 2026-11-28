@@ -228,7 +228,7 @@ export async function bundleRecord(caller: CommandCaller, bundleId: string) {
     const standing = new Map(counts.filter((scan) => scan.kind !== 'UNDO' && !voided.has(scan.id)).map((scan) => [scan.workOrderOperationId, scan]))
     const progress = row.operations.map((operation) => {
       const report = standing.get(operation.id)
-      const state = report ? ('DONE' as const) : row.place.next?.id === operation.id && (row.place.place === 'LINE' || row.place.place === 'CUTTING') ? ('HERE' as const) : ('NOT_REACHED' as const)
+      const state = report ? ('DONE' as const) : row.place.next?.id === operation.id && (row.place.place === 'LINE' || row.place.place === 'CUTTING' || /* owb-fl2 */ row.place.place === 'WAITING') ? ('HERE' as const) : ('NOT_REACHED' as const)
       return { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name, scanRequired: operation.scanRequired, state, good: report?.goodQuantity ?? null, scrap: report?.scrapQuantity ?? null, rework: report?.reworkQuantity ?? null }
     })
     // Quality: the holds on it or its work order, the reworks it travels in (open and done).
