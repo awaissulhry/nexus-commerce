@@ -296,10 +296,14 @@ describe('1.2 our warehouse first: planned, the transfer, arrived, the label, th
     expect(north.onTheWay).toEqual([expect.objectContaining({ shipmentId: ids.leg, pieces: 1, customer: expect.objectContaining({ partyId: A.customer }) })])
   })
 
-  it('invoicing never bills the transfer DDT (the queue, the deferred invoices, the candidates)', async () => {
+  it('invoicing never bills the transfer DDT (the queue, the deferred invoices, the candidates; by its id: 409 in words)', async () => {
     for (const url of [`/invoicing/shipped-not-invoiced?companyId=${A.companyA}`, `/invoicing/deferred?companyId=${A.companyA}`, `/invoicing/from-ddts/candidates?orderIds=${so2()}`]) {
       expect(JSON.stringify(await ok('finance', 'GET', url)), url).not.toContain(ids.transferDdt)
     }
+    // S3 lead yes 09:05: a draft from the transfer DDT named by its id is refused in words, and no invoice row is written.
+    const byId = await refused('finance', 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [ids.transferDdt] }, 409)
+    expect(byId.message).toMatch(/took the goods to our own warehouse \(a transfer\): nothing is sold with it/)
+    expect(await admin(`SELECT 1 FROM "InvoiceLine" WHERE "ddtId" = $1`, [ids.transferDdt])).toEqual([])
   })
 
   it('It arrived at the warehouse: once, by the warehouse (Sales may not); its audit row, its event; our warehouses lists it there', async () => {
@@ -341,9 +345,10 @@ describe('1.2 our warehouse first: planned, the transfer, arrived, the label, th
     expect((await liveDdts(ids.leg)).map((row) => row.reason)).toEqual(['TRANSFER', 'SALE'])
     // A third one: the live one (the newest) is the sale DDT.
     expect((await refused('warehouse', 'POST', `/shipping/shipments/${ids.leg}/ddt`, { carrier: { name: 'Seed Van' } }, 409)).message).toMatch(/is live for this shipment/)
-    // Still at our warehouse: the sale DDT is not billed yet.
+    // Still at our warehouse: the sale DDT is not billed yet — not listed, and refused by its id (409 in words).
     expect(JSON.stringify(await ok('finance', 'GET', `/invoicing/shipped-not-invoiced?companyId=${A.companyA}`))).not.toContain(ids.saleDdt)
     expect(JSON.stringify(await ok('finance', 'GET', `/invoicing/from-ddts/candidates?orderIds=${so2()}`))).not.toContain(ids.saleDdt)
+    expect((await refused('finance', 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [ids.saleDdt] }, 409)).message).toMatch(/are still at our warehouse .*: invoice them once they are sent on to the customer/)
   })
 
   it('Send on: the payment due is a warning (409 with the list), passed on it goes; once; billed then, the transfer never; delivered after', async () => {
@@ -379,8 +384,14 @@ describe('1.2 our warehouse first: planned, the transfer, arrived, the label, th
     await packed(await shipmentOf(id))
     expect((await ok('warehouse', 'POST', `/shipping/shipments/${id}/ship`, { version: await versionOf(id) })).shipment.status).toBe('SHIPPED')
     await ok('warehouse', 'POST', `/shipping/shipments/${id}/arrived`, { version: await versionOf(id) })
+    // S3 lead yes 09:05: left without a DDT but still at our warehouse — not in the "shipped without a DDT" list (immediate invoice) yet.
+    const before = await ok('finance', 'GET', `/invoicing/shipped-not-invoiced?companyId=${A.companyA}`)
+    expect(JSON.stringify((before.customers as Json[]).flatMap((customer) => customer.shipments ?? []))).not.toContain(id)
     const sentOn = await ok('warehouse', 'POST', `/shipping/shipments/${id}/forward`, { version: await versionOf(id), carrier: null, trackingNumber: null })
     expect(sentOn.forwardedWithoutLabel).toBe(true)
+    // Sent on: listed now.
+    const after = await ok('finance', 'GET', `/invoicing/shipped-not-invoiced?companyId=${A.companyA}`)
+    expect(JSON.stringify((after.customers as Json[]).flatMap((customer) => customer.shipments ?? []))).toContain(id)
     expect(await legRow(id)).toMatchObject({ forwardedWithoutLabel: true, customerLabelFileId: null, forwardedById: WAREHOUSE_PERSON })
     expect((await auditOf(id, 'shipping.warehouseLeg.forwarded'))[0]!.after).toMatchObject({ forwardedWithoutLabel: true, warning: 'No label from the customer yet' })
   })
