@@ -38,6 +38,7 @@ import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-cou
 import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import type { ApiIssue } from '../../../lib/api/errors'
 import type { SplitBody } from './api'
+import { lifeOfOrder, orderActOf, type LegFacts, type OrderAct } from './record/band/model' // owb-of5: the band's ONE act
 
 /**
  * The sales order screens' pure rules (SCR-038 list and board, SCR-039 the order studio; B-W1-25 part 2): what a person
@@ -104,6 +105,11 @@ export interface OrderAbilities {
   returnsManage?: boolean
   complaintsLog?: boolean
   // ---- end F-OS-303
+  // ---- owb-of5 (design plan § 5 D: sales may "Print and start the work", R24; sales plans the shipping): the band's ONE act on a
+  // confirmed order (production.print.start) and Ship… on a ready one (shipping.plan beside shipping.manage); absent: not drawn.
+  printStart?: boolean
+  planShipping?: boolean
+  // ---- end owb-of5
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -136,6 +142,8 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     auditRead: held.has('audit.read'), // F-OM-fx3 (W-08): Payments' History ›
     returnsManage: held.has('sales.returns.manage'), // F-OS-303: Open a return…, Send a claim link…
     complaintsLog: held.has('quality.complaints.log'), // F-OS-303: Log a complaint…
+    printStart: held.has('production.print.start'), // owb-of5: Print and start the work… (S3's window)
+    planShipping: held.has('shipping.plan'), // owb-of5: Ship… (S3's window)
   }
 }
 
@@ -674,13 +682,23 @@ export function askedOutsideGate(order: Pick<Order, 'depositRequired' | 'chain'>
 // ---- end F-OM-fx5w
 
 // F-OP-102: + PENDING_APPROVAL — the approver's Confirm the order (its task), anyone else's Ask for a yes / Take the request back.
-export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment' | 'confirmYes' | 'askYes'
+export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment' | 'confirmYes' | 'askYes' | /* owb-of5 */ BandActKind
+
+/**
+ * owb-of5 (design plan § 5i; prototype office.js officeNext): the band's acts that open another session's window (S3's: the print,
+ * the ship window, the warehouse leg) — the band mounts the window (record/band/ActWindows.tsx), never a page change.
+ */
+export const BAND_ACT_KINDS = ['printStart', 'ship', 'arrived', 'sendOn'] as const
+export type BandActKind = (typeof BAND_ACT_KINDS)[number]
+export const isBandAct = (kind: StepKind | null): kind is BandActKind => kind !== null && (BAND_ACT_KINDS as readonly string[]).includes(kind)
 
 export interface NextStep {
   kind: StepKind | null
   held: Phrase | null
   /** F-OP-102: Confirm the order's task (the order read's open yes, B-OP-020). */
   taskId?: string
+  /** owb-of5: It arrived / Send on — the shipment whose warehouse leg the window acts on. */
+  shipmentId?: string
 }
 
 // F-SA-201: a Delivered order closes as a Shipped one does (the machine: SHIPPED → CLOSED and DELIVERED → CLOSED; the
@@ -732,7 +750,21 @@ const NO_STEP: NextStep = { kind: null, held: null }
  * a move they may not make held with its words. The walk saw Read-only offered a held Make work orders · Ask for a yes · Change
  * promise date… · Close order… on every order, while the 8 cards already followed the rule.
  */
-export const bandStepOf = (order: Order, can: OrderAbilities, readOnly: boolean): NextStep => (readOnly ? NO_STEP : nextStep(order, can))
+export function bandStepOf(order: Order, can: OrderAbilities, readOnly: boolean, legs: readonly LegFacts[] | null = null): NextStep {
+  if (readOnly) return NO_STEP
+  // The yes the order waits for keeps today's door (the approver confirms it; anyone else asks for it).
+  if (order.status === 'PENDING_APPROVAL') return nextStep(order, can)
+  // ---- owb-of5 step 1 (design plan § 5i; L9): the ONE main act by the order's life — Confirmed → Print and start the work… (drawn
+  // only with production.print.start: "Make work orders" became it; the deposit and the release checks are said in S3's window),
+  // In production → none, Ready to ship → Ship…, a leg on its way → It arrived, at our warehouse → Send on (S3's windows).
+  const life = lifeOfOrder(order, legs)
+  const act = orderActOf({ life: life.life, note: life.note, may: { print: !!can.printStart, ship: (can.createShipment || !!can.planShipping) && readyToShipOf(order.progress) > 0 }, legs })
+  if (act && act.act !== 'CONFIRM') return { kind: ACT_STEP[act.act], held: null, ...(act.shipmentId ? { shipmentId: act.shipmentId } : {}) }
+  // Shipped or delivered (not waiting at our warehouse): closing it stays the next step (today's Close order…, held until settled).
+  if (isShippedInFull(order) && life.life !== 'AT_OUR_WAREHOUSE') return { kind: 'close', held: closeHeld(order, can) }
+  return NO_STEP
+}
+const ACT_STEP: Readonly<Record<Exclude<OrderAct, 'CONFIRM'>, BandActKind>> = Object.freeze({ PRINT: 'printStart', SHIP: 'ship', ARRIVED: 'arrived', SEND_ON: 'sendOn' })
 /** The band's ⋯ for this reader (see bandStepOf): Read-only keeps only BAND_LOOK_ITEMS that are open, and no danger item. */
 export function bandMenuFor<T extends { readonly id: string; readonly disabled?: boolean }>(
   readOnly: boolean,

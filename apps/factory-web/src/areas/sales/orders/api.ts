@@ -748,6 +748,11 @@ export const orderSchema = z.object({
   // ---- end F-OO-208
   // F-OM-102 (B-OM-002): the order's money (price grain; null without it); absent in an older answer.
   money: orderMoneySchema.nullable().optional(),
+  // ---- owb-of5 (owb-of1 step 4; PL-schema § 3): the order's picture (null: the first line's design) and Restrict on the floor (who,
+  // when; null: open to the department). Optional: absent in an answer before of1.
+  pictureFileId: z.string().nullable().optional(),
+  restricted: z.object({ by: z.string(), at: z.string() }).nullable().optional(),
+  // ---- end owb-of5
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]
