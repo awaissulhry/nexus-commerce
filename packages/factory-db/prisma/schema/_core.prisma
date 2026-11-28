@@ -378,6 +378,8 @@ model Company {
   // company only; its office people given to customers.
   departments          Department[]
   partyOfficePeople    PartyOfficePerson[] @relation("PartyOfficePersonCompany")
+  // owb-ssw structures.prisma (S3 schema wave "structures + units"): its order structures.
+  orderStructures      OrderStructure[]    @relation("OrderStructureCompany")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -583,6 +585,10 @@ model Site {
   // and, as our warehouse, the legs that go through it.
   warehouseLegs         ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegSite")
   warehouseLegsThrough  ShipmentWarehouseLeg[] @relation("ShipmentWarehouseLegWarehouse")
+  // owb-fl0 baskets.prisma (order workflow build, schema wave "floor baskets 2"): the "Do this first" marks of its baskets,
+  // the suggestions told at it.
+  basketFlags           BasketFlag[]           @relation("BasketFlagSite")
+  floorSuggestions      FloorSuggestion[]      @relation("FloorSuggestionSite")
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -788,6 +794,9 @@ model Station {
   dispatchAssignments    DispatchAssignment[]
   // floor-sync.prisma: the refused queued actions of its tablets.
   refusedActions         FloorRefusedAction[]
+  // owb-fl0 floor-auth.prisma (order workflow build, schema wave "floor baskets 2"): the phone sessions whose department
+  // pick took it.
+  floorSessions          FloorSession[]       @relation("FloorSessionStation")
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the station's rows (a device at a station).

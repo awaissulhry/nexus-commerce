@@ -24,9 +24,12 @@ export const PRODUCTION_PRINT_START_PERMISSIONS: readonly Permission[] = Object.
 
 /**
  * The role templates (roles/templates addedFor; the Owner from every()). Sales starts the work of its orders (R24, the Owner's
- * yes). The Factory designer prints only with the Owner's yes: never from its template, only by the per-person offer
+ * yes); the production manager and the planner, who release work orders today, start it too (the Owner's yes of 2026-11-28,
+ * owb-b6). The Factory designer prints only with the Owner's yes: never from its template, only by the per-person offer
  * `extra_print_and_start` an administrator assigns (People by customer › Extra rights).
  */
 export const PRODUCTION_PRINT_START_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   sales: [PRODUCTION_PRINT_START],
+  planner: [PRODUCTION_PRINT_START],
+  production_manager: [PRODUCTION_PRINT_START],
 })
