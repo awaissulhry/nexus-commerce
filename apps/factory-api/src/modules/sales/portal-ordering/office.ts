@@ -605,6 +605,9 @@ export async function acceptInCommand(tools: CommandTools, current: RequestRow, 
     }
     salesOrderId = outcome.orderId
     made = { number: outcome.number, dropped: [], warnings: [...plan.warnings] }
+    // owb- (order workflow, b3.2; PL-schema § 3): the order's picture comes with it — the request's three columns (file, when, who),
+    // copied in this transaction; none set: the order keeps the default (its first line's design). From now on the order's is live.
+    await carryPicture(tx, current.id, outcome.orderId)
     // B-CP-077: the order's lines are made in the plan's order, one for each planned line.
     const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true, quantity: true }, orderBy: { seq: 'asc' } })
     lineMap = lineMapOf(plan.lines, orderLines)
@@ -679,6 +682,13 @@ export async function acceptInCommand(tools: CommandTools, current: RequestRow, 
   })
   tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
   return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap.map((entry) => ({ ...entry, into: entry.into.map((line) => ({ ...line })) })) /* B-CP-077: the answer's own copy (the contract's arrays) */, brandPrices: asMoney('price', brandPrices) /* B-CP-076: how many customer prices it carried, the price grain (contract) */ }
+}
+
+/** owb- (b3.2): the request's picture (its three columns) onto the order made from it, at Confirm, in the accept's transaction. */
+export async function carryPicture(tx: CommandTools['tx'], requestId: string, orderId: string): Promise<void> {
+  const picture = await tx.portalOrderRequest.findUniqueOrThrow({ where: { id: requestId }, select: { pictureFileId: true, pictureSetAt: true, pictureSetById: true } })
+  if (!picture.pictureFileId || !picture.pictureSetAt || !picture.pictureSetById) return
+  await tx.salesOrder.update({ where: { id: orderId }, data: { pictureFileId: picture.pictureFileId, pictureSetAt: picture.pictureSetAt, pictureSetById: picture.pictureSetById }, select: { id: true } })
 }
 
 /** `clock`: the routes pass the app's (B-W2b-F13b: a waiting ship-to approved here is never decided before it was asked). */
