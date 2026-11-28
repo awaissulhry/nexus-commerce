@@ -13,6 +13,9 @@ import { REQUEST_FOLLOW_UPS } from '@nexus/factory-domain/sales/change-requests/
 import { FREEZE_STATES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PR-40
+// owb-po7: the life word of a sheet row and the own columns of its lines.
+import { ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
+import { ownColumnSchema, ownValueSchema } from '../../../lib/order-lines/schema'
 import { SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes' // pp-w1 (w1.4, O3-B1): + FEE, a charge line
 
 /**
@@ -64,9 +67,39 @@ export type PortalCell = z.infer<typeof portalCellSchema>
 // ── end B-TH-246 ──
 
 // ── the list ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ---- owb-po7 (owb-po-server § Shape "SHEET", built by the server's owb-po1): a row's page, its life word, its lines (the C rows), the
+// own columns it uses, what waits for the customer, what the reader may do. Every field optional: an older answer says less.
+export const SHEET_WAITS = ['NEW_MESSAGES', 'DESIGN_APPROVAL', 'SEND_LABEL', 'ASKED', 'OPEN_DETAILS', 'LATE'] as const
+export type SheetWaitKind = (typeof SHEET_WAITS)[number]
+const sheetLineSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  model: z.object({ kind: z.enum(['OWN', 'RANGE', 'NEW', 'TEXT']), words: z.string().nullable(), garmentType: z.string().nullable() }),
+  material: z.string().nullable(),
+  sizes: z.string().nullable(),
+  pieces: z.number(),
+  ownValues: z.record(z.string(), ownValueSchema).default({}),
+})
+export type SheetLine = z.infer<typeof sheetLineSchema>
+const sheetFacts = {
+  page: z.object({ kind: z.enum(['order', 'request']), id: z.string() }).optional().catch(undefined),
+  life: z.enum(ORDER_LIFE).optional().catch(undefined),
+  lines: z.array(sheetLineSchema).optional().catch(undefined),
+  ownColumnIds: z.array(z.string()).optional().catch(undefined),
+  /** A kind this page does not know is left out (never a failed read). */
+  waits: z
+    .array(z.object({ kind: z.string(), count: z.number().nullable() }))
+    .transform((rows) => rows.filter((row): row is { kind: SheetWaitKind; count: number | null } => (SHEET_WAITS as readonly string[]).includes(row.kind)))
+    .optional()
+    .catch(undefined),
+  may: z.object({ edit: z.boolean(), send: z.boolean(), delete: z.boolean(), takeBack: z.boolean(), picture: z.boolean() }).optional().catch(undefined),
+  /** The row's version (a draft's or a request's: Send, Delete, Take it back send it back). */
+  version: z.number().optional().catch(undefined),
+}
+// ---- end owb-po7
 export const orderRowSchema = z.object({
-  /** ORDER, or REQUEST: a portal order request sent and not decided yet. */
-  kind: z.enum(['ORDER', 'REQUEST']),
+  /** ORDER, or REQUEST: a portal order request sent and not decided yet; owb-po7: DRAFT, the party's draft (owb-po1). */
+  kind: z.enum(['ORDER', 'REQUEST', 'DRAFT']),
   id: z.string(),
   customerRef: z.string().nullable(),
   /** pg-fx4 (Z5): a REQUEST row's subject (the sent draft's title); null: none (an ORDER row always); an older answer: absent. */
@@ -75,7 +108,7 @@ export const orderRowSchema = z.object({
   // B-TH-303
   yourNumber,
   orderedOn: z.string().nullable(),
-  status: z.enum(CUSTOMER_ORDER_STATUSES),
+  status: z.enum(CUSTOMER_ORDER_STATUSES).catch('REQUESTED'), // owb-po7: a DRAFT row's status is not a customer status: its life word says Draft
   words,
   promiseDate: z.string().nullable(),
   originalPromiseDate: z.string().nullable(),
@@ -95,6 +128,7 @@ export const orderRowSchema = z.object({
   values: z.record(z.string(), portalCellSchema).optional(),
   /** pg-w2 (Z4, Z16 P3): the order needs the customer's answer (a re-confirm asked); a REQUEST row never; an older answer: absent. */
   needsYou: z.boolean().optional(),
+  ...sheetFacts, // owb-po7
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -117,6 +151,8 @@ export const ordersSchema = z.object({
   /** The requests and orders that need the customer's answer. */
   needsYou: z.number().optional(),
   // ---- end pg-w2
+  /** owb-po7: the own columns any row on the page uses (the Details chips). */
+  ownColumns: z.array(ownColumnSchema).optional().catch(undefined),
 })
 export type OrdersRead = z.infer<typeof ordersSchema>
 
