@@ -620,7 +620,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   }
 
   // ---- owb-of4 step 1: the Sent orders' facts, read again with the list; bulk Confirm skips text orders and the ones that hold ----
-  const catalogueFacts = useCatalogueFacts(api, can.ordersView, lock, asOf)
+  const catalogueFacts = useCatalogueFacts(api, can.ordersView === true, lock, asOf)
   const startConfirm = (picked: readonly IncomingRow[]) => {
     const next = confirmRunOf(catalogueConfirmPlan(picked, catalogueFacts))
     setConfirmed(null)
