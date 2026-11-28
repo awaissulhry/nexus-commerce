@@ -387,7 +387,9 @@
       "trackOf": "Track shipment {number} on the carrier’s site"
     },
     "also_one": "Also {count} piece of your order {order}",
-    "also_other": "Also {count} pieces of your order {order}"
+    "also_other": "Also {count} pieces of your order {order}",
+    "labelSent": "Your shipping label is with the factory.",
+    "labelFailed": "The label was not sent. Try again in a moment."
   },
   "toShip": {
     "title": "Still to ship",

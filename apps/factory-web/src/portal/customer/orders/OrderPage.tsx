@@ -118,6 +118,11 @@ import { askNoteOf, askTyped, NO_ASKS, orderLineRowsOf, undoAsk, type LineAsks }
 import { fetchMoney, noticeBodyOf, noticeProblem, sendPaymentNotice, stepOpen } from './money'
 import type { NoticeWindowModel } from './view/MoneyTab'
 // ---- end owb-po6.2
+// ---- owb-po6.3: the shipping label and the report door
+import { announceShipmentFile, completeShipmentFile, sendShipmentLabel } from './api'
+import { putToStore, sha256Hex } from '../../../record-panels/store'
+import { pageBuilt } from '../../shell/nav/portal-nav'
+// ---- end owb-po6.3
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
 import { usePortalPriceCheck } from './use-price-check' // F-CP-143: the customer's own price check (a price holder's)
@@ -1023,6 +1028,30 @@ function OrderContainer({ id }: { id: string }) {
       .catch(() => setNoticeWindow((current) => (current ? { ...current, busy: false, failed: pageT('money.sendFailed') } : current)))
   }
 
+  // ── owb-po6.3: the shipping label (S3's warehouse way) and "Report a complaint or a return…" ───────────────────────────
+  const [labelBusy, setLabelBusy] = useState<string | null>(null)
+  const labelHeld = preview ? t('held.preview') : offline ? t('held.offline') : !can('portal.upload') || !can('portal.comment') ? pageT('warehouse.mayUpload') : null
+  const sendLabel = async (shipmentId: string, file: File) => {
+    if (labelHeld || labelBusy) return
+    setLabelBusy(shipmentId)
+    try {
+      const bytes = await file.arrayBuffer()
+      const contentType = file.type || 'application/pdf'
+      const { file: announced, upload: target } = await announceShipmentFile(api, shipmentId, { originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) })
+      await putToStore(target, new Blob([bytes], { type: contentType }))
+      const done = await completeShipmentFile(api, shipmentId, announced.id)
+      const version = shipments.read?.shipments.find((entry) => entry.id === shipmentId)?.version
+      await sendShipmentLabel(api, id, shipmentId, { fileId: done.id, ...(version !== undefined ? { version } : {}) })
+      setNotice({ tone: 'success', key: 'shipments.labelSent' })
+      void loadShipments()
+    } catch {
+      setNotice({ tone: 'danger', key: 'shipments.labelFailed' })
+    } finally {
+      setLabelBusy(null)
+    }
+  }
+  const reportHref = can('portal.returns.view') && pageBuilt('returns') ? `${frame.prefix}/returns?start=CHOOSE&order=${encodeURIComponent(id)}` : null
+
   // ── owb-po5: the picture of the order and All changes ───────────────────────────────────────────────────────────────
   const [pictureOpen, setPictureOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
@@ -1208,6 +1237,9 @@ function OrderContainer({ id }: { id: string }) {
         lineAsks, // owb-po6.1
         money: seesMoney ? money : { state: 'hidden', read: null }, // owb-po6.2
         noticeWindow,
+        reportHref, // owb-po6.3
+        labelBusy,
+        labelHeld,
       }}
       actions={{
         priceCheck: priceCheck.actions, // F-CP-143
@@ -1261,6 +1293,7 @@ function OrderContainer({ id }: { id: string }) {
         onNoticeDraft: (draft) => setNoticeWindow((current) => (current ? { ...current, draft, problem: noticeProblem(draft, current.step, today), failed: null } : current)),
         onNoticeSend: sendNotice,
         onNoticeClose: () => setNoticeWindow((current) => (current?.busy ? current : null)),
+        onSendLabel: (shipmentId, file) => void sendLabel(shipmentId, file), // owb-po6.3
         // ---- F-PR-12a
         onRetryProduction: () => {
           setProduction({ state: 'loading', read: null })

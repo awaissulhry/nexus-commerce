@@ -349,6 +349,10 @@ export const shipmentSchema = z.object({
   // F-OP-135 (B-OP-044): this customer's OWN other orders the shipment carries ("also N pieces of your order 12"); never another's.
   otherOrders: z.array(z.object({ yourNumber, customerRef: z.string().nullable(), pieces: z.number() })).optional(),
   papers: z.array(z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number(), versionNo: z.number() })),
+  // owb-po6.3 (server po2.6, S3's atWarehouseOf as is): the shipment waits at the factory's warehouse for the customer's label; absent:
+  // not on the warehouse way (or the server not there yet) — no label card. `version`: the shipment as read (the label sends it back).
+  atWarehouse: z.object({ place: z.string(), city: z.string().nullable(), since: z.string().nullable(), sentOn: z.boolean(), labelSent: z.boolean() }).nullable().optional().catch(undefined),
+  version: z.number().optional(),
 })
 export type ShipmentRead = z.infer<typeof shipmentSchema>
 
@@ -517,6 +521,17 @@ export interface DesignAskBody {
   readonly appliesTo?: DesignAppliesTo
 }
 // ---- end F-SA-246
+
+// ---- owb-po6.3 (S3's owb-ss1): the customer's shipping label — uploaded with today's portal upload ON THE SHIPMENT (its conversation's
+// file route: portal.comment + portal.upload), then sent: POST …/shipments/:shipmentId/label { fileId, version? } → { shipmentId, labelSentAt }.
+const shipmentFilesPath = (shipmentId: string) => `/portal/threads/Shipment/${encodeURIComponent(shipmentId)}/files`
+export const announceShipmentFile = (api: ApiClient, shipmentId: string, body: OrderFileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(shipmentFilesPath(shipmentId), { body: { ...body }, schema: z.object({ file: orderUpload, upload: presigned }), idempotencyKey })
+export const completeShipmentFile = (api: ApiClient, shipmentId: string, fileId: string, idempotencyKey: string = newIdempotencyKey()): Promise<OrderUpload> =>
+  api.post(`${shipmentFilesPath(shipmentId)}/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: orderUpload }), idempotencyKey }).then((answer) => answer.file)
+export const sendShipmentLabel = (api: ApiClient, orderId: string, shipmentId: string, body: { fileId: string; version?: number }, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/sales-orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/label`, { body, schema: z.object({ shipmentId: z.string(), labelSentAt: z.string() }), idempotencyKey })
+// ---- end owb-po6.3
 export type AskBody = ChangeBody | CancelBody | ProductionAskBody | DesignAskBody /* F-SA-246 */
 
 /** The impact of an ask (B-PR-24/25): what is frozen, priced or not (never an amount), the earliest date (a date only), notes. */

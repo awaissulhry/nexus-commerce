@@ -170,5 +170,18 @@
       "day": "Scegliete il giorno in cui avete pagato: oggi o prima.",
       "long": "Il testo è troppo lungo."
     }
+  },
+  "shipments": {
+    "report": "Segnalate un reclamo o un reso…"
+  },
+  "warehouse": {
+    "title": "Nel magazzino della fabbrica",
+    "where": "Il vostro ordine aspetta presso {place}.",
+    "since": "Dal {date}.",
+    "send": "Inviate l'etichetta di spedizione",
+    "hint": "Scegliete l'etichetta: un PDF o un'immagine.",
+    "sending": "Stiamo inviando l'etichetta…",
+    "have": "Abbiamo la vostra etichetta: la fabbrica spedisce l'ordine.",
+    "mayUpload": "Il vostro accesso non comprende l'invio di file: chiedete al vostro amministratore."
   }
 }

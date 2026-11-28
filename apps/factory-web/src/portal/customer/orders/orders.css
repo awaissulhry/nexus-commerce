@@ -466,3 +466,19 @@
   gap: var(--nds-space-8);
   flex-wrap: wrap;
 }
+
+/* ── owb-po6.3: "At the factory’s warehouse" on a shipment, its one button (the label file is picked through its own input) ── */
+.fw-pord-warehouse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-pord-label-pick {
+  align-self: flex-start;
+  cursor: pointer;
+}

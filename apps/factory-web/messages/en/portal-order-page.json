@@ -170,5 +170,18 @@
       "day": "Choose the day you paid: today or before.",
       "long": "The text is too long."
     }
+  },
+  "shipments": {
+    "report": "Report a complaint or a return…"
+  },
+  "warehouse": {
+    "title": "At the factory’s warehouse",
+    "where": "Your order waits at {place}.",
+    "since": "Since {date}.",
+    "send": "Send the shipping label",
+    "hint": "Choose the label: a PDF or a picture.",
+    "sending": "Sending the label…",
+    "have": "We have your shipping label: the factory sends the order on.",
+    "mayUpload": "Your access does not include sending files: ask your admin."
   }
 }

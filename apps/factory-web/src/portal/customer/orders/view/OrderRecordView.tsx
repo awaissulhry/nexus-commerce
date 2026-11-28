@@ -139,6 +139,11 @@ export interface OrderRecordViewModel {
   lineAsks?: LineAsks  /** owb-po6.2: the money read (price grain; `hidden`: not built yet or refused — the round-1 cards) and the "I paid" window. */
   money?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: MoneyRead | null }
   noticeWindow?: NoticeWindowModel | null
+  /** owb-po6.3: "Report a complaint or a return…" (today's returns flow with this order; null: not part of the access). */
+  reportHref?: string | null
+  /** owb-po6.3: the shipment whose label is being sent, and why "Send the shipping label" waits (a preview, offline, no upload right). */
+  labelBusy?: string | null
+  labelHeld?: string | null
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -176,6 +181,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onNoticeDraft?: (draft: NoticeDraft) => void
   onNoticeSend?: () => void
   onNoticeClose?: () => void
+  /** owb-po6.3: the label file picked for a shipment at the factory's warehouse: uploaded on the shipment, then sent. */
+  onSendLabel?: (shipmentId: string, file: File) => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void

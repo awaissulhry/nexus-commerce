@@ -387,7 +387,9 @@
       "trackOf": "Segui la spedizione {number} sul sito del corriere"
     },
     "also_one": "Anche {count} pezzo del vostro ordine {order}",
-    "also_other": "Anche {count} pezzi del vostro ordine {order}"
+    "also_other": "Anche {count} pezzi del vostro ordine {order}",
+    "labelSent": "La vostra etichetta di spedizione è presso la fabbrica.",
+    "labelFailed": "L'etichetta non è stata inviata. Riprovate tra un momento."
   },
   "toShip": {
     "title": "Ancora da spedire",
