@@ -5,6 +5,7 @@ import { minutesOf, sameMinutes } from '@nexus/factory-domain/product/routing/op
 import { PRODUCT_ROUTING_MANAGE } from '@nexus/factory-domain/product/routing/permissions'
 import { MAX_ROUTING_STEPS, planNewStep, routeProblems, ROUTE_RULE_WORDS, SEQ_STEP, type StepData } from '@nexus/factory-domain/product/routing/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { actorOf } from '../../../core/context'
 import { assertTypedStepSmv } from '../minutes/governance'
 import { readOperations, type OperationFacts } from './read'
 import {
@@ -170,7 +171,7 @@ export async function saveRouteSteps(caller: CommandCaller, styleId: string, rev
     await insertSteps(tools, { styleId, revisionId }, planned)
     for (const step of planned) tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, after: { revisionId, ...auditedStep(step) } })
     recordSave(tools, draft, body.steps.length, { kept: kept.length, added: planned.length, removed: removed.length, moved: moves.length, warnings: [...rules.warnings] }, [...kept.map((entry) => entry.step.id), ...planned.map((step) => step.id)])
-    return routingViewInTx(tx, styleId, revisionId)
+    return routingViewInTx(tx, styleId, revisionId, actorOf(context))
   }).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw new DomainError('conflict', 'Another change took a place in the routing at the same time: load it again.')
     throw error

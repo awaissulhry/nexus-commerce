@@ -1,9 +1,9 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import type { RoutingView, StepView } from '@nexus/factory-domain/product/routing/contracts'
+import type { RoutingView, StepView, StyleRouteView } from '@nexus/factory-domain/product/routing/contracts'
 import { MINUTES_ROUND, routingMinutes } from '@nexus/factory-domain/product/routing/minutes'
 import { sameMinutes } from '@nexus/factory-domain/product/routing/operations'
 import { PRODUCT_ROUTING_VIEW } from '@nexus/factory-domain/product/routing/permissions'
@@ -19,6 +19,7 @@ import { contextOf, mayWrite } from '../materials/store'
 import { readDepartments, readOperations, readSteps, readSubcontracts, readWorkshops, type OperationFacts, type RoutingDepartment, type StepRecord } from './read'
 import { requireEditRule } from '../lifecycle/edit-rule'
 import { styleScope } from '../styles/store' // B-PR-10
+import { routeViewsOf } from '../routes/store' // owb-pd2 2.3: the revision's model and customer routes
 
 /**
  * The routing's rows (factory-db `RoutingOperation`) and what they name (`Style`, `StyleRevision`, `Operation`): the
@@ -79,6 +80,8 @@ export interface LoadedRouting {
   readonly workshops: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
   /** owb-pd2 2.2: the tenant's departments (closed ones too: an old step may name one). */
   readonly departments: readonly RoutingDepartment[]
+  /** owb-pd2 2.3: the revision's model and customer routes the reader may see. */
+  readonly routes: readonly StyleRouteView[]
 }
 
 /** owb-pd2 2.2: a step's department — its own, else its kind's (an old released routing); null: outside, or none of that number. */
@@ -88,14 +91,16 @@ export function departmentOfStep<Department extends Pick<RoutingDepartment, 'id'
   return number === OUTSIDE ? null : (departments.find((department) => department.number === number) ?? null)
 }
 
-export async function loadRouting(client: FactoryClient | CommandTx, style: BomStyleRow, revision: RevisionRow): Promise<LoadedRouting> {
+/** `actor` (owb-pd2 2.3): the reader, whose brand reach filters the customer routes; null or left out: every route (a writer's answer). */
+export async function loadRouting(client: FactoryClient | CommandTx, style: BomStyleRow, revision: RevisionRow, actor: Actor | null = null): Promise<LoadedRouting> {
   const steps = await readSteps(client, revision.id)
   const operations = await readOperations(client, steps.map((step) => step.operationId))
   const sizes = await client.size.findMany({ where: { scaleId: style.sizeScaleId, code: { in: style.sizes } }, select: { code: true, label: true } })
   const subcontracts = await readSubcontracts(client, revision.id)
   const workshops = await readWorkshops(client, subcontracts.values())
   const departments = await readDepartments(client)
-  return { style, revision, steps, operations, sizeLabels: new Map(sizes.map((size) => [size.code, size.label])), subcontracts, workshops, departments }
+  const routes = await routeViewsOf(client, revision.id, departments, actor)
+  return { style, revision, steps, operations, sizeLabels: new Map(sizes.map((size) => [size.code, size.label])), subcontracts, workshops, departments, routes }
 }
 
 // ---- the view -----------------------------------------------------------------------------------------------------------
@@ -158,14 +163,15 @@ export function routingViewOf(loaded: LoadedRouting): RoutingView {
     editable: draft && style.status !== 'ARCHIVED',
     // owb-pd2 2.2: the route rules on the steps as they are (a step outside has no department: neither Packing nor Quality).
     rules: ((rules) => ({ errors: [...rules.errors], warnings: [...rules.warnings] }))(routeProblems(steps.map((step) => ({ departmentId: departmentOfStep(step, loaded.departments)?.id ?? '' })), loaded.departments)),
+    routes: loaded.routes.map((route) => ({ ...route })), // owb-pd2 2.3
   }
 }
 
 /** The routing as the command left it (its answer). */
-export async function routingViewInTx(tx: CommandTx, styleId: string, revisionId: string): Promise<RoutingView> {
+export async function routingViewInTx(tx: CommandTx, styleId: string, revisionId: string, actor: Actor | null = null): Promise<RoutingView> {
   const style = await tx.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS })
   if (!style) throw new NotFoundError('Style not found.')
-  return routingViewOf(await loadRouting(tx, style, await findRevision(tx, styleId, revisionId)))
+  return routingViewOf(await loadRouting(tx, style, await findRevision(tx, styleId, revisionId), actor))
 }
 
 // ---- locks and versions -------------------------------------------------------------------------------------------------

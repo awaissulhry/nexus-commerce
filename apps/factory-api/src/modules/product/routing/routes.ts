@@ -1,4 +1,5 @@
 import { idempotencyKeyFrom } from '../../../core/command'
+import { actorOf } from '../../../core/context'
 import { defineRoutes } from '../../../core/manifest'
 import { compareRoutings } from './compare'
 import { addStepsContract, compareRoutingContract, copyStepsContract, getRoutingContract, removeStepContract, reorderStepsContract, saveRouteStepsContract, updateStepContract } from './contract'
@@ -17,7 +18,9 @@ import { loadRouting, readRevisionFor, routingViewOf } from './store'
 export default defineRoutes('product.routing', manifest, async (app) => {
   app.get('/product/styles/:styleId/revisions/:revisionId/routing', { schema: getRoutingContract }, async (request) => {
     const { style, revision } = await readRevisionFor(request, request.params.styleId, request.params.revisionId)
-    return { routing: routingViewOf(await request.withClient((client) => loadRouting(client, style, revision))) }
+    // owb-pd2 2.3: the reader's brand reach filters the revision's customer routes.
+    const actor = request.factoryContext ? actorOf(request.factoryContext) : null
+    return { routing: routingViewOf(await request.withClient((client) => loadRouting(client, style, revision, actor))) }
   })
 
   app.post('/product/styles/:styleId/revisions/:revisionId/routing/steps', { schema: addStepsContract }, async (request, reply) =>
