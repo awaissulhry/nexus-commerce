@@ -15,6 +15,10 @@ import type { WhereModel } from '../where'
 import { copyLinkTo, kitId, shipmentHref } from './hrefs'
 import { sentenceOf, useShipSay } from './say'
 import { ShipmentRowView } from './ShipmentRow'
+// owb-ss3 step 3.2: each row's leg (to our warehouse first) and the plan right for Create shipment….
+import type { OrderLegsModel } from '../legs/OrderLegs'
+import { legActsOf } from '../legs/model'
+import { planOf } from '../doors'
 
 /**
  * F-OS-103 (order SHIPMENTS tab, 10-design §5) — section 2 "Shipments" (#shipments; the old #deliveries lands here, L5: its card went
@@ -24,7 +28,7 @@ import { ShipmentRowView } from './ShipmentRow'
  * (ShipmentRow.tsx; content-sized columns that follow the LIST's room); "Show N cancelled"; the customer's drafts this order can join
  * (F-OP-122, shipping.manage). Draws its model (shipments/rows.ts, doors.ts); reads nothing.
  */
-export function ShipmentsSection({ order, model, actions, where }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; where: WhereModel }) {
+export function ShipmentsSection({ order, model, actions, where, legs }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; where: WhereModel; /* owb-ss3 */ legs?: OrderLegsModel }) {
   const t = useT('order-shipments')
   const o = useT('orders')
   const depth = useT('warehouse-shipments-depth')
@@ -34,7 +38,9 @@ export function ShipmentsSection({ order, model, actions, where }: { order: Orde
   const shown = shownShipments(rows, showCancelled)
   const deliveries = model.shipmentDeliveries ?? null
   const byId = new Map((deliveries?.value?.shipments ?? []).map((row) => [row.id, row]))
-  const create = createDoorOf(order, model.can, where, model.prefix, !!actions?.onCreateShipment)
+  // owb-ss3 (settle L3): Create shipment… opens for plan OR pack and send (shipping.plan OR shipping.manage).
+  const plan = planOf(model.can, legs?.rights ?? null)
+  const create = createDoorOf(order, { createShipment: plan }, where, model.prefix, !!actions?.onCreateShipment)
   const elsewhere = elsewhereDoorOf(model.elsewhere, model.can)
   const title = o('ship.listTitle')
   const buttons: ReactNode[] = []
@@ -67,7 +73,7 @@ export function ShipmentsSection({ order, model, actions, where }: { order: Orde
   const info = <p>{t('ships.info')}</p>
   const answer = shipmentsAnswer(rows).map(say)
   // One quiet line when nothing is shown (never a box; an order whose every shipment is cancelled shows it with the toggle, H2-B1).
-  const empty = !model.can.createShipment ? t('ships.empty.warehouse') : where.mode === 'today' ? t('ships.empty.plain') : where.totals.ready > 0 ? t('ships.empty.ready', { count: where.totals.ready }) : t('ships.empty.nothing')
+  const empty = !plan ? t('ships.empty.warehouse') : where.mode === 'today' ? t('ships.empty.plain') : where.totals.ready > 0 ? t('ships.empty.ready', { count: where.totals.ready }) : t('ships.empty.nothing')
   return (
     <Section id={kitId('shipments')} title={title} answer={answer.length > 0 ? sentenceOf(answer) : null} buttons={buttons} more={more} info={info}>
       {/* L5: the old Deliveries card's address lands here (its card is in the rows now). */}
@@ -92,9 +98,23 @@ export function ShipmentsSection({ order, model, actions, where }: { order: Orde
               <span className="nds-vh">{t('ships.col.more')}</span>
             </span>
           </div>
-          {shown.rows.map((row) => (
-            <ShipmentRowView key={row.id} row={row} view={rowOf(row, order, byId.get(row.id) ?? null, model.shipmentFacts?.[row.id] ?? null /* os-fx7 */)} delivery={byId.get(row.id) ?? null} order={order} model={model} actions={actions} />
-          ))}
+          {shown.rows.map((row) => {
+            const leg = legs?.legs.get(row.id) ?? null
+            return (
+              <ShipmentRowView
+                key={row.id}
+                row={row}
+                view={rowOf(row, order, byId.get(row.id) ?? null, model.shipmentFacts?.[row.id] ?? null /* os-fx7 */)}
+                delivery={byId.get(row.id) ?? null}
+                order={order}
+                model={model}
+                actions={actions}
+                leg={leg}
+                legActs={leg && legs ? legActsOf(leg, legs.rights) : []}
+                onLegAct={legs ? (act) => legs.onAct(row.id, act) : undefined}
+              />
+            )
+          })}
         </div>
       ) : (
         <Quiet>{empty}</Quiet>
