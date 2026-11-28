@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ApiClient } from '../../../../lib/api/client'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../../lib/testing/two-brands'
 import { PREFIX, styleDetail } from '../../neworder/design-data'
-import { fetchOrdersWith, type PortalOrderRow } from './api'
-import { portalProductOf, productHref, productTabOf, readStateOf } from './product-model'
+import { fetchOrdersWith, type PortalOrderRow, type PortalProductSizes } from './api'
+import { measuresOf, pictureOf, portalProductOf, productHref, productTabOf, readStateOf } from './product-model'
 
 /**
  * owb-pd4 step 4.5 (gap G9; design § 5q "Customer": "its own designs + the range priced for it. A price only for a person who sees
@@ -77,5 +77,37 @@ describe('the two tabs and the address', () => {
     expect(productTabOf('cost')).toBe('overview')
     expect(productHref('/p/BETA', 's 1')).toBe('/p/BETA/catalogue/s%201')
     expect(productHref('/p/BETA', 's1', 'sizes')).toBe('/p/BETA/catalogue/s1?tab=sizes')
+  })
+})
+
+// ---- owb-pd5 step 5.0 (pd4s s.3): the portal Sizes tab from GET /portal/catalogue/:styleId/sizes ----
+describe('step 5.0 — the portal Sizes model comes from the product\'s own Sizes read', () => {
+  const read: PortalProductSizes = {
+    picture: { fileId: 'f1', url: '/files/f1/look' },
+    mode: 'SIZES',
+    sizes: ['S', 'M', 'L'],
+    baseSize: 'M',
+    points: [
+      { code: 'CHEST', name: 'Chest', howTo: 'Around the widest part, under the arms.', values: { S: 1040, M: 1080, L: null } },
+      { code: 'SLEEVE', name: 'Sleeve length', howTo: null, values: { S: 640, M: 650 } },
+    ],
+    protectors: [{ zone: 'SHOULDER', level: 'LEVEL_2' }],
+  }
+  it('the size table in the sizes\' order (a missing value stays null, never 0); how to measure only where words exist', () => {
+    const measures = measuresOf(read)
+    expect(measures.rows).toEqual([
+      { code: 'CHEST', name: 'Chest', values: [1040, 1080, null] },
+      { code: 'SLEEVE', name: 'Sleeve length', values: [640, 650, null] },
+    ])
+    expect(measures.howTo).toEqual([{ code: 'CHEST', name: 'Chest', text: 'Around the widest part, under the arms.' }])
+    expect(measures.protectors).toEqual([{ zone: 'SHOULDER', level: 'LEVEL_2' }])
+    expect(pictureOf(read)).toBe('/api/files/f1/look')
+    expect(pictureOf(null)).toBeNull()
+  })
+  it('the page with its Sizes holds no cost, route or revision key; without the read it says plainly it is not there', () => {
+    const page = portalProductOf(styleDetail(), [betaOrder], PREFIX, 'en', read)
+    expect(keysOf(page).filter((key) => /cost|margin|route|revision|amount|total/i.test(key))).toEqual([])
+    expect(page.measures?.base).toBe('M')
+    expect(portalProductOf(styleDetail(), null, PREFIX, 'en', null).measures).toBeNull()
   })
 })

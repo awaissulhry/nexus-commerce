@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { BRANDS, GRAINS, ROWS } from '../demo/fixtures'
 import type { LooksState } from '../gallery/gallery-model'
-import { agreedText, familyWords, marginHintKey, productCardOf, productColumns, protectionWords, sizesWords, thingsBefore, typeWords } from './list-model'
+import { agreedText, familyWords, marginHintKey, productCardOf, productColumns, protectionWords, sizesWords, thingsBefore, typeWords, whoChoiceOf, whoQuery, withWhoChoice } from './list-model'
 import { PHONE_LIST_QUERY } from './use-phone'
 
 /**
@@ -85,5 +85,23 @@ describe('the phone cards at 375 px', () => {
   it('the main picture comes from the looks read (the API path through this app)', () => {
     const withPicture: LooksState = { status: 'ready', at: '2026-11-28T08:00:00.000Z', byStyle: { [ROWS[0]!.id]: { styleId: ROWS[0]!.id, picture: { id: 'p1', kind: 'PHOTO', caption: null, look: { url: '/files/f1/look' } }, pictures: 1, colourways: [] } as never } }
     expect(productCardOf(row(), { grains: GRAINS.production, looks: withPicture, locale: 'en' }).picture).toBe('/api/files/f1/look')
+  })
+})
+
+// ---- owb-pd5 step 5.0 (pd4s s.1): "Our range" / "Made for a customer" send `family=`; one customer sends `brandPartyId` ----
+describe('step 5.0 — the family filter is sent to the list read', () => {
+  const none = { view: 'open' as const, q: '', type: '', ppe: '', brand: '', family: '' as const }
+  it('"Our range" sends family=OUR_RANGE; "Made for a customer" family=FOR_CUSTOMER; one customer only its brandPartyId', () => {
+    expect(whoQuery(withWhoChoice(none, 'family:OUR_RANGE'))).toEqual({ family: 'OUR_RANGE' })
+    expect(whoQuery(withWhoChoice(none, 'family:FOR_CUSTOMER'))).toEqual({ family: 'FOR_CUSTOMER' })
+    expect(whoQuery(withWhoChoice(none, 'brand:p1'))).toEqual({ brandPartyId: 'p1' })
+    expect(whoQuery(withWhoChoice(none, ''))).toEqual({})
+    expect(whoQuery(withWhoChoice(none, 'family:NOPE'))).toEqual({})
+  })
+  it('the select shows the choice back; a customer replaces the family (never both sent)', () => {
+    expect(whoChoiceOf(withWhoChoice(none, 'family:OUR_RANGE'))).toBe('family:OUR_RANGE')
+    const both = withWhoChoice(withWhoChoice(none, 'family:FOR_CUSTOMER'), 'brand:p1')
+    expect(both).toMatchObject({ brand: 'p1', family: '' })
+    expect(whoChoiceOf(both)).toBe('brand:p1')
   })
 })

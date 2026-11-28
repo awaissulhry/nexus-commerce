@@ -184,6 +184,8 @@ export interface StyleRecordViewModel {
   orders?: Part<StyleOrders>
   /** The product's own list row (its agreed price range: price grain); absent: not read (no price grain). */
   agreed?: Part<ProductRow | null>
+  /** owb-pd5 (step 5.2): the released revision's BOM while a draft's Materials show (the CE re-check); idle otherwise. */
+  releasedBom?: Part<BomView>
   /** The person may open the orders (orders.view, or the designer's own orders): the order links are drawn. */
   ordersOpen?: boolean
   // ---- end owb-pd4
