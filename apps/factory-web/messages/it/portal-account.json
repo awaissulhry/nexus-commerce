@@ -117,6 +117,7 @@
       "name": "Nome",
       "email": "E-mail",
       "role": "Ruolo",
+      "does": "Cosa fa questa persona",
       "prices": "Vede i prezzi",
       "lastSignIn": "Ultimo accesso",
       "status": "Stato",
@@ -453,5 +454,18 @@
       "who": "Chi: {names}",
       "told": "Ognuno lo sa una volta, nel suo portale."
     }
+  },
+  "people": {
+    "title": "Le vostre persone",
+    "ours": "Le persone della vostra azienda",
+    "factory": {
+      "title": "Le persone della fabbrica per il vostro marchio",
+      "who": "È la fabbrica a decidere chi lavora per il vostro marchio.",
+      "none": "La fabbrica non ha ancora indicato nessuno per il vostro marchio."
+    },
+    "wall": "Le vostre persone vedono solo i vostri ordini, disegni e prezzi. Nessun altro cliente li vede.",
+    "closed": "Il vostro accesso non comprende Le vostre persone.",
+    "moved": "I vostri colleghi, i loro ruoli e gli inviti sono in Le vostre persone.",
+    "open": "Aprite Le vostre persone"
   }
 }

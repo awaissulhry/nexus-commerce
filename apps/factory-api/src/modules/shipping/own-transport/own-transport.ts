@@ -36,6 +36,8 @@ import { readShipment, type ShipmentHeader } from '../store'
 import { noticeSentAtOf } from '../store'
 // B-OP-034: the orders a shipment carries (its lines' orders).
 import { ordersOfShipment } from '../shipments/orders-of'
+// owb- (order workflow, S3 ss1): a shipment through our warehouse first.
+import { legOf, refusedLeg } from '../warehouse-leg/store'
 
 /**
  * A manual carrier or our own van (B-W2b-390; LOG-122; rules factory-domain shipping/own-transport). Office only. The DDT
@@ -410,6 +412,11 @@ export async function typeStatus(caller: CommandCaller, shipmentId: string, body
       const move = moveOfStatus(body.status)
       if (move !== null) {
         if (current.status !== 'SHIPPED') throw new InvalidStateError(`The shipment is ${current.status}; it moves to ${move} only once it left.`)
+        // owb- (order workflow, S3 ss1; G9): through our warehouse first — delivered only after Send on (in words, before the database says it).
+        if (move === 'DELIVERED') {
+          const leg = await legOf(tools.tx, current.id)
+          if (leg && leg.forwardedAt === null) refusedLeg('DELIVERED_BEFORE_SEND_ON')
+        }
         await tools.tx.shipment.update({ where: { id: current.id }, data: { status: move, ...(move === 'DELIVERED' ? { deliveredAt: occurredAt } : { returnedAt: occurredAt }) }, select: { id: true } })
         tools.audit({ action: 'shipping.trackingMove', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: move, at: toUtcIso(occurredAt), source: 'MANUAL', /* B-OS-015 */ overrode, ...(reason ? { reason } : {}) }, ...(reason ? { reason } : {}) })
         tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: move, partyId: current.partyId /* B-SA-004 */ } })

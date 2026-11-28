@@ -205,7 +205,8 @@ describe('two shipments of two orders leave today; the customer is invoiced mont
       await wall('warehouse', 'PATCH', `/shipping/packing/${sh2}/parcels/${parcelId}`, { grossWeightKg: weight }, 200)
     }
     expect((await wall('warehouse', 'POST', `/shipping/packing/${sh2}/pack`, {}, 200)).body.shipment.status).toBe('PACKED')
-    S.ddtA = (await wall('warehouse', 'POST', `/shipping/shipments/${sh2}/ddt`, { ship: true, carrier: { name: 'Seed Express' } }, 201)).body.ddt
+    // owb- (order workflow, S3 ss1 step 1.4; R39 (a)): SO-0003's balance before shipping is open: the goods leave with the warning passed on.
+    S.ddtA = (await wall('warehouse', 'POST', `/shipping/shipments/${sh2}/ddt`, { ship: true, carrier: { name: 'Seed Express' }, overrides: ['PAYMENT_DUE_AT_SHIP'] }, 201)).body.ddt
     const production = moneyA.shipping.quality.production
     const sb = (await wall('warehouse', 'POST', '/shipping/shipments', { salesOrderId: production.salesOrderId, lines: [{ workOrderSizeId: production.cellIds['BLK-52'], quantity: 1 }] }, 201)).body.shipment
     const parcel = (await wall('warehouse', 'POST', `/shipping/packing/${sb.id}/parcels`, { grossWeightKg: '2.5' }, 201)).body.parcelId

@@ -200,6 +200,10 @@ describe('B-CP-075: described and made-to-measure lines, and the people on them'
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE' })).toEqual([])
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'X'.repeat(41) })).toEqual(['A garment type is at most 40 characters.'])
     expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false, quantity: 3 })).toEqual(expect.arrayContaining(['A made-to-measure line is always by person.', 'A made-to-measure line counts its people, not a total.']))
+    // owb- po1.3 (S1 lead): "A new design: <kind>" is a DESCRIBED line WITH a garment type — the same shape checks as made to measure.
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'A made-up race suit', garmentType: 'RACE_SUIT', quantity: 3 })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', garmentType: 'X'.repeat(41) })).toEqual(['A garment type is at most 40 characters.'])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', garmentType: ' ' })).toEqual(['Choose the garment type of the new design, or leave it out for now.'])
   })
 
   it('counts a line by its kind; Send takes a described total, people, or a measurement sheet that stands for them (review A5)', () => {

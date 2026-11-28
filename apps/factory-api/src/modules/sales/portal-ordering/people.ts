@@ -160,7 +160,8 @@ export function checkCustomLine(line: CustomLineInput, catalogue: CustomerCatalo
   }
   const colourwayId = blankToNull(line.colourwayId)
   if (style && colourwayId && !style.colourways.some((entry) => entry.id === colourwayId && entry.available)) issues.push({ path: `${at}/colourwayId`, message: `Not an available colour of ${style.code}.` })
-  if (line.kind === 'MADE_TO_MEASURE' && blankToNull(line.garmentType) && !mtm.garmentTypes.some((type) => type.code === line.garmentType!.trim())) issues.push({ path: `${at}/garmentType`, message: 'Not a garment type we make to measure.' })
+  // owb- po1.3 (S1 lead): a DESCRIBED line ("A new design: <kind>") names one of the same garment types as a made-to-measure one.
+  if (blankToNull(line.garmentType) && !mtm.garmentTypes.some((type) => type.code === line.garmentType!.trim())) issues.push({ path: `${at}/garmentType`, message: line.kind === 'MADE_TO_MEASURE' ? 'Not a garment type we make to measure.' : 'Not a garment type we make.' })
   return issues
 }
 
@@ -175,7 +176,7 @@ export function customLineData(line: Omit<CustomLineInput, 'choices'>) {
     colourText: blankToNull(line.colourText),
     styleId: blankToNull(line.styleId),
     colourwayId: blankToNull(line.colourwayId),
-    garmentType: mtm ? blankToNull(line.garmentType) : null,
+    garmentType: blankToNull(line.garmentType), // owb- po1.3: a described line keeps its garment type too ("A new design: <kind>")
     quantity: mtm ? null : (line.quantity ?? null),
     byPerson: mtm ? true : line.byPerson === true,
     note: blankToNull(line.note),
