@@ -23,5 +23,47 @@
   },
   "styles": "Styles of {number}",
   "stylesFailed": "Couldn't read the other styles",
-  "retry": "Try again"
+  "retry": "Try again",
+  "window": {
+    "title": "The picture of the order",
+    "subtitle": "{number} · {subject}",
+    "nowLabel": "The picture now",
+    "who": "Everybody who works on this order sees this picture: the customer, the office and the floor. The customer decides it; you can set it for the customer.",
+    "upload": "A picture from your computer or phone",
+    "uploadHint": "PNG, JPG, WebP or PDF. A file with a price is never a picture.",
+    "uploading": "Uploading the file…",
+    "choose": "Or a file of this order (an image, or a PDF: its first page)",
+    "isNow": "The picture now",
+    "noFiles": "No image and no PDF is on this order yet.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "design": "Use the design",
+    "designHint": "The design of the first line, as before.",
+    "kind": {
+      "image": "An image",
+      "pdf": "A PDF: its first page",
+      "mockup": "A mockup: front and back"
+    },
+    "now": {
+      "design": "Now: the design of the first line",
+      "file": "Now: {name}",
+      "other": "Now: a picture chosen before"
+    },
+    "held": {
+      "stale": "The picture changed meanwhile. Close the window and open it again.",
+      "gone": "This order is out of your reach now.",
+      "saving": "Saving the picture…",
+      "uploading": "Wait for the upload to finish.",
+      "same": "This is the picture now. Choose another one first.",
+      "closeSaving": "Wait: the picture is being saved."
+    },
+    "refused": {
+      "stale": "Someone changed the picture of this order a moment ago. Close the window and open it again to see it.",
+      "gone": "This order is not in your reach any more. Nothing was changed.",
+      "notAllowed": "This file cannot be the picture. Only an image or a PDF that the customer can open: never a priced file or a size sheet.",
+      "upload": "The file did not upload. Try again, or choose another file.",
+      "failed": "The picture was not saved. Try again."
+    }
+  }
 }

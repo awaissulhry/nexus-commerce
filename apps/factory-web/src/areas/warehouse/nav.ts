@@ -60,7 +60,13 @@ export const officeArea: OfficeAreaNav = {
         id: 'warehouse-outbound',
         label: 'shell:nav.warehouse.outbound',
         // SCR-066 / SCR-067: the ship-today queue with the carrier cut-off, then every shipment and its record.
-        items: [{ id: 'warehouse-shipments', label: 'shell:nav.warehouse.shipments', href: '/warehouse/shipments', icon: Truck, permission: 'shipping.view' }],
+        items: [
+          { id: 'warehouse-shipments', label: 'shell:nav.warehouse.shipments', href: '/warehouse/shipments', icon: Truck, permission: 'shipping.view' },
+          // owb- (S3 ss3, base settle 7): DECLARED rows — each shows once its page is built (its address in OFFICE_PAGES). Ready to
+          // ship: orders with ready pieces in no shipment yet; Our warehouses: orders waiting at our warehouse for the label.
+          { id: 'warehouse-ready-to-ship', label: 'shell:nav.warehouse.readyToShip', href: '/warehouse/ready-to-ship', icon: PackageCheck, permission: 'shipping.view' },
+          { id: 'warehouse-our-warehouses', label: 'shell:nav.warehouse.ourWarehouses', href: '/warehouse/our-warehouses', icon: Warehouse, permission: 'shipping.view' },
+        ],
       },
       {
         id: 'warehouse-reports',

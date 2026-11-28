@@ -158,6 +158,25 @@ const READS: Readonly<Record<PictureSource, (client: Client, actor: Actor, ids: 
   // ── end B-CQ-030
 })
 
+// ── owb- (order workflow, b3.2; PL-schema § 3): the order's own picture first ─────────────────────────────────────────────────────
+/**
+ * The picture chosen for an order (SalesOrder.pictureFileId) or for a Draft or Sent order (PortalOrderRequest.pictureFileId), by
+ * record id, for the records already found visible: it is shown INSTEAD of the first style's picture when the reader may open its
+ * file (files.read over its company; AVAILABLE). No choice, or a file the reader may not open: today's default. Other sources
+ * (a quote, an e-mail inquiry, a work order) have no chosen picture.
+ */
+const CHOSEN: Partial<Readonly<Record<PictureSource, (client: Client, ids: readonly string[]) => Promise<Map<string, string>>>>> = Object.freeze({
+  async order(client, ids) {
+    const rows = ids.length > 0 ? await client.salesOrder.findMany({ where: { id: { in: [...ids] }, pictureFileId: { not: null } }, select: { id: true, pictureFileId: true } }) : []
+    return new Map(rows.flatMap((row) => (row.pictureFileId ? [[row.id, row.pictureFileId] as const] : [])))
+  },
+  async portalOrder(client, ids) {
+    const rows = ids.length > 0 ? await client.portalOrderRequest.findMany({ where: { id: { in: [...ids] }, pictureFileId: { not: null } }, select: { id: true, pictureFileId: true } }) : []
+    return new Map(rows.flatMap((row) => (row.pictureFileId ? [[row.id, row.pictureFileId] as const] : [])))
+  },
+})
+// ── end owb- ──
+
 /** The office reader (the routes are office only; a portal, floor or link session never reads these). */
 function officeActorOf(caller: CommandCaller): Actor {
   const context = caller.factoryContext
@@ -176,12 +195,22 @@ export async function recordPictures(caller: CommandCaller, source: PictureSourc
     const firstStyles = unique(records.map((record) => record.styleIds[0]!))
     const styles = new Map<string, { readonly code: string; readonly name: string }>()
     const files = new Map<string, StoreFile>()
-    if (firstStyles.length === 0) return { records, styles, thumbnails: new Map<string, { readonly fileId: string; readonly contentType: string }>(), files }
+    // owb- (b3.2): the chosen pictures the reader may open (files.read over the file's company; AVAILABLE).
+    const chosen = new Map<string, string>()
+    const chooser = CHOSEN[source]
+    if (chooser && records.length > 0 && holds(actor, FILES_READ)) {
+      const picked = await chooser(client, records.map((record) => record.id))
+      const fileIds = unique([...picked.values()])
+      const readable = fileIds.length > 0 ? await client.storedFile.findMany({ where: { AND: [scopeWhere(actor, FILES_READ, { company: { field: 'companyId', nullable: true } }) as Prisma.StoredFileWhereInput, { id: { in: fileIds }, status: 'AVAILABLE' }] }, select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true } }) : []
+      for (const file of readable) files.set(file.id, file)
+      for (const [recordId, fileId] of picked) if (files.has(fileId)) chosen.set(recordId, fileId)
+    }
+    if (firstStyles.length === 0) return { records, styles, thumbnails: new Map<string, { readonly fileId: string; readonly contentType: string }>(), files, chosen }
     for (const style of await client.style.findMany({ where: { id: { in: firstStyles } }, select: { id: true, code: true, name: true } })) styles.set(style.id, style)
     const thumbnails = await mainPictureThumbnails(client, actor, firstStyles)
     const fileIds = unique([...thumbnails.values()].map((thumbnail) => thumbnail.fileId))
     if (fileIds.length > 0) for (const file of await client.storedFile.findMany({ where: { id: { in: fileIds } }, select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true } })) files.set(file.id, file)
-    return { records, styles, thumbnails, files }
+    return { records, styles, thumbnails, files, chosen }
   })
 
   // The store is called outside the read (smallAddresses: one presign per distinct file with a small preview, a few at a time).
@@ -193,15 +222,18 @@ export async function recordPictures(caller: CommandCaller, source: PictureSourc
     const style = found.styles.get(styleId)
     if (!style) continue
     const thumbnail = found.thumbnails.get(styleId)
+    // owb- (b3.2): the order's chosen picture first (one the reader may open), else the first style's.
+    const own = found.chosen.get(record.id)
+    const ownFile = own ? found.files.get(own) : undefined
     pictures.push({
       id: record.id,
       styleId,
       styleCode: style.code,
       styleName: style.name,
       styleCount: unique(record.styleIds).length,
-      fileId: thumbnail?.fileId ?? null,
-      contentType: thumbnail?.contentType ?? null,
-      small: thumbnail ? (addresses.get(thumbnail.fileId) ?? null) : null,
+      fileId: ownFile ? ownFile.id : (thumbnail?.fileId ?? null),
+      contentType: ownFile ? ownFile.contentType : (thumbnail?.contentType ?? null),
+      small: ownFile ? (addresses.get(ownFile.id) ?? null) : thumbnail ? (addresses.get(thumbnail.fileId) ?? null) : null,
     })
   }
   // In the asked order (the page's).

@@ -175,6 +175,9 @@ model User {
   // (an office person).
   fileAsksAddressed        FileAsk[]            @relation("FileAskAddresseeUser")
   fileAsksAsked            FileAsk[]            @relation("FileAskAskedBy")
+  // owb-b1 parties.prisma (order workflow build, schema wave "order workflow 1/1"): the customers they are given to (an
+  // office person).
+  partyOfficePeople        PartyOfficePerson[]  @relation("PartyOfficePersonUser")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

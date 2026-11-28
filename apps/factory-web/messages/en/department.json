@@ -1,0 +1,36 @@
+{
+  "fixed": {
+    "1": { "name": "Pattern", "short": "Pattern" },
+    "2": { "name": "Cutting", "short": "Cutting" },
+    "3": { "name": "Patchwork & printing", "short": "Patch & print" },
+    "4": { "name": "Stitching", "short": "Stitching" },
+    "5": { "name": "Quality check", "short": "Quality" },
+    "6": { "name": "Packing", "short": "Packing" },
+    "7": { "name": "Product design", "short": "Design" },
+    "8": { "name": "Injection molding", "short": "Molding" },
+    "9": { "name": "Assembly", "short": "Assembly" }
+  },
+  "chip": {
+    "number": "Department {no}:",
+    "long": "({name})"
+  },
+  "unknown": "Department {no}",
+  "bar": {
+    "label_one": "The route: {count} step",
+    "label_other": "The route: {count} steps",
+    "done": "done",
+    "now": "here now",
+    "next": "to come"
+  },
+  "strip": {
+    "label": {
+      "baskets": "Where the baskets are, department by department",
+      "pieces": "Where the pieces are, department by department"
+    },
+    "baskets_one": "basket",
+    "baskets_other": "baskets",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "none": "None here"
+  }
+}

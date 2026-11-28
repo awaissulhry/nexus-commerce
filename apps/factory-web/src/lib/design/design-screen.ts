@@ -21,6 +21,8 @@ export type ScreenId = `SCR-${string}` | 'list-frame' | 'ds-words' | 'ds-parts' 
   | 'production-parts'
   // F-CO-K1: the shared record overview kit's parts (lib/record-overview).
   | 'record-overview'
+  // owb-b4: the department parts (lib/department), the picture parts and the window "The picture of the order" (lib/record-picture), the change log (lib/change-log).
+  | 'department-parts' | 'record-picture-parts' | 'change-log-parts'
   // pg-t: the shared order list parts, office and customer faces side by side (lib/order-groups, lib/order-cells).
   | 'order-list-parts'
 

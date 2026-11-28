@@ -1,0 +1,66 @@
+/* owb-b4 w4.3 (design § 5zi E, § 5zj A) — the window "The picture of the order": layout only, DS tokens only. The Modal is the DS's
+   (centred; a sheet from the bottom on a phone); its body is one column that never scrolls sideways at 375 px. */
+
+.fw-opic {
+  display: grid;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.fw-opic-now {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-opic-now-words {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-opic-now-words p {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.fw-opic-head {
+  margin: 0 0 var(--nds-space-6);
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-opic-up {
+  display: grid;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-opic-choices {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fw-opic-option {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-opic-option-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-opic-now-tag {
+  flex: none;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-opic-status {
+  margin: 0;
+  color: var(--nds-text-2);
+}

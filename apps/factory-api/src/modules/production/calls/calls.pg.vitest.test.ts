@@ -176,7 +176,8 @@ describe('the help-call types and who answers them (MES-144; production.settings
   it('lists the site’s types with their words, team (or the site’s team leaders), members, waiting code and use', async () => {
     const answer = await ok('manager', 'GET', `/production/calls/types?siteId=${A.siteA1}`)
     expect(answer.canManage).toBe(true)
-    expect(answer.types.map((type: Json) => type.code)).toEqual(['MATERIAL', 'MAINTENANCE', 'TEAM_LEADER'])
+    // owb-b1 (order workflow seed): after the three W2b types, the floor's problems (sortOrder 40-70) and asks (110-150).
+    expect(answer.types.map((type: Json) => type.code)).toEqual(['MATERIAL', 'MAINTENANCE', 'TEAM_LEADER', 'DAMAGED', 'UNCLEAR', 'MACHINE', 'PAPER', 'ASK_LOGO', 'ASK_PATCH', 'ASK_TO_PATCH', 'ASK_UNCLEAR', 'ASK_OTHER'])
     const [material, maintenance, teamLeader] = answer.types
     expect(material).toMatchObject({ kind: 'MATERIAL', labelEn: 'Material', labelIt: 'Materiale', icon: 'package', codeListed: true, responder: { kind: 'TEAM', team: { code: 'L1-A' }, members: 3 }, escalateAfterMinutes: 10, waitingCode: { code: 'WAIT_HELP' }, usedCount: 1, openCount: 0 })
     expect(maintenance).toMatchObject({ openCount: 1, responder: { kind: 'TEAM' } })
@@ -188,7 +189,8 @@ describe('the help-call types and who answers them (MES-144; production.settings
   it('adds a type from an active help-call code; REFUSED: the same code twice, a code not in the list, a team of another site, an indirect waiting code, 300 minutes', async () => {
     const created = await ok('manager', 'POST', '/production/calls/types', { siteId: A.siteA1, code: 'quality', kind: 'QUALITY', responderTeamId: A.teamA, escalateAfterMinutes: 15 }, 201)
     qualityTypeId = created.type.id
-    expect(created.type).toMatchObject({ code: 'QUALITY', kind: 'QUALITY', sortOrder: 40, active: true, responder: { kind: 'TEAM', members: 3 }, labelEn: 'Quality' })
+    // owb-b1: added after the seeded ASK_OTHER (sortOrder 150).
+    expect(created.type).toMatchObject({ code: 'QUALITY', kind: 'QUALITY', sortOrder: 160, active: true, responder: { kind: 'TEAM', members: 3 }, labelEn: 'Quality' })
     expect((await eventsOf('help_call_type.changed', qualityTypeId))[0]!.payload).toEqual({ typeId: qualityTypeId, code: 'QUALITY', kind: 'QUALITY', change: 'ADDED', fields: [] })
     expect(refusalOf(await no('manager', 'POST', '/production/calls/types', { siteId: A.siteA1, code: 'QUALITY', kind: 'QUALITY' }, 409))).toBe('refusal/CODE_TAKEN')
     expect(refusalOf(await no('manager', 'POST', '/production/calls/types', { siteId: A.siteA1, code: 'NOT_LISTED', kind: 'OTHER' }, 409))).toBe('refusal/CODE_NOT_LISTED')
@@ -215,7 +217,8 @@ describe('one tap from the station (MES-142, MES-143, MES-137)', () => {
   it('shows the tablet’s station, the site’s active types as tiles and no open call', async () => {
     const state = await ok('operator', 'GET', '/production/calls/station')
     expect(state).toMatchObject({ subject: 'WORKER', station: { id: A.sew1, code: 'SEW-01', line: { id: A.lineL1 } }, open: [] })
-    expect(state.tiles.map((tile: Json) => tile.type.code)).toEqual(['MATERIAL', 'MAINTENANCE', 'TEAM_LEADER'])
+    // owb-b1: the seeded problems and asks are active tiles too (QUALITY, switched off above, is not).
+    expect(state.tiles.map((tile: Json) => tile.type.code)).toEqual(['MATERIAL', 'MAINTENANCE', 'TEAM_LEADER', 'DAMAGED', 'UNCLEAR', 'MACHINE', 'PAPER', 'ASK_LOGO', 'ASK_PATCH', 'ASK_TO_PATCH', 'ASK_UNCLEAR', 'ASK_OTHER'])
     expect(state.tiles.every((tile: Json) => tile.open === null)).toBe(true)
   })
 

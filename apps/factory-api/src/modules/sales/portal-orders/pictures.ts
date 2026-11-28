@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { systemCallerOf } from '../../../platform/files/files'
-import { linePictureKey, portalLinePictureFiles, smallAddresses, type LinePictureFile } from '../../product/images/small-pictures'
+import { linePictureKey, portalLinePictureFiles, smallAddresses, type LinePictureFile, type PresignFile } from '../../product/images/small-pictures'
+import { contentWalledFor } from '../../../platform/files/content-wall' // owb- (b3.2)
 import { portalReader } from './access'
 
 /**
@@ -42,9 +43,12 @@ export async function orderPictures(app: FastifyInstance, request: FastifyReques
   if (new Set(orderIds).size !== orderIds.length) throw new ValidationError('Each id once: the same order was asked twice.', [{ path: 'body/orderIds', message: 'Each id once.' }])
   const reader = portalReader(app, request)
   // The partner's own read: the party's orders among the ids, and their lines in order (row-level security walls both).
+  // owb- (b3.2): and each order's chosen picture (pictureFileId: the partner reads it; who set it stays hidden).
+  const chosen = new Map<string, string>()
   const lines = await request.withClient(async (client) => {
-    const own = await client.salesOrder.findMany({ where: { companyId: reader.session.company.id, id: { in: [...orderIds] } }, select: { id: true } })
+    const own = await client.salesOrder.findMany({ where: { companyId: reader.session.company.id, id: { in: [...orderIds] } }, select: { id: true, pictureFileId: true } })
     if (own.length === 0) return []
+    for (const order of own) if (order.pictureFileId) chosen.set(order.id, order.pictureFileId)
     return client.salesOrderLine.findMany({ where: { orderId: { in: own.map((order) => order.id) } }, select: { orderId: true, seq: true, kind: true, styleId: true, colourwayId: true }, orderBy: [{ orderId: 'asc' }, { seq: 'asc' }] })
   })
   const first = new Map<string, GoodsLine>()
@@ -58,20 +62,28 @@ export async function orderPictures(app: FastifyInstance, request: FastifyReques
   const partyId = reader.session.partyId
   // The tenant's scope, for those orders' first lines only: the walled pictures, and the names of the styles the customer may see.
   const tenant = await reader.inTenant(async (client) => {
-    if (firstLines.length === 0) return { files: new Map<string, LinePictureFile>(), styles: new Map<string, { readonly code: string; readonly name: string }>() }
+    if (firstLines.length === 0) return { files: new Map<string, LinePictureFile>(), styles: new Map<string, { readonly code: string; readonly name: string }>(), chosenFiles: new Map<string, PresignFile>() }
     const files = await portalLinePictureFiles(client, partyId, firstLines)
     const styles = await client.style.findMany({ where: { id: { in: [...new Set(firstLines.map((line) => line.styleId))] }, OR: [{ brandPartyId: null }, { brandPartyId: partyId }] }, select: { id: true, code: true, name: true } })
-    return { files, styles: new Map(styles.map((style) => [style.id, { code: style.code, name: style.name }])) }
+    // owb- (b3.2): the chosen pictures the customer may see — shared with its party, AVAILABLE, past the content wall.
+    const chosenIds = [...new Set(chosen.values())]
+    const shared = chosenIds.length > 0 ? await client.storedFile.findMany({ where: { id: { in: chosenIds }, status: 'AVAILABLE', partyId, visibility: { has: 'PARTNER' } }, select: { id: true, contentType: true, originalName: true, storeAccountId: true, thumbnailKey: true } }) : []
+    const walled = shared.length > 0 ? await contentWalledFor(client, partyId, shared.map((file) => file.id)) : new Set<string>()
+    const chosenFiles = new Map<string, PresignFile>(shared.filter((file) => !walled.has(file.id)).map((file) => [file.id, file]))
+    return { files, styles: new Map(styles.map((style) => [style.id, { code: style.code, name: style.name }])), chosenFiles }
   })
   // The store is called after the reads, as the tenant's system (the partner role holds no store account).
-  const addresses = tenant.files.size > 0 ? await smallAddresses(systemCallerOf(request)(reader.session.tenantId), [...tenant.files.values()]) : new Map<string, { url: string; expiresAt: string }>()
+  const presign = [...tenant.files.values(), ...tenant.chosenFiles.values()]
+  const addresses = presign.length > 0 ? await smallAddresses(systemCallerOf(request)(reader.session.tenantId), presign) : new Map<string, { url: string; expiresAt: string }>()
   const pictures: PortalOrderPicture[] = []
   // In the asked order (the page's); an id that is not the party's own has no first line here: absent.
   for (const orderId of orderIds) {
     const line = first.get(orderId)
     const style = line ? tenant.styles.get(line.styleId) : undefined
     if (!line || !style) continue
-    const file = tenant.files.get(linePictureKey(line))
+    // owb- (b3.2): the order's chosen picture first (one the customer may see), else its first goods line's.
+    const own = chosen.get(orderId)
+    const file = (own ? tenant.chosenFiles.get(own) : undefined) ?? tenant.files.get(linePictureKey(line))
     pictures.push({
       id: orderId,
       styleId: line.styleId,

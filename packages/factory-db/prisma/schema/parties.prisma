@@ -14,6 +14,9 @@
 // the office's check (PartyAddress.approvalStatus WAITING; the …_portal_followups_w2b_guards triggers).
 // W2b-5 schema wave 44/44 (B-W2b-297): the factory reviews a revision (MeasurementProfile.reviewStatus, the office's update
 // grant moves its review columns too) and a revision says who of ours measured and where (the …_mtm_office_w2b_guards).
+// owb-b1 (order workflow build, schema wave "order workflow 1/1"; row 16, S2's ask of 2026-11-27 22:27): People by customer —
+// the office people given to a customer (PartyOfficePerson), the pool a customer's orders take their people from. The
+// customer sees only these factory names; everyone else stays "The factory". Ended, never deleted.
 //
 // The partyId columns of the W0 modules (OneOffLink, LinkEvidence, Thread, Message, StoredFile, OutboxEvent,
 // AuditLog, IdempotencyReceipt) stay plain ids: the ledgers keep the scope a row was written in, and the others' seeds
@@ -312,6 +315,10 @@ model Party {
   customFields            CustomField[]
   // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects it is the outside company of.
   projects                Project[]
+  // owb-b1 order-columns.prisma, parties.prisma (order workflow build, schema wave "order workflow 1/1"): as a customer, its
+  // own columns for order lines and the office people given to it.
+  lineColumns             PartyLineColumn[]
+  officePeople            PartyOfficePerson[] @relation("PartyOfficePersonParty")
 
   @@unique([tenantId, code])
   // W2b-6 (wave 48/57): one sealed carrier account per party (a secret is never shared).
@@ -757,4 +764,37 @@ enum MeasurementReviewStatus {
   CONFIRMED
   /// More is asked of the rider or dealer (the review's words).
   NEED_MORE
+}
+
+/// An office person given to a customer (owb-b1, schema wave "order workflow 1/1"; row 16; design "People by customer"):
+/// the pool its orders take their office people from, and the only factory names its portal people see (everyone else is
+/// "The factory"). One open row per customer and person; ended (endedAt, endedById together, once), never changed after,
+/// never deleted (the …_order_workflow_guards trigger and its partial unique index, G11). The office writes it (owner and
+/// admin, the People by customer page); the customer reads its own rows, never who gave or ended one.
+model PartyOfficePerson {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose office person it is (the API keeps staff to their companies).
+  companyId   String    @db.Uuid
+  /// The customer (the partner role's policy key).
+  partyId     String    @db.Uuid
+  /// The office person given: an office user of the tenant (G11).
+  userId      String    @db.Uuid
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who gave the person to the customer (an office person). Hidden from the partner role.
+  createdById String?   @db.Uuid
+  /// Taken off the customer: when and by whom, both together, once (G11). Who is hidden from the partner role.
+  endedAt     DateTime? @db.Timestamptz(3)
+  endedById   String?   @db.Uuid
+
+  company Company @relation("PartyOfficePersonCompany", fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party   @relation("PartyOfficePersonParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The Inquiry assignee's pattern: a person is made inactive, never deleted (Restrict).
+  user    User    @relation("PartyOfficePersonUser", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A customer's people (the portal's names, the order's People); a person's customers.
+  @@index([tenantId, partyId])
+  @@index([tenantId, userId])
 }

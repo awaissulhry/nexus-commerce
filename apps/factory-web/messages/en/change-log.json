@@ -1,0 +1,69 @@
+{
+  "caption": "What changed",
+  "reading": "Reading the changes…",
+  "failed": "The changes could not be read.",
+  "retry": "Try again",
+  "empty": "No change yet.",
+  "more": "Load more",
+  "moreReading": "Reading more changes…",
+  "moreFailed": "More changes could not be read.",
+  "head": {
+    "when": "When",
+    "who": "Who",
+    "what": "What",
+    "fromTo": "From → to"
+  },
+  "who": {
+    "someone": "Someone",
+    "THE_FACTORY": "The factory",
+    "YOU": "You",
+    "OFFICE": "Office",
+    "SYSTEM": "Nexus",
+    "DEPARTMENT": "A department"
+  },
+  "action": {
+    "DRAFT_STARTED": "Draft started",
+    "DRAFT_CHANGED": "Draft changed",
+    "LINES_ADDED": "Lines added",
+    "LINE_CHANGED": "Line changed",
+    "LINE_TAKEN_OUT": "Line taken out",
+    "PEOPLE_CHANGED": "People changed",
+    "PRICES_TAKEN": "Prices taken",
+    "FILE_ADDED": "File added",
+    "ARTWORK_SHARED": "Artwork shared",
+    "SENT": "Sent",
+    "TAKEN_BACK": "Taken back to a draft",
+    "WITHDRAWN": "Withdrawn",
+    "REFUSED": "Refused",
+    "CONFIRMED": "Confirmed",
+    "PROMISE_MOVED": "Promised date moved",
+    "PICTURE_SET": "Picture of the order",
+    "DELIVER_TO": "Deliver to",
+    "CHANGE_ACCEPTED": "Change accepted",
+    "READY": "Ready to ship",
+    "CANCELLED": "Cancelled",
+    "CLOSED": "Closed",
+    "SHIPPED": "Shipped",
+    "AT_OUR_WAREHOUSE": "At our warehouse",
+    "LABEL_RECEIVED": "Shipping label received",
+    "SENT_ON": "Sent on to the customer",
+    "DELIVERED": "Delivered",
+    "OTHER": "A change"
+  },
+  "subject": {
+    "LINE": "Line",
+    "SHIPMENT": "Shipment",
+    "FILE": "File",
+    "BASKET": "Basket",
+    "REQUEST": "Request"
+  },
+  "fromTo": {
+    "from": "from",
+    "to": "to"
+  },
+  "value": {
+    "none": "nothing",
+    "design": "The design",
+    "picture": "Picture"
+  }
+}

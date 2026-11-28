@@ -191,6 +191,13 @@ model Message {
   /// reads it on its own shared messages and may write it in its own posts (held to its own order's parts).
   aboutKind         String?
   aboutId           String?           @db.Uuid
+  /// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 6): a quiet line — a SYSTEM message
+  /// that tells what happened on the record ("The factory confirmed your order") in the reader's own words: the event's key
+  /// (a word key of the web, e.g. `order.confirmed`) and its arguments (ids and short values only, never a price or a
+  /// person's name; only beside a key). Null on every message a person wrote. Written with the message, never changed (a
+  /// message is append-only). Readable wherever the message is.
+  eventKey          String?
+  eventArgs         Json?
 
   thread       Thread  @relation("ThreadMessages", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A shared message names its thread's own party: the reference is checked whenever partyId is set.

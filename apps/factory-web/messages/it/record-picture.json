@@ -23,5 +23,47 @@
   },
   "styles": "Modelli di {number}",
   "stylesFailed": "Non riesco a leggere gli altri modelli",
-  "retry": "Riprova"
+  "retry": "Riprova",
+  "window": {
+    "title": "L'immagine dell'ordine",
+    "subtitle": "{number} · {subject}",
+    "nowLabel": "L'immagine adesso",
+    "who": "Tutti quelli che lavorano a questo ordine vedono questa immagine: il cliente, l'ufficio e il reparto. La decide il cliente; puoi impostarla tu per il cliente.",
+    "upload": "Un'immagine dal tuo computer o telefono",
+    "uploadHint": "PNG, JPG, WebP o PDF. Un file con un prezzo non è mai un'immagine.",
+    "uploading": "Caricamento del file…",
+    "choose": "Oppure un file di questo ordine (un'immagine, o un PDF: la sua prima pagina)",
+    "isNow": "L'immagine adesso",
+    "noFiles": "Su questo ordine non c'è ancora nessuna immagine e nessun PDF.",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "design": "Usa il design",
+    "designHint": "Il design della prima riga, come prima.",
+    "kind": {
+      "image": "Un'immagine",
+      "pdf": "Un PDF: la sua prima pagina",
+      "mockup": "Un mockup: fronte e retro"
+    },
+    "now": {
+      "design": "Adesso: il design della prima riga",
+      "file": "Adesso: {name}",
+      "other": "Adesso: un'immagine scelta prima"
+    },
+    "held": {
+      "stale": "L'immagine è cambiata nel frattempo. Chiudi la finestra e riaprila.",
+      "gone": "Questo ordine ora non è più alla tua portata.",
+      "saving": "Salvataggio dell'immagine…",
+      "uploading": "Aspetta che il caricamento finisca.",
+      "same": "Questa è già l'immagine. Scegline prima un'altra.",
+      "closeSaving": "Aspetta: l'immagine si sta salvando."
+    },
+    "refused": {
+      "stale": "Qualcuno ha appena cambiato l'immagine di questo ordine. Chiudi la finestra e riaprila per vederla.",
+      "gone": "Questo ordine non è più alla tua portata. Non è cambiato nulla.",
+      "notAllowed": "Questo file non può essere l'immagine. Solo un'immagine o un PDF che il cliente può aprire: mai un file con prezzi né una tabella taglie.",
+      "upload": "Il file non è stato caricato. Riprova o scegli un altro file.",
+      "failed": "L'immagine non è stata salvata. Riprova."
+    }
+  }
 }

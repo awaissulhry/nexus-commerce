@@ -30,3 +30,29 @@ export const PORTAL_SALES_ORDERS_PERMISSIONS: readonly Permission[] = Object.fre
 
 /** The customer roles that see the orders (template keys; the Admin follows). */
 export const SALES_ORDER_READER_TEMPLATES: readonly string[] = Object.freeze(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-viewer'])
+
+/**
+ * "I paid" (owb- order workflow, plan.md § 5 D "the customer's buyer: I paid"; PL-schema § 5A row 4 `PaymentNotice`; PL-split
+ * S1 po2). The PARTNER's (area `portal`, flagged `partner`): tell the factory that a payment of an order was made (how much,
+ * when, how, a note or a receipt file). It is a notice, never a payment: the factory records it or dismisses it in the office
+ * (S2's Money tab), and nothing is marked paid until then. Checked against the order's party (a partner session's own).
+ *
+ *   payments.notify   tell the factory you paid an order's deposit, a payment step or an amount (the money on it only with the
+ *                     price grain of the role)
+ *
+ * Given to the customer Buyer (../../auth/roles/templates PARTNER_ADDS); the customer Admin follows by itself.
+ */
+export const PORTAL_PAYMENT_NOTICES_DEFINITIONS = definePartnerPermissions('portal', {
+  'payments.notify': {
+    risk: 'write',
+    description: 'Tell the factory you paid for an order: how much, on which day, how, with a note or the receipt. The factory checks it and records the payment.',
+  },
+})
+
+export const PORTAL_PAYMENTS_NOTIFY = 'portal.payments.notify' satisfies Permission
+export const PORTAL_PAYMENT_NOTICES_PERMISSIONS: readonly Permission[] = Object.freeze([PORTAL_PAYMENTS_NOTIFY])
+
+/** The partner templates that tell the factory a payment was made (template key → permissions; the customer Admin follows). */
+export const PORTAL_PAYMENT_NOTICES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  'customer-buyer': [PORTAL_PAYMENTS_NOTIFY],
+})

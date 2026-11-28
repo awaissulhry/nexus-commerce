@@ -1,0 +1,215 @@
+/* owb-b4 w4.2 (design § 5zl, § 9; ui.js stageChip, deptBar, deptStrip) — the department parts: layout only, DS tokens only. A department's
+   colour is one of the ten DS group tones (`--nds-grid-tone-<tone>-{bg,fg,rule}`, light and dark), set by its tone class, as the thread's
+   person tones are (lib/record-thread/parts/parts.css). The number dot has no "strong step" token (design § 9 gap): it draws the tone's
+   own text colour as its fill and the page surface as its number — AA in light and dark, no raw colour. Never colour alone: the number,
+   the icon and the short name say every chip. Sizes in `em`: a chip grows with the text around it (the floor's larger text). */
+
+.fw-dept-tone-slate {
+  --fw-dept-bg: var(--nds-grid-tone-slate-bg);
+  --fw-dept-fg: var(--nds-grid-tone-slate-fg);
+  --fw-dept-rule: var(--nds-grid-tone-slate-rule);
+}
+.fw-dept-tone-purple {
+  --fw-dept-bg: var(--nds-grid-tone-purple-bg);
+  --fw-dept-fg: var(--nds-grid-tone-purple-fg);
+  --fw-dept-rule: var(--nds-grid-tone-purple-rule);
+}
+.fw-dept-tone-emerald {
+  --fw-dept-bg: var(--nds-grid-tone-emerald-bg);
+  --fw-dept-fg: var(--nds-grid-tone-emerald-fg);
+  --fw-dept-rule: var(--nds-grid-tone-emerald-rule);
+}
+.fw-dept-tone-pink {
+  --fw-dept-bg: var(--nds-grid-tone-pink-bg);
+  --fw-dept-fg: var(--nds-grid-tone-pink-fg);
+  --fw-dept-rule: var(--nds-grid-tone-pink-rule);
+}
+.fw-dept-tone-orange {
+  --fw-dept-bg: var(--nds-grid-tone-orange-bg);
+  --fw-dept-fg: var(--nds-grid-tone-orange-fg);
+  --fw-dept-rule: var(--nds-grid-tone-orange-rule);
+}
+.fw-dept-tone-blue {
+  --fw-dept-bg: var(--nds-grid-tone-blue-bg);
+  --fw-dept-fg: var(--nds-grid-tone-blue-fg);
+  --fw-dept-rule: var(--nds-grid-tone-blue-rule);
+}
+.fw-dept-tone-yellow {
+  --fw-dept-bg: var(--nds-grid-tone-yellow-bg);
+  --fw-dept-fg: var(--nds-grid-tone-yellow-fg);
+  --fw-dept-rule: var(--nds-grid-tone-yellow-rule);
+}
+.fw-dept-tone-red {
+  --fw-dept-bg: var(--nds-grid-tone-red-bg);
+  --fw-dept-fg: var(--nds-grid-tone-red-fg);
+  --fw-dept-rule: var(--nds-grid-tone-red-rule);
+}
+.fw-dept-tone-violet {
+  --fw-dept-bg: var(--nds-grid-tone-violet-bg);
+  --fw-dept-fg: var(--nds-grid-tone-violet-fg);
+  --fw-dept-rule: var(--nds-grid-tone-violet-rule);
+}
+.fw-dept-tone-cyan {
+  --fw-dept-bg: var(--nds-grid-tone-cyan-bg);
+  --fw-dept-fg: var(--nds-grid-tone-cyan-fg);
+  --fw-dept-rule: var(--nds-grid-tone-cyan-rule);
+}
+
+/* ---- the chip: number dot · icon · ONE short name ---- */
+.fw-dept-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375em;
+  max-width: 100%;
+  min-height: 1.75em;
+  padding: 0.125em 0.75em 0.125em 0.1875em;
+  border-radius: var(--nds-radius-pill);
+  background: var(--fw-dept-bg);
+  color: var(--fw-dept-fg);
+  box-shadow: inset 0 0 0 1px var(--fw-dept-rule);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.fw-dept-dot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.25em;
+  border-radius: var(--nds-radius-pill);
+  background: var(--fw-dept-fg);
+  color: var(--nds-surface);
+  font-size: 0.85em;
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-dept-icon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+}
+.fw-dept-plain {
+  flex: none;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: var(--nds-radius-full);
+  background: currentColor;
+}
+.fw-dept-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- the bar: a route as chips in order; done quiet with a check, now strong, to come plain ---- */
+.fw-dept-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-dept-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+.fw-dept-done {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: var(--nds-text-2);
+}
+.fw-dept-step[data-state='done'] .fw-dept-chip {
+  background: transparent;
+}
+.fw-dept-step[data-state='now'] .fw-dept-chip {
+  box-shadow: inset 0 0 0 2px var(--fw-dept-fg);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ---- the strip: the order's departments as tiles; the ROOM decides the rows (container queries, never the window) ---- */
+.fw-dept-strip-room {
+  container: fw-dept-strip / inline-size;
+  min-width: 0;
+}
+.fw-dept-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container fw-dept-strip (min-width: 480px) {
+  .fw-dept-strip {
+    grid-template-columns: repeat(var(--fw-dept-cols, 3), minmax(0, 1fr));
+  }
+}
+@container fw-dept-strip (min-width: 960px) {
+  .fw-dept-strip {
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  }
+}
+.fw-dept-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-top: 4px solid var(--fw-dept-fg);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.fw-dept-tile[data-has] {
+  border-color: var(--fw-dept-rule);
+  border-top-color: var(--fw-dept-fg);
+  background: var(--fw-dept-bg);
+}
+.fw-dept-tile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: var(--fw-dept-fg);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-dept-tile-name {
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.fw-dept-tile-count {
+  font-size: var(--nds-font-size-2xl);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.fw-dept-tile-count small {
+  margin-inline-start: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-dept-tile-pics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-dept-tile-none {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

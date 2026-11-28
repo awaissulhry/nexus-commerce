@@ -1,0 +1,36 @@
+{
+  "fixed": {
+    "1": { "name": "Cartamodello", "short": "Cartamodello" },
+    "2": { "name": "Taglio", "short": "Taglio" },
+    "3": { "name": "Patchwork e stampa", "short": "Patch e stampa" },
+    "4": { "name": "Cucitura", "short": "Cucitura" },
+    "5": { "name": "Controllo qualità", "short": "Qualità" },
+    "6": { "name": "Imballaggio", "short": "Imballaggio" },
+    "7": { "name": "Design del prodotto", "short": "Design" },
+    "8": { "name": "Stampaggio a iniezione", "short": "Stampaggio" },
+    "9": { "name": "Assemblaggio", "short": "Assemblaggio" }
+  },
+  "chip": {
+    "number": "Reparto {no}:",
+    "long": "({name})"
+  },
+  "unknown": "Reparto {no}",
+  "bar": {
+    "label_one": "Il percorso: {count} passaggio",
+    "label_other": "Il percorso: {count} passaggi",
+    "done": "fatto",
+    "now": "qui adesso",
+    "next": "da fare"
+  },
+  "strip": {
+    "label": {
+      "baskets": "Dove sono i cesti, reparto per reparto",
+      "pieces": "Dove sono i pezzi, reparto per reparto"
+    },
+    "baskets_one": "cesto",
+    "baskets_other": "cesti",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "none": "Nessuno qui"
+  }
+}

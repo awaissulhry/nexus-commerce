@@ -92,6 +92,10 @@ export const OFFICE_ROLE_KEYS = [
   'read_only',
   // B-CP-016: the office role "Factory designer".
   'designer',
+  // owb- (plan.md § 5 D): the three office offers (People by customer › Extra rights).
+  'extra_allow_production',
+  'extra_pack_and_send',
+  'extra_print_and_start',
 ] as const
 
 /** The owner role in words: a ready-made role by its key (the catalogue), a custom role by its own name. */

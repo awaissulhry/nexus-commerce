@@ -18,6 +18,11 @@ import { readPortalPriceCheck, savePortalBrandPrices } from '../brand-prices/por
 // pg-s2 S2.1: the small pictures of the customer's own orders (a read POST).
 import { picturesContract } from './contract'
 import { orderPictures } from './pictures'
+// owb- (order workflow, b3.1 + b3.2): the order log (the customer's face) and the order's picture.
+import { orderPictureContract, portalOrderLogContract, portalRequestLogContract, requestPictureContract } from '../orders/log-contract'
+import { setPortalOrderPicture, setRequestPicture } from '../orders/picture-set'
+import { portalWriter } from '../portal-ordering/writer'
+import { portalOrderLog, portalRequestLog } from './log'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075 status in customer words, SAL-076 production progress per customer
@@ -51,4 +56,11 @@ export default defineRoutes('portal-sales-orders', manifest, async (app) => {
   app.get('/portal/sales-orders/:orderId/price-check', { schema: portalPriceCheckContract }, async (request) => readPortalPriceCheck(app, request, request.params.orderId))
   app.put('/portal/sales-orders/:orderId/brand-prices', { schema: portalSaveBrandPricesContract }, async (request) => savePortalBrandPrices(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
   // ---- end B-CP-019
+
+  // ---- owb- (order workflow, b3.1 + b3.2): the order log in the customer's face, and the order's picture (both records).
+  app.get('/portal/sales-orders/:orderId/log', { schema: portalOrderLogContract }, async (request) => portalOrderLog(app, request, request.params.orderId, request.query))
+  app.get('/portal/order-requests/:requestId/log', { schema: portalRequestLogContract }, async (request) => portalRequestLog(app, request, request.params.requestId, request.query))
+  app.post('/portal/order-requests/:requestId/picture', { schema: requestPictureContract }, async (request) => setRequestPicture(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/sales-orders/:orderId/picture', { schema: orderPictureContract }, async (request) => setPortalOrderPicture(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  // ---- end owb-
 })

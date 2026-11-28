@@ -28,6 +28,12 @@ import {
 } from './daily-contract'
 import { cancelCheck } from './impact'
 import { manifest } from './manifest'
+// owb- (order workflow, b3.1 + b3.2): the ONE order log and the order's picture.
+import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
+import { officeDraftWriter } from '../portal-ordering/writer'
+import { officeOrderLogContract, officeRequestLogContract, orderPictureContract, requestPictureContract } from './log-contract'
+import { officeOrderLog, officeRequestLog } from './log'
+import { setOrderPicture, setRequestPicture } from './picture-set'
 import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual'
 import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
@@ -178,4 +184,14 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))
   // F-SA-244: the told lines of all the order's changes (the order page's one read).
   app.get('/sales/orders/:orderId/told/changes', { schema: toldChangesContract }, async (request) => toldChanges(request, request.params.orderId))
+
+  // ---- owb- (order workflow, b3.1 + b3.2): the ONE order log, and the order's picture (office)
+  app.get('/sales/orders/:orderId/log', { schema: officeOrderLogContract }, async (request) => officeOrderLog(request, request.params.orderId, request.query))
+  app.get('/sales/order-requests/:requestId/log', { schema: officeRequestLogContract }, async (request) => officeRequestLog(request, request.params.requestId, request.query))
+  app.post('/sales/orders/:orderId/picture', { schema: orderPictureContract }, async (request) => setOrderPicture(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/order-requests/:requestId/picture', { schema: requestPictureContract }, async (request) => {
+    const { writer } = await officeDraftWriter(app, request, request.params.requestId, ORDERS_MANAGE)
+    return setRequestPicture(writer, request.params.requestId, request.body, idempotencyKeyFrom(request))
+  })
+  // ---- end owb-
 })

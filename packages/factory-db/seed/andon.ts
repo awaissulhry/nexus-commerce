@@ -14,6 +14,13 @@ import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future fo
  *                L1-A of seed/people.ts, escalated after 10 minutes), MAINTENANCE (the same team, 5 minutes), TEAM_LEADER
  *                (the site's team leaders, never escalated); the waiting books to WAIT_HELP (seed/labour.ts). The caller
  *                is named with the employee behind the operator's sign-in (E1).
+ *                owb-b1 (order workflow build; S5's settle 5, its ask of 2026-11-27 23:36): the floor's problems and asks are
+ *                help-call types by code, no enum change. On EVERY seeded site PAPER ("Page lost or damaged", kind OTHER,
+ *                the site's line team). On the demo site A1 also the problems DAMAGED (QUALITY), UNCLEAR (OTHER) and MACHINE
+ *                (MACHINE), answered by MATERIAL's team (MATERIAL stays the one row above), and the asks ASK_LOGO, ASK_PATCH,
+ *                ASK_TO_PATCH, ASK_UNCLEAR, ASK_OTHER (kind OTHER; no designers' team in the seed, so no responder team: the
+ *                site's team leaders; who answers an ask is fixed by its code in factory-domain). Each escalates after 10
+ *                minutes. Their words are the web's, by code (a type holds no name).
  *   calls        17 Nov: a material call from SEW-01 (09:10 Rome) seen at 09:12, on the way at 09:14, solved at 09:22 by
  *                the team leader, with the operator's waiting booked (WAIT_HELP, approved as it ended); a maintenance call
  *                from SEW-02 at 13:05 still SENT (no caller named).
@@ -85,16 +92,39 @@ export async function seed(context: SeedContext): Promise<AndonSeed> {
 
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
+      // owb-b1: the floor's problems and asks of the demo site (ids of eight f's: MATERIAL stays the first row).
+      const floorType = (code: string, kind: HelpCallKind, responderTeamId: string | null, sortOrder: number) =>
+        ({ typeId: lastId(`andon:type:A1:${code}`), code, kind, responderTeamId, escalateAfterMinutes: 10, sortOrder })
       const types = [
         { typeId: typeIds.material, code: 'MATERIAL', kind: HelpCallKind.MATERIAL, responderTeamId: people.teamIds.a, escalateAfterMinutes: 10, sortOrder: 10 },
         { typeId: typeIds.maintenance, code: 'MAINTENANCE', kind: HelpCallKind.MAINTENANCE, responderTeamId: people.teamIds.a, escalateAfterMinutes: 5, sortOrder: 20 },
         { typeId: typeIds.teamLeader, code: 'TEAM_LEADER', kind: HelpCallKind.SUPERVISOR, responderTeamId: null, escalateAfterMinutes: null, sortOrder: 30 },
+        floorType('DAMAGED', HelpCallKind.QUALITY, people.teamIds.a, 40),
+        floorType('UNCLEAR', HelpCallKind.OTHER, people.teamIds.a, 50),
+        floorType('MACHINE', HelpCallKind.MACHINE, people.teamIds.a, 60),
+        floorType('PAPER', HelpCallKind.OTHER, people.teamIds.a, 70),
+        floorType('ASK_LOGO', HelpCallKind.OTHER, null, 110),
+        floorType('ASK_PATCH', HelpCallKind.OTHER, null, 120),
+        floorType('ASK_TO_PATCH', HelpCallKind.OTHER, null, 130),
+        floorType('ASK_UNCLEAR', HelpCallKind.OTHER, null, 140),
+        floorType('ASK_OTHER', HelpCallKind.OTHER, null, 150),
       ]
       for (const { typeId, code, kind, ...routing } of types) {
         const data = { ...routing, offStandardCodeId: codeIds.WAIT_HELP }
         await tx.helpCallType.upsert({
           where: { id: typeId },
           create: { id: typeId, companyId: companyA, siteId: siteA, code, kind, ...data, createdAt: T.routing, updatedAt: T.routing, createdById: actorId },
+          update: data,
+          select,
+        })
+      }
+      // owb-b1: PAPER on plant B1 too (its line team; company B has no off-standard codes, so its waiting books to none).
+      {
+        const typeId = lastId('andon:type:B1:PAPER')
+        const data = { responderTeamId: people.teamIds.b, escalateAfterMinutes: 10, sortOrder: 70, offStandardCodeId: null }
+        await tx.helpCallType.upsert({
+          where: { id: typeId },
+          create: { id: typeId, companyId: id('company:B'), siteId: id('site:B1'), code: 'PAPER', kind: HelpCallKind.OTHER, ...data, createdAt: T.routing, updatedAt: T.routing, createdById: actorId },
           update: data,
           select,
         })

@@ -180,7 +180,10 @@
     "safety_officer": "Safety officer",
     "company_doctor": "Company doctor",
     "read_only": "Read only",
-    "designer": "Factory designer"
+    "designer": "Factory designer",
+    "extra_allow_production": "Allow production",
+    "extra_pack_and_send": "Pack and send",
+    "extra_print_and_start": "Print and start the work"
   },
   "owner": {
     "unknown": "An office role"
