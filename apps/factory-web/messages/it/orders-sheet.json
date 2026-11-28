@@ -820,7 +820,9 @@
       "skippedNotOrder_one": "{count} saltato: non ancora confermato, o già limitato",
       "skippedNotOrder_other": "{count} saltati: non ancora confermati, o già limitati",
       "noDrafts": "Nessuna bozza selezionata. Un ordine inviato non si elimina mai.",
-      "designer": "Dai al grafico…"
+      "designer": "Dai al grafico…",
+      "left_one": "{count} rimasto: confermalo dopo",
+      "left_other": "{count} rimasti: confermali dopo"
     },
     "asks": {
       "title_one": "Il cliente chiede {count} modifica",

@@ -820,7 +820,9 @@
       "skippedNotOrder_one": "{count} skipped: not confirmed yet, or already restricted",
       "skippedNotOrder_other": "{count} skipped: not confirmed yet, or already restricted",
       "noDrafts": "No draft is selected. A sent order is never deleted.",
-      "designer": "Give to the designer…"
+      "designer": "Give to the designer…",
+      "left_one": "{count} left: confirm it later",
+      "left_other": "{count} left: confirm them later"
     },
     "asks": {
       "title_one": "The customer asks {count} change",

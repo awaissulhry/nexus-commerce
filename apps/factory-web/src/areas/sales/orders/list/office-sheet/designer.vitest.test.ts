@@ -32,6 +32,17 @@ describe('owb-of4 extra step — Give to the designer (bulk on the office sheet)
   })
 })
 
+describe('owb-of4 (lead) — the sheet’s bulk Confirm walks THE Confirm window, one order at a time', () => {
+  it('no direct confirm call is left; the window is owb-of5’s ConfirmOrderWindow, one per order of the run', () => {
+    const hook = readFileSync(new URL('./use-office-sheet.ts', import.meta.url), 'utf8')
+    const page = readFileSync(new URL('./OfficeSheetPage.tsx', import.meta.url), 'utf8')
+    expect(hook).not.toMatch(/confirmDraft\(/)
+    expect(hook).toContain('confirmRunOf(confirmPlanOf(')
+    expect(page).toContain("import { ConfirmOrderWindow } from '../../draft/ConfirmOrderWindow'")
+    expect(page).toMatch(/<ConfirmOrderWindow key=\{model\.confirmWindow\.requestId\}/)
+  })
+})
+
 describe('owb-of4 step 4 — Incoming on a phone draws cards', () => {
   it('Incoming keeps the list frame’s phone cards on (it never passes cards={null}) and the Confirm door is 48 px there', () => {
     const view = readFileSync(new URL('../../../inquiries/view/InquiriesView.tsx', import.meta.url), 'utf8')
