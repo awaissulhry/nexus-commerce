@@ -1038,6 +1038,59 @@ model BomLineColour {
   @@index([tenantId, bomLineId])
 }
 
+/// A department of the factory (owb-b1, schema wave "order workflow 1/1"; LF PL-schema § 2, § 5A row 8; design
+/// order-workflow-2026-11-25 § 5x, § 5zl): 1 Pattern, 2 Cutting, 3 Patch & print, 4 Stitching … — the number, the names,
+/// the ONE short name of every chip, its tone and icon. Each carries ONE existing work-centre kind (scans, floor modes,
+/// costs and capacity stay on the kind; Pattern and Cutting share CUTTING) and ONE default library Operation
+/// (Operation.departmentDefault), so a route step stays a RoutingOperation with its operationId. A number is given once and
+/// kept for ever, never reused; a department is closed, never deleted; one with screens on the floor (floorReady) keeps its
+/// name and never closes (the …_order_workflow_guards trigger, G3). The office keeps them (production.departments.manage);
+/// the floor reads them (the department chip, the phone's department pick).
+model Department {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1), as the operation library.
+  companyId      String?          @db.Uuid
+  /// Its number, above 0, unique in the tenant: given once (the highest + 1 under a lock, the API), never changed, never
+  /// reused (G3).
+  number         Int
+  /// Its name ("Patch & print") and its ONE short name on every chip ("Patch"; the long name is the hint).
+  name           String
+  shortName      String
+  /// The names per locale, the floor languages included ({ "en": …, "it": …, "ur": … }); null: the name only.
+  nameI18n       Json?
+  /// Its tone: one of the 10 grid tones (slate, purple, emerald, pink, orange, blue, yellow, red, violet, cyan; G3).
+  tone           String
+  /// Its icon: a lucide icon id in kebab case ("scissors"), which the web chip maps (G3: a non-blank id).
+  icon           String
+  /// The kind of work centre its work runs at: scans, floor modes, costs and capacity read the kind.
+  workCentreKind WorkCentreKind
+  /// Its place in the lists and the route builder (ties: by number).
+  seq            Int              @default(0)
+  /// It has screens on the floor (the floor's words and tiles name it): its name stays and it never closes (G3).
+  floorReady     Boolean          @default(false)
+  status         DepartmentStatus @default(ACTIVE)
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  company           Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Its library operations (one of them its default: the partial unique of G3) and the route steps made in it.
+  operations        Operation[]
+  routingOperations RoutingOperation[]
+
+  @@unique([tenantId, number])
+  // The target of the operations' and route steps' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// Where a department stands (owb-b1): ACTIVE, or CLOSED (not offered for new route steps; kept with its number; G3).
+enum DepartmentStatus {
+  ACTIVE
+  CLOSED
+}
+
 /// An operation of the library (PRD-109): what is done, at which kind of work centre, on which machine, with which
 /// skill and its standard minutes (SMV). Its photos and videos are its files. Routings copy it.
 model Operation {
@@ -1068,6 +1121,15 @@ model Operation {
   /// How it is done, for the traveller and the floor screen.
   instructions    String?
   status          MasterStatus   @default(ACTIVE)
+  // ── owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 2, § 5A row 8)
+  /// The department it belongs to (a department of the tenant; G3); null: none yet (every operation made before the wave:
+  /// its department is its kind's, factory-domain departmentOfKind).
+  departmentId      String?      @db.Uuid
+  /// The department's ONE default operation (the step a route builder adds when a department is picked): one per department
+  /// (the partial unique index of G3). Made with its department (the API). The default is the database's (dbgenerated, as
+  /// StoredFile.legalHold's), so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as written.
+  departmentDefault Boolean      @default(dbgenerated("('false'::text)::boolean"))
+  // ── end owb-b1
   version         Int            @default(1)
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -1075,6 +1137,9 @@ model Operation {
 
   company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   routing RoutingOperation[]
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): its department (Restrict, not Prisma's SetNull default
+  // for an optional relation: that would also clear tenantId).
+  department Department?     @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b-4 instructions.prisma (wave 25/33): its SMV versions, machine settings and work instructions.
   timeVersions     OperationTimeVersion[]
   machineSettings  OperationMachineSetting[]
@@ -1146,6 +1211,12 @@ model RoutingOperation {
   /// @grain cost
   pricePerPiece   Decimal?       @db.Decimal(18, 6)
   transitDays     Int?
+  /// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 2, § 5A row 8): the department of the step
+  /// (a department of the tenant; G3), copied when the step is made and frozen with the revision like every other column
+  /// (…_product_guards' RoutingOperation_revision_guard, unchanged: no change once the revision left DRAFT). Null on every
+  /// step made before the wave: its department is its kind's (factory-domain departmentOfKind); no released routing is
+  /// filled afterwards.
+  departmentId    String?        @db.Uuid
   version         Int            @default(1)
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -1153,6 +1224,8 @@ model RoutingOperation {
 
   revision  StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   operation Operation     @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // owb-b1: its department (Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId).
+  department Department?  @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2a: the workshop of a subcontracted step. Restrict, not Prisma's SetNull default: that would also clear tenantId.
   supplier  Party?        @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // production.prisma: the work order operations made from the step.

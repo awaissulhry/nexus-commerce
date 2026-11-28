@@ -763,6 +763,8 @@ model SalesOrder {
   picture             StoredFile?          @relation("SalesOrderPicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   paymentNotices      PaymentNotice[]      @relation("PaymentNoticeOrder")
   lineColumnUses      OrderLineColumnUse[] @relation("OrderLineColumnUseOrder")
+  // owb-b1: its prints of the work papers (production.prisma).
+  prints              OrderPrint[]         @relation("OrderPrintOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
