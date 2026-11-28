@@ -53,9 +53,16 @@ describe('what: the action\'s words, its icon, its subject', () => {
     expect(actionKeyOf('orders.changePromise')).toBe('PROMISE_MOVED')
     expect(actionKeyOf('PROMISE_MOVED')).toBe('PROMISE_MOVED')
     expect(actionKeyOf('orders.picture.set')).toBe('PICTURE_SET')
-    expect(actionKeyOf('production.baskets.move')).toBe('OTHER')
+    // owb-b7 (S5 ask 09:28): a basket's move (its undo, a route change, the route back to normal) reads "Changed on the floor".
+    expect(actionKeyOf('production.baskets.move')).toBe('CHANGED_ON_FLOOR')
+    expect(actionKeyOf('production.baskets.routeNormal')).toBe('CHANGED_ON_FLOOR')
+    expect(actionKeyOf('production.holds.place')).toBe('OTHER')
     expect(actionWordKeyOf('shipping.ship')).toBe('action.SHIPPED')
     expect(en.t('action.OTHER')).toBe('A change')
+    expect(en.t('action.CHANGED_ON_FLOOR')).toBe('Changed on the floor')
+    expect(changeLogWordsFor('it').t('action.CHANGED_ON_FLOOR')).toBe('Cambiato in reparto')
+    // owb-b7 (S2 ask 09:18): the four office acts of an order, each its own word.
+    expect(['orders.restrict', 'orders.paymentNotice.answer', 'orders.files.zip', 'orders.designer.give'].map(actionKeyOf)).toEqual(['RESTRICTION_CHANGED', 'NOTICE_ANSWERED', 'FILES_DOWNLOADED', 'DESIGNER_GIVEN'])
   })
 
   it('every action the domain names has its words in it and en; every icon id it names is a lucide icon; an unknown id is a plain dot', () => {
@@ -108,8 +115,12 @@ describe('each value kind as its chip', () => {
     expect(textOf(html)).toContain('Sam Sales')
     expect(html).toContain('<span class="fw-clog-reason">The leather arrives a week later.</span>')
     expect(textOf(html)).toContain('Basket BSK-0042')
-    expect(textOf(html)).toContain('A change')
-    expect(html).toContain('fw-clog-dot')
+    // owb-b7: the floor's move (r6) has its own words now; an action no list knows is still "A change" with a plain dot.
+    expect(textOf(html)).toContain('Changed on the floor')
+    const r6 = OFFICE_ROWS.find((entry) => entry.id === 'r6')!
+    const unknown = draw(model([{ ...r6, id: 'rx', action: 'made.up.action' }]))
+    expect(textOf(unknown)).toContain('A change')
+    expect(unknown).toContain('fw-clog-dot')
   })
 })
 

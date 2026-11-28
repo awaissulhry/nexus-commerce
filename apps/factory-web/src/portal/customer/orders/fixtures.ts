@@ -144,7 +144,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
       id: 'no-access',
       label: 'Not part of the person’s access',
       model: (locale) => ({ shell: shellOf(locale, { title: words(locale)('list.title') }), body: { kind: 'noAccess', admins: ['Anna Esempio'] } }),
-      note: 'A typed or old address (a designer, a supplier): who to ask, and Home. Not in the navigation (fails closed).',
+      note: 'A typed or old address (a supplier, a role without the orders): who to ask, and Home. Not in the navigation (fails closed).',
     },
   ],
 })

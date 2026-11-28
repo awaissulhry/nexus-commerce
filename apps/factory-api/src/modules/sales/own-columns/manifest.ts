@@ -3,7 +3,7 @@ import { defineManifest } from '../../../core/manifest'
 /**
  * The customer's own columns (owb- order workflow, S1 po1.4; design § 5zi C). The portal's: the customer's people who keep drafts
  * (portal.orderDrafts.edit: the Buyer, the Designer, the Admin) inside their party; an ORDER's columns and values also need
- * portal.salesOrders.view (the handler: never the Designer). The office's twins: orders.manage (orders.view to read) over the
+ * portal.salesOrders.view (the handler; owb-b7: the Designer holds it too). The office's twins: orders.manage (orders.view to read) over the
  * company and THAT customer, checked by the handler with can() (`record`: out of reach is 404).
  */
 export const manifest = defineManifest({

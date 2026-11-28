@@ -23,7 +23,7 @@ import { dayOrNull, readDeposits, type PortalOrderRow } from './store'
  *   POST /portal/sales-orders/:orderId/payment-notices   "I paid: tell the factory…" — a notice on the base's PaymentNotice (OPEN):
  *                                                         it changes NOTHING owed; the office records the payment or dismisses it
  *
- * Money only with the price grain (403 without: the Designer and the Viewer never; the Designer reads no order at all). Every figure
+ * Money only with the price grain (403 without: the Designer and the Viewer never — owb-b7: both read the orders, neither a price). Every figure
  * is the office's ONE rule (orderMoneyFactsOf + orderMoneyPartsOf, as the order record's `stillToPay`): never a second money rule.
  * The partner read finds the order first (another customer's: 404); the money rows the partner role cannot read (milestones, credit
  * notes' sums) are read in the tenant's scope for this one order only. No cost, no margin, no office person, no office series.
@@ -119,7 +119,7 @@ async function moneyFactsOf(request: FastifyRequest, reader: PortalReader, order
   }
 }
 
-/** The money read's own reader: the price grain, else 403 in words (the Designer is refused before, by the route's permission). */
+/** The money read's own reader: the price grain, else 403 in words (owb-b7: the Viewer and the Designer read the orders, refused here). */
 function moneyReader(app: FastifyInstance, request: FastifyRequest): { readonly reader: PortalReader; readonly locale: Locale } {
   const reader = portalReader(app, request)
   const locale = partnerLocaleOf(reader.session.person.locale)

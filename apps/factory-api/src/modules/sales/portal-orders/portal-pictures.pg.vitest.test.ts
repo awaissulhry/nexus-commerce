@@ -22,8 +22,8 @@ import { startHarness, type Browser, type Harness, type TestTenant } from '../..
  *     counted, `fileId` always null, never the original's name or storage key; `small` null while no preview exists.
  *   - A asking with B's ids (or an unknown one) gets nothing for them — absent, no error, no count; the same the other way.
  *   - a picture whose content was copied from another customer's file is left out (the content wall), in the same shape.
- *   - the body: 1–200 ids, each once; a role without portal.salesOrders.view is refused; the office picture routes refuse a portal
- *     session.
+ *   - the body: 1–200 ids, each once; the office picture routes refuse a portal session. owb-b7: the customer's Designer reads the
+ *     orders now (portal.salesOrders.view): its own order's picture as its buyer gets it, another customer's absent.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-orders`.
  */
 
@@ -216,12 +216,13 @@ describe('pg-s2 S2.1 the pictures of Portal › Orders: the customer’s own ord
     expect(JSON.stringify(await pictures('a', [w.b1]))).not.toMatch(/TPG-B-|TPG front B1/)
   })
 
-  it('the body: 1–200 ids, each once; a role without the orders’ view is refused; the office picture routes refuse a portal session', async () => {
+  it('the body: 1–200 ids, each once; the Designer gets its own orders’ pictures only; the office picture routes refuse a portal session', async () => {
     await pictures('a', [], 400)
     await pictures('a', [w.a1, w.a1], 400)
     await pictures('a', Array.from({ length: 201 }, () => newId()), 400)
     await pictures('a', ['not-an-id'], 400)
-    await pictures('designer', [w.a1], 403)
+    // owb-b7 (Owner yes 2026-11-28): the customer's Designer reads its orders — the same picture as its buyer, B's order absent.
+    expect((await pictures('designer', [w.a1, w.b1])).pictures).toEqual((await pictures('a', [w.a1])).pictures)
     for (const [url, body] of [
       ['/sales/orders/pictures', { orderIds: [w.a1] }],
       ['/sales/quotes/pictures', { quoteIds: [w.a1] }],

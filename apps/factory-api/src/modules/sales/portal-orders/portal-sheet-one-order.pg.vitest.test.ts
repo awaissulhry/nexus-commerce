@@ -3,6 +3,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
 import { LINE_MODEL_KINDS } from '@nexus/factory-domain/sales/portal-ordering/line-moves'
 import { SHEET_WAITS } from '@nexus/factory-domain/sales/portal-orders/sheet-rows'
+import { MONEY_WORDS } from '@nexus/factory-domain/sales/portal-orders/money' // owb-b7
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedShipping } from '../../../../../../packages/factory-db/seed/shipping'
@@ -25,7 +26,9 @@ import { forgetProgress } from './progress'
  *     life, C rows (model, material, sizes, pieces, own values), own column ids, waits and acts; the answer's own columns
  *   - without it (an older web): no DRAFT row
  *   - BRAND: party B's drafts never in A's sheet (nor A's in B's); a request picture of B is absent from A's answer
- *   - MONEY: a viewer's rows carry no price key and no draft; the Designer reads no sheet (403: no portal.salesOrders.view)
+ *   - MONEY: a viewer's rows carry no price key and no draft; the Designer's rows carry no price key either
+ *   - WALL owb-b7 (Owner yes 2026-11-28): the customer's Designer reads the sheet and its order page — no price, no Send, the Money
+ *     tab and the price check 403; another customer's draft and an unknown order stay unknown (404)
  *   - no office series (SO-, RQ-) in any row
  */
 
@@ -178,11 +181,63 @@ describe('the sheet as ONE order (owb- po1.1)', { timeout: SLOW_TEST_TIMEOUT_MS 
     expect((await call(browsers.buyer, 'POST', '/portal/sales-orders/pictures', {})).status).toBe(400)
   })
 
-  it('MONEY: a viewer’s rows carry no price key and no draft; the Designer reads no sheet', async () => {
+  // owb-b7: the customer's Designer reads the sheet too (portal.salesOrders.view), never a price; its drafts and acts: the WALL below.
+  it('MONEY: a viewer’s rows carry no price key and no draft; the Designer’s rows carry no price key either', async () => {
     const viewer = await ok(browsers.viewer, 'GET', '/portal/sales-orders/sheet?chip=ALL&drafts=true')
     expect(viewer.items.map((row: Json) => row.kind)).not.toContain('DRAFT')
-    for (const row of viewer.items as Json[]) expect(row).not.toHaveProperty('netAmount')
-    expect(JSON.stringify(viewer.items)).not.toMatch(/unitPrice|netAmount|brandUnitPrice/)
-    expect((await call(browsers.designer, 'GET', '/portal/sales-orders/sheet?chip=ALL&drafts=true')).status).toBe(403)
+    const designer = await ok(browsers.designer, 'GET', '/portal/sales-orders/sheet?chip=ALL&drafts=true')
+    for (const [who, sheet] of [['viewer', viewer], ['designer', designer]] as const) {
+      for (const row of sheet.items as Json[]) expect(row, who).not.toHaveProperty('netAmount')
+      expect(JSON.stringify(sheet.items), who).not.toMatch(/unitPrice|netAmount|brandUnitPrice/)
+    }
   })
+
+  // ── owb-b7 (Owner yes 2026-11-28; shared-asks 10:40 (1)): the customer's Designer reads its orders — the sheet and the order page —
+  // with no price (its role has no price grain: every money.price field drops, as for the Viewer) and no Send or take back (those
+  // stay portal.orderRequests.manage); the Money tab and the price check answer 403; another customer's rows stay unknown ──
+  it('WALL owb-b7: the customer Designer reads the sheet and its order page — no price, no Send, Money 403; another customer’s stays 404', async () => {
+    // Every key of an answer, at any depth (`seesPrices` is the answer's own flag, not a price).
+    const keysOf = (value: unknown): string[] =>
+      Array.isArray(value) ? value.flatMap(keysOf) : value !== null && typeof value === 'object' ? Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]) : []
+    const moneyKeys = (value: unknown) => [...new Set(keysOf(value).filter((key) => key !== 'seesPrices' && /price|amount|stillToPay/i.test(key)))]
+
+    const sheet = await ok(browsers.designer, 'GET', '/portal/sales-orders/sheet?chip=ALL&drafts=true')
+    expect(sheet.seesPrices).toBe(false)
+    expect(moneyKeys(sheet)).toEqual([])
+    const rows = sheet.items as Json[]
+    // Its customer's orders, its Sent order and the draft its colleague started (it keeps drafts: portal.orderDrafts.edit).
+    const orders = rows.filter((row) => row.kind === 'ORDER')
+    expect(orders.length).toBeGreaterThan(0)
+    expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining([A.draftId, A.sentId]))
+    // Never Send, never take back — on any row; it fills the draft (edit) but discards only one it started itself.
+    for (const row of rows) expect(row.may, row.id).toMatchObject({ send: false, takeBack: false })
+    expect(rows.find((row) => row.id === A.draftId)!.may).toEqual({ edit: true, send: false, delete: false, takeBack: false, picture: true })
+    expect(rows.find((row) => row.id === A.sentId)!.may).toEqual({ edit: false, send: false, delete: false, takeBack: false, picture: true })
+    // The brand wall: party B's draft is not in it.
+    for (const word of [B.draftId, 'Made-up B draft']) expect(JSON.stringify(sheet), word).not.toContain(word)
+
+    // The order page of its customer: read, without a price (the order's amounts, the lines' and sizes' prices, the deposits').
+    const orderId = orders[0]!.id as string
+    const record = await ok(browsers.designer, 'GET', `/portal/sales-orders/${orderId}`)
+    expect(record.seesPrices).toBe(false)
+    expect(record.order).toMatchObject({ id: orderId })
+    for (const key of ['netAmount', 'vatAmount', 'grossAmount', 'stillToPay']) expect(record.order, key).not.toHaveProperty(key)
+    expect(moneyKeys(record)).toEqual([])
+    // The Money tab and the price check stay closed, in the portal's words.
+    const money = await call(browsers.designer, 'GET', `/portal/sales-orders/${orderId}/money`)
+    expect(money.status).toBe(403)
+    expect(money.body.error.message).toBe(MONEY_WORDS.NO_PRICES.en)
+    expect(moneyKeys(money.body)).toEqual([])
+    const check = await call(browsers.designer, 'GET', `/portal/sales-orders/${orderId}/price-check`)
+    expect(check.status).toBe(403)
+    expect(moneyKeys(check.body)).toEqual([])
+
+    // Another customer: its buyer still finds none of this order; the Designer finds none of another's (B's draft, an id not its own).
+    expect((await call(browsers.other, 'GET', `/portal/sales-orders/${orderId}`)).status).toBe(404)
+    const unknown = await call(browsers.designer, 'GET', `/portal/sales-orders/${newId()}`)
+    expect([unknown.status, unknown.body.error?.message]).toEqual([404, 'Order not found.'])
+    const theirs = await call(browsers.designer, 'GET', `/portal/order-requests/${B.draftId}`)
+    expect([theirs.status, theirs.body.error?.message]).toEqual([404, 'Order request not found.'])
+  })
+  // ── end owb-b7 ──
 })

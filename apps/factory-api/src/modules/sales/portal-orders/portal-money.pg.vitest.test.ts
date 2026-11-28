@@ -22,7 +22,7 @@ import { atWarehouseOf } from '../../shipping/warehouse-leg/portal' // owb- po2.
  * orders), P1's portal and another customer's on; P1's buyer, viewer and designer, the other customer's buyer. Every name is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs portal-orders/portal-money`.
  *
- *   - MONEY: the buyer reads its order's money (totals, plan, invoices, notices); the viewer (no price grain) and the designer: 403
+ *   - MONEY: the buyer reads its order's money (totals, plan, invoices, notices); the viewer and the designer (no price grain): 403
  *   - BRAND: another customer's order is not found (404) — read and notice alike
  *   - "I paid": a notice OPEN only, unanswered, amount marked price; nothing owed changes; refused above what is open, on a day
  *     ahead; 409 when nothing is still to pay; the event `payment_notice.sent` (ids only)
@@ -132,7 +132,10 @@ describe('the Money tab and "I paid" (owb- po2.2)', { timeout: SLOW_TEST_TIMEOUT
     const viewer = await call(browsers.viewer, 'GET', `/portal/sales-orders/${orders[0]}/money`)
     expect(viewer.status).toBe(403)
     expect(viewer.body.error.message).toBe(MONEY_WORDS.NO_PRICES.en)
-    expect((await call(browsers.designer, 'GET', `/portal/sales-orders/${orders[0]}/money`)).status).toBe(403)
+    // owb-b7: the designer reads the orders now (portal.salesOrders.view), so the route lets it in; the price grain refuses it, in words.
+    const designer = await call(browsers.designer, 'GET', `/portal/sales-orders/${orders[0]}/money`)
+    expect(designer.status).toBe(403)
+    expect(designer.body.error.message).toBe(MONEY_WORDS.NO_PRICES.en)
   })
 
   it('BRAND: another customer’s order is not found — read and notice alike', async () => {

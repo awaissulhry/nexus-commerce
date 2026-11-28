@@ -48,6 +48,11 @@
     "LABEL_RECEIVED": "Etichetta di spedizione ricevuta",
     "SENT_ON": "Inoltrato al cliente",
     "DELIVERED": "Consegnato",
+    "RESTRICTION_CHANGED": "Riserva in reparto cambiata",
+    "NOTICE_ANSWERED": "Risposta all’avviso di pagamento",
+    "FILES_DOWNLOADED": "File scaricati",
+    "DESIGNER_GIVEN": "Grafica affidata al designer",
+    "CHANGED_ON_FLOOR": "Cambiato in reparto",
     "OTHER": "Una modifica"
   },
   "subject": {

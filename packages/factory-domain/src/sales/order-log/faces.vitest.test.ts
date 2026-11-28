@@ -55,6 +55,31 @@ describe('the actions: one word and one icon each', () => {
     expect(actionFaceOf('orders.changePromise')).toEqual({ key: 'PROMISE_MOVED', icon: 'calendar-clock' })
     expect(actionFaceOf('production.holds.place')).toEqual({ key: 'OTHER', icon: 'history' })
   })
+
+  it('owb-b7: the four office acts of an order and the floor\'s basket moves have office words — never on the customer\'s ALLOW-list', () => {
+    const office = {
+      'orders.restrict': { key: 'RESTRICTION_CHANGED', icon: 'lock' },
+      'orders.paymentNotice.answer': { key: 'NOTICE_ANSWERED', icon: 'hand-coins' },
+      'orders.files.zip': { key: 'FILES_DOWNLOADED', icon: 'download' },
+      'orders.designer.give': { key: 'DESIGNER_GIVEN', icon: 'user-plus' },
+      // S5 (ask 09:28): ONE word for a move, its undo, a route change and the route set back to normal.
+      'production.baskets.move': { key: 'CHANGED_ON_FLOOR', icon: 'factory' },
+      'production.baskets.moveUndo': { key: 'CHANGED_ON_FLOOR', icon: 'factory' },
+      'production.baskets.route': { key: 'CHANGED_ON_FLOOR', icon: 'factory' },
+      'production.baskets.routeNormal': { key: 'CHANGED_ON_FLOOR', icon: 'factory' },
+    } as const
+    for (const [action, faceOf] of Object.entries(office)) {
+      expect(actionFaceOf(action), action).toEqual(faceOf)
+      expect(ACTION_FACES[action], action).toEqual(faceOf)
+      expect(CUSTOMER_ALLOWED_ACTIONS.has(action), action).toBe(false)
+      expect(CUSTOMER_OWN_ROWS_ONLY.has(action), action).toBe(false)
+      // Not even a customer's own person's row of it reaches the customer.
+      expect(customerMayRead({ action, audience: 'PARTNER', actorPartyId: ALPHA }, ALPHA), action).toBe(false)
+    }
+    expect(ORDER_LOG_ACTIONS).toEqual(expect.arrayContaining(['RESTRICTION_CHANGED', 'NOTICE_ANSWERED', 'FILES_DOWNLOADED', 'DESIGNER_GIVEN', 'CHANGED_ON_FLOOR']))
+    // No allowed action reads as one of these office words.
+    for (const action of CUSTOMER_ALLOWED_ACTIONS) expect(['RESTRICTION_CHANGED', 'NOTICE_ANSWERED', 'FILES_DOWNLOADED', 'DESIGNER_GIVEN', 'CHANGED_ON_FLOOR'], action).not.toContain(actionFaceOf(action).key)
+  })
 })
 
 describe('the customer\'s ALLOW-list (never a hide-list)', () => {

@@ -25,7 +25,8 @@ import { unreadCounts } from '../../../platform/threads/reads' // owb- po2.3
  *   - a column: made (201), a duplicate name, a fixed column's name, a choice column with one choice: 409 in words; closed, kept
  *   - on a draft: at most 8; a value applies; switched off with a value: 409, unless dropValues (the value cleared); a closed column
  *     is not switched on and takes no value
- *   - on an order: the columns and a value at once, also after Confirm; the order record shows them; the Designer: 403
+ *   - on an order: the columns and a value at once, also after Confirm; the order record shows them; owb-b7: the Designer too (it
+ *     reads the orders now: portal.salesOrders.view beside portal.orderDrafts.edit)
  *   - BRAND: customer B cannot read or write A's columns or values (404, absent); the office reaches A only over A
  *   - the floor role reads nothing of the three tables directly
  *   - po2.3 quiet lines: a column switched on on an ORDER writes one (SYSTEM, shared, its key + args, by the customer), grouped at
@@ -185,7 +186,7 @@ describe('own columns (owb- po1.4)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect((await one('SELECT count(*)::int AS n FROM "PartyLineColumn" WHERE id = $1', [b.id])).n).toBe(1)
   })
 
-  it('on an order: the columns and a value apply at once (after Confirm); the order record shows them; the Designer may not', async () => {
+  it('on an order: the columns and a value apply at once (after Confirm); the order record shows them; the Designer may too (owb-b7)', async () => {
     const note = await column('Comment (made up)')
     const set = await ok(browsers.buyer, 'PUT', `/portal/sales-orders/${order.id}/own-columns`, { columnIds: [note.id] })
     expect(set.ownColumns.used.map((entry: Json) => entry.id)).toEqual([note.id])
@@ -193,11 +194,16 @@ describe('own columns (owb- po1.4)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(value.value).toBe('Made-up words for the floor')
     const record = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${order.id}`)
     expect(record.ownColumns.values[order.lineId][note.id].value).toBe('Made-up words for the floor')
-    expect((await call(browsers.designer, 'PUT', `/portal/sales-orders/${order.id}/own-columns`, { columnIds: [note.id] })).status).toBe(403)
-    expect((await call(browsers.designer, 'PUT', '/portal/own-values', { line: { kind: 'ORDER_LINE', id: order.lineId }, columnId: note.id, value: 'x' })).status).toBe(403)
     // The history keeps from → to on the order's own audit rows.
     const audit = await one<{ before: Json; after: Json }>(`SELECT before, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'ownColumns.setValue' ORDER BY at DESC LIMIT 1`, [order.id])
     expect(audit).toMatchObject({ before: { value: null }, after: { value: 'Made-up words for the floor' } })
+    // owb-b7 (Owner yes 2026-11-28): the customer's Designer reads the orders now, so it keeps an order's own columns and values as it
+    // keeps a draft's (portal.orderDrafts.edit) — an own column holds no price.
+    const byDesigner = await ok(browsers.designer, 'PUT', `/portal/sales-orders/${order.id}/own-columns`, { columnIds: [note.id] })
+    expect(byDesigner.ownColumns.used.map((entry: Json) => entry.id)).toEqual([note.id])
+    const designerValue = await ok(browsers.designer, 'PUT', '/portal/own-values', { line: { kind: 'ORDER_LINE', id: order.lineId }, columnId: note.id, value: 'Made-up words by the designer' })
+    expect(designerValue.value).toBe('Made-up words by the designer')
+    expect((await ok(browsers.designer, 'GET', `/portal/sales-orders/${order.id}`)).ownColumns.values[order.lineId][note.id].value).toBe('Made-up words by the designer')
   })
 
   it('BRAND: customer B cannot read or write A’s columns or values; the office reaches A only over A', async () => {

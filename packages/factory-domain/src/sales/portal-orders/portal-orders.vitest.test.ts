@@ -3,6 +3,7 @@ import { FACTORY_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { partnerTemplateOf, ROLE_TEMPLATES } from '../../auth/roles/templates'
 import { orderProgress } from '../orders/orders'
 import { PORTAL_SALES_ORDERS_VIEW } from './permissions'
+import { PORTAL_ORDER_REQUESTS_MANAGE } from '../portal-ordering/permissions' // owb-b7
 import { progressOf, percentOf } from './progress'
 import { customerPromiseHistory, PROMISE_REASON_CODES, promiseReasonOf, promiseReasonText } from './promise'
 import { AUTOMATIC_REASONS } from '../amendments/reasons' // B-OL-004
@@ -25,11 +26,20 @@ const facts = (overrides: Partial<MilestoneFacts>): MilestoneFacts => ({
 })
 
 describe('the permission (B-W2b-175)', () => {
-  it('is a partner permission held by the customer Buyer, Finance, Quality, Viewer and Admin only', () => {
+  // owb-b7 (Owner yes 2026-11-28): + the customer Designer.
+  it('is a partner permission held by the customer Buyer, Finance, Quality, Designer, Viewer and Admin only', () => {
     expect(FACTORY_PERMISSIONS.get(PORTAL_SALES_ORDERS_VIEW)).toMatchObject({ partner: true, risk: 'read' })
-    for (const key of ['customer-buyer', 'customer-finance', 'customer-quality', 'customer-viewer', 'customer-admin']) expect(partnerTemplateOf(key)?.permissions).toContain(PORTAL_SALES_ORDERS_VIEW)
-    for (const key of ['customer-designer', 'supplier-orders', 'supplier-admin', 'subcontractor-jobs', 'guest-accountant', 'partner-approve']) expect(partnerTemplateOf(key)?.permissions).not.toContain(PORTAL_SALES_ORDERS_VIEW)
+    for (const key of ['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'customer-admin']) expect(partnerTemplateOf(key)?.permissions, key).toContain(PORTAL_SALES_ORDERS_VIEW)
+    for (const key of ['supplier-orders', 'supplier-admin', 'subcontractor-jobs', 'guest-accountant', 'partner-approve']) expect(partnerTemplateOf(key)?.permissions, key).not.toContain(PORTAL_SALES_ORDERS_VIEW)
     for (const template of ROLE_TEMPLATES) expect(template.permissions).not.toContain(PORTAL_SALES_ORDERS_VIEW)
+  })
+
+  // owb-b7: the Designer reads its orders, never a price (no price grain) and never Send (portal.orderRequests.manage stays the Buyer's).
+  it('gives the customer Designer the orders without a grain and without sending', () => {
+    const designer = partnerTemplateOf('customer-designer')!
+    expect(designer.permissions).toContain(PORTAL_SALES_ORDERS_VIEW)
+    expect(designer.grains).toEqual([])
+    expect(designer.permissions).not.toContain(PORTAL_ORDER_REQUESTS_MANAGE)
   })
 })
 

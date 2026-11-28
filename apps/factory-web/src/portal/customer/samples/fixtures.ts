@@ -43,7 +43,7 @@ const set = (...names: string[]): Can => (permission) => names.includes(permissi
 const BASE = ['portal.home.view', 'portal.search', 'threads.read', 'portal.catalogue.view', 'portal.samples.view']
 const BUYER = set(...BASE, 'portal.approvals.view', 'portal.approve', 'portal.salesOrders.view', 'portal.customerDocuments.view')
 const VIEWER = set(...BASE, 'portal.approvals.view', 'portal.salesOrders.view', 'portal.customerDocuments.view')
-const DESIGNER = set(...BASE, 'portal.approvals.view', 'portal.approve', 'portal.colleagues.view')
+const DESIGNER = set(...BASE, 'portal.approvals.view', 'portal.approve', 'portal.colleagues.view', /* owb-b7 */ 'portal.salesOrders.view')
 const NO_APPROVALS = set(...BASE, 'portal.salesOrders.view')
 const FINANCE = set('portal.home.view', 'portal.search', 'threads.read', 'portal.catalogue.view', 'portal.customerDocuments.view', 'portal.payments.view')
 
@@ -310,7 +310,7 @@ export const designScreen = defineDesignScreen<SamplesCaseBuilder>({
       note: 'Waiting for your decision (ActionList: overdue first, received on, the countdown, Decide opens the decision); Your styles in development (the brand’s own only: stage, latest round, next date, what waits, the tech pack PDF with its version and state — a new tab, logged; select to download); Sample rounds (status, sent and received on, tracking in a new tab). The band: “Decide 3 waiting samples” (opens the first). No money anywhere.',
     },
     { id: 'viewer', label: 'A viewer (reads, may not decide)', model: samplesCase({ can: VIEWER, person: 'viewer' }), note: 'The page is the same; the decision pop-up holds the signature with the reason and names the admin to ask.' },
-    { id: 'designer', label: 'The Designer', model: samplesCase({ can: DESIGNER, person: 'designer' }), note: 'The brand’s product person: decides samples, downloads tech packs; no orders or documents in the rail.' },
+    { id: 'designer', label: 'The Designer', model: samplesCase({ can: DESIGNER, person: 'designer' }), note: 'The brand’s product person: decides samples, downloads tech packs; its orders without prices (owb-b7), no documents in the rail.' },
     { id: 'no-approvals', label: 'A role that does not see approvals', model: samplesCase({ can: NO_APPROVALS }), note: 'Waiting for your decision says in one line that the access does not show approvals, naming the admin; styles and rounds stay.' },
     { id: 'style-rounds', label: 'One style’s rounds (a style row opened)', model: samplesCase({ page: { styleFilter: { id: JACKET.id, code: JACKET.code }, rounds: ROUNDS.filter((r) => r.style.id === JACKET.id) } }), note: '“Rounds of BA-JKT-27” with Show every round; the count says 3 of 8.' },
     { id: 'selected', label: 'Rows selected (bulk actions)', model: samplesCase({ page: { selectedStyles: [STYLES[0]!.id, STYLES[2]!.id], selectedRounds: [ROUNDS[0]!.id, ROUNDS[1]!.id, ROUNDS[3]!.id] } }), note: 'Download 2 tech packs; Decide 2 waiting rounds (the sent round does not wait: counted out). A style without a tech pack cannot be selected (it says why).' },
