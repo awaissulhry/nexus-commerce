@@ -141,3 +141,40 @@ export async function fileAddress(api: ApiClient, fileId: string): Promise<strin
   copy.set(bytes)
   return URL.createObjectURL(new Blob([copy]))
 }
+
+// ---- owb-ss4b: Place the scan code (server owb-ss2b) ----------------------------------------------------------------------------
+
+export const placementSchema = z.object({
+  salesOrderLineId: z.string(),
+  fileId: z.string(),
+  page: z.number(),
+  xMm: z.number(),
+  yMm: z.number(),
+  sizeMm: z.number(),
+  version: z.number(),
+  placedAt: z.string(),
+  placedBy: z.object({ name: z.string() }),
+})
+export type Placement = z.infer<typeof placementSchema>
+
+/** The order's saved places (production.print.start, or the Factory designer on the order; anyone else: 404). */
+export function listPlacements(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<Placement[]> {
+  return api.get(`/production/orders/${enc(orderId)}/placements`, { schema: z.object({ placements: z.array(placementSchema) }), signal }).then((answer) => answer.placements)
+}
+
+export interface PlacementBody {
+  readonly fileId: string
+  readonly page: number
+  readonly xMm: number
+  readonly yMm: number
+  readonly sizeMm: number
+  readonly pageWidthMm: number
+  readonly pageHeightMm: number
+  /** The saved place's version (a move); absent for a new place. */
+  readonly version?: number
+}
+
+/** Save one page's place (≥ 20 mm, wholly on the page; 400 on body/sizeMm|xMm|yMm|page|fileId; a version that moved: 409). */
+export function savePlacement(api: ApiClient, orderId: string, salesOrderLineId: string, body: PlacementBody): Promise<Placement> {
+  return api.request('PUT', `/production/orders/${enc(orderId)}/placements/${enc(salesOrderLineId)}`, { body, schema: placementSchema })
+}
