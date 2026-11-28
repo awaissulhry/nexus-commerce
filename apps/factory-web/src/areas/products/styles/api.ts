@@ -65,6 +65,8 @@ export interface StyleQuery {
   ppeCategory?: string
   /** owb-pd4 (step 4.1): the family "Made for ⟨customer⟩" (the customer's party id). */
   brandPartyId?: string
+  /** owb-pd5 (step 5.0; pd4s s.1): our range, or made for a customer. */
+  family?: 'OUR_RANGE' | 'FOR_CUSTOMER'
   limit?: number
   cursor?: string | null
 }
@@ -86,6 +88,7 @@ export function listStyles(api: ApiClient, query: StyleQuery): Promise<StylePage
       productType: query.productType || undefined,
       ppeCategory: query.ppeCategory || undefined,
       brandPartyId: query.brandPartyId || undefined,
+      family: query.family || undefined,
       limit: query.limit ?? 50,
       cursor: query.cursor ?? undefined,
     },

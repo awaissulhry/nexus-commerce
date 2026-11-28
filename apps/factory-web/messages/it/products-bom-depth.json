@@ -381,5 +381,85 @@
       "min": "Scelta minima",
       "sizes": "Taglie"
     }
+  },
+  "mat": {
+    "top": {
+      "lines_one": "{count} materiale",
+      "lines_other": "{count} materiali",
+      "leather": "la pelle {code} {name}",
+      "customer_one": "{count} manda il cliente",
+      "customer_other": "{count} manda il cliente",
+      "wait_one": "l'attesa più lunga {count} giorno",
+      "wait_other": "l'attesa più lunga {count} giorni",
+      "cost": "materiali di un pezzo {cost}"
+    },
+    "customer": "Lo manda il cliente",
+    "ce": {
+      "title": "CE: ricontrolla il certificato",
+      "answer": "In questa bozza è cambiata una parte su cui si basa il certificato CE.",
+      "info": "Una protezione o l'etichetta CE tolta, o mandata ora dal cliente, può cambiare il tipo certificato. La Conformità lo verifica con l'organismo notificato prima del rilascio.",
+      "tell": "Avvisa la Conformità…",
+      "heldCompliance": "Il tuo ruolo non legge i certificati: chiedi alla Conformità o al titolare.",
+      "heldTask": "Avvisare la Conformità crea un'attività: il tuo ruolo non può creare attività.",
+      "takenOut": "{code} {name} è tolto (la revisione rilasciata lo ha).",
+      "customerSends": "{code} {name} ora lo manda {customer}."
+    },
+    "main": {
+      "title": "Materiale principale",
+      "answer": "{code} {name}.",
+      "none": "Ancora nessun materiale principale segnato.",
+      "info": "Il materiale che il cliente sceglie sulla riga d'ordine (le pelli tra cui scegliere dipendono da lui). Non si può togliere.",
+      "fixed": "Non si può togliere dalla lista.",
+      "howTo": "Segnane uno nella lista: ⋯ › Rendilo il materiale principale.",
+      "noneRead": "Lo segna chi cambia i materiali.",
+      "tag": "Principale",
+      "make": "Rendilo il materiale principale",
+      "held": "Il materiale principale non si può togliere."
+    },
+    "before": {
+      "title": "Prima che parta il lavoro",
+      "answer_one": "{code} ci mette di più: {count} giorno. Decide quando ordinare.",
+      "answer_other": "{code} ci mette di più: {count} giorni. Decide quando ordinare.",
+      "noWaits": "Non si conosce ancora nessuna attesa per i materiali che la fabbrica compra.",
+      "info": "I tre materiali che arrivano più tardi (l'attesa del materiale, se no quella del fornitore) e quello che manda il cliente.",
+      "days_one": "{count} giorno",
+      "days_other": "{count} giorni",
+      "sentTitle_one": "{count} riga la manda il cliente",
+      "sentTitle_other": "{count} righe le manda il cliente",
+      "sentBy": "La manda {customer}"
+    },
+    "list": {
+      "title_one": "Lista dei materiali ({count} riga)",
+      "title_other": "Lista dei materiali ({count} righe)",
+      "info": "Una riga per materiale: per un pezzo e la sua unità, lo scarto, quanto in più per ogni taglia, chi lo porta, l'attesa e il costo di un pezzo per chi vede i costi. Per taglia riempie le taglie dalla base e tiene ogni taglia scritta a mano.",
+      "view": "Lista",
+      "step": "+{step} {unit}",
+      "waitCustomer": "Lo manda il cliente",
+      "col": {
+        "step": "Per taglia in più",
+        "wait": "Attesa",
+        "cost": "Un pezzo"
+      }
+    },
+    "need": {
+      "title": "Cosa serve a un ordine",
+      "answer": "Scrivi i pezzi e la taglia: il fabbisogno di ogni materiale, scarto compreso. Non si salva niente.",
+      "info": "Per un pezzo × (1 + scarto) × pezzi. Una taglia senza quantità lo dice; le righe del cliente le manda lui.",
+      "pieces": "Pezzi",
+      "piecesHeld": "Scrivi un numero intero da 1 a 100.000.",
+      "size": "Taglia",
+      "baseSize": "{size} (base)",
+      "col": {
+        "material": "Materiale",
+        "need": "Serve"
+      },
+      "unknown": "Nessuna quantità per questa taglia"
+    },
+    "open": {
+      "title": "Cosa serve agli ordini aperti",
+      "answer": "{pieces} pezzi aperti in {orders} ordini, contati alla taglia base {size}.",
+      "none": "Ora nessun ordine aperto ne ha bisogno.",
+      "info": "I pezzi aperti degli ordini aperti con questo prodotto, tutti contati alla taglia base: qui le taglie di ogni ordine non si dividono."
+    }
   }
 }

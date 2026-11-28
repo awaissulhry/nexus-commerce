@@ -130,3 +130,12 @@
   align-items: center;
   gap: var(--nds-space-4);
 }
+
+/* owb-of7 step 2 — Send the design for approval: the door, the state beside it, a refusal under it; they wrap at 375 px. */
+.fw-flow-design {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}

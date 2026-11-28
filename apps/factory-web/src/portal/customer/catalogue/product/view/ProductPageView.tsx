@@ -9,7 +9,7 @@ import { Quiet, Section } from '../../../../../lib/record-sections/Kit'
 import { Loading, ReadFailed } from '../../../neworder/view/parts'
 import { useOrderingWords } from '../../../neworder/words'
 import { NS, ppeWords, typeKey } from '../../model'
-import type { PortalProductPage, ProductTab } from '../product-model'
+import type { PortalMeasures, PortalProductPage, ProductTab } from '../product-model'
 import '../../catalogue.css'
 
 /** The page's own words (owb-pd4, S4 settle 10: new words in a new catalogue). */
@@ -66,6 +66,8 @@ function OverviewTab({ model, page }: { model: ProductPageModel; page: PortalPro
       </p>
       <div className="fw-pt-pairs">
         <Section id="pp-facts" title={t('overview.facts.title')} buttons={[sheet]} info={<p>{t('overview.facts.info')}</p>}>
+          {/* owb-pd5 (step 5.0): the main picture from the product's Sizes read (pd4s). */}
+          {page.picture ? <img className="fw-pprod-pic" src={page.picture} alt={t('overview.picture', { name: page.name })} loading="lazy" decoding="async" /> : null}
           <KeyValue
             labelCase="sentence"
             items={[
@@ -171,9 +173,62 @@ function SizesTab({ page }: { page: PortalProductPage }) {
           />
         ) : null}
       </Section>
-      <Section id="pp-measure" title={t('sizes.measure.title')} answer={t('sizes.measure.answer')} info={<p>{t('sizes.measure.info')}</p>}>
-        <Quiet>{t('sizes.measure.later')}</Quiet>
+      {/* owb-pd5 (step 5.0; pd4s s.3): the size table, how to measure and the protectors of the newest released revision — nothing to type. */}
+      {page.measures ? (
+        <MeasuresParts measures={page.measures} />
+      ) : (
+        <Section id="pp-measure" title={t('sizes.measure.title')} answer={t('sizes.measure.answer')} info={<p>{t('sizes.measure.info')}</p>}>
+          <Quiet>{t('sizes.measure.later')}</Quiet>
+        </Section>
+      )}
+    </>
+  )
+}
+
+const PROTECTOR_ZONES = ['SHOULDER', 'ELBOW', 'BACK', 'CHEST', 'HIP', 'KNEE']
+
+function MeasuresParts({ measures }: { measures: PortalMeasures }) {
+  const t = useT(PRODUCT_NS)
+  const zoneWords = (zone: string) => (PROTECTOR_ZONES.includes(zone) ? t(`zone.${zone}`) : zone)
+  return (
+    <>
+      {measures.mode === 'SIZES' && measures.rows.length > 0 ? (
+        <Section id="pp-table" title={t('sizes.table.title')} answer={t('sizes.table.answer')} info={<p>{t('sizes.table.info')}</p>}>
+          <SummaryTable
+            label={t('sizes.table.title')}
+            columns={[t('sizes.table.point'), ...measures.sizes.map((size) => (size === measures.base ? t('sizes.baseColumn', { size }) : size))]}
+            align={[undefined, ...measures.sizes.map(() => 'right' as const)]}
+            rows={measures.rows.map((row) => ({ id: row.code, cells: [row.name, ...row.values.map((value) => (value === null ? '—' : String(value)))] }))}
+            stackOnPhone
+          />
+        </Section>
+      ) : measures.mode === 'MADE_TO_MEASURE' ? (
+        <Section id="pp-table" title={t('sizes.table.title')} answer={t('sizes.table.mtm')} info={<p>{t('sizes.table.info')}</p>}>
+          <Quiet>{t('sizes.table.mtmHow')}</Quiet>
+        </Section>
+      ) : null}
+      <Section id="pp-howto" title={t('sizes.howTo.title')} answer={measures.howTo.length ? undefined : t('sizes.howTo.none')} info={<p>{t('sizes.howTo.info')}</p>}>
+        {measures.howTo.length > 0 ? (
+          <ol className="fw-pprod-howto">
+            {measures.howTo.map((row) => (
+              <li key={row.code}>
+                <b>{row.name}</b> {row.text}
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </Section>
+      {measures.protectors.length > 0 ? (
+        <Section id="pp-protectors" title={t('sizes.protectors.title')} info={<p>{t('sizes.protectors.info')}</p>}>
+          <ul className="fw-pprod-howto">
+            {measures.protectors.map((row, index) => (
+              <li key={`${row.zone}:${index}`}>
+                <b>{zoneWords(row.zone)}</b> {t(`sizes.protectors.level.${row.level}`)}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
     </>
   )
 }

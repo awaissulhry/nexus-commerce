@@ -15,6 +15,8 @@ import type { BomView, MaterialView } from '../../../api'
 import { decimalText, editText } from '../../../model'
 import type { StyleRecordActions } from '../../../record/record-model'
 import type { Alternate, DepthLine, StructureLine } from '../api'
+// owb-pd5 (step 5.1): the sizes a fill keeps.
+import { typedSizesOf } from '../../materials-model'
 import {
   addAlternateHeld,
   alternateQty,
@@ -929,6 +931,8 @@ function FillDialog({ bom, model, actions, lineId }: Shared & { lineId: string }
           sizes={sizes}
           base={bom.style.baseSize}
           values={values}
+          // owb-pd5 (step 5.1): "more for each size up" never overwrites a typed size — SizeFill keeps them unless Keep is unticked.
+          overrides={typedSizesOf(line, bom.style.baseSize)}
           unit={tp(`uom.${line.uom}`)}
           scale={4}
           locale={INTL_LOCALE[locale]}

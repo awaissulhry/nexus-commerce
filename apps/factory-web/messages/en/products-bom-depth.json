@@ -381,5 +381,85 @@
       "min": "Minimum grade",
       "sizes": "Sizes"
     }
+  },
+  "mat": {
+    "top": {
+      "lines_one": "{count} material",
+      "lines_other": "{count} materials",
+      "leather": "the leather {code} {name}",
+      "customer_one": "{count} the customer sends",
+      "customer_other": "{count} the customer sends",
+      "wait_one": "the longest wait {count} day",
+      "wait_other": "the longest wait {count} days",
+      "cost": "materials of one piece {cost}"
+    },
+    "customer": "The customer sends it",
+    "ce": {
+      "title": "CE: check the certificate again",
+      "answer": "A part the CE certificate rests on changed in this draft.",
+      "info": "A protector or the CE label taken out, or now sent by the customer, can change the certified type. Compliance checks it with the notified body before the release.",
+      "tell": "Tell Compliance…",
+      "heldCompliance": "Your role does not read the certificates: ask Compliance or the owner.",
+      "heldTask": "Telling Compliance makes a task: your role cannot make tasks.",
+      "takenOut": "{code} {name} is taken out (the released revision has it).",
+      "customerSends": "{code} {name} is now sent by {customer}."
+    },
+    "main": {
+      "title": "Main material",
+      "answer": "{code} {name}.",
+      "none": "No main material is marked yet.",
+      "info": "The material the customer picks on an order line (the leathers to choose from hang on it). It cannot be taken out.",
+      "fixed": "It cannot be taken out of the list.",
+      "howTo": "Mark one in the list: ⋯ › Make it the main material.",
+      "noneRead": "The person who changes the materials marks one.",
+      "tag": "Main",
+      "make": "Make it the main material",
+      "held": "The main material cannot be taken out."
+    },
+    "before": {
+      "title": "Before the work starts",
+      "answer_one": "{code} takes the longest: {count} day. It decides when to order.",
+      "answer_other": "{code} takes the longest: {count} days. It decides when to order.",
+      "noWaits": "No wait is known yet for the materials the factory buys.",
+      "info": "The three materials that take longest to come (the material's wait, else its supplier's) and what the customer sends.",
+      "days_one": "{count} day",
+      "days_other": "{count} days",
+      "sentTitle_one": "{count} line the customer sends",
+      "sentTitle_other": "{count} lines the customer sends",
+      "sentBy": "Sent by {customer}"
+    },
+    "list": {
+      "title_one": "Material list ({count} line)",
+      "title_other": "Material list ({count} lines)",
+      "info": "One line per material: for one piece and its unit, waste, more for each size up, who brings it, the wait, and the cost of one piece for those who see costs. By size fills the sizes from the base and keeps every size typed by hand.",
+      "view": "List",
+      "step": "+{step} {unit}",
+      "waitCustomer": "The customer sends it",
+      "col": {
+        "step": "Each size up",
+        "wait": "Wait",
+        "cost": "One piece"
+      }
+    },
+    "need": {
+      "title": "What an order needs",
+      "answer": "Type the pieces and the size: each material's need, waste included. Nothing is saved.",
+      "info": "For one piece × (1 + waste) × pieces. A size without a quantity says so; the customer's lines are theirs to send.",
+      "pieces": "Pieces",
+      "piecesHeld": "Type a whole number from 1 to 100,000.",
+      "size": "Size",
+      "baseSize": "{size} (base)",
+      "col": {
+        "material": "Material",
+        "need": "Needed"
+      },
+      "unknown": "No quantity for this size"
+    },
+    "open": {
+      "title": "Open orders need",
+      "answer": "{pieces} open pieces in {orders} orders, counted at the base size {size}.",
+      "none": "No open order needs it now.",
+      "info": "The open pieces of the open orders with this product, all counted at the base size: the sizes of each order are not split here."
+    }
   }
 }

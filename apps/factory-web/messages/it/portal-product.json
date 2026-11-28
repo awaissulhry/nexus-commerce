@@ -58,7 +58,8 @@
       "ask": "Chiedete una modifica",
       "info": "La vostra domanda va alla fabbrica come richiesta con questo prodotto. La fabbrica risponde con una nuova revisione.",
       "how": "Per esempio: un collo più largo, un altro colore, una manica più lunga."
-    }
+    },
+    "picture": "L'immagine principale di {name}"
   },
   "sizes": {
     "title": "Taglie e colori",
@@ -73,9 +74,39 @@
     "notOffered": "No",
     "measure": {
       "title": "Tabella taglie e come misurare",
-      "answer": "Non ancora mostrate nel portale.",
+      "answer": "Non ancora qui.",
       "info": "Le misure finite di ogni taglia, come misurare e le protezioni.",
-      "later": "La tabella taglie, come misurare, le vostre schede misure e le protezioni non sono ancora nel portale: chiedeteci e ve le mandiamo."
+      "later": "La tabella taglie, come misurare e le protezioni non si sono potute leggere: chiedeteci e ve le mandiamo."
+    },
+    "table": {
+      "title": "Tabella taglie",
+      "answer": "Le misure finite di ogni taglia, in millimetri.",
+      "point": "Punto",
+      "info": "Dalla revisione rilasciata del prodotto. Qui non c'è niente da scrivere.",
+      "mtm": "Su misura: ogni pezzo si taglia sulle misure del pilota.",
+      "mtmHow": "Mandate le misure del pilota con ogni riga d'ordine; come misurare è qui sotto."
+    },
+    "howTo": {
+      "title": "Come misurare",
+      "none": "Ancora nessuna parola su come misurare.",
+      "info": "Una frase semplice per ogni punto di misura: le stesse parole che legge la fabbrica."
+    },
+    "protectors": {
+      "title": "Protezioni",
+      "info": "Dove sta una protezione e il suo livello: il livello 2 regge il colpo più forte.",
+      "level": {
+        "LEVEL_2": "Livello 2",
+        "LEVEL_1": "Livello 1",
+        "NONE": "Nessuna"
+      }
     }
+  },
+  "zone": {
+    "SHOULDER": "Spalle",
+    "ELBOW": "Gomiti",
+    "BACK": "Schiena",
+    "CHEST": "Petto",
+    "HIP": "Fianchi",
+    "KNEE": "Ginocchia"
   }
 }
