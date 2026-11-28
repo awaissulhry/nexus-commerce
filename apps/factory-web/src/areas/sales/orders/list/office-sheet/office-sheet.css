@@ -141,3 +141,15 @@
 .fw-osp-review p {
   margin: 0;
 }
+
+/* owb-of4: Give to the designer — the picked person */
+.fw-osp-pick-row.is-picked {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+}
+.fw-osp-pick-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

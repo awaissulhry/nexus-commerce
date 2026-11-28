@@ -12,7 +12,7 @@ import { NotInAccess } from '../../neworder/view/parts'
 import { useOrderingWords } from '../../neworder/words'
 import { fetchStyle, type StyleDetail } from '../api'
 import { askStyleHeld, askStyleHref, NS, orderHeld } from '../model'
-import { fetchOrdersWith, type PortalOrderRow } from './api'
+import { fetchOrdersWith, fetchProductSizes, type PortalOrderRow, type PortalProductSizes } from './api'
 import { PRODUCT_TABS, portalProductOf, productHref, productTabOf, readStateOf } from './product-model'
 import { PRODUCT_NS, ProductPageView, type ProductPageModel } from './view/ProductPageView'
 
@@ -46,6 +46,8 @@ function ProductContainer({ styleId }: { styleId: string }) {
   const [state, setState] = useState<ProductPageModel['state']>('loading')
   const [detail, setDetail] = useState<StyleDetail | null>(null)
   const [orders, setOrders] = useState<PortalOrderRow[] | null>(null)
+  // owb-pd5 (step 5.0; pd4s s.3): the product's Sizes (picture, size table, how to measure, protectors); null: not read or refused.
+  const [sizes, setSizes] = useState<PortalProductSizes | null>(null)
   const [tick, setTick] = useState(0)
 
   const read = useCallback(
@@ -55,6 +57,9 @@ function ProductContainer({ styleId }: { styleId: string }) {
         .then((next) => {
           setDetail(next)
           setState('ready')
+          fetchProductSizes(api, styleId, signal)
+            .then(setSizes)
+            .catch(() => setSizes(null))
           if (!readsOrders) return
           fetchOrdersWith(api, next.style.code, signal)
             .then((answer) => setOrders(answer.items))
@@ -76,7 +81,7 @@ function ProductContainer({ styleId }: { styleId: string }) {
     return () => control.abort()
   }, [allowed, read, tick])
 
-  const page = detail ? portalProductOf(detail, readsOrders ? (orders ?? []) : null, frame.prefix, locale) : null
+  const page = detail ? portalProductOf(detail, readsOrders ? (orders ?? []) : null, frame.prefix, locale, sizes) : null
   const facts = { mayOrder, preview: frame.me.preview, offline }
   const orderHeldKey = orderHeld(facts)
   usePortalBand(

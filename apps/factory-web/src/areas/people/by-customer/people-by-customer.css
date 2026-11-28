@@ -1,0 +1,109 @@
+/* owb-of4 — People › People by customer: the grid's cells, the band, the phone cards. Layout only, design-system tokens only. */
+.fw-pbc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-pbc-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-pbc-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-pbc-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-pbc-muted {
+  color: var(--nds-text-2);
+}
+.fw-pbc-small {
+  font-size: var(--nds-font-size-xs);
+}
+.fw-pbc-ell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-pbc-selcount {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-pbc-person,
+.fw-pbc-tick,
+.fw-pbc-extra {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  height: 100%;
+}
+.fw-pbc-extra {
+  gap: var(--nds-space-10);
+}
+.fw-pbc-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  white-space: nowrap;
+}
+.fw-pbc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* the phone: one card per person, its customers as chips; 48 px to touch */
+.fw-pbc-cards-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-pbc-cards-bar button {
+  min-height: 48px;
+}
+.fw-pbc-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-pbc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.fw-pbc-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-height: 48px;
+}
+.fw-pbc-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-pbc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}

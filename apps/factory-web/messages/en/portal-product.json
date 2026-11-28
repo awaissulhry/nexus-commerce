@@ -58,7 +58,8 @@
       "ask": "Ask for a change",
       "info": "Your question goes to the factory as a request with this product in it. The factory answers in a new revision.",
       "how": "For example: a wider collar, another colour, a longer sleeve."
-    }
+    },
+    "picture": "The main picture of {name}"
   },
   "sizes": {
     "title": "Sizes and colours",
@@ -73,9 +74,39 @@
     "notOffered": "No",
     "measure": {
       "title": "Size table and how to measure",
-      "answer": "Not shown in the portal yet.",
+      "answer": "Not here yet.",
       "info": "The finished measurements of each size, how to measure and the protectors.",
-      "later": "The size table, how to measure, your measurement sheets and the protectors are not in the portal yet: ask us and we send them."
+      "later": "The size table, how to measure and the protectors could not be read: ask us and we send them."
+    },
+    "table": {
+      "title": "Size table",
+      "answer": "The finished measurements of each size, in millimetres.",
+      "point": "Point",
+      "info": "From the product's released revision. Nothing to type here.",
+      "mtm": "Made to measure: each piece is cut to the rider's own measurements.",
+      "mtmHow": "Send the rider's measurements with each order line; how to measure is below."
+    },
+    "howTo": {
+      "title": "How to measure",
+      "none": "No words on how to measure yet.",
+      "info": "One plain sentence for each measurement point: the same words the factory reads."
+    },
+    "protectors": {
+      "title": "Protectors",
+      "info": "Where a protector sits and its level: level 2 takes the harder hit.",
+      "level": {
+        "LEVEL_2": "Level 2",
+        "LEVEL_1": "Level 1",
+        "NONE": "None"
+      }
     }
+  },
+  "zone": {
+    "SHOULDER": "Shoulders",
+    "ELBOW": "Elbows",
+    "BACK": "Back",
+    "CHEST": "Chest",
+    "HIP": "Hips",
+    "KNEE": "Knees"
   }
 }

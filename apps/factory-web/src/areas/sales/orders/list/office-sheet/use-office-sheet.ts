@@ -15,10 +15,12 @@ import { pictureReader } from '../../../../../lib/record-picture/api'
 import type { SheetPictures } from '../../../../../lib/orders-sheet/pictures'
 import { useCoalesced, useLive, downloadText, type LiveState } from '../../hooks'
 import { listTouches, partyFromAddress } from '../../model'
-import { confirmDraft, officeDraftPort } from '../../draft/api'
+import { officeDraftPort } from '../../draft/api'
+// owb-of4 (lead): bulk Confirm walks THE Confirm window (owb-of5 ConfirmOrderWindow) one order at a time — the run is Incoming's own.
+import { afterConfirmed, confirmRunOf, receiptOf, receiptSays, type CatalogueConfirmed, type ConfirmRun } from '../../../inquiries/catalogue-facts'
 import type { DraftRecord } from '../../../../../lib/order-draft/schema'
 import { isSheetFilter, readSheet, restrictOrder, type SheetFilter, type SheetRowRead, type SheetTiles } from './api'
-import { NS, commitRouteOf, confirmPlanOf, csvOf, deletePlanOf, orderKeyOf, pageOf, patchRow, restrictPlanOf, rowOfKey, sheetOrderOf } from './map'
+import { NS, commitRouteOf, confirmPlanOf, csvOf, deletePlanOf, designerPlanOf, orderKeyOf, pageOf, patchRow, restrictPlanOf, rowOfKey, sheetOrderOf } from './map'
 
 /**
  * owb-of3 steps 3–4 — the office Orders sheet's state: its read (`GET /sales/orders/sheet`, the filter and the search in the address:
@@ -34,6 +36,7 @@ export type OfficeWindowState =
   | { readonly kind: 'review'; readonly row: SheetRowRead; readonly lineId: string; readonly sizes: Readonly<Record<string, number>> }
   | { readonly kind: 'picture'; readonly row: SheetRowRead }
   | { readonly kind: 'print' | 'printAgain' | 'ship'; readonly orderId: string }
+  | { readonly kind: 'designer'; readonly rows: readonly SheetRowRead[]; readonly skipped: number } /* owb-of4: Give to the designer */
 
 export interface OfficeSheetModel {
   readonly prefix: string
@@ -53,6 +56,8 @@ export interface OfficeSheetModel {
   readonly flashKeys: readonly string[]
   readonly notice: { readonly tone: Tone; readonly words: string } | null
   readonly window: OfficeWindowState | null
+  /** THE Confirm window open now (bulk Confirm's run: its first order; `left` = orders still to confirm, this one included), or null. */
+  readonly confirmWindow: { readonly requestId: string; readonly left: number } | null
   readonly pictures: SheetPictures
 }
 
@@ -69,6 +74,10 @@ export interface OfficeSheetActions {
   /** A window did its work: the sheet reads again and says what happened (words already in the person's language). */
   onDone(words: string | null, tone?: Tone): void
   onDismissNotice(): void
+  /** THE Confirm window confirmed its order: the run's next order comes, or the run ends and says what it did. */
+  onConfirmed(): void
+  /** THE Confirm window closed (after a confirm: nothing; else the run stops and leaves the rest for later). */
+  onConfirmClose(): void
   readonly bulk: ReadonlyArray<{ id: string; words: string; icon: string; primary?: boolean; run(keys: readonly string[]): void }>
 }
 
@@ -274,29 +283,53 @@ export function useOfficeSheet(): { model: OfficeSheetModel; actions: OfficeShee
   )
 
   // ---- bulk: each act skips what it cannot do and says how many ---------------------------------------------------------------------
-  const runConfirm = useCallback(
-    async (keys: readonly string[]) => {
-      const plan = confirmPlanOf(rowsRef.current ?? [], keys)
-      let done = 0
-      let refused = 0
-      for (const row of plan.go) {
-        try {
-          await confirmDraft(api, row.id, { version: row.version, as: 'ORDER' })
-          done++
-        } catch {
-          refused++
-        }
-      }
-      const parts = [t('office.bulk.confirmed', { count: done })]
-      if (plan.text > 0) parts.push(t('office.bulk.skippedText', { count: plan.text }))
-      if (plan.held > 0) parts.push(t('office.bulk.skippedHeld', { count: plan.held }))
-      if (plan.other > 0) parts.push(t('office.bulk.skippedOther', { count: plan.other }))
-      if (refused > 0) parts.push(t('office.bulk.refused', { count: refused }))
-      setNotice({ tone: refused > 0 || done === 0 ? 'warning' : 'success', words: parts.join(' · ') })
-      void load(null)
+  // ---- bulk Confirm: a run through THE Confirm window (the promised day, the open details, A-5), one order at a time ----------------
+  const [run, setRun] = useState<ConfirmRun | null>(null)
+  const runRef = useRef<ConfirmRun | null>(null)
+  runRef.current = run
+  const justConfirmed = useRef(false)
+  const sayReceipt = useCallback(
+    (receipt: CatalogueConfirmed) => {
+      const parts = [t('office.bulk.confirmed', { count: receipt.done })]
+      if (receipt.text > 0) parts.push(t('office.bulk.skippedText', { count: receipt.text }))
+      if (receipt.held > 0) parts.push(t('office.bulk.skippedHeld', { count: receipt.held }))
+      if (receipt.other > 0) parts.push(t('office.bulk.skippedOther', { count: receipt.other }))
+      if (receipt.left > 0) parts.push(t('office.bulk.left', { count: receipt.left }))
+      setNotice({ tone: receipt.left > 0 || receipt.done === 0 ? 'warning' : 'success', words: parts.join(' · ') })
     },
-    [api, t, load],
+    [t],
   )
+  const runConfirm = useCallback(
+    (keys: readonly string[]) => {
+      const next = confirmRunOf(confirmPlanOf(rowsRef.current ?? [], keys))
+      setNotice(null)
+      if (next.queue.length > 0) setRun(next)
+      else sayReceipt(receiptOf(next)) // nothing to confirm: only what was skipped is said
+    },
+    [sayReceipt],
+  )
+  const onConfirmed = useCallback(() => {
+    justConfirmed.current = true
+    const now = runRef.current
+    if (!now) return
+    const next = afterConfirmed(now)
+    if (next.queue.length > 0) return setRun(next)
+    setRun(null)
+    sayReceipt(receiptOf(next))
+    void load(null)
+  }, [sayReceipt, load])
+  const onConfirmClose = useCallback(() => {
+    if (justConfirmed.current) {
+      justConfirmed.current = false
+      return
+    }
+    const now = runRef.current
+    setRun(null)
+    if (!now) return
+    const receipt = receiptOf(now)
+    if (receiptSays(receipt)) sayReceipt(receipt)
+    if (now.done > 0) void load(null)
+  }, [sayReceipt, load])
   const runRestrict = useCallback(
     async (keys: readonly string[]) => {
       const plan = restrictPlanOf(rowsRef.current ?? [], keys)
@@ -337,24 +370,30 @@ export function useOfficeSheet(): { model: OfficeSheetModel; actions: OfficeShee
     },
     [t],
   )
+  // owb-of4 extra step: Give to the designer — the confirmed orders not with the designer yet; the rest skipped and counted.
+  const openDesigner = useCallback((keys: readonly string[]) => {
+    const plan = designerPlanOf(rowsRef.current ?? [], keys)
+    setShown({ kind: 'designer', rows: plan.go, skipped: plan.already + plan.other })
+  }, [])
   const bulk = useMemo(
     () => [
       ...(manage
         ? [
-            { id: 'confirm', words: t('office.bulk.confirm'), icon: 'check', primary: true, run: (keys: readonly string[]) => void runConfirm(keys) },
+            { id: 'confirm', words: t('office.bulk.confirm'), icon: 'check', primary: true, run: runConfirm },
+            { id: 'designer', words: t('office.bulk.designer'), icon: 'image', run: openDesigner },
             { id: 'deleteDrafts', words: t('office.bulk.deleteDrafts'), icon: 'trash-2', run: openDelete },
             { id: 'restrict', words: t('office.bulk.restrict'), icon: 'lock', run: (keys: readonly string[]) => void runRestrict(keys) },
           ]
         : []),
       { id: 'export', words: t('office.bulk.export'), icon: 'download', run: runExport },
     ],
-    [manage, t, runConfirm, openDelete, runRestrict, runExport],
+    [manage, t, runConfirm, openDesigner, openDelete, runRestrict, runExport],
   )
 
   const orders = useMemo(() => (rows ?? []).map((row) => sheetOrderOf(row, prefix, t)), [rows, prefix, t])
   const pictures = useMemo<SheetPictures>(() => ({ read: pictureReader(api), sourceOf: (record) => (record.kind === 'ORDER' ? 'order' : 'portalOrder') }), [api])
 
-  const model: OfficeSheetModel = { prefix, companyId, manage, filter, q, rows, orders, tiles, more: cursor !== null, loading, problem, live, updates, lastChange, flashKeys, notice, window: shown, pictures }
+  const model: OfficeSheetModel = { prefix, companyId, manage, filter, q, rows, orders, tiles, more: cursor !== null, loading, problem, live, updates, lastChange, flashKeys, notice, window: shown, confirmWindow: run && run.queue[0] ? { requestId: run.queue[0], left: run.queue.length } : null, pictures }
   const actions: OfficeSheetActions = {
     onFilter: (next) => go({ life: next }),
     onSearch: (words) => go({ q: words }),
@@ -371,6 +410,8 @@ export function useOfficeSheet(): { model: OfficeSheetModel; actions: OfficeShee
       void load(null)
     },
     onDismissNotice: () => setNotice(null),
+    onConfirmed,
+    onConfirmClose,
     bulk,
   }
   return { model, actions }
