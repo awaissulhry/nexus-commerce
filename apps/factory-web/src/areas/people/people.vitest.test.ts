@@ -70,11 +70,11 @@ describe('people: the area and who may do what', () => {
   it('declares every People page of the tree once, in its groups and order; only built rows show', () => {
     expect(officeArea.order).toBe(11)
     const rows = (officeArea.area.sections ?? []).flatMap((section) => section.items.map((item) => item.href))
-    // owb- (base settle 7): + Factory structure and People by customer, declared (hidden until their pages land).
+    // owb- (base settle 7): + Factory structure and People by customer, declared first; both built (lead's end PR flip).
     expect(rows).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/structure', '/people/by-customer', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
     const people = OFFICE_NAV.areas.find((area) => area.id === 'people')!
-    // Every page of the area is built (B-W2b-63, the last): a row appears by itself when its address joins OFFICE_PAGES.
-    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
+    // Every page of the area is built (B-W2b-63, then owb-'s two): a row appears by itself when its address joins OFFICE_PAGES.
+    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(rows)
   })
 
   it('People sits after Finance and before Plant; HR and the production manager see Employees, sales and a lead-only role do not', () => {
@@ -106,7 +106,8 @@ describe('people: the area and who may do what', () => {
       expect(firstOfficePage(officeNavFor(permissionCheck([permission])), { areaId: 'people' }), permission).toBe('/people/attendance')
     }
     expect(rows(template('sales'))).toEqual([])
-    expect(rows(['people.view'])).toEqual(['people-employees'])
+    // owb-: Factory structure reads people.view too (GET /people/structure); the HR register is still that permission's only other row.
+    expect(rows(['people.view'])).toEqual(['people-employees', 'people-structure'])
   })
 
   it('reads the rights by name: the HR register, My team, each manage, imports, the lines and the audit', () => {

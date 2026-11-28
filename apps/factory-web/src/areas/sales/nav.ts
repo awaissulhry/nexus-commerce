@@ -13,6 +13,8 @@ import { Ruler } from 'lucide-react'
  */
 export const officeArea: OfficeAreaNav = {
   order: 2,
+  // owb- (order workflow, R20): the Factory designer (orders.view.own) opens Sales › Orders too, and sees there only the orders he is on.
+  alsoOpens: { 'sales-orders': ['orders.view.own'] },
   area: {
     id: 'sales',
     label: 'shell:nav.sales.area',
