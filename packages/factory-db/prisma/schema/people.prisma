@@ -143,6 +143,10 @@ model Employee {
   dispatchAssignments   DispatchAssignment[]
   crewMemberships       CrewMember[]
   helpCalls             HelpCall[]
+  // owb-b1 baskets.prisma (order workflow build, schema wave "order workflow 1/1"): the same, by the person.
+  basketMoves           BasketMove[]       @relation("BasketMoveEmployee")
+  basketRouteEdits      BasketRouteEdit[]  @relation("BasketRouteEditEmployee")
+  floorLateWarnings     FloorLateWarning[] @relation("FloorLateWarningEmployee")
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])
@@ -192,6 +196,18 @@ model Team {
   code        String
   name        String
   status      MasterStatus @default(ACTIVE)
+  // ── owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 9; Owner decision K): the team's
+  // picture on its chip — its letters, or one of the 12 icons, on one of the 10 grid tones. Never a photo or a file (no
+  // photo of a person or a group: floor-auth.prisma's rule, MES-276). Set by the office; read wherever the team chip is.
+  /// LETTERS (the team's initials) or ICON (pictureIcon). The default is the database's (dbgenerated, as
+  /// QualityHold.nextStep's), so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as written.
+  pictureKind   TeamPictureKind @default(dbgenerated("('LETTERS'::text)::\"TeamPictureKind\""))
+  /// The icon of an ICON picture: a lucide icon id in kebab case ("scissors"); null: none (letters).
+  pictureIcon   String?
+  /// The picture's tone: one of the 10 grid tones (slate, purple, emerald, pink, orange, blue, yellow, red, violet, cyan);
+  /// null: the chip's own pick.
+  pictureColour String?
+  // ── end owb-b1
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -210,10 +226,18 @@ model Team {
   maintenanceRequests  MaintenanceRequest[] @relation("MaintenanceRequestRoutedTeam")
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of it (a floor team).
   fileAsks             FileAsk[]            @relation("FileAskTeam")
+  // owb-b1 brand-production.prisma (order workflow build, schema wave "order workflow 1/1"): the orders whose work it owns.
+  orderTeams           OrderTeam[]          @relation("OrderTeamTeam")
 
   @@unique([tenantId, siteId, code])
   // The target of the members' and loans' tenant- and site-safe references.
   @@unique([tenantId, siteId, id])
+}
+
+/// How a team's chip pictures it (owb-b1; Owner decision K): its letters, or an icon. No photo.
+enum TeamPictureKind {
+  LETTERS
+  ICON
 }
 
 /// A person in a team, from a day to a day (MES-210): the history of who was in which team when, and its lead. A person

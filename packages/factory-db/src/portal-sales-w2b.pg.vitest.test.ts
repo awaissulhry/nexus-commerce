@@ -336,10 +336,13 @@ describe('order requests', () => {
 
   it('WS-OD-11: a sent request is frozen but for its decision, its withdrawal or (the office) its style drafts; its lines and sizes change only while DRAFT', async () => {
     const id = seeded.requests.sent
-    // OD s.1: SENT → SENT is the office's move for the style drafts only (was "not SENT → SENT" for everyone).
-    await expect(update(partner(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/was sent; only the office names the style drafts it made for it/)
-    await expect(update(office(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/\(SENT → SENT\) changes only styleIds, version, updatedAt/)
-    await expect(update(office(), 'PortalOrderRequest', id, `status = 'DRAFT', number = NULL, "sentAt" = NULL, "sentById" = NULL`)).rejects.toThrow(/not SENT → DRAFT/)
+    // OD s.1: SENT → SENT is the office's move for the style drafts only (was "not SENT → SENT" for everyone). owb G1 (b) (order workflow,
+    // …_order_workflow_guards): and the order's picture, the customer's only change of a sent request (was: "only the office names
+    // the style drafts"; the office's list was "styleIds, version, updatedAt").
+    await expect(update(partner(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/was sent; the customer changes only its picture \(the office names the style drafts it made for it\)/)
+    await expect(update(office(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/\(SENT → SENT\) changes only styleIds, pictureFileId, pictureSetAt, pictureSetById, version, updatedAt/)
+    // owb G1 (c): SENT → DRAFT is "Take it back" now (was "not SENT → DRAFT"); it keeps the number, so clearing it is still refused.
+    await expect(update(office(), 'PortalOrderRequest', id, `status = 'DRAFT', number = NULL, "sentAt" = NULL, "sentById" = NULL`)).rejects.toThrow(/\(SENT → DRAFT\) changes only status, sentAt, sentById, version, updatedAt/)
     const sentLine = (await admin(`SELECT id FROM "PortalOrderRequestLine" WHERE "requestId" = $1::uuid`, [id]))[0]!.id as string
     await expect(update(partner(), 'PortalOrderRequestLine', sentLine, `note = 'more'`)).rejects.toThrow(/change only while it is a DRAFT \(it is SENT\)/)
     await expect(copyRow('PortalOrderRequestLine', sentLine, { id: randomUUID(), seq: 9 }, partner())).rejects.toThrow(/change only while it is a DRAFT/)

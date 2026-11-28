@@ -5,6 +5,7 @@ import { seedSecondBrand, type SecondBrand } from '../src/testing/second-brand'
 import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
 import { seed as seedProduction } from './production'
+import { seedDepartmentOfKind } from './product' // owb-b1: the department of a seeded route step
 import { seed as seedRoles } from './roles'
 
 /**
@@ -125,7 +126,7 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
       await tx.colourway.create({ data: { id: blk, styleId, code: 'BLK', name: 'Black', colourId: base('product:colour:BLK'), ...stamp(T.setup) }, select })
       await tx.styleRevision.create({ data: { id: revisionId, styleId, revision: 1, status: StyleRevisionStatus.DRAFT, changeNote: 'First revision (made up).', ...stamp(T.setup) }, select })
       await tx.routingOperation.createMany({
-        data: ROUTING.map((step) => ({ id: id(`routing:JKT-B2:1:${step.code}`), styleId, revisionId, seq: step.seq, operationId: base(`product:operation:${step.operation}`), code: step.code, name: step.name, workCentreKind: step.kind, standardMinutes: step.minutes, ...stamp(T.setup) })),
+        data: ROUTING.map((step) => ({ id: id(`routing:JKT-B2:1:${step.code}`), styleId, revisionId, seq: step.seq, operationId: base(`product:operation:${step.operation}`), code: step.code, name: step.name, workCentreKind: step.kind, standardMinutes: step.minutes, departmentId: seedDepartmentOfKind(namespace, step.kind), ...stamp(T.setup) })),
       })
       await tx.styleRevision.update({ where: { id: revisionId }, data: { status: StyleRevisionStatus.RELEASED, releasedAt: T.released, releasedById: actorId, updatedAt: T.released }, select })
     }),

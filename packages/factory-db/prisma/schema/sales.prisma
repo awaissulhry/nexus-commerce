@@ -559,6 +559,8 @@ model DepositRequest {
   amendments   SalesOrderAmendment[] @relation("SalesOrderAmendmentDeposit")
   // W2b portal-sales.prisma (wave 21/22): its card and SEPA payments at the provider.
   paymentIntents PaymentIntent[]
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): the customer's "I paid" notices for it.
+  paymentNotices PaymentNotice[] @relation("PaymentNoticeDeposit")
 
   // The target of the references from its deposit invoices and payment allocations: the same company and party.
   @@unique([tenantId, companyId, partyId, id])
@@ -679,6 +681,25 @@ model SalesOrder {
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote        String?
+  // ── owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 3, § 5A row 1)
+  /// The order's picture (lists, the band, the floor's basket card): a file of the tenant, an image or a PDF, never a
+  /// fiscal archive, body data or audio (the …_order_workflow_guards trigger, G2); null: the first line's design, as
+  /// before. Copied from its request at Confirm (pictureFileId, pictureSetAt, pictureSetById together), then the office's;
+  /// a customer's choice is written by the API in the tenant's system context after the party check (the partner role
+  /// only reads this table). The three columns all or none (G2). Restrict, never deleted with the file.
+  pictureFileId       String?          @db.Uuid
+  pictureSetAt        DateTime?        @db.Timestamptz(3)
+  /// Who set the picture: an office person, or the customer's person whose choice the API wrote. Hidden from the partner
+  /// role, like createdById.
+  pictureSetById      String?          @db.Uuid
+  /// Restricted on the floor (design R23, "need to know"): the order's baskets show on the floor only to the people given
+  /// them by name. Set and lifted by the office (orders.manage, the API), with when and by whom.
+  /// Office only: hidden from the partner role. The default is the database's (dbgenerated, as StoredFile.legalHold's),
+  /// so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as it is written.
+  floorRestricted     Boolean          @default(dbgenerated("('false'::text)::boolean"))
+  floorRestrictedAt   DateTime?        @db.Timestamptz(3)
+  floorRestrictedById String?          @db.Uuid
+  // ── end owb-b1
   version             Int              @default(1)
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
@@ -736,6 +757,15 @@ model SalesOrder {
   costLines           OrderCostLine[]      @relation("OrderCostLineOrder")
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked for it.
   fileAsks            FileAsk[]            @relation("FileAskOrder")
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): its picture (Restrict, not Prisma's SetNull default:
+  // that would also clear tenantId); the customer's "I paid" notices (portal-sales.prisma); the customer's own columns used
+  // on its lines (order-columns.prisma).
+  picture             StoredFile?          @relation("SalesOrderPicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  paymentNotices      PaymentNotice[]      @relation("PaymentNoticeOrder")
+  lineColumnUses      OrderLineColumnUse[] @relation("OrderLineColumnUseOrder")
+  // owb-b1: its prints of the work papers (production.prisma), the teams that own its work (brand-production.prisma).
+  prints              OrderPrint[]         @relation("OrderPrintOrder")
+  orderTeams          OrderTeam[]          @relation("OrderTeamOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
@@ -894,6 +924,9 @@ model SalesOrderLine {
   brandPrices        OrderBrandPrice[]        @relation("OrderBrandPriceLine")
   // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked to land on it.
   fileAsks           FileAsk[]                @relation("FileAskLine")
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): order-columns.prisma, the customer's own column values
+  // on it.
+  ownValues          OrderLineOwnValue[]      @relation("OrderLineOwnValueOrderLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
@@ -1122,6 +1155,8 @@ model SalesOrderMilestone {
   @@unique([tenantId, orderId, seq])
   // W2a money.prisma (wave 7/7): the invoice lines that bill (or credit) this step.
   invoiceLines   InvoiceLine[]    @relation("InvoiceLineMilestone")
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): the customer's "I paid" notices for this step.
+  paymentNotices PaymentNotice[]  @relation("PaymentNoticeMilestone")
   // The target of the money module's references (wave 7/7: the invoice lines that bill a step): a step of the same buyer.
   @@unique([tenantId, partyId, id])
   // Open steps by due date.
