@@ -330,3 +330,70 @@ BEGIN
 END
 $$;
 
+-- =====================================================================================================================
+-- SalesOrder and PortalOrderRequest: the order's picture (owb G2; PL-schema § 3, § 5A rows 1-2; design order-workflow § 5zi E:
+-- "only a file that the customer can open can be the picture: never a file for the office only, never a priced file, never a
+-- size sheet"; everybody on the order sees it: every list, the band, the chat, the floor's basket card).
+--   every write   its file, when and who set it: all three or none (none: the first line's design, as before).
+--   a new file    a file this session can open (a portal session: one shared with its own party; one it cannot see is
+--                 refused); of the record's company or of the whole factory; shared with no other customer and of no other
+--                 customer's record (factory_file_record_party: the brand wall); an image a browser shows (never a design
+--                 file: download-only) or a PDF; never a fiscal archive or a voice note; never body data (a measurement
+--                 sheet, a body, made-to-measure or fitting photo); never a priced file (the money wall: the floor and the
+--                 designer see the picture); neither deleted nor quarantined.
+-- On a request both doors write it while DRAFT or SENT (G1); on an order the office (Confirm copies the request's three; a
+-- customer's choice is written by the API in the tenant's system context after the party check). A decided request and a
+-- CLOSED or CANCELLED order never change (their own guards).
+CREATE FUNCTION "factory_order_picture_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  what CONSTANT text := CASE TG_TABLE_NAME WHEN 'SalesOrder' THEN 'order ' || NEW."number" ELSE 'order request ' || coalesce(NEW."number", NEW."id"::text) END;
+  picture record;
+  picture_type text;
+  record_known boolean;
+  record_party uuid;
+BEGIN
+  IF TG_OP = 'UPDATE' AND (NEW."pictureFileId", NEW."pictureSetAt", NEW."pictureSetById") IS NOT DISTINCT FROM (OLD."pictureFileId", OLD."pictureSetAt", OLD."pictureSetById") THEN
+    RETURN NULL;
+  END IF;
+  IF (NEW."pictureFileId" IS NULL) <> (NEW."pictureSetAt" IS NULL) OR (NEW."pictureFileId" IS NULL) <> (NEW."pictureSetById" IS NULL) THEN
+    RAISE EXCEPTION 'sales: the picture of % names its file, when and who set it: all three or none', what
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."pictureFileId" IS NULL OR (TG_OP = 'UPDATE' AND NEW."pictureFileId" IS NOT DISTINCT FROM OLD."pictureFileId") THEN
+    RETURN NULL;
+  END IF;
+  SELECT f."companyId" AS company, f."partyId" AS party, f."recordType" AS record_type, f."recordId" AS record, f."kind"::text AS kind,
+         f."category"::text AS category, f."contentType" AS content_type, f."status"::text AS status, f."priced" AS priced
+    INTO picture
+    FROM "StoredFile" f WHERE f."tenantId" = NEW."tenantId" AND f."id" = NEW."pictureFileId";
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'sales: the picture of % is a file this person can open', what
+      USING ERRCODE = 'check_violation';
+  END IF;
+  picture_type := "factory_files_type_of"(picture.content_type);
+  IF NOT ((picture_type LIKE 'image/%' AND NOT "factory_files_is_design_type"(picture_type)) OR picture_type = 'application/pdf')
+     OR picture.kind IN ('FISCAL_ARCHIVE', 'AUDIO')
+     OR coalesce(picture.category IN ('MEASUREMENTS', 'BODY_PHOTO', 'MTM_PHOTO', 'FITTING_PHOTO'), false)
+     OR picture.status IN ('DELETED', 'QUARANTINED')
+     OR picture.priced THEN
+    RAISE EXCEPTION 'sales: the picture of % is an image or a PDF everybody on the order may see: never a fiscal archive, a voice note, body data (measurements, a body, made-to-measure or fitting photo) or a priced file, nor one deleted or quarantined', what
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT r.known, r.party INTO record_known, record_party FROM "factory_file_record_party"(NEW."tenantId", picture.record_type, picture.record) r;
+  IF (picture.company IS NOT NULL AND picture.company <> NEW."companyId")
+     OR (picture.party IS NOT NULL AND picture.party <> NEW."partyId")
+     OR (record_known AND record_party IS NOT NULL AND record_party <> NEW."partyId") THEN
+    RAISE EXCEPTION 'sales: the picture of % is a file of its own company and customer, or of the whole factory; never another customer''s', what
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "SalesOrder_picture_check" AFTER INSERT OR UPDATE OF "pictureFileId", "pictureSetAt", "pictureSetById" ON "SalesOrder"
+  FOR EACH ROW WHEN (NEW."pictureFileId" IS NOT NULL OR NEW."pictureSetAt" IS NOT NULL OR NEW."pictureSetById" IS NOT NULL)
+  EXECUTE FUNCTION "factory_order_picture_check"();
+CREATE TRIGGER "PortalOrderRequest_picture_check" AFTER INSERT OR UPDATE OF "pictureFileId", "pictureSetAt", "pictureSetById" ON "PortalOrderRequest"
+  FOR EACH ROW WHEN (NEW."pictureFileId" IS NOT NULL OR NEW."pictureSetAt" IS NOT NULL OR NEW."pictureSetById" IS NOT NULL)
+  EXECUTE FUNCTION "factory_order_picture_check"();
+
