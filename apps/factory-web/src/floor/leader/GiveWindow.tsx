@@ -7,7 +7,7 @@ import { useFloor } from '../FloorApp'
 import { fetchTeam, giveBasket, type BasketTeam } from '../basket/api'
 import { BASKET_NS } from '../basket/parts'
 import { undoStore } from '../basket/undo/store'
-import { giveBasketsOf, givePeopleOf, holderOf, personLabel } from './give'
+import { giveBasketsOf, givePeopleOf, holderOf, namesNoWorkers, personLabel } from './give'
 import { GiveWindowView, type GiveAction } from './view/GiveWindowView'
 
 /**
@@ -106,6 +106,7 @@ export function GiveWindow({ open, onClose, from, team: given, onChanged }: { re
         baskets: team && from.kind === 'person' ? giveBasketsOf(team, from.key) : null,
         said,
         busy,
+        noNames: team ? namesNoWorkers(team) : false,
       }}
       onAction={onAction}
     />

@@ -206,7 +206,8 @@
     "noneToGive": "No basket waits here.",
     "person": "Person {n}",
     "title": "Give to… · {code}",
-    "titlePerson": "Give a basket · {name}"
+    "titlePerson": "Give a basket · {name}",
+    "noNames": "This site does not name workers: a basket is not given to a person here."
   },
   "late": {
     "title": "Will be late · {code}",

@@ -13,7 +13,7 @@ import { BASKET_NS } from '../basket/parts'
 import { StepsWindowOf, type StepsTarget } from '../basket/steps/StepsWindow'
 import { useUndoChanges } from '../basket/undo/use-undo'
 import { GiveWindow } from './GiveWindow'
-import { personLabel } from './give'
+import { givePeopleOf, namesNoWorkers } from './give'
 import { groupsOf, leaderForYouOf, teamBasketsOf, teamNumbersOf, type TeamFilter } from './model'
 import { LeaderHomeView, type LeaderHomeAction } from './view/LeaderHomeView'
 
@@ -131,7 +131,8 @@ export function LeaderHome() {
           total: team ? teamBasketsOf(team) : 0,
           locale: store.locale,
           readAt: load.state === 'ready' ? load.at : 0,
-          people: team ? team.people.map((one, index) => ({ key: one.key, label: personLabel(one, index, words), holds: one.holds?.code ?? null })) : [],
+          people: team ? givePeopleOf(team, '', words).map(({ key, label, holds }) => ({ key, label, holds })) : [],
+          noNames: team ? namesNoWorkers(team) : false,
           jobs: phoneJobsOf(me),
           scanHeld: me.notice.blocksScans,
           badgeRefused: scanner.refused,

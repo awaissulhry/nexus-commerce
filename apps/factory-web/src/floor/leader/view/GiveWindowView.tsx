@@ -37,6 +37,8 @@ export interface GiveWindowModel {
   readonly baskets: readonly GiveBasket[] | null
   readonly said: string | null
   readonly busy: boolean
+  /** The site names no workers: no give to a person here (said in words). */
+  readonly noNames?: boolean
 }
 
 export type GiveAction = { readonly type: 'close' } | { readonly type: 'person'; readonly key: string } | { readonly type: 'basket'; readonly bundleId: string }
@@ -77,7 +79,7 @@ export function GiveWindowView({ model, onAction }: { readonly model: GiveWindow
               ))}
             </div>
           ) : (
-            <p className="fw-bk-muted">{tb('give.nobody')}</p>
+            <p className="fw-bk-muted">{model.noNames ? tb('give.noNames') : tb('give.nobody')}</p>
           )
         ) : null}
         {model.state === 'ready' && model.baskets ? (

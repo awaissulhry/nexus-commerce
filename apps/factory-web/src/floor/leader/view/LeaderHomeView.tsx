@@ -43,6 +43,8 @@ export interface LeaderHomeViewModel {
   readonly locale: string
   readonly readAt: number
   readonly people: readonly { readonly key: string; readonly label: string; readonly holds: string | null }[]
+  /** The site names no workers: Who has what says so (no give to a person there). */
+  readonly noNames?: boolean
   readonly jobs: readonly TileKey[]
   readonly scanHeld?: boolean
   readonly badgeRefused?: boolean
@@ -235,7 +237,7 @@ function TeamPart({ model, team, onAction }: { readonly model: LeaderHomeViewMod
           ))}
         </div>
       ) : (
-        <p className="fw-bk-muted">{tb('give.nobody')}</p>
+        <p className="fw-bk-muted">{model.noNames ? tb('give.noNames') : tb('give.nobody')}</p>
       )}
       {team.handover ? (
         <div className="fw-bk-needs" data-tone="info">

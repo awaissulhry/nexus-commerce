@@ -206,7 +206,8 @@
     "noneToGive": "Nessun cesto aspetta qui.",
     "person": "Persona {n}",
     "title": "Dai a… · {code}",
-    "titlePerson": "Dai un cesto · {name}"
+    "titlePerson": "Dai un cesto · {name}",
+    "noNames": "Questo sito non nomina gli addetti: qui un cesto non si dà a una persona."
   },
   "late": {
     "title": "Sarà in ritardo · {code}",

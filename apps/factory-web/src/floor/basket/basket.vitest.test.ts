@@ -329,9 +329,10 @@ describe('the basket page at 390 px', () => {
     expect(html).toContain('aria-disabled="true"')
   })
 
-  it('until fl6 the step bar says no "Change" and the leader row draws nothing; until fl8 no tile row', () => {
-    const html = draw(createElement(BasketPageView, { model: pageModel(basketRead(), { leader: true }), onAction: () => undefined }), 'en')
-    if (!STEPS_READY) expect(html).not.toContain('>Change<')
+  it('the step bar says "Change" only once fl6\'s window exists; until fl8 no tile row', () => {
+    const html = draw(createElement(BasketPageView, { model: pageModel(basketRead()), onAction: () => undefined }), 'en')
+    if (STEPS_READY) expect(html).toContain('Change')
+    else expect(html).not.toContain('>Change<')
     if (!HELP_READY) expect(html).not.toContain('fw-bk-tiles')
   })
 
