@@ -82,6 +82,7 @@ function shell(locale: Locale, over: Partial<PortalShellViewModel> = {}): Portal
     freeForSuppliers: false,
     preview: false,
     canSearch: true,
+    chat: { count: 2, open: false }, // owb-po5.4: Chat in the top bar
     ...over,
   }
 }
