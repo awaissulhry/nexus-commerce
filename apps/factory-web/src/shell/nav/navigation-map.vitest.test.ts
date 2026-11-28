@@ -13,6 +13,7 @@ import { NEW_VERBS } from '../../areas/home/today/model'
 import { PANELS } from '../../areas/home/today/panels'
 import { SEARCH_TYPES } from '../../areas/search/model'
 import { FLOOR_MODES, homeTiles, MAX_TILES, TILE_KEYS, tilePage, TILE_RULES, type FloorMode, type TileKey } from '../../floor/model'
+import { boardTabShown } from '../../floor/board/model' // owb-fl9
 import { whatKeyOf } from '../../floor/queue/actions'
 import { LABEL_TYPES, type ScanRead } from '../../floor/scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../../floor/tasks/routes'
@@ -42,7 +43,7 @@ const sample = (address: string) => address.replace(/\[companyId\]/g, 'c0').repl
 const rows = (nav: AreaNav): AreaNavItem[] => nav.areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.flatMap((item) => [item, ...(item.children ?? [])])))
 const shipped = (page: TreePage) => page.href !== null && !page.deferred
 const owner = officeNavFor(permissionCheck(templateOf('owner')!.permissions))
-// owb- (base settle 7): the address each declared (deferred) tree page will have once built.
+// owb- (base settle 7): the address of each tree page the order workflow declared (deferred) before it was built.
 const DECLARED_BY_ID: Readonly<Record<string, string>> = {
   'home.designDesk': '/home/design-desk',
   'warehouse.readyToShip': '/warehouse/ready-to-ship',
@@ -91,8 +92,13 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     expect(early).toEqual(['plant.settings', 'admin.overview'])
     const deferred = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.deferred).map((page) => page.id)))
     // B-W2b-362: Sales › Made-to-measure is built (Owner 11-10 Q1 = A). owb- (base settle 7): the order workflow's nine pages
-    // are declared and deferred, each until its session's page lands (S2, S3, S5).
-    expect(deferred).toEqual(['home.designDesk', 'warehouse.readyToShip', 'warehouse.ourWarehouses', 'production.teams', 'production.orderStructures', 'people.structure', 'people.byCustomer'])
+    // were declared and deferred, each until its session's page landed (S2, S3, S5); all nine are built (lead's end PR), each
+    // with its address.
+    expect(deferred).toEqual([])
+    for (const [id, href] of Object.entries(DECLARED_BY_ID)) {
+      expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages)).find((page) => page.id === id)?.href, id).toBe(href)
+      expect(OFFICE_PAGES.has(href), href).toBe(true)
+    }
     for (const page of OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((entry) => entry.deferred)))) {
       expect(page.href, page.id).toBeNull()
       expect(page.wave, page.id).toBe('owb')
@@ -150,6 +156,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/home/kpis': 'home.kpis.view', // GET /insights/kpis (B-W2b-433)
       '/home/dashboards': 'home.kpis.view', // GET /insights/dashboards (B-W2b-434)
+      '/home/design-desk': 'orders.view.own', // GET /design-desk (owb-of2; the desk lists only the orders the reader may see)
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/incoming': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322; B-TH-216: the page is Sales › Incoming)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
@@ -203,6 +210,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/warehouse/reports': 'inventory.reports.view', // GET /inventory/reports/ageing (B-W2b-356)
       '/warehouse/settings': 'inventory.stock.view', // GET /inventory/rules (B-W2b-355)
+      '/warehouse/ready-to-ship': 'shipping.view', // GET /shipping/ready (owb-ss3)
+      '/warehouse/our-warehouses': 'shipping.view', // GET /shipping/our-warehouses (owb-ss3)
       '/production/overview': 'workorders.view', // GET /production/overview (F-PR-04)
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
@@ -214,6 +223,10 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/labour': 'production.labour.view', // GET /production/labour/inbox (B-W2b-57)
       '/production/bundles': 'production.bundles.view', // GET /production/bundles (B-W2b-59)
       '/production/dispatch': 'production.dispatch.view', // GET /production/dispatch/board (B-W2b-56)
+      '/production/baskets': 'workorders.view', // GET /production/baskets/board (owb-fl4, fl9)
+      '/production/chains': 'workorders.view', // GET /production/chains (owb-fl4, fl9)
+      '/production/teams': 'workorders.view', // GET /production/teams/board (owb-ss7)
+      '/production/order-structures': 'workorders.view', // GET /production/order-structures (owb-ss8)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)
@@ -271,6 +284,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       // B-W2b-64: People › Efficiency and People reports.
       '/people/efficiency': 'people.efficiency.view', // GET /people/efficiency
       '/people/reports': 'people.attendance.view', // GET /people/reports/attendance
+      // owb-: People › Factory structure (ss8) and People by customer (of2, of4).
+      '/people/structure': 'people.view', // GET /people/structure
+      '/people/by-customer': 'roles.assign', // GET /people/by-customer
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
@@ -313,6 +329,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/transfers',
       '/warehouse/counts',
       '/warehouse/shipments',
+      // owb- (ss3): Outbound › Ready to ship and Our warehouses (shipping.view), after Shipments.
+      '/warehouse/ready-to-ship',
+      '/warehouse/our-warehouses',
       '/warehouse/reports',
       '/warehouse/locations',
       '/warehouse/shipping',
@@ -322,10 +341,10 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     ])
     // The sales role: all of Sales, Home's approvals and mail; of Quality only Nonconformances (B-W2a-68: sales raise NCRs
     // from what a customer reports), Corrective actions (B-W2b-119: sales read the 8Ds of their customers) and Complaints
-    // (B-W2a-65: sales logs them); no Compliance. Of Planning only Promise dates (B-W2b-336: planning.promise.view, sales asks
-    // "when?" on every quote).
+    // (B-W2a-65: sales logs them); Compliance's certificate rows since owb-b6 (compliance.certificates.view, the Owner's yes
+    // 2026-11-28). Of Planning only Promise dates (B-W2b-336: planning.promise.view, sales asks "when?" on every quote).
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'planning', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
+    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'planning', 'purchasing', 'warehouse', 'production', 'quality', 'compliance', 'finance', 'admin'])
     expect(rows(sales).filter((row) => row.href.startsWith('/planning/')).map((row) => row.href)).toEqual(['/planning/promise'])
     expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/capa', '/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
@@ -377,7 +396,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       production_manager: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'register', 'sourcing', 'reports', 'settings'), instructions: true, milestones: true },
       quality_inspector: { products: allProducts, compliance: allCompliance, instructions: true, milestones: false },
       planner: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'sourcing', 'settings'), instructions: false, milestones: true },
-      sales: { products: P('styles', 'materials', 'samples', 'changes', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
+      // owb-b6 (the Owner's yes, 2026-11-28 08:44): Sales reads compliance.certificates.view, so the rows that read it (as the planner's).
+      sales: { products: P('styles', 'materials', 'samples', 'changes', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'sourcing', 'settings'), instructions: false, milestones: false },
       buyer: { products: P('styles', 'materials', 'changes', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: true },
       warehouse: { products: P('styles', 'materials', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: false },
       floor_supervisor: { products: P('styles', 'materials', 'changes', 'projects', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: true, milestones: false },
@@ -402,14 +422,16 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const allSales = ['orders', /* B-TH-216 */ 'incoming', 'quotes', 'customers', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
     const allPlanning = ['mrp', 'leather', 'board', 'capacity', 'allocation', 'exceptions', 'promise', 'milestones', 'demand', 'mps', 'reports', 'settings']
     const allPurchasing = ['suppliers', 'requests', 'orders', 'subcontracting', 'sourcing', 'claims', 'reports', 'settings']
-    const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'reports', 'locations', 'shipping', 'settings']
+    // owb- (ss3): Ready to ship and Our warehouses read shipping.view, as Shipments does: whoever has one has the three.
+    const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'ready-to-ship', 'our-warehouses', 'reports', 'locations', 'shipping', 'settings']
+    const outbound = ['shipments', 'ready-to-ship', 'our-warehouses']
     const without = (all: string[], ...gone: string[]) => all.filter((page) => !gone.includes(page))
     const expected: Record<string, { sales: string[]; planning: string[]; purchasing: string[]; warehouse: string[]; approvals: boolean; rules: boolean }> = {
       owner: { sales: allSales, planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: true },
       read_only: { sales: without(allSales, /* B-W2b-362: body data, not the reader's */ 'made-to-measure'), planning: allPlanning, purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
-      sales: { sales: allSales, planning: ['promise'], purchasing: ['suppliers', 'requests'], warehouse: ['shipments'], approvals: true, rules: false },
+      sales: { sales: allSales, planning: ['promise'], purchasing: ['suppliers', 'requests'], warehouse: outbound, approvals: true, rules: false },
       planner: { sales: ['orders'], planning: allPlanning, purchasing: without(allPurchasing, 'suppliers'), warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: false },
-      buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', 'shipments', 'shipping'), approvals: true, rules: false },
+      buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', ...outbound, 'shipping'), approvals: true, rules: false },
       warehouse: { sales: ['orders', 'customers', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
       finance: { sales: without(allSales, 'incoming', /* B-W2b-362 */ 'made-to-measure'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
       production_manager: { sales: ['orders', /* B-TH-014 (Owner ask P7): the production manager reads Incoming */ 'incoming', 'customers', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
@@ -604,6 +626,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       myday: 'floor.work', // GET /people/myday (B-W2b-68)
       training: 'floor.work', // GET /safety/floor/training/sessions, /safety/floor/ppe/items (B-W2b-145)
       instructions: 'production.scan', // GET /production/instructions/floor/operation (B-W2b-232 on B-W2b-214)
+      baskets: 'production.scan', // GET /production/baskets/home (owb-fl5)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       incident: 'floor.work', // GET /safety/floor/incidents/start (B-W2b-137)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
@@ -621,13 +644,14 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       // B-W2b-105: In-line inspection at the inspection bench (tile family Quality, after Final inspection).
       // B-W2b-121: Fabric cutting at the cutting table, after Cut a hide (tile family Cutting).
       // B-W2b-232: Spec & instructions at every station mode but the warehouse (tile family Work, before Call for help).
-      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      // owb-fl5: Baskets after Spec & instructions at the production stations (on the More page: the first page stays as it was).
+      cutting: ['mywork', 'operation', 'cut', 'fabriccut', 'bundles', 'machine', 'clock', 'training', 'instructions', 'baskets', 'help', 'incident', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'training', 'instructions', 'baskets', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-F50: at the packing bench Operation after Garment labels and Pack (Owner answer 2026-11-15 to B-W2b-437's question 1).
-      packing: ['mywork', 'labels', 'pack', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      packing: ['mywork', 'labels', 'pack', 'operation', 'machine', 'clock', 'training', 'instructions', 'baskets', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-115: Incoming inspection at the inspection bench (tile family Quality, before Final inspection).
       // B-W2b-203: at the bench Operation after the inspection tiles (Owner answer 2026-11-09 to B-W2b-151's question 1).
-      inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'help', 'incident', 'lineview', 'scan'],
+      inspection: ['mywork', 'incoming', 'final', 'inline', 'operation', 'machine', 'clock', 'training', 'instructions', 'baskets', 'help', 'incident', 'lineview', 'scan'],
       // B-W2b-308: My work (the task inbox) at the warehouse. B-W2b-310: Count after Pick & issue.
       // B-W2b-F37: Pick & issue after Receive, before Move & put away (the tree's order; Owner 2026-11-13).
       warehouse: ['mywork', 'receive', 'pick', 'move', 'count', 'returnsin', 'kits', 'machine', 'clock', 'training', 'help', 'incident', 'lineview', 'scan'],
@@ -656,10 +680,16 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   })
 
   it('a floor page with no tile has its page, and is opened by its device, never by a tile', () => {
+    expect(FLOOR_NO_TILE.map((page) => page.href)).toEqual(['/floor/display', /* owb-fl8 */ '/floor/me', /* owb-fl9 */ '/floor/board', '/floor/chains'])
     for (const page of FLOOR_NO_TILE) {
       expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/(floor)', page.href, 'page.tsx')), page.id).toBe(true)
       expect(TILE_RULES.map((rule) => `/floor/${rule.key}`)).not.toContain(page.href)
+      if (page.permission) expect(everything, page.id).toContain(page.permission)
     }
+    // owb-fl9: the Board is the team leader's only (floor.lead), the same rule the page itself draws by.
+    expect(FLOOR_NO_TILE.filter((page) => page.permission).map((page) => [page.href, page.permission])).toEqual([['/floor/board', 'floor.lead']])
+    expect(boardTabShown(['floor.lead'])).toBe(true)
+    expect(boardTabShown(['floor.work', 'production.scan'])).toBe(false)
   })
 
   it('the scan router opens the right task for each label type at each station, and only a tile the station shows', () => {

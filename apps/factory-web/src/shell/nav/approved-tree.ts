@@ -56,7 +56,7 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'home.today', title: 'Today', titleIt: 'Oggi', wave: 'W1', href: '/home/today' },
           // owb-: Design desk (/home/design-desk), the Factory designer's page.
-          { id: 'home.designDesk', title: 'Design desk', titleIt: 'Scrivania design', wave: 'owb', href: null, deferred: 'owb- S2 (of7) builds it (order workflow, base settle 7)' },
+          { id: 'home.designDesk', title: 'Design desk', titleIt: 'Scrivania design', wave: 'owb', href: '/home/design-desk' },
           { id: 'home.approvals', title: 'Approvals', titleIt: 'Approvazioni', wave: 'W1', href: '/home/approvals' },
           // W2a: B-W2a-40 My tasks (SCR-233) and Notifications (SCR-005).
           { id: 'home.tasks', title: 'My tasks', titleIt: 'Le mie attività', wave: 'W2a', href: '/home/tasks' },
@@ -318,8 +318,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'warehouse.shipments', title: 'Shipments', titleIt: 'Spedizioni', wave: 'W1', href: '/warehouse/shipments' },
           // owb-: Ready to ship (/warehouse/ready-to-ship), Our warehouses (/warehouse/our-warehouses).
-          { id: 'warehouse.readyToShip', title: 'Ready to ship', titleIt: 'Pronto da spedire', wave: 'owb', href: null, deferred: 'owb- S3 (ss3) builds it (order workflow, base settle 7)' },
-          { id: 'warehouse.ourWarehouses', title: 'Our warehouses', titleIt: 'I nostri magazzini', wave: 'owb', href: null, deferred: 'owb- S3 (ss3) builds it (order workflow, base settle 7)' },
+          { id: 'warehouse.readyToShip', title: 'Ready to ship', titleIt: 'Pronto da spedire', wave: 'owb', href: '/warehouse/ready-to-ship' },
+          { id: 'warehouse.ourWarehouses', title: 'Our warehouses', titleIt: 'I nostri magazzini', wave: 'owb', href: '/warehouse/our-warehouses' },
         ],
       },
       // W2b: B-W2b-356 Warehouse reports (SCR-257). The tree's Reports group, after Outbound and before Settings.
@@ -357,7 +357,7 @@ export const OFFICE: readonly TreeArea[] = [
           // owb-: Baskets board (/production/baskets), Chains (/production/chains), Teams (/production/teams).
           { id: 'production.baskets', title: 'Baskets board', titleIt: 'Tabellone dei cesti', wave: 'owb', href: '/production/baskets' },
           { id: 'production.chains', title: 'Chains', titleIt: 'Catene', wave: 'owb', href: '/production/chains' },
-          { id: 'production.teams', title: 'Teams', titleIt: 'Squadre', wave: 'owb', href: null, deferred: 'owb- S3 (ss7) builds it (order workflow, base settle 7)' },
+          { id: 'production.teams', title: 'Teams', titleIt: 'Squadre', wave: 'owb', href: '/production/teams' },
         ],
       },
       // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
@@ -399,7 +399,7 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'production.settings', title: 'Floor rules & codes', titleIt: 'Regole di reparto', wave: 'W1', href: '/production/settings' },
           // owb-: Order structures (/production/order-structures).
-          { id: 'production.orderStructures', title: 'Order structures', titleIt: 'Strutture d’ordine', wave: 'owb', href: null, deferred: 'owb- S3 (ss8) builds it (order workflow, base settle 7)' },
+          { id: 'production.orderStructures', title: 'Order structures', titleIt: 'Strutture d’ordine', wave: 'owb', href: '/production/order-structures' },
         ],
       },
     ],
@@ -567,8 +567,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'people.attendance', title: 'Attendance', titleIt: 'Presenze', wave: 'W2b', href: '/people/attendance' },
           { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
           // owb-: Factory structure (/people/structure), People by customer (/people/by-customer).
-          { id: 'people.structure', title: 'Factory structure', titleIt: 'Struttura della fabbrica', wave: 'owb', href: null, deferred: 'owb- S3 (ss8) builds it (order workflow, base settle 7)' },
-          { id: 'people.byCustomer', title: 'People by customer', titleIt: 'Persone per cliente', wave: 'owb', href: null, deferred: 'owb- S2 (of4) builds it (order workflow, base settle 7)' },
+          { id: 'people.structure', title: 'Factory structure', titleIt: 'Struttura della fabbrica', wave: 'owb', href: '/people/structure' },
+          { id: 'people.byCustomer', title: 'People by customer', titleIt: 'Persone per cliente', wave: 'owb', href: '/people/by-customer' },
         ],
       },
       // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
@@ -755,15 +755,28 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.training', title: 'Training & PPE sign-off', titleIt: 'Firma formazione e DPI', tile: 'training', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
   // W2b: B-W2b-232 Spec & instructions (SCR-174), tile family Work, before Call for help.
   { id: 'floor.instructions', title: 'Spec & instructions', titleIt: 'Scheda e istruzioni', tile: 'instructions', modes: ['sewing', 'cutting', 'packing', 'inspection'] },
+  // owb-fl5: Baskets, the one new tablet tile (the department's baskets, For you, Coming next), after Spec & instructions and
+  // before Call for help; at the production stations only, no device (a phone has the basket home as its Home).
+  { id: 'floor.baskets', title: 'Baskets', titleIt: 'Cesti', tile: 'baskets', modes: ['sewing', 'cutting', 'packing', 'inspection'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   // W2b: B-W2b-137 Report an incident (SCR-230), tile family Maintenance & safety; kept on the first page of every Home.
   { id: 'floor.incident', title: 'Report an incident', titleIt: 'Segnala un incidente', tile: 'incident', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]
 
-/** B-W2b-66: the line TV has no tile: a DISPLAY device goes straight to it, nobody signs in (design floor.display, mode display). */
-export const FLOOR_NO_TILE: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [
+/**
+ * B-W2b-66: the line TV has no tile: a DISPLAY device goes straight to it, nobody signs in (design floor.display, mode display).
+ * owb-fl8 / fl9: Me (the phone's own page), the team leader's Board and a chain on the floor have no tile either; `permission`
+ * names the one a page asks before it shows (the Board: the team leader's, floor/board/model.ts boardTabShown).
+ */
+export const FLOOR_NO_TILE: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string; readonly permission?: string }> = [
   { id: 'floor.display', title: 'Line TV board', titleIt: 'Tabellone di linea', href: '/floor/display' },
+  // owb-fl8: Me — team and leader, what I can work in, My day, Tell the office, Large words, Sound, Language, Change person.
+  { id: 'floor.me', title: 'Me', titleIt: 'Profilo', href: '/floor/me' },
+  // owb-fl9: Board, the team leader's tab only (My team · Whole floor); a worker reads that it is the team leader's.
+  { id: 'floor.board', title: 'Board', titleIt: 'Tabellone', href: '/floor/board', permission: 'floor.lead' },
+  // owb-fl9: Chains — the device's chain, one step, its lots, +12 / −12.
+  { id: 'floor.chains', title: 'Chains', titleIt: 'Catene', href: '/floor/chains' },
 ]
 
 export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string; readonly scr: readonly string[]; readonly task: string }> = [
