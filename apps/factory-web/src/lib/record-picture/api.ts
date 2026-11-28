@@ -24,8 +24,15 @@ const pictureSchema = z.object({
 })
 const answerSchema = z.object({ pictures: z.array(pictureSchema), asOf: z.string() })
 
+/**
+ * The sources a batch route reads: every source but the floor's basket (owb-b4) — its picture comes from S5's basket read (a file
+ * stamped for the device's site), given by the host as `held` or through its own `read`.
+ */
+export type BatchSource = Exclude<PictureSource, 'basket'>
+export const isBatchSource = (source: PictureSource): source is BatchSource => source !== 'basket'
+
 /** Each source's route and the body's id list. */
-export const PICTURE_ROUTES: Readonly<Record<PictureSource, { readonly path: string; readonly key: string }>> = Object.freeze({
+export const PICTURE_ROUTES: Readonly<Record<BatchSource, { readonly path: string; readonly key: string }>> = Object.freeze({
   order: { path: '/sales/orders/pictures', key: 'orderIds' },
   quote: { path: '/sales/quotes/pictures', key: 'quoteIds' },
   request: { path: '/sales/inquiries/pictures', key: 'inquiryIds' },
@@ -45,8 +52,9 @@ export const PICTURE_ROUTES: Readonly<Record<PictureSource, { readonly path: str
  */
 const keyedOf = (source: PictureSource, picture: PictureAnswer): PictureAnswer => (source === 'customerOrder' && picture.fileId === null && picture.small ? { ...picture, fileId: `${source}:${picture.id}` } : picture)
 
-/** One batch read (the page's own API client). */
+/** One batch read (the page's own API client). owb-b4: the floor's basket has no batch route — nothing is asked, nothing answers. */
 export async function readPictures(api: ApiClient, source: PictureSource, ids: readonly string[], signal?: AbortSignal): Promise<PictureAnswer[]> {
+  if (!isBatchSource(source)) return []
   const route = PICTURE_ROUTES[source]
   const answer = await api.post(route.path, { body: { [route.key]: [...ids] }, schema: answerSchema, signal })
   // end check (#1649): the local store's path through /api.
@@ -58,3 +66,36 @@ export const pictureReader =
   (api: ApiClient): ReadPictures =>
   (source, ids) =>
     readPictures(api, source, ids)
+
+// ---- owb-b4 w4.3: the command `orders.picture.set` (owb-b23 "Shapes": POST …/picture) --------------------------------------------
+
+/**
+ * The four doors of the command (owb-b23 b3.2; S1 ask 23:36): the office's order and request (`orders.manage`), the customer's request
+ * and order (`portal.orderDrafts.edit` for both, before and after Send). The host picks its door; the window never builds an address.
+ */
+export type PictureDoor = 'office' | 'portal'
+export type PictureRecord = 'order' | 'request'
+export function orderPicturePath(door: PictureDoor, record: PictureRecord, id: string): string {
+  const key = encodeURIComponent(id)
+  if (door === 'office') return record === 'order' ? `/sales/orders/${key}/picture` : `/sales/order-requests/${key}/picture`
+  return record === 'order' ? `/portal/sales-orders/${key}/picture` : `/portal/order-requests/${key}/picture`
+}
+
+/** The body: the chosen file (null: back to the design of the first line) and the record's version the window opened with. */
+export interface OrderPictureBody {
+  readonly fileId: string | null
+  readonly version: number
+}
+
+/** The answer, parsed with this web's own zod (a field the server adds later is ignored). */
+export const orderPictureSavedSchema = z.object({ pictureFileId: z.string().nullable(), pictureSetAt: z.string().nullable().default(null), version: z.number() })
+export type OrderPictureSaved = z.infer<typeof orderPictureSavedSchema>
+
+/** The save port a host gives the window: its door's POST (a 409 stale version, 404 out of reach, 422 not an allowed file throw). */
+export type SaveOrderPicture = (body: OrderPictureBody) => Promise<OrderPictureSaved>
+
+/** The save port over the host's own API client and its door: `orderPictureSaver(api, orderPicturePath('office', 'order', id))`. */
+export const orderPictureSaver =
+  (api: ApiClient, path: string): SaveOrderPicture =>
+  (body) =>
+    api.post(path, { body: { fileId: body.fileId, version: body.version }, schema: orderPictureSavedSchema })

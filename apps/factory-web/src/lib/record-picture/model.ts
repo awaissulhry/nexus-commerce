@@ -5,27 +5,43 @@
  * three copies (two caches, three word sets). The pure part: the sizes, the fit, the cache rule, the batch rule and the names.
  *
  * Brand wall: the part reads only the walled batch routes (POST /sales/{orders,quotes,inquiries}/pictures, B-SA-011): a record the
- * reader may not see is simply absent from the answer (the part draws its neutral placeholder — never "no right"). Office only.
+ * reader may not see is simply absent from the answer (the part draws its neutral placeholder — never "no right"). The office, the
+ * portal (its own orders' read) and — owb-b4 — the floor: there only a file stamped for the device's site, given by the host.
  */
 
 /**
  * The record kinds a picture is read for (the batch route of each: orders, quotes, inquiries; F-SA-283: work orders — Production ›
- * Work orders and the planning board, by the production lane's yes, R9; never a floor or TV screen).
+ * Work orders and the planning board, by the production lane's yes, R9).
+ *
+ * owb-b4 w4.3 (design § 5zi E: "everybody sees it … the floor's order card"): `basket` — the floor's basket, drawn with its ORDER's
+ * picture. The rule on the floor: only a file stamped for the device's site (StoredFile `floorSiteId`, which the server's floor
+ * picture read returns, never a priced, measurement or audio file). No batch route: the host (S5's basket read) gives the picture
+ * through its port — `held` (the small address its read answered) or its own `read`.
  */
-export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder' /* F-CQ-103 (B-CQ-030): a portal order's style */ | 'customerOrder' /* pg-w2 (D4): a customer's own order, read by its portal */
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder' /* F-CQ-103 (B-CQ-030): a portal order's style */ | 'customerOrder' /* pg-w2 (D4): a customer's own order, read by its portal */ | 'basket' /* owb-b4: the floor's basket (its order's picture, site-stamped), through the host's port */
 
-/** Where the part is drawn: a list cell, a board card, a phone card, an order line (small or large). */
-export type PictureSize = 'cell' | 'board' | 'phone' | 'line' | 'lineLarge'
+/**
+ * Where the part is drawn: a list cell, a board card, a phone card, an order line (small or large); owb-b4: a line of the change log
+ * (beside the from → to chips: 30 px, the design's small list picture) and a message (the thread's head of an order: 40 px).
+ */
+export type PictureSize = 'cell' | 'board' | 'phone' | 'line' | 'lineLarge' | 'log' | 'message'
 
 /** The edge of each size, in CSS pixels (the board card's grows to 72 from 1680 px wide: record-picture.css). */
-export const PICTURE_PX: Readonly<Record<PictureSize, number>> = Object.freeze({ cell: 36, board: 64, phone: 48, line: 40, lineLarge: 56 })
+export const PICTURE_PX: Readonly<Record<PictureSize, number>> = Object.freeze({ cell: 36, board: 64, phone: 48, line: 40, lineLarge: 56, log: 30, message: 40 })
 export const BOARD_WIDE = Object.freeze({ px: 72, fromWidth: 1680 })
 
 /**
  * How the picture fills its square: a list cell crops (today's look); a card or a line fits — a garment photo is portrait, and
- * cropping a 64–72 px square cuts the collar and the hem.
+ * cropping a 64–72 px square cuts the collar and the hem. owb-b4: a log line and a message fit too (the whole mockup page, design
+ * round 26: "not a square cut").
  */
-export const PICTURE_FIT: Readonly<Record<PictureSize, 'cover' | 'contain'>> = Object.freeze({ cell: 'cover', board: 'contain', phone: 'contain', line: 'contain', lineLarge: 'contain' })
+export const PICTURE_FIT: Readonly<Record<PictureSize, 'cover' | 'contain'>> = Object.freeze({ cell: 'cover', board: 'contain', phone: 'contain', line: 'contain', lineLarge: 'contain', log: 'contain', message: 'contain' })
+
+/** The class of a size (record-picture.css): `fw-rpic-<size>`, the large line's `fw-rpic-line-large`. */
+export const pictureSizeClass = (size: PictureSize): string => `fw-rpic-${size === 'lineLarge' ? 'line-large' : size}`
+
+/** The placeholder mark's edge: small in a cell and a log line, else 24. */
+export const pictureMarkPx = (size: PictureSize): number => (size === 'cell' || size === 'log' ? 18 : 24)
 
 /** The most ids one batch read takes (the API's PICTURES_MAX). */
 export const BATCH_MAX = 200

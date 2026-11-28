@@ -47,6 +47,27 @@
       "fewer_other": "Hide {count} notices"
     }
   },
+  "record-picture": {
+    "window": {
+      "who": "Everybody who works on this order sees this picture: you, the factory's office and its floor. You decide it.",
+      "upload": "A picture from your computer or phone",
+      "design": "Use the design",
+      "held": {
+        "stale": "The picture changed meanwhile. Close the window and open it again.",
+        "gone": "This order is out of your reach now.",
+        "uploading": "Wait for the upload to finish.",
+        "same": "This is the picture now. Choose another one first.",
+        "closeSaving": "Wait: the picture is being saved."
+      },
+      "refused": {
+        "stale": "Someone changed the picture of this order a moment ago. Close the window and open it again to see it.",
+        "gone": "This order is not in your reach any more. Nothing was changed.",
+        "notAllowed": "This file cannot be the picture. Only an image or a PDF of this order: never a priced file or a size sheet.",
+        "upload": "The file did not upload. Try again, or choose another file.",
+        "failed": "The picture was not saved. Try again."
+      }
+    }
+  },
   "record-thread-card": {
     "menu": {
       "reply": "Reply",

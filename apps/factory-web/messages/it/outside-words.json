@@ -47,6 +47,27 @@
       "fewer_other": "Nascondete {count} avvisi"
     }
   },
+  "record-picture": {
+    "window": {
+      "who": "Tutti quelli che lavorano a questo ordine vedono questa immagine: voi, l'ufficio e il reparto della fabbrica. La decidete voi.",
+      "upload": "Un'immagine dal vostro computer o telefono",
+      "design": "Usate il design",
+      "held": {
+        "stale": "L'immagine è cambiata nel frattempo. Chiudete la finestra e riapritela.",
+        "gone": "Questo ordine ora non è più alla vostra portata.",
+        "uploading": "Aspettate che il caricamento finisca.",
+        "same": "Questa è già l'immagine. Sceglietene prima un'altra.",
+        "closeSaving": "Aspettate: l'immagine si sta salvando."
+      },
+      "refused": {
+        "stale": "Qualcuno ha appena cambiato l'immagine di questo ordine. Chiudete la finestra e riapritela per vederla.",
+        "gone": "Questo ordine non è più alla vostra portata. Non è cambiato nulla.",
+        "notAllowed": "Questo file non può essere l'immagine. Solo un'immagine o un PDF di questo ordine: mai un file con prezzi né una tabella taglie.",
+        "upload": "Il file non è stato caricato. Riprovate o scegliete un altro file.",
+        "failed": "L'immagine non è stata salvata. Riprovate."
+      }
+    }
+  },
   "record-thread-card": {
     "menu": {
       "reply": "Rispondete",

@@ -31,7 +31,7 @@ function Box({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const pictures = (count: number): ReactNode =>
-  count > 0 ? Array.from({ length: Math.min(count, 4) }, (_, index) => <RecordPicture key={index} source="order" recordId={`demo-${index}`} number="Your order 12" picture={null} size="cell" />) : undefined
+  count > 0 ? Array.from({ length: Math.min(count, 4) }, (_, index) => <RecordPicture key={index} source="order" recordId={`demo-${index}`} number="Your order 12" picture={null} size="log" />) : undefined
 
 export function DepartmentLab({ model }: { model: DepartmentLabModel }) {
   const departments = fixedDepartments(useDepartmentWords())

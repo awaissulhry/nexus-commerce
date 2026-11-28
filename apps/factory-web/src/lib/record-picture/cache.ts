@@ -152,6 +152,15 @@ export function want(source: PictureSource, recordId: string, read: ReadPictures
   return promise
 }
 
+/**
+ * owb-b4 w4.3: forget one record's answer (and a failed read's wait) — the window "The picture of the order" after a save, so the next
+ * mount of the record's picture reads its new one. The addresses by file stay (a file's address does not change).
+ */
+export function forgetRecord(source: PictureSource, recordId: string): void {
+  byRecord.delete(recordKey(source, recordId))
+  failedUntil.delete(recordKey(source, recordId))
+}
+
 /** Forget everything (tests; a sign-out reloads the page). */
 export function resetPictureCache(): void {
   for (const batch of pending.values()) if (batch.timer) clearTimeout(batch.timer)
