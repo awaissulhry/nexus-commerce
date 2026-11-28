@@ -17,6 +17,8 @@ export default defineIndexer({
     'portal_order_request.accepted': 'subject',
     'portal_order_request.refused': 'subject',
     'portal_order_request.withdrawn': 'subject',
+    // owb-po1 Take it back: the request is a DRAFT again — the event re-reads it, and the read (no drafts) drops it from the search.
+    'portal_order_request.taken_back': 'subject',
     'party.updated': bySubjectIn((tx, partyId, take) => tx.portalOrderRequest.findMany({ where: { partyId, status: { not: 'DRAFT' } }, select: { id: true }, orderBy: { id: 'asc' }, take })),
   },
   async read(tx, filter, take) {
