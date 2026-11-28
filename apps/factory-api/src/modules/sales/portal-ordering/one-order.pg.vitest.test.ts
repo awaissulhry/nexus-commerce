@@ -13,7 +13,11 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { acceptRequest, confirmRequest, listOfficeRequests, refuseRequest } from './office'
-import { officeCopyLine, officePutBackLine } from './office-drafts' // po1.3: the office's twins
+import { officeCopyLine, officeDraftView, officePutBackLine } from './office-drafts' // po1.3: the office's twins; po2.4: the draft read
+import { officeRequestView } from './office' // po2.4: the designer wall on the office reads
+import { ordersReader } from '../orders/access'
+import { readThread } from '../../../platform/threads/threads'
+import { unreadCounts } from '../../../platform/threads/reads'
 
 /**
  * The order as one thing (owb- order workflow, S1 PR po1): "Take it back" (po1.2; design § 5zi; build plan.md § 4 G1) and the ONE
@@ -199,14 +203,20 @@ describe('Take it back (owb- po1.2)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect(none.body.error.message).toBe(TAKE_BACK_WORDS.NOT_SENT.en)
   })
 
-  it('a draft taken back keeps its number: never discarded (G1 (e)), said in words; the office’s Confirm keeps the number too', async () => {
+  // owb- po2.1 (pin moved from po1.2): "Delete" of a draft taken back withdraws it (G1 (e)) — its number kept; the office's Confirm of
+  // another taken-back draft keeps the number too.
+  it('a draft taken back keeps its number: Delete withdraws it (G1 (e)); the office’s Confirm keeps the number too', async () => {
     const sent = await sentOrder('Made-up keeps its number')
     const back = await ok(browsers.buyer, 'POST', `/portal/order-requests/${sent.id}/take-back`, { version: sent.version })
-    const discard = await call(browsers.buyer, 'DELETE', `/portal/order-requests/${sent.id}?version=${back.request.version}`)
-    expect(discard.status).toBe(409)
-    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).n).toBe(1)
-    const confirmed = await confirmRequest(office(), sent.id, { version: back.request.version, as: 'ORDER' })
-    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', number: sent.number })
+    expect(back.request.may.discard).toBe(true)
+    const deleted = await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${sent.id}?version=${back.request.version}`)
+    expect(deleted).toEqual({ discarded: true, withdrawn: true })
+    expect(await one('SELECT status::text AS status, number, "withdrawnAt" IS NOT NULL AS gone FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).toEqual({ status: 'WITHDRAWN', number: sent.number, gone: true })
+    expect((await admin('SELECT 1 FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [sent.id])).length).toBe(1)
+    const other = await sentOrder('Made-up confirmed after take back')
+    const again = await ok(browsers.buyer, 'POST', `/portal/order-requests/${other.id}/take-back`, { version: other.version })
+    const confirmed = await confirmRequest(office(), other.id, { version: again.request.version, as: 'ORDER' })
+    expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', number: other.number })
   })
 })
 
@@ -322,6 +332,88 @@ describe('the accept carries the own columns; the picture on both records (owb- 
     expect(record.ownColumns.used.map((entry: Json) => entry.id)).toEqual([column.id])
     expect(record.ownColumns.values[orderLines[0]!.id][column.id].value).toBe('Made-up kept')
     expect(record.picture).toEqual({ fileId: null, setAt: null, contentType: null })
+    expect(record.order.subject).toBe('Made-up carried columns') // owb- po2 (S1 lead add): the subject of the request it came from
     expect(JSON.stringify(record)).not.toContain('Made-up gone')
+  })
+})
+
+describe('many drafts at once (owb- po2.1)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a mix of own drafts and another customer’s: theirs is "not found", nothing leaks; each item its own answer', async () => {
+    const mine = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up bulk one' }, 201)
+    const theirs = await ok(browsers.other, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up bulk theirs' }, 201)
+    const answer = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [{ id: mine.request.id, version: mine.request.version }, { id: theirs.request.id, version: theirs.request.version }] })
+    expect(answer.results).toEqual([
+      { id: mine.request.id, ok: true, words: null },
+      { id: theirs.request.id, ok: false, words: { en: 'Order not found.', it: 'Ordine non trovato.' } },
+    ])
+    expect(JSON.stringify(answer)).not.toContain('Made-up bulk theirs')
+    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [theirs.request.id])).n).toBe(1)
+    expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [mine.request.id])).n).toBe(0)
+  })
+
+  it('a taken-back draft in a bulk delete is withdrawn (number kept); send many sends each; a Designer may not send', async () => {
+    const sent = await sentOrder('Made-up bulk taken back')
+    const back = await ok(browsers.buyer, 'POST', `/portal/order-requests/${sent.id}/take-back`, { version: sent.version })
+    const deleted = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [{ id: sent.id, version: back.request.version }] })
+    expect(deleted.results).toEqual([{ id: sent.id, ok: true, words: null }])
+    expect(await one('SELECT status::text AS status, number FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).toEqual({ status: 'WITHDRAWN', number: sent.number })
+    const a = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up send many A' }, 201)
+    const b = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up send many B' }, 201)
+    const sentMany = await ok(browsers.buyer, 'POST', '/portal/order-requests/bulk-send', { items: [{ id: a.request.id, version: a.request.version }, { id: b.request.id, version: b.request.version + 5 }] })
+    expect(sentMany.results[0]).toEqual({ id: a.request.id, ok: true, words: null })
+    expect(sentMany.results[1]).toMatchObject({ id: b.request.id, ok: false })
+    expect((await one('SELECT status::text AS status FROM "PortalOrderRequest" WHERE id = $1', [a.request.id])).status).toBe('SENT')
+    expect((await call(browsers.designer, 'POST', '/portal/order-requests/bulk-send', { items: [{ id: b.request.id, version: b.request.version }] })).status).toBe(403)
+    expect((await call(browsers.buyer, 'POST', '/portal/order-requests/bulk-delete', { items: [] })).status).toBe(400)
+  })
+})
+
+describe('the designer wall: the office Draft/Sent reads and the order threads; factory people (owb- po2.4)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const designerId = newId()
+  const otherOfficeId = newId()
+  const designer = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: designerId, requestId: newId(), grants: [{ permissions: ['orders.view.own', 'threads.read'], companies: 'all', sites: 'all', parties: 'all' }] })
+  const noRight = () => callerFor(h.database, { audience: 'office', tenantId: T, actorId: newId(), requestId: newId(), grants: [{ permissions: ['threads.read'], companies: 'all', sites: 'all', parties: 'all' }] })
+
+  beforeAll(async () => {
+    await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => {
+      await client.user.create({ data: { id: designerId, email: 'dea.designer@owb-wall.example.com', displayName: 'Made-up Dea Designer', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
+      await client.user.create({ data: { id: otherOfficeId, email: 'otto.office@owb-wall.example.com', displayName: 'Made-up Otto Office', locale: 'en', status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
+    })
+  })
+
+  it('office request reads: on the order → read and listed; not on it → 404 and absent; no right → 403', async () => {
+    const onIt = await sentOrder('Made-up designer on it')
+    const offIt = await sentOrder('Made-up designer not on it')
+    await admin(`INSERT INTO "RecordFollower" (id, "tenantId", "recordType", "recordId", "userId", reason, version, "createdAt", "updatedAt") VALUES ($1, $2, 'PortalOrderRequest', $3, $4, 'CHOSE', 1, now(), now())`, [newId(), T, onIt.id, designerId])
+    expect((await officeRequestView(designer(), onIt.id)).request.id).toBe(onIt.id)
+    await expect(officeRequestView(designer(), offIt.id)).rejects.toThrow(/not found/)
+    expect((await officeDraftView(h.app, designer() as never, onIt.id)).request.id).toBe(onIt.id)
+    await expect(officeDraftView(h.app, designer() as never, offIt.id)).rejects.toThrow(/not found/)
+    const listed = (await listOfficeRequests(designer(), { status: 'OPEN' })).requests.map((entry) => entry.id)
+    expect(listed).toContain(onIt.id)
+    expect(listed).not.toContain(offIt.id)
+    expect(() => ordersReader(noRight())).toThrow(/may not/)
+  })
+
+  it('threads: the designer reads the thread of an order it is on; another order’s thread is 404 and never counted or readable', async () => {
+    const onIt = await sentOrder('Made-up thread on it')
+    const offIt = await sentOrder('Made-up thread not on it')
+    await admin(`INSERT INTO "RecordFollower" (id, "tenantId", "recordType", "recordId", "userId", reason, version, "createdAt", "updatedAt") VALUES ($1, $2, 'PortalOrderRequest', $3, $4, 'CHOSE', 1, now(), now())`, [newId(), T, onIt.id, designerId])
+    await expect(readThread(designer(), { type: 'PortalOrderRequest', id: onIt.id }, { limit: 20 })).resolves.toBeTruthy()
+    await expect(readThread(designer(), { type: 'PortalOrderRequest', id: offIt.id }, { limit: 20 })).rejects.toThrow(/not found/)
+    const counts = await unreadCounts(designer(), [{ type: 'PortalOrderRequest', id: onIt.id }, { type: 'PortalOrderRequest', id: offIt.id }], { readable: true })
+    expect(counts.counts.map((count) => [count.recordId, count.readable])).toEqual([[onIt.id, true], [offIt.id, false]])
+    expect(counts.counts[1]!.newCount).toBe(0)
+  })
+
+  it('factory people: the office people of THIS customer’s pool only — names, role words, letters; never an e-mail', async () => {
+    await admin(`INSERT INTO "PartyOfficePerson" (id, "tenantId", "companyId", "partyId", "userId", version, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, 1, now(), now()), ($6, $2, $3, $7, $8, 1, now(), now())`, [newId(), T, companyA, P1, designerId, newId(), world.partyId, otherOfficeId])
+    const mine = await ok(browsers.buyer, 'GET', '/portal/factory-people')
+    expect(mine.people.map((person: Json) => person.name)).toEqual(['Made-up Dea Designer'])
+    expect(mine.people[0].picture).toEqual({ kind: 'LETTERS', icon: null, colour: null })
+    const text = JSON.stringify(mine)
+    for (const word of ['owb-wall.example.com', 'Made-up Otto Office']) expect(text, word).not.toContain(word)
+    const theirs = await ok(browsers.other, 'GET', '/portal/factory-people')
+    expect(theirs.people.map((person: Json) => person.name)).toEqual(['Made-up Otto Office'])
   })
 })

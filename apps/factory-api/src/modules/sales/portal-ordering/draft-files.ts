@@ -226,9 +226,13 @@ async function dropFiles(files: () => FilesRuntime, request: FastifyRequest, rem
   }
 }
 
-/** DELETE /portal/order-requests/:requestId — the draft discarded (./requests.ts), then its files (the store asked only when it had some). */
+/**
+ * DELETE /portal/order-requests/:requestId — the draft discarded (./requests.ts), then its files (the store asked only when it had
+ * some). owb- po2.1 (G1 (e)): a draft taken back (it keeps its number) is withdrawn instead, its lines and files KEPT.
+ */
 export async function discardDraftWithFiles(files: () => FilesRuntime, writer: DraftWriter, requestId: string, version: number, idempotencyKey?: string) {
   const row = await ownDraft(writer, requestId)
+  if (row.number !== null) return discardDraft(writer, requestId, version, idempotencyKey)
   const remover = uploaderOf(writer, row, [FILES_DELETE])
   const doomed = await filesToDrop(remover, row)
   const answer = await discardDraft(writer, requestId, version, idempotencyKey)

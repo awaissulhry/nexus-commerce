@@ -66,6 +66,10 @@ import { doneOf, reopenOnSharedMessage, type DoneView } from './work-state'
 import { contentWalledFor, walledForOutside } from '../files/content-wall'
 // ---- B-SA-061: what a message is about (a part of its order), checked in words before the database's own guard.
 import { aboutOf, aboutProblems, aboutShapeProblems, aboutsHeldBack, NONE_HELD, OFFICE_ONLY_ABOUT_KINDS, ABOUT_THREAD_TYPE, type About } from './about'
+// owb- po2.3 (order workflow): quiet lines in the feed — their event, grouped at read time.
+import { feedEventOf, groupQuietLines } from '@nexus/factory-domain/threads/quiet-lines'
+import { orderWallHolds } from './order-wall' // owb- po2.4: the designer wall on an order's thread
+const NO_QUIET: ReadonlyMap<string, number> = new Map()
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -122,6 +126,9 @@ const MESSAGE_COMMON = {
   bodyHtml: true,
   attachmentFileIds: true,
   at: true,
+  // owb- po2.3 (order workflow): a quiet line's key and arguments (partner-readable; ids and short values only).
+  eventKey: true,
+  eventArgs: true,
 } as const satisfies Prisma.MessageSelect
 const MESSAGE_OFFICE = {
   ...MESSAGE_COMMON,
@@ -247,10 +254,12 @@ export function threadViewOf(row: SeenThread): ThreadView {
  * `workerShown`: the site's PERFORMANCE gate lets the office read who wrote a floor note; without it the note says a person did (B-W2b-F4).
  * B-SA-061 `aboutHeld`: the messages whose about this reader may not read (a work order it does not reach): null for them.
  */
-function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true, links: MessageLinks = NO_LINKS, aboutHeld: ReadonlySet<string> = NONE_HELD): MessageView {
+function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true, links: MessageLinks = NO_LINKS, aboutHeld: ReadonlySet<string> = NONE_HELD, /* owb- po2.3 */ quiet: ReadonlyMap<string, number> = NO_QUIET): MessageView {
   const authorHidden = row.authorKind === 'WORKER' && !workerShown
   return {
     id: row.id,
+    // owb- po2.3: a quiet line's event (its key, arguments and how many lines it stands for); null: an ordinary message.
+    event: feedEventOf(row, quiet),
     threadId: row.threadId,
     direction: row.direction,
     audience: row.audience,
@@ -581,6 +590,8 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     if (office) {
       const found = await officeRecord(client, record)
       if (!mayOnThread(actor, THREADS_READ, record.type, found.scope)) throw new NotFoundError('Record not found.')
+      // owb- po2.4 (R20): an order's thread also needs orders.view, or orders.view.own while the reader is on the order.
+      if (!(await orderWallHolds(client, context, record, found.scope))) throw new NotFoundError('Record not found.')
       thread = found.thread
       // ---- B-TH-028: a record without a message yet still has who answers it and what waits (a request by its state).
       if (!thread) return { ...EMPTY, reading: null, head: await headOf(client, record, null, serverClock.now()) }
@@ -597,9 +608,12 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
       take: page.limit + 1,
       select: office ? MESSAGE_OFFICE : MESSAGE_COMMON,
     })) as MessageRow[]
-    const shown = rows.slice(0, page.limit)
+    const page0 = rows.slice(0, page.limit)
+    // owb- po2.3: quiet lines of one side and key inside 10 minutes are ONE line (grouped here, at read time: messages are append-only).
+    const grouped = groupQuietLines(page0)
+    const shown = page0.filter((row) => !grouped.dropped.has(row.id))
     const attachments = await visibleAttachments(client, context, shown.flatMap((row) => row.attachmentFileIds))
-    const last = shown.at(-1)
+    const last = page0.at(-1)
     // A thread sits on one site: its gate is read once, and only for a page with a floor note (the office's: others read none).
     // tw-s S.3 (B4): or with a reply or a correction — a quoted floor note names its writer through the gate, also on a page without one.
     const gates = await workerGatesFor(client, office && shown.some((row) => row.authorKind === 'WORKER' || Boolean(row.replyToMessageId) || Boolean(row.correctsMessageId)) ? [thread.siteId] : [])
@@ -625,7 +639,7 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const aboutHeld = office ? await aboutsHeldBack(client, actor, shown) : NONE_HELD
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links, aboutHeld), erased, inbound.skipped, office ? inbound.mails : null)),
+      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links, aboutHeld, grouped.counts), erased, inbound.skipped, office ? inbound.mails : null)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
       reading,
       ...(head ? { head } : {}),
@@ -654,7 +668,8 @@ export type ThreadTools = Pick<CommandTools, 'tx' | 'context' | 'now' | 'audit' 
  * the record's company, site and party from its resolver; a thread made before its record had a party takes the
  * party once it has one. No permission check here: the caller (a route, an email job) has done its own.
  */
-export async function ensureThread(tools: ThreadTools, record: RecordRef, createdById: string | null): Promise<{ thread: ThreadRow; created: boolean }> {
+// owb- po2.3: it needs only the transaction, the time and the audit (a quiet line's writer passes no more).
+export async function ensureThread(tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>, record: RecordRef, createdById: string | null): Promise<{ thread: ThreadRow; created: boolean }> {
   const { tx, now } = tools
   // ---- B-PR-08a: a work order's, hold's or NCR's party is a wall party, never the thread's share party (records.ts NOT_SHAREABLE):
   // its thread is made, and stays, without one.

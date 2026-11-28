@@ -14,6 +14,7 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { officeListColumns, officeSetValue } from './commands'
+import { unreadCounts } from '../../../platform/threads/reads' // owb- po2.3
 
 /**
  * The customer's own columns (owb- order workflow, S1 po1.4; design § 5zi C, R62 a; PL-schema § 5A row 5, G8) on the local stack,
@@ -27,6 +28,8 @@ import { officeListColumns, officeSetValue } from './commands'
  *   - on an order: the columns and a value at once, also after Confirm; the order record shows them; the Designer: 403
  *   - BRAND: customer B cannot read or write A's columns or values (404, absent); the office reaches A only over A
  *   - the floor role reads nothing of the three tables directly
+ *   - po2.3 quiet lines: a column switched on on an ORDER writes one (SYSTEM, shared, its key + args, by the customer), grouped at
+ *     read time; never unread; the partner feed shows it and never an office note; a draft writes none
  */
 
 let h: Harness
@@ -225,5 +228,40 @@ describe('own columns (owb- po1.4)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     await expect(floor((client) => client.partyLineColumn.findMany())).rejects.toThrow(/permission denied/)
     await expect(floor((client) => client.orderLineColumnUse.count())).rejects.toThrow(/permission denied/)
     await expect(floor((client) => client.orderLineOwnValue.count())).rejects.toThrow(/permission denied/)
+  })
+})
+
+describe('quiet lines (owb- po2.3)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const quietOf = (recordId: string) => admin<{ eventKey: string; eventArgs: Json; authorKind: string; audience: string; direction: string }>(`SELECT m."eventKey", m."eventArgs", m."authorKind"::text AS "authorKind", m.audience::text AS audience, m.direction::text AS direction FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordId" = $1 AND m."eventKey" IS NOT NULL ORDER BY m.at`, [recordId])
+
+  it('a column switched on on an order: ONE quiet line each, SYSTEM and shared, grouped in the feed, never unread', async () => {
+    const readerId = newId()
+    const officeReader = callerFor(h.database, { audience: 'office', tenantId: T, actorId: readerId, requestId: newId(), grants: [{ permissions: ['threads.read', 'orders.view'], companies: 'all', sites: 'all', parties: 'all' }] })
+    const before = (await unreadCounts(officeReader, [{ type: 'SalesOrder', id: order.id }])).counts[0]!.newCount
+    const first = await column('Quiet one (made up)')
+    const second = await column('Quiet two (made up)')
+    const now = await ok(browsers.buyer, 'GET', `/portal/sales-orders/${order.id}`)
+    await ok(browsers.buyer, 'PUT', `/portal/sales-orders/${order.id}/own-columns`, { columnIds: [...now.ownColumns.used.map((entry: Json) => entry.id), first.id, second.id] })
+    const lines = (await quietOf(order.id)).filter((line) => line.eventArgs.columnId === first.id || line.eventArgs.columnId === second.id)
+    expect(lines).toHaveLength(2)
+    for (const line of lines) expect(line).toMatchObject({ eventKey: 'quiet.ownColumnAdded', authorKind: 'SYSTEM', audience: 'PARTNER', direction: 'OUTBOUND', eventArgs: { by: 'CUSTOMER' } })
+    // Never unread (the office's count did not move).
+    expect((await unreadCounts(officeReader, [{ type: 'SalesOrder', id: order.id }])).counts[0]!.newCount).toBe(before)
+    // The partner feed shows them as ONE line (one side, one key, inside 10 minutes), never an office note.
+    const thread = await one<{ id: string; partyId: string }>('SELECT id, "partyId" FROM "Thread" WHERE "recordId" = $1', [order.id])
+    await admin(`INSERT INTO "Message" (id, "tenantId", "threadId", direction, audience, channel, "authorKind", "bodyText", at, "createdAt") VALUES ($1, $2, $3, 'INTERNAL_NOTE', 'OFFICE', 'APP', 'SYSTEM', 'Made-up office note', now(), now())`, [newId(), T, thread.id])
+    const feed = await ok(browsers.buyer, 'GET', `/portal/threads/SalesOrder/${order.id}`)
+    const quiet = feed.messages.filter((message: Json) => message.event)
+    expect(quiet.length).toBeGreaterThan(0)
+    expect(quiet[0].event).toMatchObject({ key: 'quiet.ownColumnAdded', args: { by: 'CUSTOMER' } })
+    expect(quiet[0].event.count).toBeGreaterThanOrEqual(2)
+    expect(JSON.stringify(feed)).not.toContain('Made-up office note')
+  })
+
+  it('a draft writes none (silent for a draft)', async () => {
+    const quietCol = await column('Draft silent (made up)')
+    const draft = await draftWithLine('Made-up silent draft')
+    await ok(browsers.buyer, 'PUT', `/portal/order-requests/${draft.request.id}/own-columns`, { version: draft.request.version, columnIds: [quietCol.id] })
+    expect(await quietOf(draft.request.id)).toEqual([])
   })
 })
