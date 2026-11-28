@@ -69,3 +69,35 @@ export const printSheetContract = defineContract({
     }),
   },
 })
+
+// ---- owb-ss2b: Place the scan code (the Shape of build/briefs/owb-ss2.md § owb-ss2b, FIXED) ------------------------------------------
+
+const placementView = output({
+  salesOrderLineId: id(),
+  fileId: id(),
+  page: z.number().int(),
+  xMm: z.number(),
+  yMm: z.number(),
+  sizeMm: z.number(),
+  version: z.number().int(),
+  placedAt: instant(),
+  placedBy: output({ name: z.string() }),
+})
+
+export const listPlacementsContract = defineContract({ params: orderParams, response: { 200: output({ placements: z.array(placementView) }) } })
+
+export const savePlacementContract = defineContract({
+  params: input({ orderId: id(), salesOrderLineId: id() }),
+  body: input({
+    fileId: id(),
+    page: z.number().int().min(1).max(500),
+    xMm: z.number().min(0).max(2000),
+    yMm: z.number().min(0).max(2000),
+    sizeMm: z.number().min(0).max(2000),
+    pageWidthMm: z.number().max(2000),
+    pageHeightMm: z.number().max(2000),
+    /** The place's version as read (a second save moves it); left out for a new place. */
+    version: z.number().int().min(1).optional(),
+  }),
+  response: { 200: placementView },
+})
