@@ -30,6 +30,10 @@ import { browserKeptStorage, KeptClocks, type KeptSnapshot } from './tasks/clock
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
 import { leaveSignIn } from './gate' // W1-BGF
+// owb-fl6: the Undo bar of every floor page (design § 5zg): this person's last move or give, undone here.
+import { newIdempotencyKey } from '../lib/api/client'
+import { giveBack, undoMove } from './basket/api'
+import { undoStore } from './basket/undo/store'
 
 /**
  * The floor app (SCR-020 … 025): one client root under `/floor` that knows the device and the signed-in operator,
@@ -227,6 +231,10 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
 
   const device = load.status === 'ready' ? load.device : null
   const me = load.status === 'ready' ? load.me : null
+  const undo = useSyncExternalStore(undoStore.subscribe, undoStore.getSnapshot, undoStore.getSnapshot)
+  const undoPerson = me?.worker.id ?? null
+  // owb-fl6: another person on the device sees nothing of the one before.
+  useEffect(() => undoStore.forget(undoPerson), [undoPerson])
   const numberKinds = useMemo(() => numberKindsOf(me?.permissions ?? []), [me?.permissions])
   const shellQueue = shellQueueOf(queueSnapshot, { workerId: me?.worker.id ?? null, numberKinds }, { now: new Date(), timeZone: DEFAULT_TIME_ZONE })
 
@@ -501,6 +509,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         crew: (options.crew ?? !options.showHome) ? (me?.crew ?? crewLeft) : null,
         menu: me ? { clock: me.permissions.includes('floor.work'), myday: me.permissions.includes('floor.work'), addPerson: Boolean(me.rules?.crew), crew: Boolean(me.crew), full: me.crew ? (me.crew.members.length >= me.crew.max ? me.crew.max : null) : null } : undefined,
         idle: me ? { warning: idle.warning, secondsLeft: idle.secondsLeft } : undefined,
+        undo: me && ((undo.entry && undo.entry.personId === me.worker.id) || undo.said) ? { entry: undo.entry, busy: undo.busy, said: undo.said } : null,
       }
       const onFrame = (action: FrameAction) => {
         switch (action.type) {
@@ -539,11 +548,15 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
             return idle.stay()
           case 'queue':
             return router.push(SYNC)
+          case 'undo':
+            return void runUndo(api)
+          case 'undo-close':
+            return undoStore.close()
         }
       }
       return { frame: model, onFrame }
     },
-    [device, me, online, moveHeld, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
+    [device, me, online, moveHeld, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt, undo],
   )
 
   const store: FloorStore = {
@@ -624,6 +637,29 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       <FloorContext.Provider value={store}>{load.status === 'ready' ? children : <Starting status={load.status} onRetry={() => void reload()} frame={frame('start.title')} />}</FloorContext.Provider>
     </I18nProvider>
   )
+}
+
+/**
+ * owb-fl6: Undo of this person's last change. A move: each of its groups (`POST /production/baskets/moves/:groupId/undo`; the server
+ * takes back only what nobody moved since). A give: today's reassign back to who held it. The bar then goes, or says why it stays.
+ */
+async function runUndo(api: ApiClient): Promise<void> {
+  const { entry, busy } = undoStore.getSnapshot()
+  if (!entry || busy) return
+  undoStore.start()
+  if (entry.kind === 'move') {
+    let undone = 0
+    let failed = false
+    for (const groupId of entry.groupIds) {
+      const answer = await undoMove(api, groupId, newIdempotencyKey())
+      if (answer.ok) undone += answer.value.undone
+      else failed = true
+    }
+    return undoStore.finish(undone > 0 ? 'undone' : failed ? 'failed' : 'moved')
+  }
+  if (!entry.backTo) return undoStore.finish('failed')
+  const answer = await giveBack(api, entry.assignment, entry.backTo)
+  undoStore.finish(answer.ok ? 'undone' : answer.problem.kind === 'conflict' || answer.problem.kind === 'refused' ? 'moved' : 'failed')
 }
 
 /** Before the device is known: opening, or the server does not answer (with Try again). */

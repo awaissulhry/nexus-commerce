@@ -173,7 +173,7 @@ function Basket({ model, view, read, onAction }: { readonly model: BasketPageVie
         </div>
       ) : null}
       {model.leader ? <LeaderRow view={view} leader={model.leader} onChanged={changed} /> : null}
-      {model.stepsReady ? <StepsWindow open={model.stepsOpen} onClose={() => onAction({ type: 'closeSteps' })} view={view} leader={model.leader} onChanged={changed} /> : null}
+      {model.stepsReady && model.stepsOpen ? <StepsWindow open onClose={() => onAction({ type: 'closeSteps' })} view={view} leader={model.leader} onChanged={changed} /> : null}
       {model.helpReady ? <AskWindow open={model.askOpen} onClose={() => onAction({ type: 'closeAsk' })} read={read} onChanged={changed} /> : null}
       <Modal open={model.photo !== null} onClose={() => onAction({ type: 'photoCancel' })} title={model.photo ? tb('qc.photo', { words: model.photo.words }) : tb('qc.title')} size="md" sheet className="fw-floor-dialog">
         {model.photo ? <HidePhoto label={tb('qc.take')} heldReason={model.online ? null : tb('qc.photoOffline')} onCapture={(photo) => onAction({ type: 'photoTaken', photo: photo.photo })} onCancel={() => onAction({ type: 'photoCancel' })} /> : null}

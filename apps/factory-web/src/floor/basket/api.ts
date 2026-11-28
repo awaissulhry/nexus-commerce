@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ApiClient } from '../../lib/api/client'
+import { newIdempotencyKey, type ApiClient } from '../../lib/api/client'
 import { putToStore, sha256Hex } from '../../record-panels/store'
 import { presignedSchema } from '../../record-panels/api'
 import { onlineFirst, type KeepsActions } from '../queue/online-first'
@@ -207,9 +207,91 @@ export function reportDone(api: ApiClient, queue: KeepsActions, online: boolean,
   })
 }
 
-/** A move by hand (fl2's command): Take it here (TAKEN_HERE) and Quality's "Not good: send back" (BACK, REDO). Online in fl5. */
-export function moveBaskets(api: ApiClient, body: { readonly bundleIds: readonly string[]; readonly toOperationId: string | null; readonly kind: 'FORWARD' | 'BACK' | 'TAKEN_HERE'; readonly reason?: 'REDO' | 'MISTAKE' | 'OTHER'; readonly clientEventId: string }): Promise<TaskOutcome<MoveAnswer>> {
+/**
+ * A move by hand (fl2's command): Take it here (TAKEN_HERE), Quality's "Not good: send back" (BACK, REDO), the Steps window (FORWARD;
+ * BACK with its reason), Change all (one call per target step). Online in fl5/fl6: the offline kind `production.baskets.move` comes with
+ * server A's fl2 (then this goes online first, kept on the phone).
+ */
+export function moveBaskets(api: ApiClient, body: { readonly bundleIds: readonly string[]; readonly toOperationId: string | null; readonly kind: 'FORWARD' | 'BACK' | 'TAKEN_HERE'; readonly reason?: 'REDO' | 'MISTAKE' | 'OTHER'; readonly note?: string; readonly clientEventId: string }): Promise<TaskOutcome<MoveAnswer>> {
   return floorWrite(api, 'POST', '/production/baskets/move', { body, schema: moveAnswerSchema, idempotencyKey: body.clientEventId })
+}
+
+const undoAnswerSchema = z.object({ undone: z.number().int(), stay: z.number().int() })
+export type UndoAnswer = z.infer<typeof undoAnswerSchema>
+
+/** Undo a move (one basket or many: its group). The own move while nobody moved it since; another person's: the team leader. */
+export function undoMove(api: ApiClient, groupId: string, clientEventId: string): Promise<TaskOutcome<UndoAnswer>> {
+  return floorWrite(api, 'POST', `/production/baskets/moves/${seg(groupId)}/undo`, { body: { clientEventId }, schema: undoAnswerSchema, idempotencyKey: clientEventId })
+}
+
+const routeAnswerSchema = z.object({ groupId: z.string(), changed: z.number().int(), stay: z.number().int(), warnings: z.array(z.string()).optional().default([]) })
+export type RouteAnswer = z.infer<typeof routeAnswerSchema>
+
+/** For whom a route change is: baskets (one, or the ones chosen), or all baskets of an order. */
+export type RouteTarget = { readonly bundleIds: readonly string[] } | { readonly salesOrderId: string }
+
+/** Change the route (the team leader; online only): skip, put back, add a step before the last, with one reason. */
+export function changeRoute(api: ApiClient, target: RouteTarget, edits: readonly { readonly kind: 'SKIP' | 'PUT_BACK' | 'ADD'; readonly operationId?: string; readonly departmentId?: string }[], reason: 'NOT_NEEDED' | 'REDO' | 'CUSTOMER' | 'OTHER'): Promise<TaskOutcome<RouteAnswer>> {
+  return floorWrite(api, 'POST', '/production/baskets/route', { body: { ...target, edits, reason }, schema: routeAnswerSchema })
+}
+
+/** Back to the normal route (one basket, the chosen ones, or the order). */
+export function normalRoute(api: ApiClient, target: RouteTarget): Promise<TaskOutcome<{ readonly changed: number }>> {
+  return floorWrite(api, 'POST', '/production/baskets/route/normal', { body: target, schema: z.object({ changed: z.number().int() }) })
+}
+
+/** One person of the team: `key` is the worker the give names; the name only where the site names workers (worker-gate). */
+const teamPersonSchema = z.object({ key: z.string(), name: z.string().nullable(), holds: z.object({ bundleId: z.string(), code: z.string() }).nullable() })
+export type TeamPerson = z.infer<typeof teamPersonSchema>
+
+const teamOrderSchema = z.object({ salesOrderId: z.string().nullable(), customerCode: z.string(), picture: basketPictureSchema.nullable(), baskets: z.array(rowSchema) })
+export type TeamOrder = z.infer<typeof teamOrderSchema>
+
+/** `GET /production/baskets/team` (floor.lead; server B's fl4): the leader's home. Numbers of the TEAM, never of one person. */
+export const basketTeamSchema = z.object({
+  team: teamSchema.nullable(),
+  numbers: z.object({ working: z.number().int(), waiting: z.number().int(), late: z.number().int(), problem: z.number().int() }),
+  forYou: z.array(forYouSchema),
+  orders: z.array(teamOrderSchema),
+  people: z.array(teamPersonSchema),
+  /** People of the team not on the floor today: a count (a list is counted). */
+  missing: z.preprocess((value) => (Array.isArray(value) ? value.length : value), z.number().int()).optional().default(0),
+  doneToday: z.number().int(),
+  handover: z.object({ writtenAt: z.string().nullable().optional(), topics: z.array(z.string()).optional().default([]), text: z.string().nullable().optional() }).nullable().optional().default(null),
+})
+export type BasketTeam = z.infer<typeof basketTeamSchema>
+
+export function fetchTeam(api: ApiClient): Promise<TaskOutcome<BasketTeam>> {
+  return floorRead(api, '/production/baskets/team', { schema: basketTeamSchema })
+}
+
+const assignedSchema = z.object({ assignment: z.object({ id: z.string(), version: z.number().int(), workerId: z.string().nullable() }) })
+export type Assigned = z.infer<typeof assignedSchema>
+
+/** Give to… = today's `POST /production/dispatch/assignments`, naming the BASKET only (the server finds its step: fl4's seam). Online. */
+export function giveBasket(api: ApiClient, workerId: string, bundleId: string): Promise<TaskOutcome<Assigned>> {
+  return floorWrite(api, 'POST', '/production/dispatch/assignments', { body: { workerId, bundleIds: [bundleId] }, schema: assignedSchema })
+}
+
+/** Undo a give: today's reassign, back to the person who held it. */
+export function giveBack(api: ApiClient, assignment: { readonly id: string; readonly version: number }, workerId: string): Promise<TaskOutcome<Assigned>> {
+  return floorWrite(api, 'POST', `/production/dispatch/assignments/${seg(assignment.id)}/reassign`, { body: { version: assignment.version, workerId }, schema: assignedSchema })
+}
+
+/** Do this first (floor.lead; server B's fl3): on or off; it puts the basket on top of the workers' lists. Online in fl6. */
+export function setFirst(api: ApiClient, bundleIds: readonly string[], on: boolean): Promise<TaskOutcome<unknown>> {
+  const clientEventId = newIdempotencyKey()
+  return floorWrite(api, 'POST', '/production/baskets/flags', { body: { bundleIds, kind: 'FIRST', on, clientEventId }, schema: z.unknown(), idempotencyKey: clientEventId })
+}
+
+export const LATE_DAYS = [1, 2, 3, 5] as const
+export const LATE_REASONS = ['MATERIAL', 'MACHINE', 'PEOPLE', 'REDO'] as const
+export type LateReason = (typeof LATE_REASONS)[number]
+
+/** Will be late (floor.lead; server B's fl3): sales reads it before the date slips. Online in fl6. */
+export function tellLate(api: ApiClient, bundleIds: readonly string[], days: (typeof LATE_DAYS)[number], reason: LateReason): Promise<TaskOutcome<unknown>> {
+  const clientEventId = newIdempotencyKey()
+  return floorWrite(api, 'POST', '/production/baskets/late', { body: { bundleIds, days, reason, clientEventId }, schema: z.unknown(), idempotencyKey: clientEventId })
 }
 
 /** A tick of the quality check: today's checklist tick, kept on the phone first (floor-sync `production.checklist.tick`). */

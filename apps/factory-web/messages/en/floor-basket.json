@@ -90,7 +90,8 @@
     "changeLabel": "Change the step of {code}",
     "own": "Own route",
     "ready": "Ready to ship",
-    "label": "The route: {count} steps"
+    "label": "The route: {count} steps",
+    "offRoute": "Not on its route"
   },
   "dock": {
     "label": "The next step",
@@ -125,5 +126,137 @@
     "photoFailed": "The photo did not go. Try again.",
     "photoOffline": "A photo needs the network.",
     "ticked": "ticked"
+  },
+  "steps": {
+    "title": "Steps · {code}",
+    "titleNone": "Steps",
+    "loading": "Reading the steps…",
+    "failed": "The steps could not be read.",
+    "tapStep": "Tap a step. The basket goes there.",
+    "tapStepMany": "Tap a step. The chosen baskets go there.",
+    "whichBaskets": "Which baskets?",
+    "all": "All {count}",
+    "choose": "Choose",
+    "pickFirst": "Choose the baskets first.",
+    "itIsHere": "It is here",
+    "next": "Next",
+    "goesBack": "Back",
+    "whyBack": "Why does it go back?",
+    "why": {
+      "REDO": "Work again",
+      "MISTAKE": "Moved by mistake",
+      "OTHER": "Other"
+    },
+    "leaderBack": "Only the team leader moves a basket back.",
+    "packFirst": "Pack it first: Packed at Packing makes it ready to ship.",
+    "leaderRoute": "Only the team leader changes the route.",
+    "stay_one": "{count} stays: this step is not on its route",
+    "stay_other": "{count} stay: this step is not on their route",
+    "moved_one": "{count} basket → {dept}",
+    "moved_other": "{count} baskets → {dept}",
+    "hereCount": "{count} here",
+    "close": "Close"
+  },
+  "route": {
+    "title": "Change the route",
+    "titleOf": "Change the route · {code}",
+    "forWhom": "For whom?",
+    "onlyThis": "Only this basket",
+    "allOfOrder": "All baskets of the order",
+    "chosen_one": "The chosen basket ({count})",
+    "chosen_other": "The chosen baskets ({count})",
+    "own": "Own route",
+    "normalBack": "Back to the normal route",
+    "normalDone": "The normal route is back.",
+    "whyRoute": "Why does the route change?",
+    "why": {
+      "NOT_NEEDED": "Not needed here",
+      "REDO": "Work again",
+      "CUSTOMER": "The customer asked",
+      "OTHER": "Other"
+    },
+    "stepsFor": "The steps that are still to come",
+    "newStep": "New",
+    "putBack": "Put back",
+    "skip": "Skip",
+    "takeOut": "Take out",
+    "lastStep": "Last step",
+    "addNote": "A new step goes before the last step.",
+    "addStep": "Add a step",
+    "back": "Back",
+    "save": "Save the route",
+    "changeFirst": "Skip or add a step first.",
+    "whyFirst": "Tap why the route changes first.",
+    "saved": "The route is changed. The office sees it.",
+    "noQuality": "No quality check is left on this route."
+  },
+  "undo": {
+    "label": "The last change",
+    "undo": "Undo",
+    "close": "Close",
+    "baskets_one": "{count} basket",
+    "baskets_other": "{count} baskets",
+    "moved": "Somebody moved this basket after you. Your step stays as it is.",
+    "failed": "Undo did not go through."
+  },
+  "give": {
+    "whom": "Give it to whom?",
+    "free": "Free",
+    "nobody": "Nobody in the team yet.",
+    "noneToGive": "No basket waits here.",
+    "person": "Person {n}",
+    "title": "Give to… · {code}",
+    "titlePerson": "Give a basket · {name}"
+  },
+  "late": {
+    "title": "Will be late · {code}",
+    "howLate": "How many days late?",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "why": "Why?",
+    "reason": {
+      "MATERIAL": "Material missing",
+      "MACHINE": "Machine problem",
+      "PEOPLE": "People missing",
+      "REDO": "Work again"
+    },
+    "pickDays": "Pick the days first.",
+    "note": "The customer hears it from sales, not from the floor.",
+    "told": "Sales is told. Sales tells the customer."
+  },
+  "leader": {
+    "row": "Team leader",
+    "giveTo": "Give to…",
+    "doFirst": "Do this first",
+    "willLate": "Will be late",
+    "firstOn": "First now: on top of the list.",
+    "firstOff": "Not first any more.",
+    "parts": "Baskets or team",
+    "baskets": "Baskets · {count}",
+    "team": "Team",
+    "today": "My team today",
+    "number": {
+      "working": "Working: {count}",
+      "waiting": "Waiting: {count}",
+      "late": "Late: {count}",
+      "problem": "Problem: {count}"
+    },
+    "filter": {
+      "working": "Working",
+      "waiting": "Waiting",
+      "late": "Late",
+      "problem": "Problem"
+    },
+    "showAll": "Show all",
+    "empty": "No basket in your team now.",
+    "noTeam": "You lead no team yet. The office sets the teams.",
+    "orderBaskets_one": "{count} basket",
+    "orderBaskets_other": "{count} baskets",
+    "changeAll": "Change all",
+    "firstOf": "Do this first: {code}",
+    "missing": "People missing: {count}",
+    "doneToday": "Done today: {count}",
+    "whoHas": "Who has what",
+    "handover": "Handover note"
   }
 }

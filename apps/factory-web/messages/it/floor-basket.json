@@ -90,7 +90,8 @@
     "changeLabel": "Cambia la fase di {code}",
     "own": "Percorso proprio",
     "ready": "Pronto da spedire",
-    "label": "Il percorso: {count} fasi"
+    "label": "Il percorso: {count} fasi",
+    "offRoute": "Fuori dal suo percorso"
   },
   "dock": {
     "label": "Il prossimo passo",
@@ -125,5 +126,137 @@
     "photoFailed": "La foto non è partita. Riprova.",
     "photoOffline": "Una foto ha bisogno della rete.",
     "ticked": "fatto"
+  },
+  "steps": {
+    "title": "Fasi · {code}",
+    "titleNone": "Fasi",
+    "loading": "Lettura delle fasi…",
+    "failed": "Non è stato possibile leggere le fasi.",
+    "tapStep": "Tocca una fase. Il cesto va lì.",
+    "tapStepMany": "Tocca una fase. I cesti scelti vanno lì.",
+    "whichBaskets": "Quali cesti?",
+    "all": "Tutti {count}",
+    "choose": "Scegli",
+    "pickFirst": "Prima scegli i cesti.",
+    "itIsHere": "È qui",
+    "next": "Poi",
+    "goesBack": "Indietro",
+    "whyBack": "Perché torna indietro?",
+    "why": {
+      "REDO": "Da rifare",
+      "MISTAKE": "Spostato per errore",
+      "OTHER": "Altro"
+    },
+    "leaderBack": "Solo il capo squadra rimanda indietro un cesto.",
+    "packFirst": "Prima imballalo: Imballato all'Imballaggio lo rende pronto da spedire.",
+    "leaderRoute": "Solo il capo squadra cambia il percorso.",
+    "stay_one": "{count} resta: questa fase non è nel suo percorso",
+    "stay_other": "{count} restano: questa fase non è nel loro percorso",
+    "moved_one": "{count} cesto → {dept}",
+    "moved_other": "{count} cesti → {dept}",
+    "hereCount": "{count} qui",
+    "close": "Chiudi"
+  },
+  "route": {
+    "title": "Cambia il percorso",
+    "titleOf": "Cambia il percorso · {code}",
+    "forWhom": "Per chi?",
+    "onlyThis": "Solo questo cesto",
+    "allOfOrder": "Tutti i cesti dell'ordine",
+    "chosen_one": "Il cesto scelto ({count})",
+    "chosen_other": "I cesti scelti ({count})",
+    "own": "Percorso proprio",
+    "normalBack": "Torna al percorso normale",
+    "normalDone": "Il percorso normale è tornato.",
+    "whyRoute": "Perché cambia il percorso?",
+    "why": {
+      "NOT_NEEDED": "Qui non serve",
+      "REDO": "Da rifare",
+      "CUSTOMER": "L'ha chiesto il cliente",
+      "OTHER": "Altro"
+    },
+    "stepsFor": "Le fasi ancora da fare",
+    "newStep": "Nuova",
+    "putBack": "Rimetti",
+    "skip": "Salta",
+    "takeOut": "Togli",
+    "lastStep": "Ultima fase",
+    "addNote": "Una nuova fase va prima dell'ultima.",
+    "addStep": "Aggiungi una fase",
+    "back": "Indietro",
+    "save": "Salva il percorso",
+    "changeFirst": "Prima salta o aggiungi una fase.",
+    "whyFirst": "Prima tocca perché cambia il percorso.",
+    "saved": "Il percorso è cambiato. L'ufficio lo vede.",
+    "noQuality": "Su questo percorso non resta nessun controllo qualità."
+  },
+  "undo": {
+    "label": "L'ultima modifica",
+    "undo": "Annulla",
+    "close": "Chiudi",
+    "baskets_one": "{count} cesto",
+    "baskets_other": "{count} cesti",
+    "moved": "Qualcuno ha spostato questo cesto dopo di te. Il tuo passo resta com'è.",
+    "failed": "L'annullamento non è andato a buon fine."
+  },
+  "give": {
+    "whom": "A chi lo dai?",
+    "free": "Libero",
+    "nobody": "Ancora nessuno nella squadra.",
+    "noneToGive": "Nessun cesto aspetta qui.",
+    "person": "Persona {n}",
+    "title": "Dai a… · {code}",
+    "titlePerson": "Dai un cesto · {name}"
+  },
+  "late": {
+    "title": "Sarà in ritardo · {code}",
+    "howLate": "Quanti giorni di ritardo?",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "why": "Perché?",
+    "reason": {
+      "MATERIAL": "Manca materiale",
+      "MACHINE": "Problema macchina",
+      "PEOPLE": "Mancano persone",
+      "REDO": "Da rifare"
+    },
+    "pickDays": "Prima scegli i giorni.",
+    "note": "Il cliente lo sa dalle vendite, non dal reparto.",
+    "told": "Le vendite lo sanno. Le vendite lo dicono al cliente."
+  },
+  "leader": {
+    "row": "Capo squadra",
+    "giveTo": "Dai a…",
+    "doFirst": "Fai prima questo",
+    "willLate": "Sarà in ritardo",
+    "firstOn": "Ora è il primo: in cima alla lista.",
+    "firstOff": "Non è più il primo.",
+    "parts": "Cesti o squadra",
+    "baskets": "Cesti · {count}",
+    "team": "Squadra",
+    "today": "La mia squadra oggi",
+    "number": {
+      "working": "In lavorazione: {count}",
+      "waiting": "In attesa: {count}",
+      "late": "In ritardo: {count}",
+      "problem": "Problema: {count}"
+    },
+    "filter": {
+      "working": "In lavoro",
+      "waiting": "In attesa",
+      "late": "In ritardo",
+      "problem": "Problema"
+    },
+    "showAll": "Mostra tutto",
+    "empty": "Nessun cesto nella tua squadra ora.",
+    "noTeam": "Non guidi ancora una squadra. L'ufficio crea le squadre.",
+    "orderBaskets_one": "{count} cesto",
+    "orderBaskets_other": "{count} cesti",
+    "changeAll": "Cambia tutti",
+    "firstOf": "Fai prima questo: {code}",
+    "missing": "Persone assenti: {count}",
+    "doneToday": "Fatti oggi: {count}",
+    "whoHas": "Chi ha cosa",
+    "handover": "Nota di passaggio turno"
   }
 }
