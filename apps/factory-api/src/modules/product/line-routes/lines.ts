@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { LINE_ROUTE_REFUSALS, type LineRouteExceptionBody, type LineRoutesView, type LineRouteRefusal, type PickLineRouteBody } from '@nexus/factory-domain/product/routing/line-route-contracts'
 import { PRODUCT_ROUTING_MANAGE } from '@nexus/factory-domain/product/routing/permissions'
@@ -34,7 +35,7 @@ function refused(code: LineRouteRefusal, kind: 'conflict' | 'forbidden' | 'valid
 }
 
 /** The order as the person sees it (orders.view, or orders.view.own and on it), with its scope; else 404. */
-async function seenOrder(caller: CommandCaller, orderId: string, permission = ORDERS_VIEW): Promise<{ context: OfficeContext; order: OrderScope & { id: string } }> {
+async function seenOrder(caller: CommandCaller, orderId: string, permission: Permission = ORDERS_VIEW): Promise<{ context: OfficeContext; order: OrderScope & { id: string } }> {
   const context = officeContextOf(caller)
   assertOrdersReader(context)
   const order = isUuid(orderId) ? await caller.withClient((client) => client.salesOrder.findUnique({ where: { id: orderId }, select: { id: true, companyId: true, partyId: true } })) : null
@@ -84,7 +85,8 @@ async function lineFor(tx: CommandTx, order: OrderScope & { id: string }, lineId
   // The order's prints, then the row: a print and a route change wait for each other on the order.
   await tx.$queryRaw`SELECT "id" FROM "SalesOrder" WHERE "id" = ${order.id}::uuid FOR UPDATE`
   if (await printedFirst(tx, order.id)) throw refused('FROZEN', 'conflict')
-  const row = await tx.salesOrderLineRoute.findUnique({ where: { salesOrderLineId: lineId }, select: LINE_ROUTE_COLUMNS })
+  // One row per line in the tenant (@@unique([tenantId, salesOrderLineId])); row-level security holds the tenant.
+  const row = await tx.salesOrderLineRoute.findFirst({ where: { salesOrderLineId: lineId }, select: LINE_ROUTE_COLUMNS })
   if (row) {
     if (version === undefined || version !== row.version) throw new StaleVersionError('SalesOrderLineRoute', row.id, row.version, version ?? 0)
     const { count } = await tx.salesOrderLineRoute.updateMany({ where: { id: row.id, version: row.version }, data: { version: row.version + 1 } })
@@ -101,7 +103,7 @@ async function writeRow(tools: CommandTools, order: OrderScope & { id: string },
     return
   }
   await tx.salesOrderLineRoute.create({
-    data: { id: newId(), companyId: order.companyId, partyId: order.partyId, salesOrderId: order.id, salesOrderLineId: lineId, ...(data as Prisma.SalesOrderLineRouteUncheckedCreateInput), createdAt: now, updatedAt: now, createdById: officeActor(tools) },
+    data: { id: newId(), companyId: order.companyId, partyId: order.partyId, salesOrderId: order.id, salesOrderLineId: lineId, ...(data as Omit<Prisma.SalesOrderLineRouteUncheckedCreateInput, 'id' | 'companyId' | 'partyId' | 'salesOrderId' | 'salesOrderLineId'>), createdAt: now, updatedAt: now, createdById: officeActor(tools) },
     select: { id: true },
   })
 }

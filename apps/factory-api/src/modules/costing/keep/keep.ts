@@ -51,6 +51,9 @@ export async function keepCost(caller: CommandCaller, styleId: string, revisionI
   const reason = keepReasonOf(body.reason)
   if (reason === null) throw new ValidationError('Say why the standard cost changes.', [{ path: 'body/reason', message: `Expected 1 to ${KEEP_REASON_MAX} characters.` }])
   const mayApprove = can(actor, COSTING_SHEETS_APPROVE, { companyId })
+  // A money.cost field is optional in the contract (left out without the grain): Keep needs it, as read.
+  const expectedTotal = body.expectedTotal
+  if (expectedTotal === undefined) throw new ValidationError('Send the cost now as you read it.', [{ path: 'body/expectedTotal', message: 'Required.' }])
 
   const { result } = await command(caller, { name: 'costing.keepCost', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools): Promise<KeepView> => {
     const { tx, now } = tools
@@ -61,7 +64,7 @@ export async function keepCost(caller: CommandCaller, styleId: string, revisionI
     const day = businessDate(now)
     const live = await costNowOf(tx, fresh, revision, { id: companyId, currency: company.currency }, day)
     const kept = await keptOf(tx, styleId, companyId, day)
-    const refusal = keepRefusalOf({ total: live.total, missing: live.missing.length, expectedTotal: body.expectedTotal, kept: kept?.amount ?? null })
+    const refusal = keepRefusalOf({ total: live.total, missing: live.missing.length, expectedTotal, kept: kept?.amount ?? null })
     if (refusal) throw keepRefused(refusal, refusal === 'MISSING_PARTS' ? live.missing.map((entry) => ({ path: `missing/${entry.code}`, message: entry.message })) : [])
     if (await keptTodayOf(tools, styleId, companyId)) throw keepRefused('KEPT_TODAY')
 
@@ -81,7 +84,7 @@ export async function keepCost(caller: CommandCaller, styleId: string, revisionI
         note: reason,
         inputs: {
           components: { writtenAt: toUtcIso(now), on: day, colourwayId: live.colourwayId, siteId: live.pieceRateSiteId, piecesPerCarton: null, leftOut: [], warnings: live.computed.warnings.map((warning) => warning.code) },
-          keep: { reason, byId: asker, expectedTotal: body.expectedTotal },
+          keep: { reason, byId: asker, expectedTotal },
         },
         lines: numbered(live.computed.lines, new Set()),
       },

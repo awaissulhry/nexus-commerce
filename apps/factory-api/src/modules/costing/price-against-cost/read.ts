@@ -32,7 +32,7 @@ const text = (value: { toString(): string }): string => decimalText(value.toStri
 const dayValue = (day: BusinessDate): Date => new Date(`${day}T00:00:00.000Z`)
 const inForceOn = (day: Date) => ({ AND: [{ OR: [{ validFrom: null }, { validFrom: { lte: day } }] }, { OR: [{ validTo: null }, { validTo: { gte: day } }] }] })
 const LIST_SCOPE = { company: { field: 'companyId', nullable: true } } as const
-const PARTY_SCOPE = { party: { field: 'id' } } as const
+const PARTY_SCOPE = { party: 'id' } as const
 
 /** The grains this read needs, all three: a price, a cost and what one earns over the other. */
 export const PRICE_AGAINST_COST_GRAINS = ['money.price', 'money.cost', 'money.margin'] as const
