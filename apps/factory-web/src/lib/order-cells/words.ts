@@ -15,7 +15,12 @@ export interface CellWords {
   readonly orders: Translate
   readonly sheet: Translate
   readonly list: Translate
+  /** owb-b4 w4.1: the order's life in nine words and its notes (`order-life`; outside: "At the factory’s warehouse"). */
+  readonly life: Translate
 }
+
+/** owb-b4 w4.1: the catalogue of the nine words. */
+export const ORDER_LIFE_NS = 'order-life'
 
 const CACHE = new Map<string, CellWords>()
 
@@ -28,6 +33,7 @@ export function cellWordsFor(locale: Locale, reader: Reader): CellWords {
       orders: createTranslator(locale, catalogueFor(locale, 'orders', reader)),
       sheet: createTranslator(locale, catalogueFor(locale, 'orders-sheet', reader)),
       list: createTranslator(locale, catalogueFor(locale, ORDER_LIST_NS, reader)),
+      life: createTranslator(locale, catalogueFor(locale, ORDER_LIFE_NS, reader)),
     })
     CACHE.set(key, words)
   }

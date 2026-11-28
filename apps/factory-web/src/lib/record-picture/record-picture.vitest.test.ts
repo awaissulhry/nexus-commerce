@@ -6,7 +6,7 @@ import { LOCALES } from '../i18n/locales'
 import { createTranslator, messagesFor } from '../i18n/messages'
 import { PICTURE_ROUTES, readPictures } from './api'
 import { failedRecently, keepSmall, recordOf, resetPictureCache, smallOf, staleOf, drawn, want, type ReadPictures } from './cache'
-import { BATCH_MAX, BATCH_WAIT_MS, batchesOf, faceOf, fallbackOf, moreOf, PICTURE_FIT, PICTURE_PX, RETRY_AFTER_MS, rowPictureOf, styleWords, untilOf, wantsSmall, type PictureAnswer } from './model'
+import { BATCH_MAX, BATCH_WAIT_MS, batchesOf, faceOf, fallbackOf, moreOf, PICTURE_FIT, PICTURE_PX, pictureMarkPx, pictureSizeClass, RETRY_AFTER_MS, rowPictureOf, styleWords, untilOf, wantsSmall, type PictureAnswer } from './model'
 import { RECORD_PICTURE_NS } from './view/RecordPicture'
 // F-SA-283: the part drawn on the server (as the design index draws it).
 import { createElement } from 'react'
@@ -45,14 +45,17 @@ afterEach(() => {
 })
 
 describe('sizes and fit', () => {
-  it('a cell 36 px, a board card 64 px (72 from 1680 px wide), a phone card 48 px, an order line 40 / 56 px', () => {
-    expect(PICTURE_PX).toEqual({ cell: 36, board: 64, phone: 48, line: 40, lineLarge: 56 })
+  it('a cell 36 px, a board card 64 px (72 from 1680 px wide), a phone card 48 px, an order line 40 / 56 px; owb-b4: a log line 30 px, a message 40 px', () => {
+    expect(PICTURE_PX).toEqual({ cell: 36, board: 64, phone: 48, line: 40, lineLarge: 56, log: 30, message: 40 })
     const css = readFileSync(join(HERE, 'record-picture.css'), 'utf8')
     expect(css).toMatch(/@media \(min-width: 1680px\)\s*\{\s*\.fw-rpic-board\s*\{\s*--fw-rpic-size: 72px;/)
     for (const [size, px] of Object.entries(PICTURE_PX)) expect(css, size).toContain(`--fw-rpic-size: ${px}px;`)
   })
-  it('a cell crops (today\'s look); a card, a phone card and a line fit (a garment photo is portrait)', () => {
-    expect(PICTURE_FIT).toEqual({ cell: 'cover', board: 'contain', phone: 'contain', line: 'contain', lineLarge: 'contain' })
+  it('a cell crops (today\'s look); a card, a phone card and a line fit (a garment photo is portrait); owb-b4: a log line and a message fit', () => {
+    expect(PICTURE_FIT).toEqual({ cell: 'cover', board: 'contain', phone: 'contain', line: 'contain', lineLarge: 'contain', log: 'contain', message: 'contain' })
+    expect(pictureSizeClass('lineLarge')).toBe('fw-rpic-line-large')
+    expect(pictureSizeClass('log')).toBe('fw-rpic-log')
+    expect([pictureMarkPx('cell'), pictureMarkPx('log'), pictureMarkPx('message'), pictureMarkPx('board')]).toEqual([18, 18, 24, 24])
   })
   it('layout only, with design-system tokens: no raw colour', () => {
     const css = readFileSync(join(HERE, 'record-picture.css'), 'utf8')

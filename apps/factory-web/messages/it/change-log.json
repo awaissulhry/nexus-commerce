@@ -1,0 +1,69 @@
+{
+  "caption": "Cosa è cambiato",
+  "reading": "Lettura delle modifiche…",
+  "failed": "Non riesco a leggere le modifiche.",
+  "retry": "Riprova",
+  "empty": "Ancora nessuna modifica.",
+  "more": "Carica altro",
+  "moreReading": "Lettura di altre modifiche…",
+  "moreFailed": "Non riesco a leggere altre modifiche.",
+  "head": {
+    "when": "Quando",
+    "who": "Chi",
+    "what": "Cosa",
+    "fromTo": "Da → a"
+  },
+  "who": {
+    "someone": "Qualcuno",
+    "THE_FACTORY": "La fabbrica",
+    "YOU": "Tu",
+    "OFFICE": "Ufficio",
+    "SYSTEM": "Nexus",
+    "DEPARTMENT": "Un reparto"
+  },
+  "action": {
+    "DRAFT_STARTED": "Bozza iniziata",
+    "DRAFT_CHANGED": "Bozza modificata",
+    "LINES_ADDED": "Righe aggiunte",
+    "LINE_CHANGED": "Riga modificata",
+    "LINE_TAKEN_OUT": "Riga tolta",
+    "PEOPLE_CHANGED": "Persone cambiate",
+    "PRICES_TAKEN": "Prezzi presi",
+    "FILE_ADDED": "File aggiunto",
+    "ARTWORK_SHARED": "Grafica condivisa",
+    "SENT": "Inviato",
+    "TAKEN_BACK": "Riportato in bozza",
+    "WITHDRAWN": "Ritirato",
+    "REFUSED": "Rifiutato",
+    "CONFIRMED": "Confermato",
+    "PROMISE_MOVED": "Data promessa spostata",
+    "PICTURE_SET": "Immagine dell'ordine",
+    "DELIVER_TO": "Consegna a",
+    "CHANGE_ACCEPTED": "Modifica accettata",
+    "READY": "Pronto per la spedizione",
+    "CANCELLED": "Annullato",
+    "CLOSED": "Chiuso",
+    "SHIPPED": "Spedito",
+    "AT_OUR_WAREHOUSE": "Nel nostro magazzino",
+    "LABEL_RECEIVED": "Etichetta di spedizione ricevuta",
+    "SENT_ON": "Inoltrato al cliente",
+    "DELIVERED": "Consegnato",
+    "OTHER": "Una modifica"
+  },
+  "subject": {
+    "LINE": "Riga",
+    "SHIPMENT": "Spedizione",
+    "FILE": "File",
+    "BASKET": "Cesto",
+    "REQUEST": "Richiesta"
+  },
+  "fromTo": {
+    "from": "da",
+    "to": "a"
+  },
+  "value": {
+    "none": "niente",
+    "design": "Il design",
+    "picture": "Immagine"
+  }
+}

@@ -6,7 +6,7 @@ import { FileText, Image as ImageIcon, Shirt } from 'lucide-react'
 import { useT } from '../../i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import type { ReadPictures } from '../cache'
-import { faceOf, fallbackOf, moreOf, styleWords, type PictureSize, type PictureSource, type RowPicture } from '../model'
+import { faceOf, fallbackOf, moreOf, pictureMarkPx, pictureSizeClass, styleWords, type PictureSize, type PictureSource, type RowPicture } from '../model'
 import { useRecordPicture } from '../use-record-picture'
 import '../record-picture.css'
 
@@ -55,7 +55,8 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
   const { picture, styleCount, src } = useRecordPicture({ source, recordId, picture: own, styleCount: count, read, demo, held })
   const [broken, setBroken] = useState(false)
   useEffect(() => setBroken(false), [src])
-  const className = `fw-rpic fw-rpic-${size === 'lineLarge' ? 'line-large' : size}`
+  const className = `fw-rpic ${pictureSizeClass(size)}`
+  const mark = pictureMarkPx(size) // owb-b4: the log line's small mark
   const face = faceOf(picture, fallback)
 
   if (face === 'picture' && picture) {
@@ -64,7 +65,7 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
     const name = `${t('open', { number })} · ${style}`
     const body = (
       <>
-        {src && !broken ? <img src={src} alt={t('alt', { style })} loading="lazy" onError={() => setBroken(true)} /> : <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className={src === undefined ? 'fw-rpic-wait' : undefined} />}
+        {src && !broken ? <img src={src} alt={t('alt', { style })} loading="lazy" onError={() => setBroken(true)} /> : <Shirt size={mark} aria-hidden className={src === undefined ? 'fw-rpic-wait' : undefined} />}
         {more > 0 && <span className="fw-rpic-more">{t('more', { count: more })}</span>}
       </>
     )
@@ -95,14 +96,14 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
   if (face === 'reading') {
     return (
       <span className={`${className} fw-rpic-none`} role="img" aria-label={t('reading', { number })} aria-busy>
-        <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className="fw-rpic-wait" />
+        <Shirt size={mark} aria-hidden className="fw-rpic-wait" />
       </span>
     )
   }
 
   return (
     <span className={`${className} fw-rpic-none`} role="img" aria-label={t('noneOf', { number })} title={t('noneOf', { number })}>
-      <Shirt size={size === 'cell' ? 18 : 24} aria-hidden />
+      <Shirt size={mark} aria-hidden />
     </span>
   )
 }

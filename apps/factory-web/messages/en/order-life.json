@@ -1,0 +1,25 @@
+{
+  "life": {
+    "DRAFT": "Draft",
+    "SENT": "Sent",
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY_TO_SHIP": "Ready to ship",
+    "SHIPPED": "Shipped",
+    "AT_OUR_WAREHOUSE": "At our warehouse",
+    "DELIVERED": "Delivered",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "note": {
+    "PARTLY_SHIPPED": "{shipped} of {total} shipped",
+    "CANCELLED": "Cancelled",
+    "REFUSED": "Refused",
+    "QUOTE": "A quote",
+    "WAITS_FOR_APPROVAL": "Waits for approval",
+    "WAITS_FOR_PRINT": "Confirmed: waits for the print",
+    "PRINTED": "Printed"
+  },
+  "tail": {
+    "PARTLY_SHIPPED": "{shipped} of {total}"
+  }
+}

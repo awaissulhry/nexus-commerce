@@ -64,6 +64,16 @@ button.fw-rpic {
   --fw-rpic-size: 56px;
   --fw-rpic-fit: contain;
 }
+/* owb-b4 w4.3: a line of the change log (beside the from → to chips) and a message (the thread's head of an order). */
+.fw-rpic-log {
+  --fw-rpic-size: 30px;
+  --fw-rpic-fit: contain;
+  border-radius: var(--nds-radius-sm);
+}
+.fw-rpic-message {
+  --fw-rpic-size: 40px;
+  --fw-rpic-fit: contain;
+}
 
 .fw-rpic-wait {
   opacity: 0.4;

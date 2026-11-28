@@ -17,5 +17,6 @@ export const designScreen = defineDesignScreen<OrderCellsLabModel>({
     { id: 'cells', label: 'Promised and Shipped', model: { show: 'cells' }, note: 'Office: the Late tag beside the day, “No promise”. Customer: “was …”, “date asked”, “wanted”; the next parcel named by its order.' },
     { id: 'card', label: 'The phone card', model: { show: 'card' }, note: 'The Work card’s block: the picture at the left, the sub line, the chips, the Promised line.' },
     { id: 'bubble', label: 'New messages: the bubble on both faces', model: { show: 'bubble' }, note: '“2”, “99+”; nothing new: an empty cell that says so to a screen reader.' },
+    { id: 'life', label: 'owb-: the nine life words and their notes, on both faces', model: { show: 'life' }, note: 'Draft · Sent · Confirmed · In production · Ready to ship · Shipped · At our warehouse (the customer: “At the factory’s warehouse”) · Delivered · Withdrawn; notes as the word (Cancelled, Refused, Confirmed: waits for the print, Printed) or after a dot (40 of 114, A quote, Waits for approval); the last two from today’s codes.' },
   ],
 })
