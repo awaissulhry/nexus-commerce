@@ -267,6 +267,13 @@ describe('the ONE lines table: copy, take out, put back, material (owb- po1.3)',
     expect((await call(browsers.other, 'POST', `${url}/lines/${draft.describedId}/put-back`, { version: back.request.version })).status).toBe(404)
   })
 
+  it('"A new design: <kind>": a described line takes a garment type of the list only (400 in words otherwise)', async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject: 'Made-up new design' }, 201)
+    const refused = await call(browsers.buyer, 'POST', `/portal/order-requests/${made.request.id}/custom-lines`, { version: made.request.version, line: { description: 'A made-up new design', garmentType: 'MADE-UP-NONE', quantity: 1 } })
+    expect(refused.status).toBe(400)
+    expect(refused.body.error.message).toBe('Not a garment type we make.')
+  })
+
   it('the Send ignores a line taken out: the request goes with its live lines only', async () => {
     const draft = await twoLines('Made-up send without it')
     const url = `/portal/order-requests/${draft.id}`

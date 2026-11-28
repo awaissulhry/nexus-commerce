@@ -1221,7 +1221,8 @@ export async function changeCustomLine(writer: DraftWriter, requestId: string, l
   const line = await writer.scoped((client) => ownCustomLine(client, row, lineId))
   const keep = <T>(asked: T | undefined, now: T): T => (asked === undefined ? now : asked)
   // od-s s.4 (addendum R3): the Sizing cell changes the row's kind in this one update — custom size: made to measure (by person; its
-  // total and size run go, its people carry the sizes); standard or not decided: a described row (the garment type goes).
+  // total and size run go, its people carry the sizes); standard or not decided: a described row (owb- po1.3: its garment type stays,
+  // "A new design: <kind>").
   const kind: CustomLineKind = body.sizing === undefined ? line.kind : body.sizing === 'MADE_TO_MEASURE' ? 'MADE_TO_MEASURE' : 'DESCRIBED'
   const toMtm = kind === 'MADE_TO_MEASURE' && line.kind !== 'MADE_TO_MEASURE'
   checkChoices(body.choices, 'body/choices')

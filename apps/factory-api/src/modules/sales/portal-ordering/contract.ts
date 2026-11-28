@@ -108,7 +108,7 @@ const customLine = output({
   /** A described line's own private-label style, or the style a made-to-measure line is made from (null: none named). */
   style: named.nullable(),
   colourway: named.nullable(),
-  /** MADE_TO_MEASURE: the garment type (a measurement template's code) and its name. */
+  /** The garment type (a measurement template's code) and its name: MADE_TO_MEASURE, or (owb- po1.3) a DESCRIBED "A new design: <kind>". */
   garmentType: output({ code: z.string(), words }).nullable(),
   /** DESCRIBED: the pieces in all (the split by size may follow after Send). */
   quantity: z.number().int().nullable(),
