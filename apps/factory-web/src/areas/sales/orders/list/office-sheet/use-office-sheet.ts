@@ -254,7 +254,7 @@ export function useOfficeSheet(): { model: OfficeSheetModel; actions: OfficeShee
         case 'print':
         case 'printAgain':
         case 'ship':
-          if (row.kind === 'ORDER') setShown({ kind: act, orderId: row.id })
+          if (row.kind === 'ORDER') setShown({ kind: act as 'print' | 'printAgain' | 'ship', orderId: row.id })
           return
         default:
           return

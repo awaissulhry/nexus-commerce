@@ -81,6 +81,9 @@ export function OrdersSheet(props: OrdersSheetProps) {
 /** A tile's tone as the strip's small dot (the design system's colour of that tone). */
 const ACCENT: Readonly<Record<GridTone, string>> = Object.freeze({ neutral: 'var(--nds-text-3)', info: 'var(--nds-info)', success: 'var(--nds-success)', warning: 'var(--nds-warning)', danger: 'var(--nds-danger)' })
 
+/** The totals row, pinned under the rows (one array, so the grid never draws it again for nothing). */
+const PINNED_BOTTOM: SheetRow[] = [TOTALS_ROW]
+
 const DEFAULT_COLUMN: ColDef<SheetRow> = { sortable: false, resizable: true, suppressMovable: true, filter: false, suppressHeaderMenuButton: true, suppressHeaderContextMenu: true }
 
 function Sheet(props: OrdersSheetProps) {
@@ -359,7 +362,7 @@ function Sheet(props: OrdersSheetProps) {
             rowData={rows}
             columnDefs={columnDefs}
             defaultColDef={DEFAULT_COLUMN}
-            pinnedBottomRowData={[TOTALS_ROW]}
+            pinnedBottomRowData={PINNED_BOTTOM}
             getRowId={getRowId}
             getRowClass={getRowClass}
             rowClassRules={rowClassRules}
