@@ -21,6 +21,7 @@ import {
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { findRevision, lockStyleRow, readRevisionFor, STYLE_COLUMNS } from '../bom/store'
+import { assertMayEditDraft } from '../drafts/may-edit' // owb-pd1 1.4
 import { requireEditRule } from '../lifecycle/edit-rule'
 import {
   assertMayWrite,
@@ -70,12 +71,18 @@ const clashed = (error: unknown): never => {
   throw error
 }
 
-/** The style and revision as the caller may see them, and the write permission checked against the style's company. */
-async function writer(caller: CommandCaller, styleId: string, revisionId: string, permission: Permission = PRODUCT_BOM_MANAGE) {
+/**
+ * The style and revision as the caller may see them, and the write permission checked against the style's company. owb-pd1 1.4:
+ * `designer` — the size table of a DRAFT revision is the designer's too (product.drafts.edit; ../drafts/may-edit.ts).
+ */
+async function writer(caller: CommandCaller, styleId: string, revisionId: string, permission: Permission = PRODUCT_BOM_MANAGE, designer = false) {
   const seen = await readRevisionFor(caller, styleId, revisionId)
-  assertMayWrite(contextOf(caller), permission, seen.style.companyId, 'measurement spec of a style')
+  if (designer) assertMayEditDraft(contextOf(caller), seen.style.companyId, seen.revision.status, permission)
+  else assertMayWrite(contextOf(caller), permission, seen.style.companyId, 'measurement spec of a style')
   return seen
 }
+/** owb-pd1 1.4: the acts on the size table a designer may do on a DRAFT revision. */
+const sizeTable = (caller: CommandCaller, styleId: string, revisionId: string) => writer(caller, styleId, revisionId, PRODUCT_BOM_MANAGE, true)
 
 /** GET …/measurement-spec: the revision's live spec as the grid shows it. */
 export async function getSpec(caller: CommandCaller, styleId: string, revisionId: string): Promise<MeasurementSpecView> {
@@ -94,7 +101,7 @@ async function ruleProblems(tx: CommandTx, caller: CommandCaller, ruleId: string
 
 /** product.measures.startSpec: a DRAFT spec of a draft revision (blank, or the cells of another spec). One live spec per revision. */
 export async function startSpec(caller: CommandCaller, styleId: string, revisionId: string, body: StartSpecBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   const context = contextOf(caller)
 
   const { result } = await command(caller, { name: 'product.measures.startSpec', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
@@ -152,7 +159,7 @@ export async function startSpec(caller: CommandCaller, styleId: string, revision
 
 /** product.measures.updateSpec: a draft spec's base size or grade rule (the cells stay as they are). */
 export async function updateSpec(caller: CommandCaller, styleId: string, revisionId: string, body: UpdateSpecBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   const { result } = await command(caller, { name: 'product.measures.updateSpec', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
     const { tx } = tools
     const locked = await lockSpec(tools, styleId, revisionId, body.version)
@@ -257,14 +264,14 @@ async function typedCells(
 
 /** product.measures.writeCells: cells typed or pasted (TYPED; null takes a cell out). */
 export async function writeSpecCells(caller: CommandCaller, styleId: string, revisionId: string, body: SpecCellsBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   const { result } = await command(caller, { name: 'product.measures.writeCells', idempotencyKey, input: { styleId, revisionId, ...body } }, (tools) => typedCells(tools, styleId, revisionId, body.version, body.cells, 'CELLS')).catch(clashed)
   return result
 }
 
 /** product.measures.addPoints: points of the library added at the end, each with its base size value. */
 export async function addSpecPoints(caller: CommandCaller, styleId: string, revisionId: string, body: AddSpecPointsBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   const ids = body.points.map((point) => point.pointOfMeasureId)
   if (new Set(ids).size !== ids.length) throw invalid([{ path: 'body/points', message: 'Each point once.' }], NOUN)
   const { result } = await command(caller, { name: 'product.measures.addPoints', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
@@ -278,7 +285,7 @@ export async function addSpecPoints(caller: CommandCaller, styleId: string, revi
 
 /** product.measures.removePoints: points out of the spec (every size of each). */
 export async function removeSpecPoints(caller: CommandCaller, styleId: string, revisionId: string, body: SpecPointsBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   if (new Set(body.pointOfMeasureIds).size !== body.pointOfMeasureIds.length) throw invalid([{ path: 'body/pointOfMeasureIds', message: 'Each point once.' }], NOUN)
   const { result } = await command(caller, { name: 'product.measures.removePoints', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
     const { tx } = tools
@@ -299,7 +306,7 @@ export async function removeSpecPoints(caller: CommandCaller, styleId: string, r
 
 /** product.measures.reorderPoints: every point of the spec in its new order (places 1, 2, 3 …, the same on every size). */
 export async function reorderSpecPoints(caller: CommandCaller, styleId: string, revisionId: string, body: SpecPointsBody, idempotencyKey?: string): Promise<MeasurementSpecView> {
-  await writer(caller, styleId, revisionId)
+  await sizeTable(caller, styleId, revisionId)
   const { result } = await command(caller, { name: 'product.measures.reorderPoints', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const locked = await lockSpec(tools, styleId, revisionId, body.version)

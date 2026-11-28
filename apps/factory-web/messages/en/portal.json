@@ -3,12 +3,16 @@
     "home": "Home",
     "waiting": "Waiting for you",
     "orders": "Orders",
-    "ordersRequests": "Orders & requests",
+    "prices": "Prices",
+    "agreedPrices": "Agreed prices",
     "newOrder": "New order",
     "production": "Production",
-    "quotesSamples": "Quotes & samples",
+    "customers": "Customers",
+    "yourCustomers": "Your customers",
+    "payments": "Payments",
+    "products": "Products",
+    "people": "People",
     "quotes": "Quotes & requests",
-    "catalogue": "Catalogue",
     "samples": "Samples & tech packs",
     "documents": "Documents",
     "returns": "Returns & claims",
@@ -22,7 +26,6 @@
     "auditRoom": "Audit room"
   },
   "rail": {
-    "label": "Portal areas",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -79,7 +82,6 @@
     "portal": "Portal",
     "ask": "Ask a question",
     "more": "More actions",
-    "pages": "Pages",
     "pagesOf": "Pages of {area}"
   },
   "live": {

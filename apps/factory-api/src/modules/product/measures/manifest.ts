@@ -12,12 +12,16 @@ const libraryManage = { audiences: ['office'], permission: 'product.styles.manag
 const specView = { audiences: ['office'], permission: 'product.bom.view', scope: 'record' } as const
 const specManage = { audiences: ['office'], permission: 'product.bom.manage', scope: 'record' } as const
 const specRelease = { audiences: ['office'], permission: 'product.bom.release', scope: 'record' } as const
+// owb-pd1 1.4 (S4 settle 6): the size table of a DRAFT revision and a point's how-to words are the designer's too (product.drafts.edit)
+// — the route asks the read right (every holder of the manage right holds it) and the handler the write (modules/product/drafts).
+const specDraft = specView
+const libraryHowTo = libraryView
 
 export const manifest = defineManifest({
   'GET /product/points-of-measure': libraryView,
   'POST /product/points-of-measure': libraryManage,
   'GET /product/points-of-measure/:pomId': libraryView,
-  'PATCH /product/points-of-measure/:pomId': libraryManage,
+  'PATCH /product/points-of-measure/:pomId': libraryHowTo,
   // The list's selection (Owner rule 2026-10-29): several points archived or restored.
   'POST /product/points-of-measure/status': libraryManage,
   'POST /product/points-of-measure/:pomId/picture': libraryManage,
@@ -34,12 +38,12 @@ export const manifest = defineManifest({
   'POST /product/measurement-templates/:templateId/archive': libraryManage,
   'POST /product/measurement-templates/:templateId/restore': libraryManage,
   'GET /product/styles/:styleId/revisions/:revisionId/measurement-spec': specView,
-  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec': specManage,
-  'PATCH /product/styles/:styleId/revisions/:revisionId/measurement-spec': specManage,
-  'PUT /product/styles/:styleId/revisions/:revisionId/measurement-spec/cells': specManage,
-  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/points': specManage,
-  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/points/remove': specManage,
-  'PUT /product/styles/:styleId/revisions/:revisionId/measurement-spec/points/order': specManage,
+  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec': specDraft,
+  'PATCH /product/styles/:styleId/revisions/:revisionId/measurement-spec': specDraft,
+  'PUT /product/styles/:styleId/revisions/:revisionId/measurement-spec/cells': specDraft,
+  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/points': specDraft,
+  'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/points/remove': specDraft,
+  'PUT /product/styles/:styleId/revisions/:revisionId/measurement-spec/points/order': specDraft,
   'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/approve': specRelease,
   'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/reopen': specRelease,
   'POST /product/styles/:styleId/revisions/:revisionId/measurement-spec/archive': specManage,

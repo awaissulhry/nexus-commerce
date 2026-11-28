@@ -426,6 +426,14 @@ export function firstWaiting<G extends { readonly rows: readonly { readonly done
   }
   return { groups: shown, open, more: open > max }
 }
+
+/**
+ * owb-po4.1 (order workflow plan § 5 F): Waiting for you is Home's card now — the menu has no row for it — so "All N waiting"
+ * opens its page whenever something waits (before: only past the first five). Nothing waits: no link (the card says so).
+ */
+export function waitingLinkOf(prefix: string, five: { readonly open: number } | null, label: (count: number) => string): { href: string; label: string } | null {
+  return five && five.open > 0 ? { href: `${prefix}/waiting`, label: label(five.open) } : null
+}
 // ── end F-PR-15
 
 // ── What waits for you: the rows the Approve pop-up answers ────────────────────────────────────────────────────────────

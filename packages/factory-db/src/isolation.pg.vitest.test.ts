@@ -119,6 +119,8 @@ import { seedCustomerPage } from './testing/customer-page' // B-CP-005
 import { seedOrderMoney } from './testing/order-money' // B-OM-019
 import { seedOrderFiles } from './testing/order-files' // B-OF-030
 import { seedOrderWorkflow } from './testing/order-workflow' // owb-b1
+import { seedFloorBaskets } from './testing/floor-baskets' // owb-fl0
+import { seedOrderStructures } from './testing/order-structures' // owb-ssw
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -245,6 +247,63 @@ async function adjustCopy(model: string, copy: Record<string, unknown>): Promise
     return { ...copy, userId: person!.id }
   }
   // ---- end owb-b1
+  // ---- owb-fl0 (schema wave "floor baskets 2", …_production_floor_baskets_2_guards): one open mark per basket and kind
+  // (BasketFlag_one_open): the copy of the first (open) mark goes to another basket of the same work order at the site with no
+  // open mark of that kind (testing/floor-baskets.ts leaves bundle 2 free).
+  if (model === 'BasketFlag') {
+    const [free] = await admin(
+      `SELECT b.id::text AS id FROM "Bundle" b
+        WHERE b."tenantId" = $1::uuid AND b."siteId" = $2::uuid AND b."workOrderId" = $3::uuid
+          AND NOT EXISTS (SELECT 1 FROM "BasketFlag" f WHERE f."tenantId" = b."tenantId" AND f."bundleId" = b.id AND f.kind::text = $4 AND f."clearedAt" IS NULL)
+        ORDER BY b.id LIMIT 1`,
+      [copy.tenantId, copy.siteId, copy.workOrderId, copy.kind],
+    )
+    expect(free, 'another basket of the work order with no open mark of the kind (testing/floor-baskets.ts)').toBeDefined()
+    return { ...copy, bundleId: free!.id }
+  }
+  // ---- end owb-fl0
+  // ---- owb-ssw (S3 schema wave "structures + units", …_order_structures_guards): what a partial unique keeps once moves in the copy.
+  // Two open rules of a company never fit exactly the same orders (OrderStructureRule_open_same_orders): the copy takes a kind of
+  // product no open rule of the company gives that customer.
+  if (model === 'OrderStructureRule') {
+    const [kind] = await admin(
+      `SELECT k::text AS kind FROM unnest(enum_range(NULL::"ProductType")) AS k
+        WHERE NOT EXISTS (SELECT 1 FROM "OrderStructureRule" r
+                           WHERE r."tenantId" = $1::uuid AND r."companyId" = $2::uuid AND r."partyId" IS NOT DISTINCT FROM $3::uuid AND r.category = k AND r."closedAt" IS NULL)
+        ORDER BY k LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId],
+    )
+    expect(kind, 'a kind of product no open rule of the company gives the customer (testing/order-structures.ts)').toBeDefined()
+    return { ...copy, category: kind!.kind }
+  }
+  // One open structure by hand per order (OrderStructureOverride_one_open): the copy goes to another order of the same company and
+  // customer with none open.
+  if (model === 'OrderStructureOverride') {
+    const [other] = await admin(
+      `SELECT o.id::text AS id FROM "SalesOrder" o
+        WHERE o."tenantId" = $1::uuid AND o."companyId" = $2::uuid AND o."partyId" = $3::uuid AND o.id <> $4::uuid
+          AND NOT EXISTS (SELECT 1 FROM "OrderStructureOverride" v WHERE v."tenantId" = o."tenantId" AND v."salesOrderId" = o.id AND v."endedAt" IS NULL)
+        ORDER BY o.id LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId, copy.salesOrderId],
+    )
+    expect(other, 'another order of the customer with no open structure by hand (testing/order-structures.ts)').toBeDefined()
+    return { ...copy, salesOrderId: other!.id }
+  }
+  // One kept structure per line (its unique key, made of ids only): the copy goes to another line of an order of the same company
+  // and customer that kept none (a line of its own order: OrderLineStructureKept_check).
+  if (model === 'OrderLineStructureKept') {
+    const [free] = await admin(
+      `SELECT l.id::text AS line, o.id::text AS "order" FROM "SalesOrderLine" l
+         JOIN "SalesOrder" o ON o."tenantId" = l."tenantId" AND o.id = l."orderId"
+        WHERE l."tenantId" = $1::uuid AND o."companyId" = $2::uuid AND o."partyId" = $3::uuid
+          AND NOT EXISTS (SELECT 1 FROM "OrderLineStructureKept" k WHERE k."tenantId" = l."tenantId" AND k."salesOrderLineId" = l.id)
+        ORDER BY l.id LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId],
+    )
+    expect(free, 'a line of the customer that kept no structure (testing/order-structures.ts)').toBeDefined()
+    return { ...copy, salesOrderId: free!.order, salesOrderLineId: free!.line }
+  }
+  // ---- end owb-ssw
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
@@ -665,6 +724,18 @@ beforeAll(async () => {
   await seedOrderWorkflow({ db: factory, namespace: 'iso-a' })
   await seedOrderWorkflow({ db: factory, namespace: 'iso-b' })
   // ---- end owb-b1
+  // ---- owb-fl0 (schema wave "floor baskets 2"): bundle 1's open "Do this first" mark and an idea told at A1 without a name, in
+  // each tenant (testing/floor-baskets.ts; the first rows the plain ones a copy may repeat).
+  await seedFloorBaskets({ db: factory, namespace: 'iso-a' })
+  await seedFloorBaskets({ db: factory, namespace: 'iso-b' })
+  // ---- end owb-fl0
+  // ---- owb-ssw (order workflow build, S3 schema wave "structures + units"; no CLI seed change): a design page of SEED-SO-0002,
+  // company A's structure "Seed jackets" (team L1-A, the office member), rule 1 (P1, JACKET), SEED-SO-0002's structure by hand,
+  // its BLK line's kept structure and the scan code's place on the design page, in each tenant (testing/order-structures.ts; the
+  // first rows the plain ones a copy may repeat).
+  await seedOrderStructures({ db: factory, namespace: 'iso-a' })
+  await seedOrderStructures({ db: factory, namespace: 'iso-b' })
+  // ---- end owb-ssw
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -709,6 +780,7 @@ it('covers every classified table and every runtime role', () => {
     'BankLine',
     'BankMatch',
     'BankStatement',
+    'BasketFlag', // owb-fl0
     'BasketMove', // owb-b1
     'BasketRouteEdit', // owb-b1
     'BomLine',
@@ -821,6 +893,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'FloorSuggestion', // owb-fl0
     'FloorSyncEvent',
     'GarmentDowngrade',
     'GarmentLabelPrint',
@@ -976,8 +1049,12 @@ it('covers every classified table and every runtime role', () => {
     'OrderGate',
     'OrderLineColumnUse', // owb-b1
     'OrderLineOwnValue', // owb-b1
+    'OrderLineStructureKept', // owb-ssw
     'OrderPriceAcceptance', // B-OM-019
     'OrderPrint', // owb-b1
+    'OrderStructure', // owb-ssw
+    'OrderStructureOverride', // owb-ssw
+    'OrderStructureRule', // owb-ssw
     'OrderTeam', // owb-b1
     'OrgArea',
     'OutboxEvent',
@@ -1173,6 +1250,7 @@ it('covers every classified table and every runtime role', () => {
     'SampleShipment',
     'SampleSwatch',
     'SavedView',
+    'ScanCodePlacement', // owb-ssw
     'ScanCorrectionRequest',
     'ScanPatternFinding',
     'ScheduleChange',

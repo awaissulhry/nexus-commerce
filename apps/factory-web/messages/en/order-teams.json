@@ -1,0 +1,120 @@
+{
+  "part": {
+    "title": "Team",
+    "info": "The team that makes this order. The production manager gives an order to a team; several teams can work together or split the baskets. Sales can ask for another team. The customer sees no team.",
+    "none": "No team yet. Every worker sees its baskets.",
+    "one": "{team}.",
+    "together": "{teams} work together · {team} is in charge.",
+    "split": "The baskets are split: {teams}.",
+    "splitSoon": "The baskets to come are split: {teams}.",
+    "byRule": "Given by its order structure.",
+    "leader": "Leader: {name}",
+    "noLeader": "No leader yet",
+    "inCharge": "In charge",
+    "share_one": "{count} basket",
+    "share_other": "{count} baskets",
+    "shareSoon_one": "{count} basket to come",
+    "shareSoon_other": "{count} baskets to come",
+    "give": "Give to a team…",
+    "change": "Change…",
+    "ask": "Ask for another team",
+    "asked": "Asked: the production manager answers.",
+    "failed": "The team of this order could not be read."
+  },
+  "give": {
+    "title": "The teams of this order",
+    "planned_one": "{count} basket planned",
+    "planned_other": "{count} baskets planned",
+    "count_one": "{count} team on this order",
+    "count_other": "{count} teams on this order",
+    "countNone": "No team on this order yet",
+    "mode": {
+      "label": "How they work",
+      "TOGETHER": "They work together",
+      "SPLIT": "They split the baskets"
+    },
+    "inCharge": "In charge",
+    "putInCharge": "Put in charge",
+    "inChargeHint": "The leader of the team in charge answers for the order.",
+    "remove": "Take {team} off this order",
+    "locked": "Shared at print",
+    "together": "Sees every basket",
+    "less": "One basket less for {team}",
+    "more": "One basket more for {team}",
+    "shareLabel": "Baskets for {team}",
+    "even": "Share them evenly",
+    "sum": {
+      "ok": "{given} of {planned} baskets are given.",
+      "short": "{given} of {planned} baskets are given: {count} more to give.",
+      "over": "{given} of {planned} baskets are given: {count} too many."
+    },
+    "note": {
+      "together": "Every team sees every basket. Each team keeps its name and its people. The leader of the team in charge answers for the order.",
+      "split": "Each team makes its own baskets: the first team takes the first baskets, and so on. The leader of the team in charge answers for the order.",
+      "sharedAtPrint": "The baskets were shared at print: the shares stay. Teams that work together can still be added or taken off.",
+      "noTeam": "This order will have no team: every worker sees its baskets."
+    },
+    "empty": "Add a team below. With no team, every worker sees the baskets of this order.",
+    "add": "Add a team",
+    "search": "Find a team",
+    "addOne": "Add {team}",
+    "noMore": "Every team of the factory is on this order.",
+    "noMatch": "No team matches “{query}”.",
+    "noBoard": "The teams could not be read.",
+    "suggested": "Suggested",
+    "worked": "Worked for this customer",
+    "why": "Why (not needed)",
+    "whyHint": "For example: a big order, a short date",
+    "act": "Save",
+    "held": {
+      "unchanged": "Nothing changed yet.",
+      "addTeam": "Add a team first.",
+      "shareZero": "Each team needs one basket or more: take a team off, or give it baskets.",
+      "notAddUp": "The baskets do not add up: {given} of {planned} are given.",
+      "sharedAtPrint": "The baskets were shared at print: the shares stay.",
+      "splitTwo": "Two teams or more can split the baskets.",
+      "splitTooFew": "This order has {count} baskets: it cannot be split between {teams} teams."
+    }
+  },
+  "facts": {
+    "leader": "{name}",
+    "noLeader": "no leader yet",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "small": "Small teams show no numbers",
+    "loadOf": "{count} of {max} baskets in work",
+    "load_one": "{count} basket in work",
+    "load_other": "{count} baskets in work"
+  },
+  "mark": {
+    "OVER_LIMIT": "Over its limit",
+    "NO_NEW_ORDERS": "Takes no new order",
+    "MISSING_TODAY": "People missing today",
+    "MISSING_TODAY_n": "{count} missing today",
+    "LATE": "Late",
+    "LATE_n": "{count} late"
+  },
+  "ask": {
+    "title": "Ask for another team",
+    "body": "The production manager gives orders to teams. Say why this order needs another team: they get a task with the order and your words.",
+    "why": "Why another team?",
+    "whyHint": "For example: the customer asked for the team that made the last order",
+    "act": "Ask the production manager",
+    "held": {
+      "why": "Say why first.",
+      "long": "At most {count} characters."
+    }
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "error": {
+    "read": "Something went wrong while reading.",
+    "write": "It was not saved. Try again.",
+    "forbidden": "You may not do this.",
+    "offline": "No answer from the factory: check the network and try again.",
+    "notFound": "This order is not there any more.",
+    "conflict": "Someone changed the teams of this order meanwhile: they were read again. Check them and save again.",
+    "invalid": "It was refused as it is: check the teams and the baskets."
+  }
+}

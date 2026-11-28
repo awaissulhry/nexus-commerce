@@ -23,12 +23,20 @@ export type ShipmentRow = Order['chain']['shipments'][number]
 type Line = Order['lines'][number]
 type SizeProgress = Line['progress']
 
-/** The buckets in the bar's order. `planned`: on a shipment not left, told apart into packed / draft only when every contents is read. */
-export const BUCKETS = ['shipped', 'packed', 'draft', 'planned', 'back', 'ready', 'making', 'closed'] as const
+/**
+ * The buckets in the bar's order. `planned`: on a shipment not left, told apart into packed / draft only when every contents is read.
+ * owb-ss3 (design plan § 5n "Where every garment is", the word "At our warehouse"): `atWarehouse` — left the factory on a shipment that
+ * went to our own warehouse first, arrived there and is not sent on yet (the legs read, `GET /shipping/warehouse-legs`); counted out of
+ * Shipped (the order read counts it shipped), so the buckets still add up to what was ordered. 0 while the legs are not read.
+ */
+export const BUCKETS = ['shipped', 'atWarehouse', 'packed', 'draft', 'planned', 'back', 'ready', 'making', 'closed'] as const
 export type Bucket = (typeof BUCKETS)[number]
 export type Buckets = Readonly<Record<Bucket, number>>
 
-const NONE: Buckets = Object.freeze({ shipped: 0, packed: 0, draft: 0, planned: 0, back: 0, ready: 0, making: 0, closed: 0 })
+const NONE: Buckets = Object.freeze({ shipped: 0, atWarehouse: 0, packed: 0, draft: 0, planned: 0, back: 0, ready: 0, making: 0, closed: 0 })
+
+/** owb-ss3: the shipments whose garments sit at our warehouse now (arrived, not sent on: legs/model.ts atWarehouseIds); null: not read. */
+export type AtWarehouse = ReadonlySet<string>
 
 /** Per shipment that came back with the carrier: whether its garments were received back into stock (the deliveries read). */
 export type Received = ReadonlyMap<string, boolean>
@@ -109,8 +117,8 @@ export interface WhereModel {
   readonly allOut: boolean
   /** The shipments that left (for "Everything shipped: … on N shipments"). */
   readonly left: number
-  /** The doors under each bucket of the legend. */
-  readonly doors: Readonly<Record<'shipped' | 'packed' | 'draft' | 'planned' | 'back', readonly ShipRef[]>>
+  /** The doors under each bucket of the legend. owb-ss3: `atWarehouse` — the shipments at our warehouse now. */
+  readonly doors: Readonly<Record<'shipped' | 'atWarehouse' | 'packed' | 'draft' | 'planned' | 'back', readonly ShipRef[]>>
   readonly cards: readonly StyleCard[]
 }
 
@@ -151,15 +159,17 @@ function cellsOfLine(line: Line): { size: string | null; progress: SizeProgress 
 }
 
 /** Every goods cell in its bucket (the buckets of a cell add up to its ordered pieces). */
-export function cellsOf(order: Pick<Order, 'lines' | 'progress'>, rows: readonly ShipmentRow[], received: Received | null): CellCount[] {
+export function cellsOf(order: Pick<Order, 'lines' | 'progress'>, rows: readonly ShipmentRow[], received: Received | null, atWarehouse: AtWarehouse | null = null): CellCount[] {
   const counted = countedOf(order)
   const split = contentsRead(rows)
   return goodsOf(order).flatMap((line) =>
     cellsOfLine(line).map(({ size, progress }): CellCount => {
-      const shipped = progress.shipped
+      // owb-ss3: the garments of this cell at our warehouse now, out of what left (never more than left; 0 without the legs read).
+      const atWh = atWarehouse && atWarehouse.size > 0 ? Math.min(piecesOn(rows, line, size, (row) => row.status === 'SHIPPED' && atWarehouse.has(row.id)), progress.shipped) : 0
+      const shipped = progress.shipped - atWh
       const closed = progress.closedShort ?? 0
       const toShip = progress.toShip
-      if (!counted) return { lineId: line.id, size, ordered: progress.ordered, stillToShip: toShip, buckets: { ...NONE, shipped, closed } }
+      if (!counted) return { lineId: line.id, size, ordered: progress.ordered, stillToShip: toShip, buckets: { ...NONE, shipped, atWarehouse: atWh, closed } }
       // A line closed short sends nothing more: whatever is not shipped is closed (the domain's rule), so nothing of it is planned.
       const planned = Math.min(max0(progress.planned ?? 0), toShip)
       const ready = Math.min(max0(progress.readyNow ?? 0), toShip - planned)
@@ -175,7 +185,7 @@ export function cellsOf(order: Pick<Order, 'lines' | 'progress'>, rows: readonly
       // Came back, not yet received: only where the deliveries read says so (unknown: they stay "still to be made or released").
       const back = received ? Math.min(piecesOn(rows, line, size, (row) => row.status === 'RETURNED' && received.get(row.id) === false), toShip - planned - ready) : 0
       const making = toShip - planned - ready - back
-      return { lineId: line.id, size, ordered: progress.ordered, stillToShip: toShip - planned, buckets: { shipped, packed, draft, planned: rest, back, ready, making, closed } }
+      return { lineId: line.id, size, ordered: progress.ordered, stillToShip: toShip - planned, buckets: { shipped, atWarehouse: atWh, packed, draft, planned: rest, back, ready, making, closed } }
     }),
   )
 }
@@ -264,13 +274,16 @@ function cardOf(group: StyleGroup, order: Pick<Order, 'promiseDate'>, cells: rea
   }
 }
 
-/** The section's model from the order read, its shipments and (when read) which returned shipments were received back. */
-export function whereOf(order: Pick<Order, 'status' | 'lines' | 'progress' | 'promiseDate' | 'chain'>, received: Received | null): WhereModel {
+/**
+ * The section's model from the order read, its shipments and (when read) which returned shipments were received back. owb-ss3: and
+ * (when the legs are read) which shipments sit at our warehouse now.
+ */
+export function whereOf(order: Pick<Order, 'status' | 'lines' | 'progress' | 'promiseDate' | 'chain'>, received: Received | null, atWarehouse: AtWarehouse | null = null): WhereModel {
   const rows = order.chain.shipments
   const counted = countedOf(order)
   const split = counted && contentsRead(rows)
   const goods = goodsOf(order)
-  const cells = cellsOf(order, rows, received)
+  const cells = cellsOf(order, rows, received, atWarehouse)
   const totals = add(cells)
   const ordered = sumOf(cells.map((cell) => cell.ordered))
   const stillToShip = sumOf(cells.map((cell) => cell.stillToShip))
@@ -285,10 +298,11 @@ export function whereOf(order: Pick<Order, 'status' | 'lines' | 'progress' | 'pr
     ordered,
     stillToShip,
     totals,
-    allOut: goods.length > 0 && totals.shipped > 0 && stillToShip === 0 && onShipments === 0,
+    allOut: goods.length > 0 && totals.shipped + totals.atWarehouse > 0 && stillToShip === 0 && onShipments === 0,
     left: live.filter((row) => LEFT.has(row.status)).length,
     doors: {
-      shipped: live.filter((row) => LEFT.has(row.status)).map(refOf),
+      shipped: live.filter((row) => LEFT.has(row.status) && !(atWarehouse?.has(row.id) ?? false)).map(refOf),
+      atWarehouse: live.filter((row) => row.status === 'SHIPPED' && (atWarehouse?.has(row.id) ?? false)).map(refOf),
       packed: live.filter((row) => row.status === 'PACKED').map(refOf),
       draft: live.filter((row) => row.status === 'DRAFT').map(refOf),
       planned: live.filter((row) => NOT_LEFT.has(row.status)).map(refOf),
@@ -313,7 +327,7 @@ export function whereAnswer(where: WhereModel, order: Pick<Order, 'progress'>): 
   if (where.state === 'cancelled') return [word('where.state.cancelled')]
   if (where.state === 'feesOnly') return [word('where.state.feesOnly')]
   if (where.allOut) {
-    const out = word('where.allOut', undefined, { words: { garments: word('where.garments', { count: where.totals.shipped }), shipments: word('where.shipments', { count: where.left }) } })
+    const out = word('where.allOut', undefined, { words: { garments: word('where.garments', { count: where.totals.shipped + where.totals.atWarehouse }), shipments: word('where.shipments', { count: where.left }) } })
     return where.totals.closed > 0 ? [out, word('where.closedPart', { count: where.totals.closed })] : [out]
   }
   if (where.mode === 'today') return [wordOf('orders', 'ship.figures', { ordered: order.progress.ordered, released: order.progress.released, shipped: order.progress.shipped, toShip: order.progress.toShip })]
