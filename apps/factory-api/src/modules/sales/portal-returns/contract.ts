@@ -198,7 +198,7 @@ const complaintRecord = output({
     item: output({ style: named.nullable(), size: z.string().nullable(), serial: z.string().nullable(), batchNumber: z.string().nullable() }),
     // fix-portal-numbers-1 (B-TH-303): the order the complaint is about by the customer's own number and PO, never the office's series.
     order: output({ id: id(), yourNumber: output({ seq: z.number().int(), words }).nullable(), yourRef: z.string().nullable() }).nullable(),
-    shipment: numbered.nullable(),
+    shipment: output({ id: id() }).nullable(), // owb-po2c: no `number` — never the office's shipment series (SH-…)
     photos: z.array(file),
   }),
   progress: output({ answerBy: day.nullable(), answeredAt: at.nullable() }),
