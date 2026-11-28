@@ -55,6 +55,8 @@ import { draftStillOpen, peopleSizesOf, shipToInUseOf } from './people'
 import { sendProblems } from './requests'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import type { CommandTools } from '../../../core/command'
+// owb- po1.5 (order workflow): the customer's own columns go with the order at Confirm.
+import { carryOwnColumns } from '../own-columns/carry'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
@@ -573,6 +575,7 @@ export async function acceptInCommand(tools: CommandTools, current: RequestRow, 
   const byId = new Map(read.map((line) => [line.id, line]))
   let lineMap: AcceptLineMapEntry[]
   let brandPrices = 0 // B-CP-076: the customer's prices the order took over
+  let ownColumns = { uses: 0, values: 0 } // owb- po1.5: the customer's own columns the order took over
   // end B-CP-077
   // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
   // approves it first, in this command (the order or quote may then use it).
@@ -611,6 +614,9 @@ export async function acceptInCommand(tools: CommandTools, current: RequestRow, 
     // B-CP-077: the order's lines are made in the plan's order, one for each planned line.
     const orderLines = await tx.salesOrderLine.findMany({ where: { orderId: outcome.orderId }, select: { id: true, seq: true, quantity: true }, orderBy: { seq: 'asc' } })
     lineMap = lineMapOf(plan.lines, orderLines)
+    // owb- po1.5 (order workflow): the customer's own columns go with it — the request's columns ON it in their places, each request
+    // line's values onto the order lines the map made from it (a line taken out is in no map: its values stay behind).
+    ownColumns = await carryOwnColumns(tx, current, outcome.orderId, lineMap, actorId, now)
     // ---- B-CP-076: the customer's prices carried onto the order by the map, in this command (never by place); never converted.
     const priced: PricedOrder = { id: outcome.orderId, companyId: current.companyId, partyId: current.partyId }
     const currency = (await tx.salesOrder.findUniqueOrThrow({ where: { id: outcome.orderId }, select: { currency: true } })).currency
@@ -678,7 +684,7 @@ export async function acceptInCommand(tools: CommandTools, current: RequestRow, 
     recordId: current.id,
     companyId: current.companyId,
     before: { status: 'SENT' },
-    after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })) },
+    after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })), ...(ownColumns.uses > 0 ? { ownColumns } : {}) /* owb- po1.5 */ },
   })
   tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
   return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap.map((entry) => ({ ...entry, into: entry.into.map((line) => ({ ...line })) })) /* B-CP-077: the answer's own copy (the contract's arrays) */, brandPrices: asMoney('price', brandPrices) /* B-CP-076: how many customer prices it carried, the price grain (contract) */ }
@@ -767,11 +773,12 @@ export async function confirmRequest(caller: CommandCaller, requestId: string, b
       // The office prices again: no price check of the customer's (seesPrices false); only what holds a Send.
       const problems = (await sendProblems(tx, current, lines, day, false, people)).filter((entry) => holdsSend(entry.code))
       if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length === 1 ? '1 problem holds' : `${problems.length} problems hold`} the send: fix ${problems.length === 1 ? 'it' : 'them'} first.`, problems.map((entry) => ({ path: entry.lineId ? `lines/${entry.lineId}` : 'request', message: entry.words.en })))
-      const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })
-      await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number: number.formatted, sentAt: now, sentById: context.actorId, version: current.version + 1 }, select: { id: true } })
+      // owb- po1.2 (G1 (d)): a draft the customer took back keeps the number of its first Send (never a new one).
+      const number = current.number ?? (await allocateNumber(tools, { companyId: current.companyId, kind: 'PORTAL_REQUEST' }, { type: 'PortalOrderRequest', id: current.id, date: day })).formatted
+      await tx.portalOrderRequest.update({ where: { id: current.id }, data: { status: 'SENT', number, sentAt: now, sentById: context.actorId, version: current.version + 1 }, select: { id: true } })
       const pieces = Math.max(1, lines.reduce((sum, line) => sum + piecesOfLine(line, people), 0))
-      tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number: number.formatted, lines: lines.length, pieces, byOffice: true } })
-      tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
+      tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number, lines: lines.length, pieces, byOffice: true } })
+      tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
       current = (await readRequest(tx, current.id))!
     }
     return acceptInCommand(tools, current, body, context.actorId)
