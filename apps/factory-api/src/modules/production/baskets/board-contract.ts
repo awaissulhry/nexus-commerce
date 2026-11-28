@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { LATE_REASONS, LATE_STATES } from '@nexus/factory-domain/production/baskets/signals'
 
 /**
@@ -46,7 +47,7 @@ export const basketCard = basketRow.extend({
   team: teamLook.nullable(),
   worker: output({ name: z.string() }).nullable(),
   /** "k of n": steps of its route done, of all. */
-  progress: output({ done: z.number().int(), total: z.number().int() }),
+  progress: output({ done: z.number().int(), total: notMoney(z.number().int()) }),
   late: output({ days: z.number().int(), reason: z.enum(LATE_REASONS), state: z.enum(LATE_STATES) }).nullable(),
 })
 
