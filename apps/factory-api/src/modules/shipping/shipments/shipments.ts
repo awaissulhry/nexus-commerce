@@ -5,7 +5,7 @@ import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissi
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
-import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
 // B-OP-040 (order page N6, lines-derived): several orders of one customer (on since B-OP-047).
@@ -17,7 +17,7 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
-import { assertMay, mayOn, officeContextOf } from '../access'
+import { assertMay, assertMayPlan, mayOn, officeContextOf } from '../access'
 import { lockCells, reserveReleased, tenantOf } from '../cells'
 import { contentsView, headerView, lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { assertOrderCaps, capRequestsOf } from './backorder'
@@ -75,6 +75,17 @@ export async function officeShipment(caller: CommandCaller, shipmentId: string, 
   const shipment = await caller.withClient((client) => readShipment(client, shipmentId))
   assertMay(context, SHIPPING_VIEW, permission, shipment)
   return shipment!
+}
+
+/**
+ * owb- (order workflow, S3 ss1 step 1.1; settle L3): the shipment the office may see (else 404) and PLAN (shipping.plan or
+ * shipping.manage: ../access.ts mayPlanShipments; else 403) — its lines, delivery details, cancelling, move, merge, take off, split.
+ */
+export async function shipmentToPlan(caller: CommandCaller, shipmentId: string): Promise<ShipmentHeader> {
+  const context = officeContextOf(caller)
+  const shipment = await caller.withClient((client) => readShipment(client, shipmentId))
+  assertMayPlan(context, shipment)
+  return shipment
 }
 
 export async function getShipment(caller: CommandCaller, shipmentId: string): Promise<{ shipment: ShipmentDetail }> {
@@ -399,7 +410,7 @@ export interface CreateShipmentInput {
 }
 
 /**
- * shipping.manage: a DRAFT shipment of a sales order from one site (LOG-001), numbered from the company's SHIPMENT
+ * shipping.plan or shipping.manage (owb-): a DRAFT shipment of a sales order from one site (LOG-001), numbered from the company's SHIPMENT
  * series, to the order's ship-to (or another delivery address of its party), with the site's default carrier and
  * service (LOG-117), and optionally its first lines (released garments only).
  */
@@ -415,7 +426,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     if (!siteId) throw new ValidationError('Name the site the goods leave from.', [{ path: 'body/siteId', message: 'Required when the lines do not name one site.' }])
     const site = await client.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } })
     if (!site || site.companyId !== order.companyId) throw new ValidationError("Not a site of the order's company.", [{ path: 'body/siteId', message: "Expected a site of the order's company." }])
-    assertMay(context, SHIPPING_VIEW, SHIPPING_MANAGE, { companyId: order.companyId, siteId, partyId: order.partyId }, 'Sales order')
+    assertMayPlan(context, { companyId: order.companyId, siteId, partyId: order.partyId }, 'Sales order') // owb- (S3 ss1): plan OR manage
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
     // W2b-5 (B-W2b-281): the database refuses a shipment of an order that waits for a yes; say it in words first.
     if (order.status === 'PENDING_APPROVAL') throw new InvalidStateError('The sales order waits for a yes; nothing ships for it until it is confirmed.')
@@ -494,7 +505,7 @@ async function onShipment<Result>(
 }
 
 export async function addLines(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; lines: readonly { workOrderSizeId: string; quantity: number }[] }, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   const byCell = garmentsByCell(body.lines)
   // B-OP-040: the orders it carries now, and what another order of the customer would join (B-OP-047: N6 on).
   const cells = await caller.withClient(async (client) =>
@@ -519,9 +530,9 @@ async function lineOf(tx: CommandTx, shipmentId: string, lineId: string) {
   return line
 }
 
-/** shipping.manage: a line's garments, more (released ones only) or fewer (never below the serials it holds). */
+/** shipping.plan or shipping.manage (owb-): a line's garments, more (released ones only) or fewer (never below the serials it holds). */
 export async function changeLine(caller: CommandCaller, shipmentId: string, lineId: string, body: { version?: number | undefined; quantity: number }, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   return onShipment(caller, shipment, { name: 'shipping.changeLine', idempotencyKey, input: { shipmentId, lineId, ...body }, version: body.version }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['DRAFT'], 'its lines change')
     const line = await lineOf(tools.tx, current.id, lineId)
@@ -550,9 +561,9 @@ export async function unpackSerialsOf(tools: CommandTools, shipment: { companyId
   }
 }
 
-/** shipping.manage: removes a line (its serials are unpacked first, in the same command). */
+/** shipping.plan or shipping.manage (owb-): removes a line (its serials are unpacked first, in the same command). */
 export async function removeLine(caller: CommandCaller, shipmentId: string, lineId: string, query: { version?: number | undefined }, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   return onShipment(caller, shipment, { name: 'shipping.removeLine', idempotencyKey, input: { shipmentId, lineId, ...query }, version: query.version }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['DRAFT'], 'its lines change')
     const line = await lineOf(tools.tx, current.id, lineId)
@@ -582,13 +593,13 @@ export interface UpdateShipmentInput {
 }
 
 /**
- * shipping.manage: the delivery details (address, who carries, carrier and service) while the goods are planned or
+ * shipping.plan or shipping.manage (owb-): the delivery details (address, who carries, carrier and service) while the goods are planned or
  * packed and nothing was declared yet (no carrier label, no live DDT); the internal note at any time; the mode of
  * transport (B-W2b-19, Intrastat) until the shipment is cancelled, also after the goods left (a DDT keeps the one it was
  * issued with).
  */
 export async function updateShipment(caller: CommandCaller, shipmentId: string, body: UpdateShipmentInput, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   const delivery = body.shipToAddressId !== undefined || body.transportBy !== undefined || body.carrierCode !== undefined || body.serviceCode !== undefined
   const shipTo = body.shipToAddressId ? await caller.withClient((client) => shipToOf(client, shipment.partyId, body.shipToAddressId!, 'body/shipToAddressId')) : undefined
   return onShipment(caller, shipment, { name: 'shipping.update', idempotencyKey, input: { shipmentId, ...body }, version: body.version }, async (tools) => {
@@ -630,13 +641,13 @@ export async function updateShipment(caller: CommandCaller, shipmentId: string, 
 }
 
 /**
- * shipping.manage: cancels a DRAFT or PACKED shipment with its reason, when no carrier label and no live DDT name it.
+ * shipping.plan or shipping.manage (owb-): cancels a DRAFT or PACKED shipment with its reason, when no carrier label and no live DDT name it.
  * Its serials are unpacked in the same command (a serial leaves a line only while the shipment is a DRAFT, so a PACKED
  * one is unpacked first): they can go on another shipment, or be taken back by a reversal. The office only; never the
  * floor. Its lines stay as they were and no longer count against the cells' released garments.
  */
 export async function cancelShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; reason: string }, idempotencyKey?: string) {
-  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const shipment = await shipmentToPlan(caller, shipmentId) // owb- (S3 ss1): plan OR manage
   return onShipment(caller, shipment, { name: 'shipping.cancel', idempotencyKey, input: { shipmentId, ...body }, version: body.version }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['DRAFT', 'PACKED'], 'it is cancelled')
     const facts = await shipmentFacts(tools.tx, current.id)

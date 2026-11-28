@@ -3,7 +3,7 @@ import { DomainError, ValidationError, type Issue } from '@nexus/factory-domain/
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { addressUseProblem } from '@nexus/factory-domain/parties/address-approval'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
-import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { earliestDay } from '@nexus/factory-domain/shipping/queue/risk'
 import {
   garmentsLeft,
@@ -23,7 +23,7 @@ import {
 } from '@nexus/factory-domain/shipping/split/split'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
-import { assertMay, mayOn, officeContextOf } from '../access'
+import { assertMay, assertMayPlan, mayPlanShipments, officeContextOf } from '../access'
 import { lockCells, tenantOf } from '../cells'
 import { carryHoldsInCommand, lockShipmentRow } from '../holds/store'
 import { syncSystemHoldsInCommand } from '../holds/system'
@@ -109,7 +109,8 @@ export async function splitPreview(caller: CommandCaller, shipmentId: string) {
       lines: dated.map((line) => ({ id: line.id, label: line.label, workOrderSizeId: line.workOrderSizeId, size: line.size, quantity: line.quantity, packed: line.packed, serials: line.serials, movable: movableOf(line), shipBy: line.shipBy })),
       reasons: [...SPLIT_REASONS],
       rules: [{ rule: 'PROMISE_DATE' as const, stays: rule.stays, shipments: rule.groups.map((group) => ({ shipBy: group.shipBy, garments: group.garments, lines: [...group.moves] })), kept: [...rule.kept] }],
-      mayManage: mayOn(context, SHIPPING_MANAGE, shipment!),
+      // owb- (S3 ss1 step 1.1): may split = shipping.plan or shipping.manage (the key keeps its name for the web).
+      mayManage: mayPlanShipments(context, shipment!),
     }
   })
 }
@@ -285,11 +286,11 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   return made
 }
 
-/** The parent the office may split (shipping.manage over it), as read before the command. */
+/** The parent the office may split (shipping.plan or shipping.manage over it, owb- S3 ss1), as read before the command. */
 async function splittable(caller: CommandCaller, shipmentId: string): Promise<ShipmentHeader> {
   const context = officeContextOf(caller)
   const shipment = await caller.withClient((client) => readShipment(client, shipmentId))
-  assertMay(context, SHIPPING_VIEW, SHIPPING_MANAGE, shipment)
+  assertMayPlan(context, shipment)
   return shipment!
 }
 
@@ -305,7 +306,7 @@ function deliveryOf(parent: ShipmentHeader, body: DeliveryInput): DeliveryChoice
 const fromOf = (parent: ShipmentHeader): DeliveryChoice => ({ transportBy: parent.transportBy, carrierCode: parent.carrierCode, serviceCode: parent.serviceCode, shipToAddressId: parent.shipToAddressId })
 
 /**
- * POST /shipping/shipments/:shipmentId/split (shipping.manage): garments named by hand onto a new shipment — B-OS-010: or onto
+ * POST /shipping/shipments/:shipmentId/split (shipping.plan or shipping.manage, owb-): garments named by hand onto a new shipment — B-OS-010: or onto
  * several (`groups`, 1 to 20, each with its reason and delivery) in ONE command, one idempotency key, all or nothing.
  */
 export async function splitShipment(caller: CommandCaller, shipmentId: string, body: SplitBody, idempotencyKey?: string) {
@@ -336,7 +337,7 @@ export interface SplitRuleBody {
   readonly rule: SplitRule
 }
 
-/** POST /shipping/shipments/:shipmentId/split-by-rule (shipping.manage): the rule's new shipments, in ONE command. */
+/** POST /shipping/shipments/:shipmentId/split-by-rule (shipping.plan or shipping.manage, owb-): the rule's new shipments, in ONE command. */
 export async function splitByRule(caller: CommandCaller, shipmentId: string, body: SplitRuleBody, idempotencyKey?: string) {
   const parent = await splittable(caller, shipmentId)
   if (!(SPLIT_RULES as readonly string[]).includes(body.rule)) throw new ValidationError('Not a split rule.', [{ path: 'body/rule', message: `One of ${SPLIT_RULES.join(', ')}.` }])
