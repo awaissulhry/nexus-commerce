@@ -1,0 +1,93 @@
+{
+  "back": {
+    "orders": "Orders",
+    "customer": "Customer",
+    "customers": "Customers",
+    "designDesk": "Design desk",
+    "incoming": "Incoming",
+    "readyToShip": "Ready to ship",
+    "today": "Today",
+    "order": "Order",
+    "page": "Back"
+  },
+  "act": {
+    "confirm": "Confirm the order…",
+    "printStart": "Print and start the work…",
+    "ship": "Ship…",
+    "arrived": "It arrived at the warehouse",
+    "sendOn": "Send on to the customer"
+  },
+  "tag": {
+    "CUSTOMER_ON_HOLD": "Customer on hold",
+    "DESIGN_WAITS": "Design: waits for approval",
+    "DESIGN_APPROVED": "Design approved",
+    "DESIGN_CHANGE": "Design: a change is asked",
+    "RESTRICTED": "Restricted",
+    "PROBLEMS_one": "{count} problem",
+    "PROBLEMS_other": "{count} problems",
+    "REMAKE": "Remake"
+  },
+  "people": {
+    "button": "People",
+    "count_one": "People · {count}",
+    "count_other": "People · {count}",
+    "window": "People on {number}",
+    "add": "Add people",
+    "designer": "Give the graphics to the designer"
+  },
+  "mockup": {
+    "alt": "The mockup of {number}",
+    "none": "No mockup yet. Its picture shows here."
+  },
+  "next": {
+    "title": "What happens next",
+    "yours": "Your step: {act}",
+    "DRAFT": "The order is still a draft. Confirm it when every line has its product.",
+    "SENT": "The customer sent it. Check it and confirm the order.",
+    "CONFIRMED": "Confirmed: waits for the print. Print and start the work, then the baskets go to the floor.",
+    "IN_PRODUCTION": "The baskets are on the floor. Each department passes them on.",
+    "READY_TO_SHIP": "Everything is made. Ship it.",
+    "SHIPPED": "It left the factory and is on its way.",
+    "AT_OUR_WAREHOUSE": "It waits at our warehouse. Send it on to the customer.",
+    "DELIVERED": "The customer has it.",
+    "WITHDRAWN": "The order was withdrawn. Nothing more happens."
+  },
+  "floor": {
+    "label": "On the floor",
+    "open": "The department sees it",
+    "restricted": "Only named workers",
+    "by": "by {name} · {at}",
+    "restrict": "Restrict on the floor",
+    "lift": "Open it to the department",
+    "busy": "Saving…",
+    "failed": "The floor setting could not be saved. Try again."
+  },
+  "text": {
+    "title": "The order as it was written",
+    "lines": "The lines in the customer’s words",
+    "line": "Line {seq}",
+    "files": "The files sent with it",
+    "notice": "This order came as text. Read it and pick the product of each line. Then you can confirm."
+  },
+  "linked": {
+    "customer": "Customer"
+  },
+  "cf": {
+    "windowTitle": "Confirm the order",
+    "promised": "Promised",
+    "promiseHint": "You promise this day. The customer sees it. Change it later on Production › Change the promise….",
+    "promiseEmpty": "Type the day you promise.",
+    "promisePast": "This day is in the past. Promise today or a later day.",
+    "wanted": "The customer wants it for",
+    "wantedNone": "No day given",
+    "openTitle_one": "{count} detail still open. You can confirm now.",
+    "openTitle_other": "{count} details still open. You can confirm now.",
+    "openWhy": "The design work and the pattern can start. The history keeps that you confirmed with open details.",
+    "pickProduct": "Pick the product first: line {seq}",
+    "pickProductTitle": "Pick the product first",
+    "pickProductWhy": "Line {seq} has no product yet. Pick it here or in the sheet; then you can confirm.",
+    "noProduct": "No product yet",
+    "failed": "The order could not be confirmed. Try again.",
+    "readFailed": "This order could not be read. Close and try again."
+  }
+}

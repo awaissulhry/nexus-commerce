@@ -109,7 +109,7 @@ export const designScreen = defineDesignScreen<Builder>({
       label: 'The Confirm window: each row, what the order still needs (Missing only here)',
       model: () => {
         const record = recordOf()
-        return model({ record, confirm: { entries: Object.fromEntries(confirmRowsOf(productRowsOf(record.request)).map((entry) => [entry.rowId, entry])), busy: false, failed: null } })
+        return model({ record, confirm: { entries: Object.fromEntries(confirmRowsOf(productRowsOf(record.request)).map((entry) => [entry.rowId, entry])), promise: '2026-12-22', busy: false, failed: null } })
       },
     },
     { id: 'read-only', label: 'A reader who may not change it (orders.view only)', model: (locale) => model({ writeHeld: words(locale).t('save.readonly'), mayConfirm: false, mayStyles: false }) },

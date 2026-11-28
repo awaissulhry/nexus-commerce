@@ -21,6 +21,7 @@ import { NOTES_NS, openHeld as noteHeld } from '../../../../../production/_share
 import { FollowersDoor } from '../Discuss' // F-SA-266
 import { askPresetOf, askStarterOf } from '../../production/asks' // F-PT-103b: the ready ask
 import { readOf } from '../../overview/model' // F-PT-103b: the promise the starter names
+import { PeopleDoors } from './FlowParts' // owb-of5 step 2: Add people · Give the graphics to the designer
 import './people.css' // F-OO-131: the supervisor's own doors (F-CO-K2: the list is the kit's)
 import { OverviewCard } from '../../../../../../lib/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 import { Row, RowList } from '../../../../../../lib/record-overview/Overview' // F-CO-K2: its rows are the kit's ONE list
@@ -140,6 +141,9 @@ function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecor
           </Row>
         </RowList>
       )}
+      {/* owb-of5 step 2 (prototype: People's Add people · Give the graphics to the designer): the conversation's followers door, for who
+          may change the order (sales and the owner); the designer's door only before the print. Read-only: none. */}
+      {frame?.openDoor && !readOnly && model.can.manage ? <PeopleDoors onFollowers={() => frame.openDoor?.('followers')} designer={order.status === 'CONFIRMED' || order.status === 'PENDING_APPROVAL'} /> : null}
     </OverviewCard>
   )
 }
