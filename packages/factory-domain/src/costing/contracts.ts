@@ -81,6 +81,8 @@ export type MaterialLineView = z.infer<typeof materialLineView>
 /** The minutes of one kind of work centre in one garment and what they cost. */
 export const labourLineView = output({
   workCentreKind: kind(),
+  /** owb-pd2 2.5: the department whose own rate costs these steps; left out: the kind's rate. */
+  departmentId: id().optional(),
   steps: z.number().int(),
   minutes: z.string(),
   costPerMinute: money.cost(z.string().nullable()),
@@ -158,6 +160,8 @@ export type MaterialPriceView = z.infer<typeof materialPriceView>
 /** The labour rate the sheet used for one kind of work centre of the routing. */
 export const labourRateUsedView = output({
   workCentreKind: kind(),
+  /** owb-pd2 2.5: the department whose own rate this is; left out: the kind's rate. */
+  departmentId: id().optional(),
   steps: z.number().int(),
   minutes: z.string(),
   /** NONE: no rate applies (listed as missing). */
@@ -355,6 +359,8 @@ export const labourRateView = output({
   status: z.enum(LABOUR_RATE_STATUSES),
   /** The rate a cost sheet uses today for its company (a tenant-wide one: for a company without its own). */
   inForce: z.boolean(),
+  /** owb-pd2 2.5: the department the rate is for (it wins over its kind's rate there); null: the kind's rate. Left out by an old reader. */
+  departmentId: id().nullable().optional(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
@@ -380,6 +386,8 @@ export const createRateBody = input({
   plannedEfficiencyPct: percent().optional(),
   validFrom: businessDate(),
   note: note().nullish(),
+  /** owb-pd2 2.5: a department of the rate's kind (and company, or the whole factory) whose own rate this is; left out or null: the kind's. Never changes. */
+  departmentId: id().nullish(),
 })
 export type CreateRateBody = z.output<typeof createRateBody>
 

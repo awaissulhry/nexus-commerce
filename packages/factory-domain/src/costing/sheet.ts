@@ -41,7 +41,8 @@ export const COST_ROUND: RoundTo = { scale: COST_SCALE, rounding: 'HALF_UP' }
 const QUANTITY_ROUND: RoundTo = { scale: QUANTITY_SCALE, rounding: 'HALF_UP' }
 
 /** A routing step as costing reads it. */
-export type CostingStep = Pick<StepData, 'id' | 'workCentreKind' | 'standardMinutes'>
+/** owb-pd2 2.5: with its department (a department's own rate wins over its kind's). */
+export type CostingStep = Pick<StepData, 'id' | 'workCentreKind' | 'standardMinutes' | 'departmentId'>
 
 /** Everything a sheet is computed from. */
 export interface CostFacts {
@@ -83,6 +84,8 @@ const missingOf = (code: MissingCode, parts: Partial<Omit<Missing, 'key' | 'code
 /** The labour of one kind of work centre per garment (the same in every cell in W1). */
 interface LabourPart {
   readonly workCentreKind: WorkCentreKind
+  /** owb-pd2 2.5: the department whose own rate costs these steps; null: the kind's rate. */
+  readonly departmentId: string | null
   readonly steps: number
   readonly minutes: Decimal
   readonly rate: LabourRate | null
@@ -120,12 +123,24 @@ export function prepareSheet(facts: CostFacts): PreparedSheet {
   if (facts.lines.length === 0) everywhere.push(note(missingOf('NO_BOM', {}, 'The revision has no BOM lines: add its materials to cost them.')))
   if (facts.steps.length === 0) everywhere.push(note(missingOf('NO_ROUTING', {}, 'The revision has no routing: add its operations to cost the labour.')))
 
-  // Labour: the minutes of each kind present in the routing, in floor order, and the rate in force.
+  // Labour: the minutes of each kind present in the routing, in floor order, and the rate in force. owb-pd2 2.5: the steps of a
+  // department with its own rate valid on the day are a part of their own at that rate (after the kind's part).
   const labour: LabourPart[] = WORK_CENTRE_KINDS.flatMap((workCentreKind) => {
     const ofKind = facts.steps.filter((step) => step.workCentreKind === workCentreKind)
     if (ofKind.length === 0) return []
+    const groups = new Map<string | null, CostingStep[]>()
+    for (const step of ofKind) {
+      const own = step.departmentId ? pickRate(facts.rates, workCentreKind, facts.companyId, facts.on, step.departmentId) : null
+      const key = own !== null && own.departmentId === step.departmentId ? step.departmentId! : null
+      groups.set(key, [...(groups.get(key) ?? []), step])
+    }
+    const ordered = [...groups].sort(([a], [b]) => (a === null ? -1 : b === null ? 1 : a < b ? -1 : a > b ? 1 : 0))
+    return ordered.map(([departmentId, steps]) => labourPart(workCentreKind, departmentId, steps))
+  })
+
+  function labourPart(workCentreKind: WorkCentreKind, departmentId: string | null, ofKind: readonly CostingStep[]): LabourPart {
     const minutes = sumMinutes(ofKind)
-    const rate = pickRate(facts.rates, workCentreKind, facts.companyId, facts.on)
+    const rate = pickRate(facts.rates, workCentreKind, facts.companyId, facts.on, departmentId)
     const keys: string[] = []
     let amount: Decimal | null = null
     if (rate === null) {
@@ -138,8 +153,8 @@ export function prepareSheet(facts: CostFacts): PreparedSheet {
       amount = minutes.times(decimalOf(rate.costPerMinute, 'costPerMinute')).div(pct(decimalOf(rate.plannedEfficiencyPct, 'plannedEfficiencyPct')))
     }
     everywhere.push(...keys)
-    return [{ workCentreKind, steps: ofKind.length, minutes, rate, amount, missing: keys }]
-  })
+    return { workCentreKind, departmentId, steps: ofKind.length, minutes, rate, amount, missing: keys }
+  }
 
   // Prices: per material, once.
   const prices = new Map<string, { price: Decimal | null; missing: string[] }>()
@@ -334,6 +349,7 @@ export function cellView(cell: ExactCell): CellCostView {
       amount: costField(cell.labourCost),
       lines: cell.labour.map((part) => ({
         workCentreKind: part.workCentreKind,
+        ...(part.departmentId !== null ? { departmentId: part.departmentId } : {}), // owb-pd2 2.5
         steps: part.steps,
         minutes: minutesText(part.minutes),
         costPerMinute: asMoney('cost', part.rate === null ? null : decimalText(part.rate.costPerMinute)),
@@ -377,6 +393,7 @@ export function inputsView(sheet: PreparedSheet): { materials: MaterialPriceView
   })
   const labour = sheet.labour.map((part): LabourRateUsedView => ({
     workCentreKind: part.workCentreKind,
+    ...(part.departmentId !== null ? { departmentId: part.departmentId } : {}), // owb-pd2 2.5
     steps: part.steps,
     minutes: minutesText(part.minutes),
     source: part.rate === null ? 'NONE' : 'LABOUR_RATE',

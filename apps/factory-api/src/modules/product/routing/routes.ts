@@ -1,9 +1,11 @@
 import { idempotencyKeyFrom } from '../../../core/command'
+import { actorOf } from '../../../core/context'
 import { defineRoutes } from '../../../core/manifest'
 import { compareRoutings } from './compare'
-import { addStepsContract, compareRoutingContract, copyStepsContract, getRoutingContract, removeStepContract, reorderStepsContract, updateStepContract } from './contract'
+import { addStepsContract, compareRoutingContract, copyStepsContract, getRoutingContract, removeStepContract, reorderStepsContract, saveRouteStepsContract, updateStepContract } from './contract'
 import { manifest } from './manifest'
 import { addSteps, copyRoutingSteps, removeStep, reorderSteps, updateStep } from './steps'
+import { saveRouteSteps } from './save'
 import { loadRouting, readRevisionFor, routingViewOf } from './store'
 
 /**
@@ -16,12 +18,19 @@ import { loadRouting, readRevisionFor, routingViewOf } from './store'
 export default defineRoutes('product.routing', manifest, async (app) => {
   app.get('/product/styles/:styleId/revisions/:revisionId/routing', { schema: getRoutingContract }, async (request) => {
     const { style, revision } = await readRevisionFor(request, request.params.styleId, request.params.revisionId)
-    return { routing: routingViewOf(await request.withClient((client) => loadRouting(client, style, revision))) }
+    // owb-pd2 2.3: the reader's brand reach filters the revision's customer routes.
+    const actor = request.factoryContext ? actorOf(request.factoryContext) : null
+    return { routing: routingViewOf(await request.withClient((client) => loadRouting(client, style, revision, actor))) }
   })
 
   app.post('/product/styles/:styleId/revisions/:revisionId/routing/steps', { schema: addStepsContract }, async (request, reply) =>
     reply.code(201).send({ routing: await addSteps(request, request.params.styleId, request.params.revisionId, request.body, idempotencyKeyFrom(request)) }),
   )
+
+  // owb-pd2 2.2: the product route saved whole by the route builder.
+  app.put('/product/styles/:styleId/revisions/:revisionId/routing/steps', { schema: saveRouteStepsContract }, async (request) => ({
+    routing: await saveRouteSteps(request, request.params.styleId, request.params.revisionId, request.body, idempotencyKeyFrom(request)),
+  }))
 
   app.patch('/product/styles/:styleId/revisions/:revisionId/routing/steps/:stepId', { schema: updateStepContract }, async (request) => ({
     routing: await updateStep(request, request.params.styleId, request.params.revisionId, request.params.stepId, request.body, idempotencyKeyFrom(request)),

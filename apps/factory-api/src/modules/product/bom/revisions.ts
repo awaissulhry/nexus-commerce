@@ -11,7 +11,8 @@ import { styleMachine } from '@nexus/factory-domain/product/styles/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
-import { readOperations, readSteps } from '../routing/read'
+import { keptDepartmentId, readOperations, readSteps, usableDepartmentIds } from '../routing/read' // owb-pd2: a copied step keeps its department
+import { copyRoutes } from '../routes/store' // owb-pd2 2.3: the routes travel into the next draft
 import { openTypeChangeReviewsInCommand } from '../../compliance/type-changes/detect'
 import { requireEditRule } from '../lifecycle/edit-rule'
 import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
@@ -122,17 +123,22 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
         supplierId: true,
         pricePerPiece: true,
         transitDays: true,
+        // owb-pd2: the step's department travels with it (the G3 guard: an open one of the style's company; else its kind's).
+        departmentId: true,
       },
       orderBy: { seq: 'asc' },
     })
+    const usable = await usableDepartmentIds(tx, locked.companyId)
     // B-W2b-225: each copy's new id, so its depth (minutes, cells, checkpoint, size times, settings) follows it.
     const stepCopies = routing.map((step) => ({ from: step.id, to: newId() }))
     if (routing.length > 0) {
       await tx.routingOperation.createMany({
-        data: routing.map((step, index) => ({ ...step, id: stepCopies[index]!.to, styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, ...stamp })),
+        data: routing.map((step, index) => ({ ...step, id: stepCopies[index]!.to, styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, departmentId: keptDepartmentId(step.departmentId, usable), ...stamp })),
       })
     }
     const depth = await copyStepDepthInCommand(tools, { styleId, revisionId: id }, stepCopies)
+    // owb-pd2 2.3: the revision's model and customer routes travel with its routing.
+    const routesCopied = await copyRoutes(tools, { revisionId: sourceId }, { styleId, revisionId: id, companyId: locked.companyId })
 
     const sourceLines = await readLines(tx, sourceId)
     const lines = copyLines(sourceLines, newId)
@@ -180,7 +186,7 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
     const range = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true, sizeScaleId: true } })
     const measures = await copyMeasuresInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, range.sizes, range.sizeScaleId)
     if (!emptyMeasuresCopy(measures)) tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, measures } })
-    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
+    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, ...(routesCopied > 0 ? { routes: routesCopied } : {}), pieces, changeNote: body.changeNote ?? null, ...(auditedDepthCopy(depth) ? { routingDepth: auditedDepthCopy(depth) } : {}) }
     tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, ...copied } })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id, revision, status: 'DRAFT', copiedFrom: source.revision } } })
     if (changeOrder) await linkDraftInCommand(tools, changeOrder, { styleId, revisionId: id, revision })
