@@ -59,7 +59,7 @@ export async function seedProductRoutes(context: SeedContext): Promise<ProductRo
     orderLineIds: [base('sales:SO1:line:10'), base('sales:SO1:line:20')],
     ids: {
       route: firstId('route:double-check'),
-      steps: ROUTE_DEPARTMENTS.map((number, index) => (index === 0 ? firstId(`route:double-check:${index + 1}`) : id(`route:double-check:${index + 1}`))),
+      steps: ROUTE_DEPARTMENTS.map((_number, index) => (index === 0 ? firstId(`route:double-check:${index + 1}`) : id(`route:double-check:${index + 1}`))),
       lineRoute: firstId('line-route:SO-0001:10'),
     },
   }

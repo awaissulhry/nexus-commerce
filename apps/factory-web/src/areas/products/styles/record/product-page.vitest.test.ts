@@ -129,7 +129,8 @@ describe('step 4.3 — the Overview in the section kit, per person', () => {
     expect(JSON.stringify(route)).not.toMatch(/minute/i)
     expect(howItIsMadeOf(null)).toEqual([])
     expect(routeSummaryOf({ routeSummary: [] })).toBeNull()
-    expect(routeSummaryOf({})).toBeNull()
+    // An answer without a summary (an older API): the field left out.
+    expect(routeSummaryOf({} as NonNullable<Parameters<typeof routeSummaryOf>[0]>)).toBeNull()
     const html = textOf(renderView(StyleDesign, recordModel('sales'), 'en'))
     expect(html).toContain('How it is made')
     expect(html).toContain('Stitching')

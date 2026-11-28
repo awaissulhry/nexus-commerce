@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { CATALOGUE } from '../../../../../lib/i18n/messages'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
@@ -38,9 +39,17 @@ import { PriceCard } from './view/PriceCard'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['products-cost'] ?? {}
 const has = (locale: (typeof LOCALES)[number], key: string) => key in words(locale) || (`${key}_one` in words(locale) && `${key}_other` in words(locale))
-const euro = (amount: string) => `€${amount}`
+const euro = (amount: string | null | undefined) => (amount == null ? '—' : `€${amount}`)
+/** A figure of the components answer, marked with the cost grain as the API's handler marks it. */
+const costAmount = (value: string) => asMoney('cost', value)
 
-const line = (over: Partial<ComponentLine>): ComponentLine => ({
+/** A line written with plain figures; its money fields are marked as the API sends them. */
+type PlainLine = Omit<ComponentLine, 'unitCost' | 'cost' | 'pct'> & { unitCost: string; cost: string; pct: string | null }
+const line = (over: Partial<PlainLine>): ComponentLine => {
+  const plain = plainLine(over)
+  return { ...plain, unitCost: asMoney('cost', plain.unitCost), cost: asMoney('cost', plain.cost), pct: asMoney('cost', plain.pct) }
+}
+const plainLine = (over: Partial<PlainLine>): PlainLine => ({
   seq: null,
   category: 'MATERIAL',
   source: 'BOM_LINE',
@@ -76,18 +85,18 @@ const SPLIT = [
   {
     size: '52',
     categories: [
-      { category: 'LEATHER' as const, amount: '27.94' },
-      { category: 'MATERIAL' as const, amount: '7.43' },
-      { category: 'LABOUR' as const, amount: '51.75' },
-      { category: 'OVERHEAD' as const, amount: '10.36' },
-      { category: 'FREIGHT' as const, amount: '1.2' },
-      { category: 'COMMISSION' as const, amount: '3' },
+      { category: 'LEATHER' as const, amount: costAmount('27.94') },
+      { category: 'MATERIAL' as const, amount: costAmount('7.43') },
+      { category: 'LABOUR' as const, amount: costAmount('51.75') },
+      { category: 'OVERHEAD' as const, amount: costAmount('10.36') },
+      { category: 'FREIGHT' as const, amount: costAmount('1.2') },
+      { category: 'COMMISSION' as const, amount: costAmount('3') },
     ],
-    knownTotal: '101.68',
-    total: '101.68',
+    knownTotal: costAmount('101.68'),
+    total: costAmount('101.68'),
     complete: true,
   },
-  { size: '58', categories: [{ category: 'LEATHER' as const, amount: '30' }, { category: 'LABOUR' as const, amount: '51.75' }], knownTotal: '81.75', total: null, complete: false },
+  { size: '58', categories: [{ category: 'LEATHER' as const, amount: costAmount('30') }, { category: 'LABOUR' as const, amount: costAmount('51.75') }], knownTotal: costAmount('81.75'), total: asMoney('cost', null), complete: false },
 ]
 
 describe('the 9 categories in 4 parts', () => {
@@ -112,7 +121,7 @@ describe('the 9 categories in 4 parts', () => {
     expect(costOfOne({ split: SPLIT }, '58')).toMatchObject({ knownTotal: '81.75', total: null, complete: false })
     expect(costOfOne({ split: SPLIT }, '99')).toBeNull()
     // Without the cost grain the server drops the figures: nothing to draw.
-    expect(costOfOne({ split: [{ ...SPLIT[0]!, knownTotal: undefined as unknown as string }] }, '52')).toBeNull()
+    expect(costOfOne({ split: [{ ...SPLIT[0]!, knownTotal: undefined }] }, '52')).toBeNull()
   })
 
   it('the size shown: the asked one when costed, else the base size, else the first', () => {
