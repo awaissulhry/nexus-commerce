@@ -52,7 +52,7 @@ export const PEOPLE: readonly PersonRow[] = [
   person('e-pavel', 'Pavel Pattern', null, 'Pattern master'),
 ]
 
-export const STRUCTURE: Structure = { units: UNITS, people: PEOPLE, may: { manage: true } }
+export const STRUCTURE: Structure = { units: [...UNITS], people: [...PEOPLE], may: { manage: true } }
 
 /** Team Lia's profile as read: one open order, one done. */
 export const LIA_RECORD: UnitRecord = {

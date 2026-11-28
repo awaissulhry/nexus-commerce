@@ -167,7 +167,6 @@ describe('an order’s teams (GET, PUT)', () => {
   it('after the first print the shares stay: only together rows are added or taken off', async () => {
     const orderId = await anotherOrder()
     const second = await newTeam(`T-${run}-P`)
-    const third = await newTeam(`T-${run}-Q`)
     const read = await teamsOf(orderId)
     const planned = read.plannedBaskets as number
     const split = await ok('manager', 'PUT', `/production/orders/${orderId}/teams`, { version: read.version, rows: [{ teamId: people.teamIds.a, inCharge: true, basketShare: planned - 1 }, { teamId: second, inCharge: false, basketShare: 1 }] })
