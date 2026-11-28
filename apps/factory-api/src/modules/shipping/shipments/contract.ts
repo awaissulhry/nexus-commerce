@@ -9,7 +9,7 @@ import { FREIGHT_RULES, MAX_FREIGHT } from '@nexus/factory-domain/shipping/shipm
 import { CARRIER_RETURN_STATES } from '@nexus/factory-domain/shipping/shipments/stock'
 import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
-import { freightSchema, oneShipment, shipmentOrdersSchema, statusSchema, transportBySchema } from '../views'
+import { freightSchema, oneShipment, shipmentOrdersSchema, shipmentSchema, statusSchema, transportBySchema } from '../views'
 // B-W2b-386: the ready list's ship-by day, cut-off and risk.
 import { businessDate as businessDateSchema } from '@nexus/factory-domain/core/contracts'
 import { AT_RISK_MINUTES_RANGE, QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
@@ -190,8 +190,15 @@ export const createShipmentContract = defineContract({
     serviceCode: z.string().trim().max(128).nullish(),
     internalNote: z.string().trim().max(2000).nullish(),
     lines: z.array(lineInput).max(MAX_LINES_PER_REQUEST).optional(),
+    /**
+     * owb- (order workflow, S3 ss1 step 1.2; settle L5): where it goes — the customer (default: the order's ship-to, or
+     * shipToAddressId), or one of OUR warehouses first (a WAREHOUSE site of the order's company; then no shipToAddressId): the
+     * shipment's ship-to is the warehouse's address and its leg is planned in the same command.
+     */
+    destination: z.discriminatedUnion('kind', [input({ kind: z.literal('CUSTOMER') }), input({ kind: z.literal('OUR_WAREHOUSE'), siteId: id() })]).optional(),
   }),
-  response: { 201: oneShipment },
+  // owb- (S3 ss1): + the leg planned with it (null: straight to the customer).
+  response: { 201: output({ shipment: shipmentSchema, leg: output({ warehouseSiteId: id() }).nullable() }) },
 })
 
 export const updateShipmentContract = defineContract({
