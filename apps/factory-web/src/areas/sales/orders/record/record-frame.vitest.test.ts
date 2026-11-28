@@ -83,7 +83,8 @@ describe('the order on RecordFrame', () => {
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
     // F-PT-101: Production now first, then Work orders (each its own section file), then the dates (#dates).
     // F-PT-201: the dates are Dates & plan's own section file (#dates).
-    expect(tab).toMatch(/<NowSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<WorkOrdersSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<DatesSection order=\{order\} model=\{model\} actions=\{actions\} \/>/)
+    // owb-b5 (w5.5): the base's slot From the floor (S5's) stands between the baskets and the dates (the design's order).
+    expect(tab).toMatch(/<NowSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<WorkOrdersSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*\{\/\*[^*]*\*\/\}\s*<FromTheFloorPart companyId=\{order\.companyId\} orderId=\{order\.id\} \/>\s*<DatesSection order=\{order\} model=\{model\} actions=\{actions\} \/>/)
     expect(html.indexOf('id="now"')).toBeLessThan(html.indexOf('id="work-orders"'))
     expect(html.indexOf('id="work-orders"')).toBeLessThan(html.indexOf('id="dates"'))
     // F-SA-235 → F-PT-402: the tech pack in force is What we make it to's own half (#specs), inside the tab.

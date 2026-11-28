@@ -241,7 +241,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // while Terms shows), its view only on `?tab=terms`; today's Requirements and Tax identity cards stand under it until ct-w2.
   const termsDepth = useCustomerTerms(record.party)
   const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, retryHistory: record.retryHistory /* ct-fx3 G-W08 */, depth: termsDepth, enabled: tab === 'terms' })
-  const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null
+  const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} companyId={session.company?.id ?? null /* owb-b5 (w5.5): S3's slot */} /> : null
   const termsNotice = <TermsNotices notices={terms.notices} />
   // F-CT-405: end
   return (
