@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { PublicBranding } from '@nexus/factory-domain/branding/contracts'
 import { brandPortals } from '@nexus/ui/tokens/branding'
 import { brandingTokensOf } from '../../lib/api/branding'
+import { pictureReader } from '../../lib/record-picture/api' // owb-po5.1
 import { isApiError } from '../../lib/api/errors'
 import { formatDate, formatTime } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
@@ -65,6 +66,13 @@ import { PORTAL_ASK_EVENT } from './record/PortalRecordFrame'
 import { emailTopicNoteKey } from './model'
 // ---- end B-TH-273
 import { EmailSettingsView } from './view/EmailSettingsView'
+// ---- owb-po5.4: Chat in the top bar
+import { fetchChats, type ChatRead } from './chat/api'
+import { chatCountOf, chatOpensAt, chatRowsOf, type ChatPanelState } from './chat/model'
+import { ChatPanelView } from './chat/view/ChatPanelView'
+import { PortalThread } from './thread/PortalThread'
+import { RECORD_TYPE_WORDS } from './thread-model'
+// ---- end owb-po5.4
 import { DisplayView, MyAccessView, ShortcutsView, StillThereView, UnsavedGuardView, type ShortcutGroup } from './view/FrameDialogs'
 import { NotificationsView } from './view/NotificationsView'
 import { PortalShellView, type PortalDialog } from './view/PortalShellView'
@@ -127,6 +135,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   const [idleEnd, setIdleEnd] = useState(() => Date.parse(me.session.idleExpiresAt))
   const onCall = useCallback((at: number) => setIdleEnd((current) => idleEndAfterCall(current, at, absoluteEnd)), [absoluteEnd])
   const api = useMemo(() => portalBrowserApi(onCall), [onCall])
+  // owb-po5.1: the band's order picture reads through the frame's batch reader (POST /portal/sales-orders/pictures).
+  const pictures = useMemo(() => pictureReader(api), [api])
 
   // ── branding and density reach every pop-up (they render into <body>) ──
   useEffect(() => brandPortals(brand), [brand])
@@ -268,11 +278,14 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
     }
   }, [api])
   const [notificationsState, setNotificationsState] = useState<'loading' | 'error' | 'ready'>('loading')
+  // owb-po5.4: the chats' new messages follow the same news (a new message notifies the person).
+  const readChatsRef = useRef<() => void>(() => undefined)
   const live = usePortalLive(
     {
       onChange: (change) => {
         if (change.type.startsWith('partner_task.')) void readTasksRef.current()
         if (change.type === 'partner_notification.created') {
+          readChatsRef.current()
           void readUnread()
           if (dialogRef.current === 'notifications') void readList()
         }
@@ -359,10 +372,33 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
         .finally(() => window.location.assign(signInHref(null)))
     })
 
+  // ── owb-po5.4: Chat in the top bar — the person's chats (GET /portal/threads), their new messages, the panel beside the page ──
+  const [chat, setChat] = useState<ChatPanelState>({ open: false })
+  const [chats, setChats] = useState<{ state: 'loading' | 'error' | 'ready'; list: ChatRead[] | null }>({ state: 'loading', list: null })
+  const readChats = useCallback(async () => {
+    if (!can.has('threads.read')) return setChats({ state: 'ready', list: [] })
+    try {
+      setChats({ state: 'ready', list: (await fetchChats(api)).conversations })
+    } catch {
+      setChats((current) => ({ state: current.list ? 'ready' : 'error', list: current.list }))
+    }
+  }, [api, can])
+  readChatsRef.current = () => void readChats()
+  useEffect(() => {
+    void readChats()
+  }, [readChats])
+  const chatRows = useMemo(() => chatRowsOf(chats.list ?? [], (type) => t(`record.type.${RECORD_TYPE_WORDS.includes(type as never) ? type : 'other'}`)), [chats.list, t])
+
   // ── the pop-ups ──
   const bellAnchor = useRef<HTMLSpanElement>(null)
   const [marking, setMarking] = useState(false)
   const open = (next: PortalDialog) => {
+    // owb-po5.4: Chat is a panel beside the page, not a pop-up: the button opens it (on a record page, at that record's chat) or shuts it.
+    if (next === 'chat') {
+      setChat((current) => (current.open ? { open: false } : chatOpensAt(band?.ask ? { type: band.ask.type, id: band.ask.id, label: band.ask.label ?? null } : null)))
+      void readChats()
+      return
+    }
     setDialog(next)
     if (next === 'notifications') void readList()
     if (next === 'email') void readEmail()
@@ -592,6 +628,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
                 freeForSuppliers: kinds.some((kind) => kind === 'SUPPLIER' || kind === 'SUBCONTRACTOR') && !kinds.includes('CUSTOMER'),
                 preview: me.preview,
                 canSearch: can.has('portal.search'),
+                pictures, // owb-po5.1: the band's order picture
+                chat: can.has('threads.read') ? { count: chatCountOf(chats.list), open: chat.open } : null, // owb-po5.4
               }}
               onNavigate={(href) => leaveTo(href)}
               onOpen={open}
@@ -603,6 +641,24 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
               {children}
             </PortalShellView>
 
+            {/* owb-po5.4: the Chat panel beside the page — the list, one chat (the same PortalThread as everywhere), back. */}
+            <ChatPanelView
+              model={{ open: chat.open, record: chat.open ? chat.record : null, state: chats.state, rows: chatRows }}
+              actions={{
+                onClose: () => {
+                  setChat({ open: false })
+                  void readChats()
+                },
+                onBack: () => {
+                  setChat({ open: true, record: null })
+                  void readChats()
+                },
+                onPick: (record) => setChat({ open: true, record }),
+                onRetry: () => void readChats(),
+              }}
+            >
+              {chat.open && chat.record ? <PortalThread type={chat.record.type} id={chat.record.id} /> : null}
+            </ChatPanelView>
             <SearchView
               model={{ ...searchState, open: dialog === 'search' }}
               onQuery={onQuery}

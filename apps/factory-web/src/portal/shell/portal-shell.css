@@ -164,6 +164,40 @@
   flex-wrap: wrap;
 }
 
+/* owb-po5.1: the order's picture in the band — its own button with the camera mark in its corner (design § 5zj A: "the picture is a
+   button"); a plain picture for a person who may not change it. */
+.fw-pband-pic {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--nds-radius-md);
+  cursor: pointer;
+}
+
+span.fw-pband-pic {
+  cursor: default;
+}
+
+.fw-pband-pic:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pband-pic-cam {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  box-shadow: 0 0 0 1px var(--nds-border);
+}
+
 .fw-pband-actions,
 .fw-pband-buttons {
   display: inline-flex;

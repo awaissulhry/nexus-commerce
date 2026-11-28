@@ -179,7 +179,8 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('the office’s words in both languages, a link each, the old addresses landing on their new tabs', () => {
     expect(tabsOf().map((tab) => [tab.id, tab.label])).toEqual([['overview', 'Overview'], ['lines', 'Lines'], ['shipments', 'Shipments'], ['files', 'Files']])
     expect(tabsOf({}, 'it').map((tab) => tab.label)).toEqual(['Panoramica', 'Righe', 'Spedizioni', 'File'])
-    expect(tabsOf().map((tab) => tab.id)).toEqual([...RECORD_TABS])
+    // owb-po5.2: Money only for a person who sees prices (`money`).
+    expect(tabsOf({ money: true }).map((tab) => tab.id)).toEqual([...RECORD_TABS])
     expect(tabsOf()[3]!.href).toBe(`${PREFIX}/orders/${orderRecord().order.id}?tab=files`)
     expect([tabOf('status'), tabOf('documents'), tabOf('messages'), tabOf(null)]).toEqual(['overview', 'files', 'overview', 'overview'])
     for (const locale of ['en', 'it'] as const) for (const old of ['tabs.status', 'tabs.documents']) expect(CATALOGUE[locale]['portal-orders']![old], `${locale} ${old}`).toBeUndefined()
@@ -330,7 +331,8 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
 
 describe('L4 — the band’s status is the shared status chip (lib/order-cells StateChip: the orders list’s chip, the office’s tone)', () => {
   it('the band names the order’s status; the shell draws the shared chip with its group’s mark; another page keeps its pill', () => {
-    expect(bandOf({}, 'IN_PRODUCTION').status).toMatchObject({ order: 'IN_PRODUCTION', tone: customerStatusTone('IN_PRODUCTION') })
+    // owb-po5.1: the band names the order's life (`{ life, note }`, the nine words) for the shared StateChip.
+    expect(bandOf({}, 'IN_PRODUCTION').status).toMatchObject({ life: 'IN_PRODUCTION', note: null, tone: customerStatusTone('IN_PRODUCTION') })
     for (const status of CUSTOMER_ORDER_STATUSES) expect(bandOf({}, status).status?.tone, status).toBe(customerStatusTone(status))
     const html = drawBand(bandOf(), 'en')
     expect(html).toContain('fw-sheet-st')
