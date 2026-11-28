@@ -70,7 +70,8 @@ describe('people: the area and who may do what', () => {
   it('declares every People page of the tree once, in its groups and order; only built rows show', () => {
     expect(officeArea.order).toBe(11)
     const rows = (officeArea.area.sections ?? []).flatMap((section) => section.items.map((item) => item.href))
-    expect(rows).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
+    // owb- (base settle 7): + Factory structure and People by customer, declared (hidden until their pages land).
+    expect(rows).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/structure', '/people/by-customer', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
     const people = OFFICE_NAV.areas.find((area) => area.id === 'people')!
     // Every page of the area is built (B-W2b-63, the last): a row appears by itself when its address joins OFFICE_PAGES.
     expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])

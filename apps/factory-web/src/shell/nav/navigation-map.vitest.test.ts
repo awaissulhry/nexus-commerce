@@ -24,6 +24,7 @@ import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf } from '../../links/
 import { matchPages } from '../palette/palette-model'
 import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, LINKS_NO_TOKEN, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
+import { builtRowsOnly, DECLARED_PAGES } from './office-nav' // owb- (base settle 7)
 import { officeRedirects, RENAMED_PAGES, renamedAddress } from './renamed'
 
 /**
@@ -41,6 +42,18 @@ const sample = (address: string) => address.replace(/\[companyId\]/g, 'c0').repl
 const rows = (nav: AreaNav): AreaNavItem[] => nav.areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.flatMap((item) => [item, ...(item.children ?? [])])))
 const shipped = (page: TreePage) => page.href !== null && !page.deferred
 const owner = officeNavFor(permissionCheck(templateOf('owner')!.permissions))
+// owb- (base settle 7): the address each declared (deferred) tree page will have once built.
+const DECLARED_BY_ID: Readonly<Record<string, string>> = {
+  'home.designDesk': '/home/design-desk',
+  'warehouse.readyToShip': '/warehouse/ready-to-ship',
+  'warehouse.ourWarehouses': '/warehouse/our-warehouses',
+  'production.baskets': '/production/baskets',
+  'production.chains': '/production/chains',
+  'production.teams': '/production/teams',
+  'production.orderStructures': '/production/order-structures',
+  'people.structure': '/people/structure',
+  'people.byCustomer': '/people/by-customer',
+}
 
 describe('the Office map is the approved tree (rail, overlays, words, order)', () => {
   it('the rail: one area per tree area that has a W0–W2a page, in the tree\'s order and with its order number; Plant right above Admin at the foot', () => {
@@ -71,13 +84,36 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const allowed = new Set(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter(shipped).map((page) => page.href))))
     // Every tree page is of a built wave, or says why it ships early.
     // W2b pages join the tree as their screen steps ship (B-W2b-55 People › Employees, B-W2b-58 Production › Help calls, …).
-    expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a', 'W2b'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
+    // owb- (base settle 7): the order workflow's pages are declared with wave `owb` (each deferred until its session builds it).
+    expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a', 'W2b', 'owb'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
     expect(rows(OFFICE_NAV).map((row) => row.href).filter((href) => !allowed.has(href))).toEqual([])
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
     expect(early).toEqual(['plant.settings', 'admin.overview'])
     const deferred = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.deferred).map((page) => page.id)))
-    // B-W2b-362: Sales › Made-to-measure is built (Owner 11-10 Q1 = A): no page is deferred any more.
-    expect(deferred).toEqual([])
+    // B-W2b-362: Sales › Made-to-measure is built (Owner 11-10 Q1 = A). owb- (base settle 7): the order workflow's nine pages
+    // are declared and deferred, each until its session's page lands (S2, S3, S5).
+    expect(deferred).toEqual(['home.designDesk', 'warehouse.readyToShip', 'warehouse.ourWarehouses', 'production.baskets', 'production.chains', 'production.teams', 'production.orderStructures', 'people.structure', 'people.byCustomer'])
+    for (const page of OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((entry) => entry.deferred)))) {
+      expect(page.href, page.id).toBeNull()
+      expect(page.wave, page.id).toBe('owb')
+    }
+  })
+
+  it('owb-: each declared row sits in its area\'s section in the tree\'s group and order, and shows once its address is built', () => {
+    // The declarations hold every row (built or not); with the declared addresses built, the map equals the tree with its
+    // deferred pages shipped — the land of each session only flips its address.
+    const declarations = { view: 'office' as const, areas: officeAreaDeclarations().map((declaration) => declaration.area) }
+    const flipped = builtRowsOnly(declarations, new Set([...OFFICE_PAGES, ...DECLARED_PAGES]))
+    const hrefOf = (page: TreePage) => page.href ?? DECLARED_BY_ID[page.id] ?? null
+    for (const tree of OFFICE) {
+      const area = flipped.areas.find((entry) => entry.id === tree.id)
+      if (!area) continue
+      const groups = tree.groups.map((group) => group.pages.flatMap((page) => hrefOf(page) ?? [])).filter((pages) => pages.length > 0)
+      expect((area.sections ?? []).map((section) => section.items.map((item) => item.href)), tree.id).toEqual(groups)
+    }
+    // Before the flip none of them shows, for anyone (the owner holds every permission).
+    const everyone = officeNavFor(permissionCheck(templateOf('owner')!.permissions))
+    expect(rows(everyone).map((row) => row.href).filter((href) => DECLARED_PAGES.has(href))).toEqual([])
   })
 
   it('every row\'s page is built and opens (OFFICE_PAGES); every built page has its one place in the map', () => {

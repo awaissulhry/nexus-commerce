@@ -1,4 +1,6 @@
 import { BarChart3, Bell, BellRing, CheckCheck, Gauge, Home, Inbox, LayoutDashboard, ListTodo, Sun } from 'lucide-react'
+// owb- (order workflow): Design desk.
+import { Palette } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -24,6 +26,10 @@ export const officeArea: OfficeAreaNav = {
         items: [
           // SCR-029 (B-W1-52): what needs me now, my flow and my lists. Every office role holds home.view.
           { id: 'home-today', label: 'shell:nav.home.today', href: '/home/today', icon: Sun, permission: 'home.view' },
+          // owb- (S2 of7, base settle 7): Design desk — the Factory designer's page (floor asks, help asked, designs waiting for
+          // approval, scan codes to place) over the orders it is on (orders.view.own; the Owner by every permission). DECLARED:
+          // shows once its page is built. After Today, so nobody's first page moves.
+          { id: 'home-design-desk', label: 'shell:nav.home.designDesk', href: '/home/design-desk', icon: Palette, permission: 'orders.view.own' },
           // SCR-030 (B-W1-21): the requests that wait for my yes, my own requests, recent decisions (quotes in W1).
           { id: 'home-approvals', label: 'shell:nav.home.approvals', href: '/home/approvals', icon: CheckCheck, permission: 'home.view' },
           // SCR-233 (B-W2a-40): my tasks on any record (or of their own); reading them is reaching Home.

@@ -1205,6 +1205,18 @@
       "company_doctor": {
         "name": "Medico competente",
         "description": "Il medico competente: scadenzario e organigramma della sicurezza; i giudizi di idoneità arrivano con le pagine della sorveglianza sanitaria, mai una diagnosi; non vede importi."
+      },
+      "extra_allow_production": {
+        "name": "Consenti produzione",
+        "description": "Un diritto in più accanto al ruolo della persona: vedere gli ordini di lavoro, così si apre la scheda Produzione dell’ordine; non vede importi."
+      },
+      "extra_pack_and_send": {
+        "name": "Imballa e spedisci",
+        "description": "Un diritto in più accanto al ruolo della persona: creare, cambiare e spedire le spedizioni degli ordini che vede; non vede importi."
+      },
+      "extra_print_and_start": {
+        "name": "Stampa e avvia il lavoro",
+        "description": "Un diritto in più accanto al ruolo della persona: stampare e avviare il lavoro di un ordine confermato, dato con il sì del titolare; non vede importi."
       }
     },
     "bulk": {
@@ -1720,6 +1732,7 @@
     "product_materials_approve": "Decidere l'approvazione di un materiale (approvare, con una condizione, bloccare)",
     "product_styles_view": "Vedere gli articoli",
     "product_styles_manage": "Creare e modificare articoli",
+    "product_drafts_edit": "Creare un prodotto e modificarne la bozza (articolo, materiali, taglie, ciclo); mai rilasciarlo, archiviarlo o prezzarlo",
     "product_mtm_switch": "Attivare o disattivare le regole su misura di un modello di misure (se disattivate non si controlla nulla)",
     "product_styles_lifecycle": "Spostare un articolo nel suo ciclo di vita",
     "product_settings_manage": "Gestire tipi di prodotto, regole di modifica e tolleranza di consumo",
@@ -1765,6 +1778,7 @@
     "purchasing_reports_view": "Vedere i report acquisti di un'azienda: spesa per fornitore, categoria, materiale, azienda e mese con gli ordini di campionatura a parte, e le righe degli ordini di acquisto in ritardo con cosa bloccano (solo dagli ordini che si possono vedere; importi solo con il permesso sui costi)",
     "shipping_view": "Vedere le spedizioni",
     "shipping_manage": "Pianificare e cambiare spedizioni",
+    "shipping_plan": "Pianificare come viaggia un ordine: da solo, con gli altri ordini del cliente, o prima al nostro magazzino",
     "shipping_pack": "Imballare una spedizione",
     "shipping_settings_view": "Vedere le impostazioni di spedizione degli stabilimenti",
     "shipping_settings_manage": "Cambiare le impostazioni di spedizione",
@@ -1859,6 +1873,7 @@
     "orders_close": "Chiudere un ordine spedito non saldato",
     "orders_waive": "Rinunciare all’acconto di un ordine o a una scadenza prima della spedizione",
     "orders_moneyPlan": "Cambiare a mano il piano di pagamento di un ordine: l’acconto, le rate, le loro scadenze e i termini di pagamento",
+    "orders_view_own": "Vedere solo gli ordini in cui la persona è coinvolta: messa sull’ordine o chiamata per un aiuto sul design",
     "privacy_view": "Vedere gli adempimenti privacy della società",
     "privacy_manage": "Scrivere e pubblicare informative; registrare le prese visione",
     "privacy_requests_view": "Vedere le richieste sui dati personali della società: chi ha chiesto, il tipo, la scadenza di 30 giorni, lo stato e cosa ha cancellato e conservato una cancellazione",
@@ -2053,6 +2068,7 @@
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
     "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
     "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
+    "people_structure_manage": "Gestire la struttura della fabbrica: aggiungere, modificare, spostare, unire o chiudere unità e nominare chi le guida",
     "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
     "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona",
     "people_privacy_view": "Vedere il presupposto legale dei dati del personale per sede e finalità, e la valutazione d'impatto",
@@ -2070,6 +2086,13 @@
     "production_labour_answer": "Rispondere alla contestazione di un lavoratore su un proprio dato, accolta o respinta (mai la propria)",
     "production_calls_view": "Vedere le chiamate di aiuto, i loro tempi per chiamata e linea e chi viene chiamato per ogni tipo (mai per persona)",
     "production_calls_answer": "Rispondere alle chiamate di aiuto: vista, in arrivo, risolta o annullata, e a cosa hanno portato",
+    "production_departments_manage": "Gestire i reparti della fabbrica: aggiungere, rinominare, cambiare colore o icona, chiudere o riaprire (un numero non si usa mai due volte)",
+    "production_print_start": "Stampare e avviare il lavoro di un ordine confermato (prima i controlli di rilascio), e ristampare le sue pagine e schede",
+    "production_teams_assign": "Assegnare un ordine o alcuni suoi cesti a una squadra, e cambiare o chiudere la parte di una squadra",
+    "production_baskets_move": "Spostare avanti un cesto a mano o prenderlo nel proprio reparto, senza scansione e senza paga",
+    "production_baskets_route": "Riportare indietro un cesto con un motivo, annullare lo spostamento fatto da un altro e cambiare i passaggi di un cesto",
+    "production_structures_manage": "Gestire le strutture d’ordine (i passaggi, la squadra e le persone di un ordine) e assegnarne una a un ordine a mano",
+    "production_structures_rules": "Gestire le regole che scelgono la struttura di un ordine, metterle in ordine e provarle",
     "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde",
     "production_boards_view": "Vedere i tabelloni di linea: i pezzi ora per ora contro gli obiettivi, la mappa del WIP, il tabellone TV (solo totali di linea)",
     "production_boards_targets": "Impostare gli obiettivi orari di una linea per oggi o un giorno successivo (mai per persona)",
@@ -2156,6 +2179,7 @@
     "portal_catalogue_view": "Vedere gli articoli che potete acquistare: colori, taglie, classe di certificazione e, per i ruoli che vedono i prezzi, il vostro prezzo",
     "portal_orderRequests_manage": "Fare richieste d'ordine: scegliere articoli, riordinare un ordine passato ai prezzi di oggi o caricare un foglio, poi inviare la richiesta",
     "portal_orderDrafts_edit": "Iniziare e completare bozze d'ordine con i colleghi (articoli, file, date, note, messaggi) e scartare una bozza iniziata da voi; la invia un collega che può ordinare",
+    "portal_payments_notify": "Comunicare alla fabbrica che avete pagato un ordine (quanto, quando, come, con la ricevuta); la fabbrica lo verifica",
     "portal_addresses_view": "Vedere gli indirizzi di consegna della vostra organizzazione",
     "portal_addresses_manage": "Aggiungere o archiviare gli indirizzi di consegna della vostra organizzazione e scegliere quello predefinito",
     "portal_salesOrders_ask": "Chiedere alla fabbrica di modificare o annullare gli ordini della propria organizzazione entro i limiti previsti, e ritirare una richiesta finché attende",

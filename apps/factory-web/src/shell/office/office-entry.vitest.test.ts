@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { permissionCheck } from '../../lib/session/session'
 import { OWNER_PERMISSIONS, SALES_PERMISSIONS } from '../design-data'
 import { firstOfficePage, isWindowPage, OFFICE_NAV, OFFICE_PAGES, officeNavFor, PROFILE_PAGE, WINDOW_PAGES } from '../nav/office-nav'
+import { DECLARED_PAGES } from '../nav/office-nav' // owb- (base settle 7)
 import { rolePermissions } from '../design-data'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // F-SA-210
 
@@ -72,9 +73,19 @@ describe('the built pages are the page files (a page added without its address, 
   const files = pageFiles(OFFICE_DIR)
   const entries = files.filter((file) => readFileSync(file, 'utf8').includes('openOfficeEntry('))
   const pages = files.filter((file) => !entries.includes(file))
+  // owb- (base settle 7): a declared page has its route stub but is not built yet (DECLARED_PAGES, not OFFICE_PAGES).
+  const declared = pages.filter((file) => DECLARED_PAGES.has(addressOf(file)))
 
-  it('OFFICE_PAGES lists exactly the office pages that are not entries', () => {
-    expect(pages.map(addressOf).sort()).toEqual([...OFFICE_PAGES].sort())
+  it('OFFICE_PAGES lists exactly the office pages that are not entries (nor declared stubs)', () => {
+    expect(pages.filter((file) => !declared.includes(file)).map(addressOf).sort()).toEqual([...OFFICE_PAGES].sort())
+  })
+
+  it('owb-: every declared page is a stub file showing NotBuiltYet, never built, never an entry; a built page is never declared', () => {
+    expect(declared.map(addressOf).sort()).toEqual([...DECLARED_PAGES].sort())
+    for (const file of declared) expect(readFileSync(file, 'utf8'), addressOf(file)).toContain('<NotBuiltYet />')
+    for (const address of DECLARED_PAGES) expect(OFFICE_PAGES.has(address), address).toBe(false)
+    // No entry ever lands on one: the owner's first page of each area stays a built page.
+    for (const area of OFFICE_NAV.areas) expect(DECLARED_PAGES.has(firstOfficePage(owner, { areaId: area.id })), area.id).toBe(false)
   })
 
   it('/w/<company> and every area\'s own address have an entry or a page: the rail and the brand link never 404', () => {

@@ -7,7 +7,9 @@
  *
  *  - OFFICE: the rail areas (the tree's `order`: People 11 — W2b, from B-W2b-55 —, Plant 12 right above Admin 13), their groups
  *    and pages. `href` is the page's built address; `early` and `deferred` name a page the build ships outside its tree
- *    wave and why.
+ *    wave and why. owb- (order workflow, base settle 7): the lane's new office pages are declared here with wave `owb`,
+ *    `href: null` and `deferred` naming the session that builds each; that session's land sets the address (one line) and
+ *    the row shows (the address joins OFFICE_PAGES).
  *  - FLOOR: the W0–W2a floor tasks with their tile (floor/model.ts TILE_KEYS) and the station modes the tree gives them
  *    (My work: see its line).
  *  - LINKS: the W1 link pages with their task (links/_nav/link-types.ts); LINKS_NO_TOKEN the ones a QR or a typed code opens.
@@ -53,6 +55,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'home.today', title: 'Today', titleIt: 'Oggi', wave: 'W1', href: '/home/today' },
+          // owb-: Design desk (/home/design-desk), the Factory designer's page.
+          { id: 'home.designDesk', title: 'Design desk', titleIt: 'Scrivania design', wave: 'owb', href: null, deferred: 'owb- S2 (of7) builds it (order workflow, base settle 7)' },
           { id: 'home.approvals', title: 'Approvals', titleIt: 'Approvazioni', wave: 'W1', href: '/home/approvals' },
           // W2a: B-W2a-40 My tasks (SCR-233) and Notifications (SCR-005).
           { id: 'home.tasks', title: 'My tasks', titleIt: 'Le mie attività', wave: 'W2a', href: '/home/tasks' },
@@ -311,7 +315,12 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Outbound',
         labelIt: 'In uscita',
         hideLabel: false,
-        pages: [{ id: 'warehouse.shipments', title: 'Shipments', titleIt: 'Spedizioni', wave: 'W1', href: '/warehouse/shipments' }],
+        pages: [
+          { id: 'warehouse.shipments', title: 'Shipments', titleIt: 'Spedizioni', wave: 'W1', href: '/warehouse/shipments' },
+          // owb-: Ready to ship (/warehouse/ready-to-ship), Our warehouses (/warehouse/our-warehouses).
+          { id: 'warehouse.readyToShip', title: 'Ready to ship', titleIt: 'Pronto da spedire', wave: 'owb', href: null, deferred: 'owb- S3 (ss3) builds it (order workflow, base settle 7)' },
+          { id: 'warehouse.ourWarehouses', title: 'Our warehouses', titleIt: 'I nostri magazzini', wave: 'owb', href: null, deferred: 'owb- S3 (ss3) builds it (order workflow, base settle 7)' },
+        ],
       },
       // W2b: B-W2b-356 Warehouse reports (SCR-257). The tree's Reports group, after Outbound and before Settings.
       { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'warehouse.reports', title: 'Warehouse reports', titleIt: 'Report magazzino', wave: 'W2b', href: '/warehouse/reports' }] },
@@ -345,6 +354,10 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
           // W2b: B-W2b-56 Dispatch (SCR-138).
           { id: 'production.dispatch', title: 'Dispatch', titleIt: 'Assegnazione lavoro', wave: 'W2b', href: '/production/dispatch' },
+          // owb-: Baskets board (/production/baskets), Chains (/production/chains), Teams (/production/teams).
+          { id: 'production.baskets', title: 'Baskets board', titleIt: 'Tabellone dei cesti', wave: 'owb', href: null, deferred: 'owb- S5 (fl9) builds it (order workflow, base settle 7)' },
+          { id: 'production.chains', title: 'Chains', titleIt: 'Catene', wave: 'owb', href: null, deferred: 'owb- S5 (fl9) builds it (order workflow, base settle 7)' },
+          { id: 'production.teams', title: 'Teams', titleIt: 'Squadre', wave: 'owb', href: null, deferred: 'owb- S3 (ss7) builds it (order workflow, base settle 7)' },
         ],
       },
       // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
@@ -383,7 +396,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,
-        pages: [{ id: 'production.settings', title: 'Floor rules & codes', titleIt: 'Regole di reparto', wave: 'W1', href: '/production/settings' }],
+        pages: [
+          { id: 'production.settings', title: 'Floor rules & codes', titleIt: 'Regole di reparto', wave: 'W1', href: '/production/settings' },
+          // owb-: Order structures (/production/order-structures).
+          { id: 'production.orderStructures', title: 'Order structures', titleIt: 'Strutture d’ordine', wave: 'owb', href: null, deferred: 'owb- S3 (ss8) builds it (order workflow, base settle 7)' },
+        ],
       },
     ],
   },
@@ -549,6 +566,9 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
           { id: 'people.attendance', title: 'Attendance', titleIt: 'Presenze', wave: 'W2b', href: '/people/attendance' },
           { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
+          // owb-: Factory structure (/people/structure), People by customer (/people/by-customer).
+          { id: 'people.structure', title: 'Factory structure', titleIt: 'Struttura della fabbrica', wave: 'owb', href: null, deferred: 'owb- S3 (ss8) builds it (order workflow, base settle 7)' },
+          { id: 'people.byCustomer', title: 'People by customer', titleIt: 'Persone per cliente', wave: 'owb', href: null, deferred: 'owb- S2 (of4) builds it (order workflow, base settle 7)' },
         ],
       },
       // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).

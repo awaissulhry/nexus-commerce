@@ -217,6 +217,10 @@ describe('the permissions (registry and role templates)', () => {
       read_only: ['files.read'],
       // B-CP-016: the Factory designer reads and sends the artwork (a priced file stays locked: no price grain).
       designer: ['files.read', 'files.upload'],
+      // owb- (plan.md § 5 D): the three offers give one right each, never a file right.
+      extra_allow_production: [],
+      extra_pack_and_send: [],
+      extra_print_and_start: [],
     })
   })
 })

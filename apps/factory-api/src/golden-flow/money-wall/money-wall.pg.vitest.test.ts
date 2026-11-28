@@ -646,7 +646,8 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
 
   it('M12 M-CP-3: the office Factory designer sees no price anywhere — the order, the list, the price check, the priced files, the draft', async () => {
     const designer = P.designer
-    expect((await ok(designer, 'GET', '/auth/office/me')).permissions).toEqual(expect.arrayContaining(['orders.view', 'files.read', 'threads.read']))
+    // owb- (R20): orders.view became orders.view.own — the designer reads the orders it is on (S2 of1 opens those reads).
+    expect((await ok(designer, 'GET', '/auth/office/me')).permissions).toEqual(expect.arrayContaining(['orders.view.own', 'files.read', 'threads.read']))
     expect(await noPriceIn(designer, `/sales/orders/${SO2()}`)).not.toBeNull()
     expect(await noPriceIn(designer, `/sales/orders?partyId=${P1()}&limit=200`)).not.toBeNull()
     await heldForPrices(designer, 'GET', `/sales/orders/${SO2()}/price-check`)
