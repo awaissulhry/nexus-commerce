@@ -146,7 +146,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const t = useT('products')
 
   const [style, setStyle] = useState<Loaded<StyleView>>({ status: 'loading' })
-  // owb-pd4 (step 4.3): How it is made — the route summary that GET style carries (kept across a write's answer, which has none).
+  // owb-pd4 (step 4.3): How it is made — the route summary every style answer carries (pd1), taken from the product's read.
   const [routeSummary, setRouteSummary] = useState<RouteSummaryStep[] | null>(null)
   // owb-pd4 (steps 4.3, 4.4): the open order lines of the product; the product's own list row (its agreed price range).
   const [orders, setOrders] = useState<Part<StyleOrders>>({ status: 'idle' })

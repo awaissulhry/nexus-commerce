@@ -460,7 +460,7 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
             // owb-pd4 (step 4.2): a reader without the BOM's right (sales) reads the revisions from the product's own read.
             <RevisionsOnly style={style} />
           ) : tab === 'compliance' && !model.can.complianceView ? (
-            // owb-pd4 (step 4.2): Compliance held until the Owner's rights batch (base answer 22:50) — the tab says why.
+            // owb-pd4 (step 4.2): a reader without the certificates' right (the designer; Sales holds it since owb-b6) — the tab says why.
             <HeldCompliance />
           ) : tab === 'techpack' ? (
             // B-W2b-243: the Tech pack tab (SCR-305), mounted by the container.

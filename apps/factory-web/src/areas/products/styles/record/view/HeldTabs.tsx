@@ -11,8 +11,8 @@ import { useProductWords } from '../product-words'
 /**
  * owb-pd4 step 4.2 (design § 5q "Who": sales reads Overview, Sizes, Compliance, Versions & changes; the designer Compliance too) — the
  * two tabs a reader gets without their usual right, in the section kit:
- *   HeldCompliance   the certificates' right (compliance.certificates.view) waits for the Owner's rights batch (base answer 22:50): the
- *                    tab says so, in words, instead of an empty page or an error.
+ *   HeldCompliance   a reader without the certificates' right (compliance.certificates.view: the designer; Sales holds it since
+ *                    owb-b6): the tab says so, in words, instead of an empty page or an error.
  *   RevisionsOnly    Versions & changes without the BOM's right: the revisions from the product's own read (number, state, date);
  *                    comparing revisions and their changes stay with the BOM's right.
  */
