@@ -16,7 +16,7 @@ import { CHANGE_YES_KIND, NAMESPACE as DEPTH, yesDoorOf } from '../../../depth/m
 import { YesDoorView } from '../../../depth/view/DepthBand'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { orderWaitingOf, readOf, rowWordsOf } from '../../overview/model'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OC-101 (L6): the Production kit, in place
 import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection' // the rows' doors, shared with Overview
 import { dayTimeOf, WAITING_ALIASES } from '../layout'
 import { askWordsOf, stillGroupsOf, type StillGroup } from '../model'

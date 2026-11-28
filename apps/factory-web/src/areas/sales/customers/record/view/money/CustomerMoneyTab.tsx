@@ -7,7 +7,7 @@ import { WithMessages } from '../../../../../../record-panels/i18n'
 import { MoneyAnswer } from '../../../../orders/record/money/view/parts'
 import { keepNumbers, sentenceOf } from '../../../../orders/record/money/view/say'
 import { word } from '../../../../orders/record/money/word'
-import { Section } from '../../../../orders/record/view/production/Kit'
+import { Section } from '../../../../../../lib/record-sections/Kit'
 import { balanceOf } from '../../money/balance'
 import { collectOf, type CollectInPlace, type CollectRow } from '../../money/collect'
 import { documentsOf, type DocumentChip, type DocumentsRead } from '../../money/documents' // F-CM-202

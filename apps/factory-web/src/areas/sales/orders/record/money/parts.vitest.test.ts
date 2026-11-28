@@ -265,10 +265,11 @@ describe('F-CM-k1: the parts file', () => {
   })
 
   it('K1.2: the sections draw the parts (one place for each markup), each `./parts` import AFTER the file\'s Kit import', () => {
+    // owb-b5 (w5.1): the kit moved to lib/record-sections (its import keeps its place in each file).
     for (const file of ['./view/TotalsSection.tsx', './view/PaymentsSection.tsx', './view/PriceCheckSection.tsx', './view/MarginSection.tsx']) {
       const text = source(file)
-      expect(text.indexOf("from '../../view/production/Kit'"), file).toBeGreaterThan(-1)
-      expect(text.indexOf("from './parts'"), file).toBeGreaterThan(text.indexOf("from '../../view/production/Kit'"))
+      expect(text.indexOf("from '../../../../../../lib/record-sections/Kit'"), file).toBeGreaterThan(-1)
+      expect(text.indexOf("from './parts'"), file).toBeGreaterThan(text.indexOf("from '../../../../../../lib/record-sections/Kit'"))
       expect(text, file).toContain('<Fold ')
       expect(text, file).not.toContain('className="fw-om-fold"')
     }
@@ -283,7 +284,7 @@ describe('F-CM-k1: the parts file', () => {
 
   it('K1.3: Invoices & credit notes draws the shared list — it builds each row\'s ⋯ and hands the sixth column; the row markup lives in the part only', () => {
     const text = source('./view/InvoicesSection.tsx')
-    expect(text.indexOf("from './parts'")).toBeGreaterThan(text.indexOf("from '../../view/production/Kit'"))
+    expect(text.indexOf("from './parts'")).toBeGreaterThan(text.indexOf("from '../../../../../../lib/record-sections/Kit'"))
     expect(text).toContain("<InvoiceList rows={rows} price={price} extraHead={t('money.share')} menuOf={menuOf} onRetrySdi={() => actions?.onRetryPart?.('sdi')} />")
     expect(text).toContain('extra: row.share === null ? null : money(row.share, order.currency, locale),')
     expect(text).not.toMatch(/className="fw-om-ir|className=\{`fw-om-il/)

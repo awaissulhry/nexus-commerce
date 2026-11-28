@@ -18,7 +18,7 @@ import type { SectionId } from '../production/layout'
 import type { OrderRecordModel } from '../record-model'
 import { copyLinkTo } from '../shipments/view/hrefs'
 import { LineMenuButton } from './LineMenu'
-import { Section } from './production/Kit' // F-OF-101: the Production kit, in place (Kit.tsx untouched; its Section draws the ONE ⓘ)
+import { Section } from '../../../../../lib/record-sections/Kit' // F-OF-101: the Production kit, in place (Kit.tsx untouched; its Section draws the ONE ⓘ)
 // F-OF-201 (order FILES tab W2): "Waiting for files" (#asks) — the band beside the files from 1200 px of the tab's room, above them below.
 import { useSearchParams } from 'next/navigation'
 import { ASKS_NS, AskButton, AsksBody, useAsksAnswer } from '../../../../../lib/record-thread/files-view/asks/view/AsksBody'

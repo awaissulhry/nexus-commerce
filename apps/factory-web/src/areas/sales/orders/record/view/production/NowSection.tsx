@@ -30,7 +30,7 @@ import { askPresetOf, askStarterOf, asksOf, onItOf } from '../../production/asks
 import { healthWhyOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf, type HealthWhy } from '../../production/now'
 import { ShowInThreadDoor } from '../Discuss'
 import { LineMenuButton } from '../LineMenu'
-import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 
 /**
  * F-PT-102 / F-PT-103 (order PRODUCTION tab, 10-design §3; S5 §3; 18-lead-settles L3, L5, L7) — "Production now", the tab's top

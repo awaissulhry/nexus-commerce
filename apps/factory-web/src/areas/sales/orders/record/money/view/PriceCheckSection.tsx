@@ -15,7 +15,7 @@ import type { Phrase } from '../../../model'
 import { seqList } from '../../price-check-card'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OM-101 (L6): the Production kit, in place
 import { priceCheckOf, type PriceCheckView, type PriceLineRow, type PriceTag } from '../price'
 import { Fold } from './parts' // F-CM-k1: the shared fold
 import { lineOf, useSay, type Say } from './say'

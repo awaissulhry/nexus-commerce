@@ -41,13 +41,8 @@ export const FULL_ROW: readonly SectionId[] = Object.freeze(['now', 'work-orders
 /** L2: "Counts as of hh:mm" only on these sections (the minute the piece counts were taken: the read's `asOf`). */
 export const COUNTS_AS_OF: readonly SectionId[] = Object.freeze(['now', 'work-orders'])
 
-/** A section's head: at most three visible buttons; the rest go into its ⋯. */
-export const HEAD_BUTTONS_MAX = 3
-
-/** The buttons a head shows and the ones it moves into its ⋯ (in their order). */
-export function headButtonsOf<T>(buttons: readonly T[]): { readonly shown: readonly T[]; readonly more: readonly T[] } {
-  return { shown: buttons.slice(0, HEAD_BUTTONS_MAX), more: buttons.slice(HEAD_BUTTONS_MAX) }
-}
+/** A section's head: at most three visible buttons; the rest go into its ⋯ (owb-b5 w5.1: moved with the kit to lib/record-sections). */
+export { HEAD_BUTTONS_MAX, headButtonsOf } from '../../../../../lib/record-sections/model'
 
 /** A part of a section as the kit draws it: reading (skeleton rows), failed (PartState + Try again), withheld (one line), empty, shown. */
 export type PartFace = 'reading' | 'failed' | 'withheld' | 'empty' | 'shown'

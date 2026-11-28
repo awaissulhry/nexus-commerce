@@ -99,7 +99,7 @@ describe('fx5: Materials as the picture', () => {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['forWorkOrders', 'buyNothing']) expect(t(`productionTab.materials.${key}`, { numbers: 'N' }), `${locale} ${key}`).not.toMatch(/productionTab\.|\{/)
     }
-    const kit = readFileSync(new URL('../view/production/Kit.tsx', import.meta.url), 'utf8')
+    const kit = readFileSync(new URL('../../../../../lib/record-sections/Kit.tsx', import.meta.url), 'utf8') // owb-b5 (w5.1): the kit moved to lib
     expect(kit).toContain('export function useUnitWords()')
     const view = readFileSync(new URL('../view/production/MaterialsSection.tsx', import.meta.url), 'utf8')
     expect(view).toContain('const unit = useUnitWords()')

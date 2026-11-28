@@ -224,11 +224,12 @@ describe('F-OF-101: the tab\'s layout — the Production kit in place, one answe
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('FilesTab draws the kit\'s Section in place (Kit.tsx untouched), its root the kit\'s size container; the keys only in the ⓘ', () => {
     const tab = source('../../../areas/sales/orders/record/view/FilesTab.tsx')
-    expect(tab).toContain("import { Section } from './production/Kit'")
+    expect(tab).toContain("import { Section } from '../../../../../lib/record-sections/Kit'") // owb-b5 (w5.1): the kit moved to lib, unchanged
     expect(tab).toContain('<div className="fw-pt fw-of">')
     expect(tab).toContain('<OrderFilesBody model={files}')
     expect(tab).toContain("t('info.keys')")
-    expect(source('../../../areas/sales/orders/record/view/production/Kit.tsx')).toContain('id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */')
+    expect(source('../../record-sections/Kit.tsx')).toContain('export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: string /* owb-b5 (w5.1)')
+    expect(() => source('../../../areas/sales/orders/record/view/production/Kit.tsx')).toThrow()
     // The keys left the body's foot (P0-B15): the tab's ⓘ says them; the thread's window keeps its own footer.
     expect(source('./view/FilesView.tsx')).not.toContain("place === 'tab' && (\n        <div className=\"fw-rtv-foot\">")
   })

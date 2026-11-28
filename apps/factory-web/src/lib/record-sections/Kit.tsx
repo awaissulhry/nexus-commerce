@@ -4,12 +4,10 @@ import type { ReactNode } from 'react'
 import { Info } from 'lucide-react'
 import { Banner, Card, DetailPopover } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
-import { formatTime } from '../../../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../../../lib/i18n/provider'
-import { headButtonsOf, type SectionId } from '../../production/layout'
-import type { ChangesSectionId } from '../../changes/layout' // F-OC-101: the Changes tab draws its four sections with this kit, in place (L6)
-import type { MoneySectionId } from '../../money/layout' // F-OM-101: the Money tab draws its sections with this kit, in place (L6); a type only
-import './production.css'
+import { formatTime } from '../i18n/format'
+import { useLocale, useT } from '../i18n/provider'
+import { headButtonsOf } from './model'
+import './record-sections.css'
 
 /**
  * F-PT-101 (order PRODUCTION tab, 10-design §2) — the kit every section draws with, so the six look and behave as one:
@@ -19,10 +17,16 @@ import './production.css'
  *               "Counts as of hh:mm" only where L2 says (Production now, Work orders)
  *   states      reading: rows of skeleton in the section's own shape; failed: one danger line with its own Try again (the rest of the tab
  *               still draws); empty: one quiet line; withheld: one line of words (never a right's name, never an empty "none")
+ *
+ * owb-b5 (w5.1; design plan § 5i "ONE section kit"): MOVED here, unchanged, from areas/sales/orders/record/view/production/Kit.tsx — the
+ * order's Production, Changes, Money, Shipments and Files tabs and the customer page's tabs draw with it; a portal page may too. Its
+ * rules moved with it (record-sections.css: the kit's rules of production.css, verbatim). A shared part imports no office or portal
+ * code: a section's `id` is the tab's own address (`now`, `freeze`, `totals`, `party-hold` …), each tab's layout keeps its list
+ * (production/changes/money layout.ts, the customer tabs' models). Owner after the base: S2.
  */
 
 /** A section of the tab: a DS Card (padded), its address and its head; the body below. */
-export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */; title: string; answer?: ReactNode; asOf?: string | null; buttons?: readonly ReactNode[]; info?: ReactNode; more?: ReactNode; children: ReactNode }) {
+export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: string /* owb-b5 (w5.1): the tab's own address; was SectionId | ChangesSectionId (F-OC-101) | MoneySectionId (F-OM-101), office types a shared part may not import */; title: string; answer?: ReactNode; asOf?: string | null; buttons?: readonly ReactNode[]; info?: ReactNode; more?: ReactNode; children: ReactNode }) {
   const { shown } = headButtonsOf(buttons ?? [])
   const headId = `fw-pt-h-${id}`
   return (

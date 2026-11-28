@@ -8,7 +8,7 @@ import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OM-101 (L6): the Production kit, in place
 import { PAYMENTS_ALIASES } from '../layout'
 import { planHistoryHref, planOf, type EarlierRow } from '../plan'
 import { stillToPayOf } from '../totals'

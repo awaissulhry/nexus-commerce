@@ -35,7 +35,9 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     // F-OM-301 / 302: Price check and Margin are the kit's sections too (the old card and the old Margin tab are gone).
     expect(source('./view/PriceCheckSection.tsx')).toContain('<Section id="price-check"')
     expect(source('./view/MarginSection.tsx')).toContain('<Section id="margin"')
-    expect(source('../view/production/Kit.tsx')).toContain('id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */')
+    // owb-b5 (w5.1): the kit moved to lib unchanged; it takes the tab's own address (a shared part names no office type).
+    expect(source('../../../../../lib/record-sections/Kit.tsx')).toContain('export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: string /* owb-b5 (w5.1)')
+    expect(() => source('../view/production/Kit.tsx')).toThrow()
     // #deposit and #schedule (the cards that went into Payments) land on it: elements at its top.
     expect(source('./view/PaymentsSection.tsx')).toContain('PAYMENTS_ALIASES.map((alias) => <span key={alias} id={alias} className="fw-om-alias" tabIndex={-1} />)')
     // The old file is gone (one path per job): the page draws the new layout and mounts the plan's windows once.
@@ -58,6 +60,7 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     // F-OM-fx3 (W-18): at S the heads keep ⋯ ⓘ on the title line — scoped to this tab, the Production kit untouched.
     expect(css).toContain('.fw-om .fw-pt-head-r { display: contents; }')
     expect(source('../view/production/production.css')).not.toContain('fw-om')
+    expect(source('../../../../../lib/record-sections/record-sections.css')).not.toContain('fw-om') // owb-b5 (w5.1): the kit's rules moved there
   })
 
   it('views draw their models and fetch nothing (no API client, no acts hook)', () => {

@@ -8,7 +8,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import { isHide, receivePlacesOf, type ReceiptActions, type ReceiptModel } from '../../production/receipt'
 import { Frame } from '../Dialogs'
-import { PartFailed, PartReading, useUnitWords } from './Kit'
+import { PartFailed, PartReading, useUnitWords } from '../../../../../../lib/record-sections/Kit'
 import './receipt.css' // F-PT-304: laid out by the screen (the dialog is outside the tab's size container)
 
 /**

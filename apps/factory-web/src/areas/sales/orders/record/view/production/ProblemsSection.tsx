@@ -20,7 +20,7 @@ import { DiscussDoor, ShowInThreadDoor } from '../Discuss'
 import { CREDIT_NS, StripRow } from '../overview/StripRow'
 import { GateRows } from '../../links/view/OrderLinks' // F-SC-W4: the compliance gates that stop the order, the notice's own rows
 import { gatesOf } from '../../links/model' // F-SC-W4
-import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
 
 const NCR_NS = 'ncr'
 

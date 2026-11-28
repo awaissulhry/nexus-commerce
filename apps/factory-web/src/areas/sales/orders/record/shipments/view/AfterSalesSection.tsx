@@ -10,7 +10,7 @@ import type { Order } from '../../../api'
 import { complaintHref, returnHref } from '../../links/model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OS-104: the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OS-104: the Production kit, in place
 import { afterSalesOf, type CaseRow } from '../after-sales'
 import { Button } from '@nexus/ui/primitives' // F-OS-303
 import { afterSalesDoorsOf } from '../doors' // F-OS-303

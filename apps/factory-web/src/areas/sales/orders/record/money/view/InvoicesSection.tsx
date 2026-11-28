@@ -14,7 +14,7 @@ import type { ChainInvoice, Order } from '../../../api'
 import { discussAboutOf } from '../../dock/discuss'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { PartFailed, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
+import { PartFailed, Section } from '../../../../../../lib/record-sections/Kit' // F-OM-101 (L6): the Production kit, in place
 import { invoicesOf, type InvoiceRow } from '../invoices'
 import { InvoiceList, type InvoiceListRow } from './parts' // F-CM-k1: the shared list (its head and rows); this file builds each row's ⋯
 import { useSay } from './say'

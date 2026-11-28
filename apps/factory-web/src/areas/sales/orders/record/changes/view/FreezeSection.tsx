@@ -12,7 +12,7 @@ import type { Order } from '../../../api'
 import type { FreezeField } from '../../../depth/api'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OC-101 (L6): the Production kit, in place
 import { FREEZE_WORD_TONE, freezePartsOf, freezeVerdictOf, isFinalVerdict, linesDoorOf, type FreezeVerdict } from '../freeze'
 import './changes.css'
 

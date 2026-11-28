@@ -14,7 +14,7 @@ import { promiseRowOf } from '../../overview/dates'
 import { MOVES_OPEN, promiseHistoryOf, toldOfMove, type MoveReason, type MoveRow } from '../../production/history'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { ShowInThreadDoor } from '../Discuss'
-import { Quiet } from './Kit'
+import { Quiet } from '../../../../../../lib/record-sections/Kit'
 
 /**
  * F-PT-204 (order PRODUCTION tab, 10-design §5 Block D; S4; bugs B21–B24) — "Promise history" inside Dates & plan (#promise-moves):

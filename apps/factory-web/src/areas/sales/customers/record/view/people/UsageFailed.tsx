@@ -2,7 +2,7 @@
 
 import { CircleAlert } from 'lucide-react'
 import { useLocale } from '../../../../../../lib/i18n/provider'
-import { Quiet } from '../../../../orders/record/view/production/Kit'
+import { Quiet } from '../../../../../../lib/record-sections/Kit'
 import { said } from '../../people/model'
 import { sentenceOf, usePeopleSay } from './say'
 

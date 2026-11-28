@@ -6,7 +6,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Bench } from '../../../../../warehouse/shipments/cartons/api'
 import type { Order } from '../../../api'
 import type { Part } from '../../record-model'
-import { PartFailed, PartReading } from '../../view/production/Kit'
+import { PartFailed, PartReading } from '../../../../../../lib/record-sections/Kit'
 import { httpsOrNull } from '../model'
 import type { ShipmentRow } from '../where'
 import { parcelGroupsOf } from '../rows' // F-OS-301

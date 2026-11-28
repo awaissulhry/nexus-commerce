@@ -22,7 +22,7 @@ import { readOf } from '../../overview/model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { revisionToAskOf } from '../../revised-order-ask'
 import { toldParts, type ToldChange } from '../../told'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
+import { PartFailed, PartReading, Section } from '../../../../../../lib/record-sections/Kit' // F-OC-101 (L6): the Production kit, in place
 import { dayTimeOf } from '../layout'
 import { askWordsOf } from '../model'
 import { changeRowsOf, chipCountsOf, HISTORY_CHIPS, HISTORY_OPEN, historyChipOf, restoreOf, rowsForChip, type ChangeRow, type HistoryChip, type RevisionFacts } from '../history'

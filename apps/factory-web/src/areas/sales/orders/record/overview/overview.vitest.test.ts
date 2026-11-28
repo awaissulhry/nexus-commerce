@@ -1505,7 +1505,7 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const card of ['ProgressCard', 'PeopleCard', 'RequestsCard']) expect(read(`../view/overview/${card}.tsx`), card).toMatch(/return <PartState problem=\{/)
     // K1.5: "Loading {part}…" left the order's catalogue with its one reader; "Couldn't load {part}" and "Try again" stay (Production's
     // section kit and the whole page read them). The kit says the same words, letter for letter, in both languages.
-    expect(read('../view/production/Kit.tsx')).toContain("t('part.failed', { part })")
+    expect(read('../../../../../lib/record-sections/Kit.tsx')).toContain("t('part.failed', { part })") // owb-b5 (w5.1): the kit moved to lib
     for (const locale of LOCALES) {
       const words = messagesFor(locale, ['orders']).orders!
       const kit = messagesFor(locale, ['record-overview'])['record-overview']!

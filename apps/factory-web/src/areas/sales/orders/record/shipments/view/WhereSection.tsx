@@ -18,7 +18,7 @@ import { rowAnchor } from '../../dock/discuss'
 import { lineMovesOf, lineTargetOf } from '../../line-moves'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import { Section } from '../../view/production/Kit' // F-OS-101: the Production kit, in place
+import { Section } from '../../../../../../lib/record-sections/Kit' // F-OS-101: the Production kit, in place
 import { shownBuckets, sumWord, whereAnswer, type Bucket, type ColourCells, type Fact, type ShipRef, type StyleCard, type WhereModel } from '../where'
 import { copyLinkTo, kitId, shipmentTabHref } from './hrefs'
 import { useShipSay } from './say'
