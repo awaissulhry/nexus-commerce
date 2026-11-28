@@ -9,9 +9,13 @@ import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { ORDER_GROUPS } from '@nexus/factory-domain/sales/portal-orders/status' // pg-s1 S1.2
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
-import { pictureIds } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids)
+import { PICTURES_MAX } from '../../product/images/small-pictures' // pg-s2 S2.1: the office's batch body (1–200 ids); owb- po1.1: of both kinds
 // owb- po1.4 (order workflow): the customer's own columns (the shared answer shapes).
-import { recordOwnColumns } from '../own-columns/schemas'
+import { ownColumn, ownValue, recordOwnColumns } from '../own-columns/schemas'
+// owb- po1.1 (order workflow): the sheet's row kinds and waits, the nine life words, the line model kinds.
+import { SHEET_ROW_KINDS, SHEET_WAITS } from '@nexus/factory-domain/sales/portal-orders/sheet-rows'
+import { LIFE_NOTE_KINDS, ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
+import { LINE_MODEL_KINDS } from '@nexus/factory-domain/sales/portal-ordering/line-moves'
 
 /**
  * Customer orders in the portal (B-W2b-175; SAL-075, SAL-076, SAL-080, SAL-081; design portal.customer.orders). Every
@@ -294,8 +298,38 @@ const portalColumn = output({
 })
 const portalCell = output({ value: grainedJson(), wordsIt: z.string().nullable(), wordsEn: z.string().nullable() })
 
+// ---- owb- po1.1 (order workflow; the S1 build's FIXED Shape "SHEET"): the order as ONE thing — each row's page, life, lines (C rows),
+// own columns, waits and acts; drafts as rows when asked (`drafts=true`).
+const sheetLine = output({
+  id: id(),
+  seq: z.number().int(),
+  /** OWN (the customer's own label) · RANGE (the factory's collection) · NEW (a new design: a garment type) · TEXT (the customer's words). */
+  model: output({ kind: z.enum(LINE_MODEL_KINDS), words: z.string().nullable(), garmentType: z.string().nullable() }),
+  /** Settle 4: the line's "Material" choice, else the colourway's name. */
+  material: z.string().nullable(),
+  /** "50 × 2 · 52 × 3"; null: none (a by-person line: its people). */
+  sizes: z.string().nullable(),
+  pieces: z.number().int(),
+  /** columnId → value (the columns ON the row only). */
+  ownValues: z.record(z.string(), ownValue),
+})
+const sheetFacts = {
+  /** The order page the row opens: a confirmed order, or a Draft or Sent order (its request). */
+  page: output({ kind: z.enum(['order', 'request']), id: id() }),
+  /** The base's nine words (orderLifeOf) and its note ("40 of 114", cancelled, refused, waits for the office's yes …). */
+  life: z.enum(ORDER_LIFE),
+  lifeNote: output({ kind: z.enum(LIFE_NOTE_KINDS), shipped: z.number().int().optional(), total: z.number().int().optional() }).nullable(),
+  lines: z.array(sheetLine),
+  ownColumnIds: z.array(id()),
+  /** "Waits · news": only what waits; SEND_LABEL comes with S3's warehouse leg (never sent until then). */
+  waits: z.array(output({ kind: z.enum(SHEET_WAITS), count: z.number().int().nullable() })),
+  may: output({ edit: z.boolean(), send: z.boolean(), delete: z.boolean(), takeBack: z.boolean(), picture: z.boolean() }),
+}
+// ---- end owb- po1.1
+
 export const sheetContract = defineContract({
-  querystring: listContract.querystring,
+  // owb- po1.1: `drafts=true` adds the party's drafts on the first page of OPEN and ALL (an older web asks without it: no DRAFT kind).
+  querystring: listContract.querystring.extend({ drafts: z.enum(['true', 'false']).default('false') }),
   response: {
     200: output({
       asOf: instant(),
@@ -315,7 +349,10 @@ export const sheetContract = defineContract({
       /** The portal columns: every customer's fields shown in the portal and this customer's own. */
       columns: z.array(portalColumn),
       /** The list's rows (`number` null: the customer reads its own `yourNumber`, never an office series), each with its cells by column id. */
-      items: z.array(row.extend({ values: z.record(z.string(), portalCell) })),
+      // owb- po1.1: + kind DRAFT (status null: no customer status yet) and every row's facts.
+      items: z.array(row.extend({ kind: z.enum(SHEET_ROW_KINDS), status: status.nullable(), values: z.record(z.string(), portalCell), ...sheetFacts })),
+      /** owb- po1.1: the customer's own columns any row on the page uses, each once. */
+      ownColumns: z.array(ownColumn),
       live,
     }),
   },
@@ -339,16 +376,18 @@ export const sheetDownloadContract = defineContract({
  * smallPicturesView) for the customer's OWN orders only — an id that is not one of them is absent; never a file id (`fileId` null).
  */
 export const picturesContract = defineContract({
-  body: input({ orderIds: pictureIds() }),
+  // owb- po1.1: + the party's Draft and Sent orders (`requestIds`); at least one id in all, at most 200 (the handler says it in words).
+  body: input({ orderIds: z.array(id()).max(PICTURES_MAX).default([]), requestIds: z.array(id()).max(PICTURES_MAX).default([]) }),
   response: {
     200: output({
       pictures: z.array(
         output({
-          /** One of the customer's own orders (another customer's, or an unknown id, is absent). */
+          /** One of the customer's own orders, or (owb- po1.1) one of its Draft or Sent orders (another customer's, or an unknown id, is absent). */
           id: id(),
-          styleId: id(),
-          styleCode: z.string(),
-          styleName: z.string(),
+          /** owb- po1.1: null only for a Draft or Sent order whose lines name no style (its chosen picture shows). */
+          styleId: id().nullable(),
+          styleCode: z.string().nullable(),
+          styleName: z.string().nullable(),
           /** The order's distinct goods styles ("+2" beside the picture). */
           styleCount: z.number().int(),
           /** Always null: the portal never gets a file id it could open. */
