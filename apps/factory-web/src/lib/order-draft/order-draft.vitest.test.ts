@@ -11,6 +11,13 @@ import { choiceWords, draftViewOf, headerDraftOf, personWhat, productRowsOf, row
 import { DRAFT_NS, draftWordsFor } from './words'
 import { DraftPage, type DraftPageModel } from './view/DraftPage'
 import { PiecesBody, piecesOpenOf } from './view/RowWindows'
+// owb-po3: the window, the ONE lines table's rows, Review and send, the window frame's keys.
+import { render, textOf } from '../record-thread/parts/testing'
+import { windowKeyOf } from '../window-shell/model'
+import { lineRowsOfDraft } from '../order-lines/model'
+import { DraftWindowBody, type DraftWindowModel } from './view/DraftWindow'
+import { ReviewSendBody, type ReviewSendModel } from './view/ReviewSendWindow'
+import { reviewDraftOf, reviewPointsOf, sendResultsOf } from './review-send'
 
 /**
  * THE SIMPLE ORDER START (od-tw t.2) — the ONE draft order's pins, for both doors:
@@ -245,3 +252,102 @@ describe('od-fx12 — the Owner’s look: nothing required, the mail saves as yo
   })
 })
 
+
+// ---- owb-po3.1 + po3.4: THE NEW ORDER WINDOW, the office host on the ONE lines table, Review and send ---------------------------------
+describe('owb-po3: the New order window', () => {
+  const source = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8')
+  const record = kindsRecord({ request: { subject: 'Race team kit for 2027' } })
+  const windowModel = (over: Partial<DraftWindowModel> = {}): DraftWindowModel => ({
+    open: true,
+    phase: 'draft',
+    title: 'Race team kit for 2027',
+    saved: 'Draft saved 10:42',
+    drafts: [{ id: 'd-2', title: 'Gloves for the juniors', line: '2 lines' }],
+    picture: { chosen: false, held: null },
+    header: headerDraftOf(record.request),
+    headerErrors: {},
+    shipTo: [],
+    today: TODAY,
+    lines: { rows: lineRowsOfDraft(record.request), mode: 'draft', columns: [], styles: [], kinds: [], prices: null, pending: false, removed: [], writeHeld: null, saving: [], columnsDoor: true, room: 'wide' },
+    files: { files: [], logos: [], sheets: [], uploading: [], open: true, addHeld: null, removeHeld: null, draftName: 'Race team kit for 2027', dropKey: 'mail.drop', accept: '.pdf' },
+    side: { lines: 3, pieces: '42', sum: null, stillOpen: [{ id: 'row-x', label: 'Team gloves · row 3', what: 'Sizes', rowId: 'x' }], openCount: 1 },
+    sendHeld: null,
+    busy: false,
+    deleteHeld: null,
+    deleteAsk: false,
+    writeHeld: null,
+    banner: null,
+    sent: null,
+    end: null,
+    ...over,
+  })
+  const body = (over: Partial<DraftWindowModel> = {}, locale: 'it' | 'en' = 'en') => textOf(render(createElement(DraftWindowBody, { model: windowModel(over), actions: { onClose: () => undefined } }), locale))
+
+  it('the window opens as a mail laid out as an order: picture + Subject, Wanted for, Your reference · Lines · Files · Message; beside it one look, Still open, What happens next', () => {
+    const html = body()
+    for (const words of ['Subject', 'Wanted for', 'Your reference', 'Lines', 'A mockup', 'A size file', 'Another file', 'Message to the factory', 'Your order at one look', 'Still open', 'What happens next', 'Drafts 1'])
+      expect(html, words).toContain(words)
+    expect(html).not.toContain('For your customer') // waits for Your customers (built:false)
+    expect(html).toContain('Team gloves · row 3') // Still open is a list…
+    expect(body({}, 'it')).toContain('Messaggio alla fabbrica')
+  })
+
+  it('Esc saves and closes; ⌘ / Ctrl + Enter sends (the field you are in is left first, so its words go with it)', () => {
+    expect(windowKeyOf({ key: 'Escape', metaKey: false, ctrlKey: false, altKey: false }, { acts: true })).toBe('leave')
+    expect(windowKeyOf({ key: 'Enter', metaKey: true, ctrlKey: false, altKey: false }, { acts: true, held: null })).toBe('act')
+    expect(windowKeyOf({ key: 'Enter', metaKey: false, ctrlKey: true, altKey: false }, { acts: true, held: 'Ask Bianca Brand' })).toBeNull()
+    const win = source('./view/DraftWindow.tsx')
+    expect(win).toMatch(/<WindowShell open=\{model\.open\} onClose=\{actions\.onClose\}/)
+    expect(win).toMatch(/words: t\('window\.send'\), onAct: leaveFieldThen\(\(\) => actions\.onSend\?\.\(\)\)/)
+    // the portal host: closing = everything typed goes to the server, then the orders page
+    expect(readFileSync(new URL('../../portal/customer/neworder/NewOrderPage.tsx', import.meta.url), 'utf8')).toMatch(/void flush\(\)\.finally\(\(\) => router\.push\(`\$\{frame\.prefix\}\/orders`\)\)/)
+  })
+
+  it('after Send the window stays: "Your order · <subject> is with the factory", what happens next, Open the order — never a number', () => {
+    const html = body({ phase: 'sent', sent: { subject: 'Race team kit for 2027', lines: 3, pieces: '42', wanted: '12/12/2026', openHref: '/p/BRAND-ALPHA/orders/requests/r-1' } })
+    expect(html).toContain('Your order · Race team kit for 2027 is with the factory.')
+    expect(html).toContain('Until then you can change everything')
+    expect(html).not.toMatch(/RQ-|SO-|order \d/)
+  })
+
+  it('the office host still draws its draft PAGE, now on the ONE lines table (Model · Material · Sizes · Pieces), never a price', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = page('office', {}, locale)
+      expect(html).toContain('fw-ol')
+      expect(textOf(html)).toContain(locale === 'en' ? 'Model' : 'Modello')
+      expect(html).not.toMatch(/€|EUR|Your price|Il vostro prezzo/)
+    }
+  })
+})
+
+describe('owb-po3.4: Review and send', () => {
+  const record = kindsRecord({ request: { subject: 'Race team kit for 2027', requestedDate: null, stillOpen: { items: [], openCount: 2, confirmHeld: false } } })
+  const one = reviewDraftOf(record, 'Race team kit for 2027')
+  const review = (over: Partial<ReviewSendModel> = {}, locale: 'it' | 'en' = 'en') =>
+    textOf(render(createElement(ReviewSendBody, { model: { open: true, drafts: [one], currency: 'EUR', note: '', noteDoor: true, held: null, busy: false, results: null, ...over }, actions: { onClose: () => undefined } }), locale))
+
+  it('send one: its lines, its price (money only), the open points as WARNINGS — nothing stops it', () => {
+    expect(reviewPointsOf(one).map((point) => [point.ok, point.key])).toEqual([[true, 'review.lines'], [false, 'review.noWanted'], [false, 'review.open']])
+    const html = review()
+    expect(html).toContain('No wanted date. You can give it later.')
+    expect(html).toContain('2 details still open. They can come later.')
+    expect(html).toContain('Nothing here stops you.')
+    expect(html).toContain('A note to the factory (if you want)')
+    expect(review({ drafts: [{ ...one, price: null }] })).not.toMatch(/€|Agreed|answers with its price/)
+  })
+
+  it('send many: each draft answers — the sent ones counted, a refused one by its title with the server’s words in the page’s language', () => {
+    const drafts = [one, { ...one, id: 'r-2', title: 'Gloves for the juniors' }]
+    const answers = [{ id: one.id, ok: true, words: null }, { id: 'r-2', ok: false, words: { en: 'The factory has already answered this order.', it: 'La fabbrica ha già risposto a questo ordine.' } }]
+    const results = sendResultsOf(answers, drafts, 'it', '—')
+    expect(results).toEqual({ sent: 1, refused: [{ id: 'r-2', title: 'Gloves for the juniors', words: 'La fabbrica ha già risposto a questo ordine.' }] })
+    const html = review({ drafts, results: sendResultsOf(answers, drafts, 'en', '—') })
+    expect(html).toContain('1 order is with the factory.')
+    expect(html).toContain('1 order was not sent: Gloves for the juniors : The factory has already answered this order.')
+  })
+
+  it('a colleague who may not order reads why (the button waits); still open never blocks one who may', () => {
+    expect(review({ held: 'Ask Bianca Brand: she may order.' })).toContain('Ask Bianca Brand: she may order.')
+    expect(review()).not.toContain('Ask Bianca Brand')
+  })
+})
