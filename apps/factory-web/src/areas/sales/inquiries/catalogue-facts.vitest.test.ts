@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createTranslator, catalogueFor } from '../../../lib/i18n/messages'
 import type { IncomingRow } from './api'
-import { catalogueConfirmPlan, catalogueFactsOf, factsByIdOf, factsWordsOf, offersConfirm, type CatalogueFacts } from './catalogue-facts'
+import { afterConfirmed, catalogueConfirmPlan, catalogueFactsOf, confirmRunOf, confirmRunOne, factsByIdOf, factsWordsOf, offersConfirm, receiptOf, receiptSays, type CatalogueFacts } from './catalogue-facts'
 import { incomingBarOf } from './bar'
 import { confirmedWordsOf } from './view/InquiriesView'
 import { HELD_ROW, SENT_ROW, TEXT_ROW, readRow } from '../orders/list/office-sheet/fixtures'
@@ -69,7 +70,34 @@ describe('owb-of4 step 1 — Incoming’s Sent orders with the sheet read’s fa
     expect(offersConfirm(incoming('req-sent', { catalogueOrder: { status: 'ACCEPTED', source: 'PORTAL', customerRef: null, lines: 1, styles: [], requestedDate: null, decidedAt: null, salesOrder: null, quote: null } }), facts.get('req-sent'), true)).toBe(false)
   })
 
-  it('what bulk Confirm did, in words', () => {
-    expect(confirmedWordsOf({ done: 2, text: 1, held: 0, other: 0, refused: 0 }, t)).toBe('2 orders confirmed · 1 text order skipped: pick its product first')
+  it('what Confirm did, in words (and what was left for later)', () => {
+    expect(confirmedWordsOf({ done: 2, text: 1, held: 0, other: 0, refused: 0, left: 0 }, t)).toBe('2 orders confirmed · 1 text order skipped: pick its product first')
+    expect(confirmedWordsOf({ done: 1, text: 0, held: 0, other: 0, refused: 0, left: 2 }, t)).toBe('1 order confirmed · 2 left: confirm them later')
+  })
+})
+
+describe('owb-of4 (lead fix) — Confirm opens THE Confirm window (owb-of5 ConfirmOrderWindow), one order at a time', () => {
+  it('bulk Confirm walks the plan’s orders through the window; each confirm brings the next; the end says what it did', () => {
+    const plan = catalogueConfirmPlan([incoming('req-sent'), incoming('req-text'), incoming('req-held')], facts)
+    let run = confirmRunOf({ ...plan, go: [...plan.go, incoming('req-two')] })
+    expect(run.queue).toEqual(['req-sent', 'req-two'])
+    run = afterConfirmed(run)
+    expect(run.queue).toEqual(['req-two'])
+    run = afterConfirmed(run)
+    expect(receiptOf(run)).toEqual({ done: 2, text: 1, held: 1, other: 0, refused: 0, left: 0 })
+  })
+
+  it('a door is a run of one; a window closed at once says nothing, one closed midway leaves the rest for later', () => {
+    expect(receiptSays(receiptOf(confirmRunOne('req-sent')))).toBe(false)
+    expect(receiptOf(afterConfirmed({ queue: ['a', 'b', 'c'], done: 0, text: 0, held: 0, other: 0 }))).toMatchObject({ done: 1, left: 2 })
+  })
+
+  it('the row’s door and the ⋯ menu open the ONE window; Accept as quote and Refuse stay as they were', () => {
+    const view = readFileSync(new URL('./view/InquiriesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("import { ConfirmOrderWindow } from '../../orders/draft/ConfirmOrderWindow'")
+    expect(view).not.toContain("onCatalogueVerb?.(data, 'order')")
+    expect(view).toContain("onCatalogueVerb?.(data, 'quote')")
+    expect(view).toContain("onCatalogueVerb?.(data, 'refuse')")
+    expect(view.match(/onConfirmDoor\?\.\(data\)/g)).toHaveLength(2)
   })
 })

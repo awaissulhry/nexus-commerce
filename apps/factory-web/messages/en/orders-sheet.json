@@ -902,7 +902,7 @@
     "onHold": "Customer on hold",
     "onHoldHint": "The customer is on hold: confirm only when the hold is lifted",
     "confirm": "Confirm the order…",
-    "bulkConfirm": "Confirm {count}",
+    "bulkConfirm": "Confirm {count}…",
     "bulkNone": "No ticked order can be confirmed together: open each one",
     "bulkSkips": "Skipped: {text} sent as text · {held} that hold",
     "confirmed_one": "{count} order confirmed",
@@ -915,6 +915,8 @@
     "skippedOther_other": "{count} skipped: not sent orders",
     "refused_one": "{count} refused",
     "refused_other": "{count} refused",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "left_one": "{count} left: confirm it later",
+    "left_other": "{count} left: confirm them later"
   }
 }

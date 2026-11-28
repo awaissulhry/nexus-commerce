@@ -902,7 +902,7 @@
     "onHold": "Cliente in sospeso",
     "onHoldHint": "Il cliente è in sospeso: conferma solo quando la sospensione è tolta",
     "confirm": "Conferma l’ordine…",
-    "bulkConfirm": "Conferma {count}",
+    "bulkConfirm": "Conferma {count}…",
     "bulkNone": "Nessun ordine spuntato si può confermare insieme: aprili uno per uno",
     "bulkSkips": "Saltati: {text} inviati come testo · {held} in attesa",
     "confirmed_one": "{count} ordine confermato",
@@ -915,6 +915,8 @@
     "skippedOther_other": "{count} saltati: non sono ordini inviati",
     "refused_one": "{count} rifiutato",
     "refused_other": "{count} rifiutati",
-    "dismiss": "Chiudi"
+    "dismiss": "Chiudi",
+    "left_one": "{count} rimasto: confermalo dopo",
+    "left_other": "{count} rimasti: confermali dopo"
   }
 }

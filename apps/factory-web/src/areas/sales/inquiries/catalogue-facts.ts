@@ -10,8 +10,8 @@ import { readSheet, type SheetRowRead } from '../orders/list/office-sheet/api'
  * owb-of4 step 1 — Incoming's catalogue rows (the orders a customer SENT), with the facts of the office sheet's read (owb-of1 Shape,
  * `GET /sales/orders/sheet?life=incoming`; Incoming's own read names none of them): the picture (the request's, the batch read
  * already draws it), "Sent as text · product not picked" or "n details still open", the flag "Customer on hold", and ONE door
- * Confirm the order… (today's Accept as order window, with its promise date). Bulk Confirm skips text orders and the ones that hold,
- * and says how many. Pure, apart from the read hook at the end.
+ * Confirm the order… — THE Confirm window (owb-of5 `ConfirmOrderWindow`: the promised day, the open details, A-5). Bulk Confirm walks
+ * the same window one order at a time, skips text orders and the ones that hold, and says how many. Pure, apart from the read hook.
  */
 
 export interface CatalogueFacts {
@@ -66,14 +66,41 @@ export function catalogueConfirmPlan(picked: readonly IncomingRow[], facts: Read
   return { go, text, held, other }
 }
 
-/** What bulk Confirm did, counted (the view says it in words). */
+/** What Confirm did, counted (the view says it in words): confirmed, skipped (text, holds, not Sent), refused, left for later. */
 export interface CatalogueConfirmed {
   readonly done: number
   readonly text: number
   readonly held: number
   readonly other: number
   readonly refused: number
+  /** Still in the run when the person closed the window (confirm them later). */
+  readonly left: number
 }
+
+/**
+ * A Confirm run through THE Confirm window: the requests still to confirm (the first one is in the window), what was confirmed and what
+ * the plan skipped. One door = a run of one; bulk Confirm = a run of the plan's orders, one window after the other.
+ */
+export interface ConfirmRun {
+  readonly queue: readonly string[]
+  readonly done: number
+  readonly text: number
+  readonly held: number
+  readonly other: number
+}
+
+export const confirmRunOne = (requestId: string): ConfirmRun => ({ queue: [requestId], done: 0, text: 0, held: 0, other: 0 })
+
+export const confirmRunOf = (plan: { readonly go: readonly Pick<IncomingRow, 'id'>[]; readonly text: number; readonly held: number; readonly other: number }): ConfirmRun => ({ queue: plan.go.map((row) => row.id), done: 0, text: plan.text, held: plan.held, other: plan.other })
+
+/** The window confirmed its order: the next one comes (an empty queue ends the run). */
+export const afterConfirmed = (run: ConfirmRun): ConfirmRun => ({ ...run, queue: run.queue.slice(1), done: run.done + 1 })
+
+/** The run's receipt: what was confirmed and skipped; what is still in the queue is left for later (the person closed the window). */
+export const receiptOf = (run: ConfirmRun): CatalogueConfirmed => ({ done: run.done, text: run.text, held: run.held, other: run.other, refused: 0, left: run.queue.length })
+
+/** A receipt says something only when an order was confirmed or one was skipped (a window closed at once says nothing). */
+export const receiptSays = (receipt: CatalogueConfirmed): boolean => receipt.done + receipt.text + receipt.held + receipt.other + receipt.refused > 0
 
 /** The facts of the Sent orders, read again when Incoming reads (its `tick`); none for a reader without orders.view. */
 export function useCatalogueFacts(api: ApiClient, enabled: boolean, partyId: string | null, tick: string | number | null): ReadonlyMap<string, CatalogueFacts> {

@@ -9,6 +9,7 @@ import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui
 import { Button, FilterChip, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { Banner } from '@nexus/ui/components' // owb-of4: what bulk Confirm did
 import { factsWordsOf, offersConfirm, type CatalogueConfirmed, type CatalogueFacts } from '../catalogue-facts' // owb-of4
+import { ConfirmOrderWindow } from '../../orders/draft/ConfirmOrderWindow' // owb-of4 (lead fix): THE Confirm window (owb-of5)
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 // F-SA-224: the one customer filter of the Sales lists.
@@ -230,6 +231,8 @@ export interface InquiriesModel {
   // ---- owb-of4 step 1: the Sent orders' facts (the office sheet's read) and what bulk Confirm did
   catalogueFacts?: ReadonlyMap<string, CatalogueFacts>
   catalogueConfirmed?: CatalogueConfirmed | null
+  /** THE Confirm window open now (the run's first order; `left` = orders of the run still to confirm, this one included), or null. */
+  confirmWindow?: { readonly requestId: string; readonly left: number } | null
 }
 
 export interface InquiriesActions {
@@ -272,8 +275,14 @@ export interface InquiriesActions {
   record?: InquiryRecordActions
   onCopy?: (numbers: readonly string[]) => void
   onDismissNotice?: () => void
-  /** owb-of4: the receipt of bulk Confirm, dismissed. */
+  /** owb-of4: the receipt of Confirm, dismissed. */
   onDismissConfirmed?: () => void
+  /** owb-of4 (lead fix): "Confirm the order…" of a Sent order — THE Confirm window opens on it. */
+  onConfirmDoor?: (row: IncomingRow) => void
+  /** THE Confirm window confirmed its order (the run goes on to the next one). */
+  onConfirmed?: () => void
+  /** THE Confirm window closed (after a confirm: nothing; else the run stops and says what it did). */
+  onConfirmClose?: () => void
   onDismissPageNotice?: (key: string) => void
   /** F-SA-212: the page's pictures in ONE batch read (the container reads it; the view fetches nothing). */
   readPictures?: ReadPictures
@@ -534,7 +543,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                 </Tag>
               )}
               {offersConfirm(data, sent, m.can.orders) && (
-                <Button size="sm" variant="primary" className="fw-inq-confirm" heldReason={offline ? t('held.offline') : null} onClick={() => act()?.onCatalogueVerb?.(data, 'order')}>
+                <Button size="sm" variant="primary" className="fw-inq-confirm" heldReason={offline ? t('held.offline') : null} onClick={() => act()?.onConfirmDoor?.(data)}>
                   {so('incoming.confirm')}
                 </Button>
               )}
@@ -717,7 +726,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             // F-CQ-204: a portal order sent: Accept as order / as quote, Refuse — its own window (orders.manage; as a quote + quotes.manage).
             ...(data.kind === 'CATALOGUE_ORDER' && data.catalogueOrder?.status === 'SENT' && m.can.orders
               ? [
-                  { id: 'acceptOrder', label: `${t('catalogue.acceptOrder')}…`, onSelect: () => act()?.onCatalogueVerb?.(data, 'order') },
+                  // owb-of4 (lead fix): the ONE Confirm window (owb-of5), the row's door's own words; Accept as quote and Refuse stay.
+                  { id: 'acceptOrder', label: so('incoming.confirm'), onSelect: () => act()?.onConfirmDoor?.(data) },
                   ...(m.can.quotes ? [{ id: 'acceptQuote', label: `${t('catalogue.acceptQuote')}…`, onSelect: () => act()?.onCatalogueVerb?.(data, 'quote') }] : []),
                   { id: 'refuse', label: `${t('catalogue.refuse')}…`, tone: 'danger' as const, onSelect: () => act()?.onCatalogueVerb?.(data, 'refuse') },
                 ]
@@ -1224,6 +1234,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       )}
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
       {model.catalogueConfirmed && <ConfirmedLine confirmed={model.catalogueConfirmed} say={so} onDismiss={actions?.onDismissConfirmed} />}
+      {model.confirmWindow && (
+        <ConfirmOrderWindow key={model.confirmWindow.requestId} open requestId={model.confirmWindow.requestId} onClose={() => actions?.onConfirmClose?.()} onConfirmed={() => actions?.onConfirmed?.()} />
+      )}
       {/* B-TH-217 (PL2): the list ~35 % and the request ~65 % beside it; nothing but the band sits above the pane.
           F-SA-277: pane 'host' — no SplitPane, the page's dock is the reading pane: the list alone. */}
       {hostPane ? listColumn : (
@@ -1329,13 +1342,14 @@ export function confirmedWordsOf(confirmed: CatalogueConfirmed, say: (key: strin
   if (confirmed.held > 0) parts.push(say('incoming.skippedHeld', { count: confirmed.held }))
   if (confirmed.other > 0) parts.push(say('incoming.skippedOther', { count: confirmed.other }))
   if (confirmed.refused > 0) parts.push(say('incoming.refused', { count: confirmed.refused }))
+  if (confirmed.left > 0) parts.push(say('incoming.left', { count: confirmed.left }))
   return parts.join(' · ')
 }
 
 function ConfirmedLine({ confirmed, say, onDismiss }: { confirmed: CatalogueConfirmed; say: (key: string, params?: Readonly<Record<string, string | number>>) => string; onDismiss?: () => void }) {
   return (
     <Banner
-      tone={confirmed.refused > 0 || confirmed.done === 0 ? 'warning' : 'success'}
+      tone={confirmed.refused > 0 || confirmed.left > 0 || confirmed.done === 0 ? 'warning' : 'success'}
       title={confirmedWordsOf(confirmed, say)}
       action={
         onDismiss ? (
