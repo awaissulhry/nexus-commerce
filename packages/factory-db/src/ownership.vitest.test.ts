@@ -317,8 +317,12 @@ describe('model ownership', () => {
       'OrderGate',
       'OrderLineColumnUse', // owb-b1: a customer's own column used on a record (order-columns.json)
       'OrderLineOwnValue', // owb-b1: a customer's own column value on a line (order-columns.json)
+      'OrderLineStructureKept', // owb-ssw: what an order line kept at its first print (structures.json)
       'OrderPriceAcceptance', // B-OM-019: a price difference accepted by hand (sales-brand-prices.json)
       'OrderPrint', // owb-b1: a print of an order's work papers (production.json)
+      'OrderStructure', // owb-ssw: an order structure (structures.json)
+      'OrderStructureOverride', // owb-ssw: one order's structure by hand (structures.json)
+      'OrderStructureRule', // owb-ssw: a rule that gives an order line its structure (structures.json)
       'OrderTeam', // owb-b1: a team that owns an order's work (brand-production.json)
       'OrgArea',
       'OutboxEvent',
@@ -515,6 +519,7 @@ describe('model ownership', () => {
       'SampleShipment',
       'SampleSwatch',
       'SavedView',
+      'ScanCodePlacement', // owb-ssw: the scan code's place on a design page (production.json)
       'ScanCorrectionRequest',
       'ScanPatternFinding',
       'ScheduleChange',
