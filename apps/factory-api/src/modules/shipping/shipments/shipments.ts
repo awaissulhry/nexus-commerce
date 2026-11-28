@@ -23,6 +23,8 @@ import { contentsView, headerView, lockedStatus, readShipment, shipmentFacts, ty
 import { assertOrderCaps, capRequestsOf } from './backorder'
 import { freightView } from './freight'
 import { assertNotOnHold } from '../../parties/holds/stops'
+// owb- (order workflow, S3 ss1 step 1.2): our warehouse first.
+import { legOf, planLegInCommand, refusedLeg, warehouseDestinationOf } from '../warehouse-leg/store'
 
 /**
  * The office's shipments (B-W1-46; LOG-001, LOG-002, LOG-039, GAP-002; A2 SCR-066, SCR-067): plan a DRAFT shipment
@@ -407,6 +409,8 @@ export interface CreateShipmentInput {
   readonly serviceCode?: string | null | undefined
   readonly internalNote?: string | null | undefined
   readonly lines?: readonly { readonly workOrderSizeId: string; readonly quantity: number }[] | undefined
+  /** owb- (S3 ss1 step 1.2): the customer (default) or one of our warehouses first (its leg is planned in the same command). */
+  readonly destination?: { readonly kind: 'CUSTOMER' } | { readonly kind: 'OUR_WAREHOUSE'; readonly siteId: string } | undefined
 }
 
 /**
@@ -414,7 +418,11 @@ export interface CreateShipmentInput {
  * series, to the order's ship-to (or another delivery address of its party), with the site's default carrier and
  * service (LOG-117), and optionally its first lines (released garments only).
  */
-export async function createShipment(caller: CommandCaller, body: CreateShipmentInput, idempotencyKey?: string): Promise<{ shipment: ShipmentDetail }> {
+// owb- (S3 ss1 step 1.2; settles L4, L5): `destination` OUR_WAREHOUSE — the ship-to is the warehouse site's address snapshot (no
+// shipToAddressId; refused while the order has no customer address to send the goods on to) and the leg (warehouse-leg/) is made in
+// the same command; the answer names it (`leg`). The quick "Ship the whole order…" uses this route as it is (salesOrderIds for
+// "together"): the DRAFT is then packed and sent in Warehouse as today — weights, the DDT, the holds; nothing legal is skipped.
+export async function createShipment(caller: CommandCaller, body: CreateShipmentInput, idempotencyKey?: string): Promise<{ shipment: ShipmentDetail; leg: { warehouseSiteId: string } | null }> {
   const context = officeContextOf(caller)
   const byCell = garmentsByCell(body.lines ?? [])
   const plan = await caller.withClient(async (client) => {
@@ -430,7 +438,15 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
     // W2b-5 (B-W2b-281): the database refuses a shipment of an order that waits for a yes; say it in words first.
     if (order.status === 'PENDING_APPROVAL') throw new InvalidStateError('The sales order waits for a yes; nothing ships for it until it is confirmed.')
-    const shipTo = body.shipToAddressId ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId') : (order.shipTo as Prisma.InputJsonValue)
+    // owb- (S3 ss1): to our warehouse first — its address, after the warehouse and the customer's address are checked.
+    const toWarehouse = body.destination?.kind === 'OUR_WAREHOUSE'
+      ? await warehouseDestinationOf(client, { warehouseSiteId: body.destination.siteId, companyId: order.companyId, fromSiteId: siteId, customerShipTo: order.shipTo, shipToAddressId: body.shipToAddressId })
+      : null
+    const shipTo = toWarehouse
+      ? (toWarehouse.shipTo as Prisma.InputJsonValue)
+      : body.shipToAddressId
+        ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId')
+        : (order.shipTo as Prisma.InputJsonValue)
     // B-OP-040 (N6): the other orders asked, each checked against the first (409 in words; an order the caller may not
     // see, or another customer's, as an unknown one).
     const join = await joinShipmentFacts(client, { number: null, status: 'DRAFT', siteId, salesOrderId: order.id, shipTo })
@@ -438,9 +454,9 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     const shipment = { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT' as const, salesOrderIds: [order.id, ...others], join }
     const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, ShippableCell>()
     const settings = await client.shippingSettings.findUnique({ where: { id: siteId }, select: { defaultTransportBy: true, defaultCarrierCode: true, defaultServiceCode: true, integrationAccountId: true } })
-    return { order, siteId, cells, shipTo, settings, others }
+    return { order, siteId, cells, shipTo, settings, others, warehouseSiteId: toWarehouse?.warehouseSiteId ?? null }
   })
-  const { order, siteId, cells, shipTo, settings, others } = plan
+  const { order, siteId, cells, shipTo, settings, others, warehouseSiteId } = plan
   const carrierCode = body.carrierCode !== undefined ? blankToNull(body.carrierCode) : (settings?.defaultCarrierCode ?? null)
   const serviceCode = body.serviceCode !== undefined ? blankToNull(body.serviceCode) : carrierCode === settings?.defaultCarrierCode ? (settings?.defaultServiceCode ?? null) : null
   const transportBy = body.transportBy ?? settings?.defaultTransportBy ?? 'CARRIER'
@@ -473,6 +489,8 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
       select: { id: true },
     })
     const scope = { id, number: number.formatted, companyId: order.companyId, siteId, partyId: order.partyId }
+    // owb- (S3 ss1): the leg through our warehouse, with its DRAFT (the leg's guard: a shipment of its customer and site).
+    if (warehouseSiteId) await planLegInCommand(tools, scope, warehouseSiteId)
     const added = byCell.size > 0 ? await addGarments(tools, scope, byCell, cells) : []
     const garments = added.reduce((sum, line) => sum + line.quantity, 0)
     tools.audit({
@@ -480,13 +498,13 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
       recordId: id,
       companyId: order.companyId,
       siteId,
-      after: { number: number.formatted, status: 'DRAFT', salesOrderId: order.id, siteId, transportBy, carrierCode, carrierName, serviceCode, shipToAddressId: body.shipToAddressId ?? null, lines: added },
+      after: { number: number.formatted, status: 'DRAFT', salesOrderId: order.id, siteId, transportBy, carrierCode, carrierName, serviceCode, shipToAddressId: body.shipToAddressId ?? null, lines: added, /* owb- */ ...(warehouseSiteId ? { destination: { kind: 'OUR_WAREHOUSE', siteId: warehouseSiteId } } : {}) },
     })
     tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments, partyId: order.partyId /* B-SA-004: the order row's customer, the shipment's */ } })
     changed(tools, scope, 'DRAFT', 'lines')
     // B-OP-040: made with lines of other orders of the customer (only after the switch): their orders joined it.
     if (others.length > 0) ordersChanged(tools, scope, [order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: order.id }), { atCreation: true } /* B-CW-040 */)
-    return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!) }
+    return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!), leg: warehouseSiteId ? { warehouseSiteId } : null }
   })
   return result
 }
@@ -604,6 +622,8 @@ export async function updateShipment(caller: CommandCaller, shipmentId: string, 
   const shipTo = body.shipToAddressId ? await caller.withClient((client) => shipToOf(client, shipment.partyId, body.shipToAddressId!, 'body/shipToAddressId')) : undefined
   return onShipment(caller, shipment, { name: 'shipping.update', idempotencyKey, input: { shipmentId, ...body }, version: body.version }, async (tools) => {
     const current = (await readShipment(tools.tx, shipment.id))!
+    // owb- (S3 ss1): a shipment to our warehouse first keeps the warehouse's address (its leg names that warehouse).
+    if (body.shipToAddressId && (await legOf(tools.tx, current.id))) refusedLeg('LEG_ADDRESS')
     if (delivery) {
       if (current.status !== 'DRAFT' && current.status !== 'PACKED') throw new InvalidStateError(`The shipment is ${current.status}; its delivery details change only until it leaves.`)
       const facts = await shipmentFacts(tools.tx, current.id)

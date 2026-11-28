@@ -32,6 +32,8 @@ import { shipmentDetail } from '../shipments/shipments'
 import { readShipment, type ShipmentHeader } from '../store'
 // B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
 import { ordersChanged, ordersOfShipment } from '../shipments/orders-of'
+// owb- (order workflow, S3 ss1 step 1.2): our warehouse first.
+import { legOf, planLegInCommand } from '../warehouse-leg/store'
 
 /**
  * Split one order into several shipments (B-W2b-386; LOG-005; rules factory-domain shipping/split). Office: shipping.view
@@ -191,6 +193,8 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   // B-OP-041 (order page N6, lines-derived): the orders the parent carries before; B-OS-021: a child is made for one of its own
   // lines' orders (the parent's first order when it carries one) and carries the orders of its own lines, a subset of the parent's.
   const parentOrdersBefore = await ordersOfShipment(tx, parent)
+  // owb- (order workflow, S3 ss1 step 1.2): a parent going to our warehouse first — a child that keeps its address goes there too.
+  const parentLeg = await legOf(tx, parent.id)
   const made: string[] = []
   // B-OS-010: what each old line still holds as the new shipments take from it (a line may give to several).
   const left = new Map(lines.map((line) => [line.id, line.quantity]))
@@ -238,6 +242,8 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
       },
       select: { id: true },
     })
+    // owb- (S3 ss1): the child keeps the parent's warehouse leg unless it is sent to a customer address of its own.
+    if (parentLeg && group.shipTo === null) await planLegInCommand(tools, { id, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, parentLeg.warehouseSiteId)
     // Garments come off the old lines (after the child's header, B-OS-021), before the child's lines: a cell's lines over every
     // shipment never pass its releases (the triggers).
     for (const move of group.moves) {

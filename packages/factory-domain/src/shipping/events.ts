@@ -40,6 +40,10 @@ import { TRACKING_VIAS } from './tracking-link/rules'
  *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
  *                             replaces a cancelled one whose goods left
  *   ddt.source_cancelled      such a DDT was cancelled (it keeps its number; a new one replaces it)
+ *   shipment.arrived_at_warehouse  owb- (S3 ss1): a shipment going through our warehouse first arrived there
+ *   shipment.label_received   owb- (S3 ss1): the customer's own shipping label of such a shipment came (the portal, or the
+ *                             office on its behalf)
+ *   shipment.forwarded        owb- (S3 ss1): it was sent on from our warehouse to the customer (with or without the label)
  */
 const status = z.enum(SHIPMENT_STATUSES)
 
@@ -226,4 +230,28 @@ export const events = [
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status', 'salesOrderIds'] },
   }),
   // ── end B-OP-030 ──
+  // ── owb- (order workflow, S3 ss1 step 1.2; settle L5): a shipment through OUR warehouse first. Ids only (no address, no label
+  // file, no person); the customer's id for the office's live wall only (B-SA-004), never a live field. ──
+  defineEvent({
+    type: 'shipment.arrived_at_warehouse',
+    context: 'shipping',
+    description: 'A shipment that goes through one of our warehouses first arrived there (It arrived at the warehouse).',
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), warehouseSiteId: z.uuid(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'warehouseSiteId', 'salesOrderIds'] },
+  }),
+  defineEvent({
+    type: 'shipment.label_received',
+    context: 'shipping',
+    description: "The customer's own shipping label of a shipment at (or on its way to) our warehouse came: from the portal, or the office on the customer's behalf.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), byCustomer: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'byCustomer', 'salesOrderIds'] },
+  }),
+  defineEvent({
+    type: 'shipment.forwarded',
+    context: 'shipping',
+    description: "A shipment was sent on from our warehouse to the customer (Send on to the customer), with the customer's label or without it.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), warehouseSiteId: z.uuid(), withoutLabel: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'warehouseSiteId', 'withoutLabel', 'salesOrderIds'] },
+  }),
+  // ── end owb- ──
 ] as const
