@@ -380,7 +380,7 @@ describe('owb-: the order workflow rights — who holds each, the designer, the 
     })
     const designer = templateOf('designer')!
     const alone = office(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }], false))
-    const withOffer = office(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }, { role: offers.extra_allow_production, scope: onlyA }], false))
+    const withOffer = office(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }, { role: offers['extra_allow_production']!, scope: onlyA }], false))
     expect(can(alone, 'workorders.view' as Permission, { companyId: A })).toBe(false)
     expect(can(withOffer, 'workorders.view' as Permission, { companyId: A })).toBe(true)
     // The offer's scope holds: company B is not reached by it.
