@@ -15,7 +15,8 @@ const departmentSchema = departmentsAnswerSchema.shape.departments.element
 
 export const basketCardSchema = z
   .object({
-    id: z.string(),
+    /** S5's board card (owb-fl4 board-contract.ts `basketCard`): the bundle is the basket. */
+    bundleId: z.string(),
     code: z.string().nullable().optional(),
     label: z.string().nullable().optional(),
     state: z.string().nullable().optional(),
@@ -32,6 +33,8 @@ export type BasketCard = z.infer<typeof basketCardSchema>
 const boardSchema = z.object({
   columns: z.array(z.object({ department: departmentSchema, baskets: z.array(basketCardSchema) })),
   readyToShip: z.array(basketCardSchema).default([]),
+  /** Baskets at a step of no department (an outside step): kept, never lost. */
+  elsewhere: z.array(basketCardSchema).default([]),
 })
 export type OrderBasketsBoard = z.infer<typeof boardSchema>
 
@@ -48,5 +51,5 @@ export function departmentTilesOf(board: OrderBasketsBoard, locale: string): { r
 
 /** Every basket of the order once, with its department (the ready ones last, department null). */
 export function basketsOf(board: OrderBasketsBoard, locale: string): { readonly card: BasketCard; readonly dept: Department | null }[] {
-  return [...board.columns.flatMap((column) => column.baskets.map((card) => ({ card, dept: departmentOfAnswer(column.department, locale) }))), ...board.readyToShip.map((card) => ({ card, dept: null }))]
+  return [...board.columns.flatMap((column) => column.baskets.map((card) => ({ card, dept: departmentOfAnswer(column.department, locale) }))), ...board.elsewhere.map((card) => ({ card, dept: null })), ...board.readyToShip.map((card) => ({ card, dept: null }))]
 }

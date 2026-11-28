@@ -1,0 +1,36 @@
+/* owb-of6 step 1 — the Baskets rows (S5's board read): one row per basket; the columns wrap in a narrow tab (the tab is the size
+   container `pt`: every rule follows the tab's room, never the screen). Tokens only, light and dark. */
+.fw-flow-baskets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-flow-basket {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(120px, 1.4fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(90px, 1.2fr) minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: center;
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+.fw-flow-basket > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-flow-basket-code {
+  font-family: var(--nds-font-mono);
+}
+.fw-flow-basket-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+@container pt (max-width: 719px) {
+  .fw-flow-basket {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

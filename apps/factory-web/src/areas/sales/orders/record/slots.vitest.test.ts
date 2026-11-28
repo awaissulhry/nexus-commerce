@@ -30,14 +30,17 @@ const PRODUCTION_TAB = 'areas/sales/orders/record/view/ProductionTab.tsx'
 const TERMS_TAB = 'areas/sales/customers/record/view/terms/TermsTab.tsx'
 /** owb-of5 step 1: the band's ONE act opens these three windows, mounted once for the order page. */
 const BAND_ACTS = 'areas/sales/orders/record/band/ActWindows.tsx'
+/** owb-of6 step 1: Print again… on the Baskets section, Place the scan code… on What we make it to. */
+const BASKETS = 'areas/sales/orders/record/view/production/WorkOrdersSection.tsx'
+const MAKE_TO = 'areas/sales/orders/record/view/production/MakeToSection.tsx'
 
 const windowProps = { open: true, onClose: () => undefined, companyId: 'company-1', orderId: 'order-1' }
 const part = { companyId: 'company-1', orderId: 'order-1' }
 
 const STUBS = [
   { path: 'areas/sales/orders/record/print/PrintStartWindow.tsx', name: 'PrintStartWindow', owner: 'S3 (owb-ss4)', draw: () => PrintStartWindow(windowProps), mounts: [BAND_ACTS] as string[], filled: true /* owb-ss4 */ },
-  { path: 'areas/sales/orders/record/print/PrintAgainWindow.tsx', name: 'PrintAgainWindow', owner: 'S3 (owb-ss4)', draw: () => PrintAgainWindow(windowProps), mounts: ['areas/production/baskets/BasketsBoardPage.tsx'] as string[], filled: true /* owb-ss4 */ },
-  { path: 'areas/sales/orders/record/print/PlaceScanCodeWindow.tsx', name: 'PlaceScanCodeWindow', owner: 'S3 (owb-ss4)', draw: () => PlaceScanCodeWindow(windowProps), mounts: [] as string[], filled: false },
+  { path: 'areas/sales/orders/record/print/PrintAgainWindow.tsx', name: 'PrintAgainWindow', owner: 'S3 (owb-ss4)', draw: () => PrintAgainWindow(windowProps), mounts: [BASKETS, 'areas/production/baskets/BasketsBoardPage.tsx'] as string[], filled: true /* owb-ss4 */ },
+  { path: 'areas/sales/orders/record/print/PlaceScanCodeWindow.tsx', name: 'PlaceScanCodeWindow', owner: 'S3 (owb-ss4)', draw: () => PlaceScanCodeWindow(windowProps), mounts: [MAKE_TO] as string[], filled: false },
   { path: 'areas/sales/orders/record/shipments/ShipWholeOrderWindow.tsx', name: 'ShipWholeOrderWindow', owner: 'S3 (owb-ss3)', draw: () => ShipWholeOrderWindow(windowProps), mounts: [BAND_ACTS] as string[], filled: true /* owb-ss3 */ },
   { path: 'areas/sales/orders/record/shipments/WarehouseLegWindow.tsx', name: 'WarehouseLegWindow', owner: 'S3 (owb-ss3)', draw: () => WarehouseLegWindow({ ...windowProps, act: 'SEND_ON' }), mounts: [BAND_ACTS] as string[], filled: true /* owb-ss3 */ },
   { path: 'areas/production/teams/parts/OrderTeamPart.tsx', name: 'OrderTeamPart', owner: 'S3 (owb-ss7)', draw: () => OrderTeamPart(part), mounts: [PRODUCTION_TAB], filled: true /* owb-ss7 7.3 */ },
