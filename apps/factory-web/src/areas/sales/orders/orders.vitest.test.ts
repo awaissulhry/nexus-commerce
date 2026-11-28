@@ -1751,11 +1751,12 @@ describe('F-OP-311: Read-only sees no next step and no move in the band; everyon
     }
     for (const locale of LOCALES) {
       for (const id of ['f-oo-105-read-only', 'f-oo-205-read-only']) expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf(id), locale)), `${id} ${locale}`).toBe('')
-      expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-oo-105-holds-sales'), locale)), locale).toContain('<button')
+      // owb-of5 step 1 (design § 5i): an order in production has NO main act in the band (Change promise date… lives on Production).
+      expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-oo-105-holds-sales'), locale)), locale).toBe('')
     }
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
     // F-OS-101 (L10): the band's step, then (on the Shipments tab only) without its Create shipment… copy.
-    expect(view).toContain('const bandStep = bandStepOf(order, model.can, readOnly)')
+    expect(view).toContain('const bandStep = bandStepOf(order, model.can, readOnly, model.flow?.legs ?? null)') // owb-of5: + S3's legs
     expect(view).toContain('bandMenuFor(readOnly, groups, cancelItem)')
   })
 })
