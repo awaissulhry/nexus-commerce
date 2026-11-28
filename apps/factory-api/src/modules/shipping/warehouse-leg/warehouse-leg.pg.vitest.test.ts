@@ -155,7 +155,8 @@ async function openBalance(): Promise<string> {
 }
 const settle = (id: string) => force(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [id])
 
-const ids: Record<string, string> = {}
+// Filled in order by the cases below (each case reads only the ids an earlier case set).
+const ids = {} as { balance: string; label: string; leg: string; saleDdt: string; straight: string; transferDdt: string }
 
 beforeAll(async () => {
   db = await migratedDatabase('warehouse_leg')

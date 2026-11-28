@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { costOfOne } from '../now/model'
 import { marginAt, pctOf, priceForTarget, priceOf, whatIf, whatIfBaseOf, type WhatIfBase } from './model'
 
@@ -68,7 +69,9 @@ describe('the arithmetic', () => {
   })
 
   it('the base is the cost of one piece now, in its 4 parts', () => {
-    const cost = costOfOne({ split: [{ size: '52', categories: [{ category: 'LEATHER', amount: '30' }, { category: 'MATERIAL', amount: '10' }, { category: 'LABOUR', amount: '50' }, { category: 'OVERHEAD', amount: '9' }, { category: 'PACKAGING', amount: '1' }], knownTotal: '100', total: '100', complete: true }] }, '52')!
+    // The components answer marks its figures with the cost grain (asMoney, as the API's handler does).
+    const amount = (value: string) => asMoney('cost', value)
+    const cost = costOfOne({ split: [{ size: '52', categories: [{ category: 'LEATHER', amount: amount('30') }, { category: 'MATERIAL', amount: amount('10') }, { category: 'LABOUR', amount: amount('50') }, { category: 'OVERHEAD', amount: amount('9') }, { category: 'PACKAGING', amount: amount('1') }], knownTotal: amount('100'), total: amount('100'), complete: true }] }, '52')!
     expect(whatIfBaseOf(cost)).toEqual(BASE)
   })
 })

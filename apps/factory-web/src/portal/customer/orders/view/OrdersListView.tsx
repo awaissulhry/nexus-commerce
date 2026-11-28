@@ -25,7 +25,6 @@ import { useRoomWidth } from '../../../../lib/order-cells/use-room-width'
 import { useCellWords } from '../../../../lib/order-cells/words'
 import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture'
 // owb-po7.3: the picture as a button, the life word, Waits · news and Details (the customer's own columns as chips).
-import type { OrderRow } from '../api'
 import { detailsOf, lifeOf, pictureDoorOf, waitChipsOf, type WaitChip } from '../sheet/model'
 import { PictureButton, SHEET_NS, WaitsChips } from '../sheet/view/SheetParts'
 import { OwnChips } from '../../../../lib/order-lines/own-columns/OwnChips'

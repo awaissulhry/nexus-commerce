@@ -148,7 +148,7 @@ describe('merge (design § 5zd: any number of units)', () => {
       { employeeId: 'ea', fromTeamId: 'a', plan: { kind: 'MOVE', end: { id: 'ma', until: '2026-11-27' }, remove: null, start: { teamId: 'k', since: today }, wasLead: true } },
       { employeeId: 'eb', fromTeamId: 'b', plan: { kind: 'MOVE', end: null, remove: 'mb', start: { teamId: 'k', since: today }, wasLead: false } },
     ])
-    expect(plan.endRows.sort()).toEqual(['r1a', 'r2a', 'r2b', 'r3a'])
+    expect([...plan.endRows].sort()).toEqual(['r1a', 'r2a', 'r2b', 'r3a'])
     expect(plan.updateRows).toEqual([{ rowId: 'r1k', salesOrderId: 'o1', inCharge: true, basketShare: 10, bundleIds: ['b1', 'b2'], fromRowIds: ['r1a'] }])
     expect(plan.insertRows).toEqual([
       { salesOrderId: 'o2', companyId: 'c', partyId: 'p', siteId: 's', inCharge: true, basketShare: null, bundleIds: [], givenBy: 'RULE', fromRowIds: ['r2a', 'r2b'] },

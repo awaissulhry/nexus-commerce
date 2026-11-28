@@ -157,7 +157,8 @@ export async function orderMoney(app: FastifyInstance, request: FastifyRequest, 
 
 export interface NoticeBody {
   readonly stepId: string | null
-  readonly amount: number
+  /** Absent when the caller holds no price grain (the marked input strips it): refused as AMOUNT. */
+  readonly amount?: number | undefined
   readonly paidOn: BusinessDate
   readonly method?: string | undefined
   readonly note?: string | undefined
@@ -175,7 +176,8 @@ export async function sendPaymentNotice(app: FastifyInstance, request: FastifyRe
   const order = await partnerOrder(request, reader, orderId)
   const today = businessDate(appClock(app).now())
   const money = await moneyFactsOf(request, reader, order, today)
-  const problem = noticeProblem({ amount: body.amount, stillToPay: money.totals.stillToPay, paidOn: body.paidOn, today })
+  const amount = body.amount ?? 0
+  const problem = noticeProblem({ amount, stillToPay: money.totals.stillToPay, paidOn: body.paidOn, today })
   if (problem === 'NOTHING_TO_PAY') throw new DomainError('conflict', said(problem, locale), [{ path: 'refusal/NOTHING_TO_PAY', message: said(problem, locale) }])
   if (problem) throw new ValidationError(said(problem, locale), [{ path: problem === 'FUTURE' ? 'body/paidOn' : 'body/amount', message: said(problem, locale) }])
   const step = body.stepId === null ? null : money.plan.find((entry) => entry.id === body.stepId && entry.id !== REST_STEP_ID)
@@ -195,7 +197,7 @@ export async function sendPaymentNotice(app: FastifyInstance, request: FastifyRe
         salesOrderId: order.id,
         depositRequestId: step?.source.depositRequestId ?? null,
         milestoneId: step?.source.milestoneId ?? null,
-        amount: body.amount,
+        amount,
         currency: order.currency,
         paidOn: new Date(`${body.paidOn}T00:00:00.000Z`),
         method: body.method?.trim() || null,
@@ -207,7 +209,7 @@ export async function sendPaymentNotice(app: FastifyInstance, request: FastifyRe
       },
       select: { id: true, depositRequestId: true, milestoneId: true, amount: true, paidOn: true, state: true },
     })
-    tools.audit({ action: 'portalOrders.paymentNotice', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { noticeId: id, stepId: body.stepId, amount: markMoney('price', body.amount), paidOn: body.paidOn, byPartner: true } })
+    tools.audit({ action: 'portalOrders.paymentNotice', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { noticeId: id, stepId: body.stepId, amount: markMoney('price', amount), paidOn: body.paidOn, byPartner: true } })
     tools.emit({ type: 'payment_notice.sent', subject: order.id, companyId: order.companyId, payload: { noticeId: id, salesOrderId: order.id, partyId: reader.session.partyId } })
     return row
   })

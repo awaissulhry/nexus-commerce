@@ -109,7 +109,7 @@ function Door({ api, change, companyId, onSaved }: { api: ApiClient; change: boo
   }
 
   const setDept = (departmentId: string, patch: Partial<{ cpm: string; eff: string }>) =>
-    setDraft((current) => ({ ...current, depts: { ...current.depts, [departmentId]: { cpm: '', eff: '', ...current.depts[departmentId], ...patch } } }))
+    setDraft((current) => ({ ...current, depts: { ...current.depts, [departmentId]: { ...(current.depts[departmentId] ?? { cpm: '', eff: '' }), ...patch } } }))
 
   const model: RatesWindowModel = {
     state: loaded.status,

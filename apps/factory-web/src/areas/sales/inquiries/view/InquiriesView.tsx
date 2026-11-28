@@ -542,7 +542,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                   {so('incoming.onHold')}
                 </Tag>
               )}
-              {offersConfirm(data, sent, m.can.orders) && (
+              {offersConfirm(data, sent, m.can.orders === true) && (
                 <Button size="sm" variant="primary" className="fw-inq-confirm" heldReason={offline ? t('held.offline') : null} onClick={() => act()?.onConfirmDoor?.(data)}>
                   {so('incoming.confirm')}
                 </Button>
