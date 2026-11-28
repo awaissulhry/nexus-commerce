@@ -21,7 +21,7 @@ describe('pt-w2 W2.1 — the partner model', () => {
   }
 
   it('WALL: the portal thread’s message map has no audience, note, author id or office field', () => {
-    expectTypeOf<keyof PortalThreadMessage>().toEqualTypeOf<'id' | 'side' | 'channel' | 'author' | 'body' | 'attachments' | 'at' | 'atText' | 'replyTo' | 'correctedBy' | 'erased'>()
+    expectTypeOf<keyof PortalThreadMessage>().toEqualTypeOf<'id' | 'side' | 'channel' | 'author' | 'body' | 'attachments' | 'at' | 'atText' | 'replyTo' | 'correctedBy' | 'erased' | 'event'>()
     expectTypeOf<keyof PortalQuote>().toEqualTypeOf<'id' | 'authorName' | 'authorKind' | 'excerpt' | 'at' | 'erased' | 'mine' | 'fileCount' | 'firstFile'>()
     expectTypeOf<keyof PortalThreadFile>().toEqualTypeOf<'id' | 'name' | 'size' | 'sizeBytes' | 'href' | 'contentType' | 'locked'>()
     for (const name of ['PortalThreadMessage', 'PortalQuote', 'PortalThreadFile', 'PortalPin', 'PartnerFeedMessage']) {

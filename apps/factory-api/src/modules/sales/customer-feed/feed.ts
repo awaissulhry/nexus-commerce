@@ -131,6 +131,9 @@ const FEED_MESSAGE = {
   forFloor: true,
   amount: true,
   amountCurrency: true,
+  // owb-po2.3: a quiet line's key and args (the message view carries `event`).
+  eventKey: true,
+  eventArgs: true,
 } as const satisfies Prisma.MessageSelect
 type FeedMessage = Prisma.MessageGetPayload<{ select: typeof FEED_MESSAGE }>
 
