@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from '../../lib/i18n/locales'
+import { isFloorLocale, type FloorLocale } from '../../lib/i18n/locales'
 import type { QueueItem } from '../queue/model'
 
 /**
@@ -53,9 +53,12 @@ export const mayQueueSuggestion = (withName: boolean): boolean => withName
 /** The person's place on the floor, by today's right: a team leader holds `floor.lead`. */
 export const roleOf = (permissions: readonly string[]): 'LEADER' | 'WORKER' => (permissions.includes('floor.lead') ? 'LEADER' : 'WORKER')
 
-/** The site's floor languages this web speaks, in the site's order (an unknown tag is left out, never shown raw). */
-export function floorLanguages(floorLocales: readonly string[]): Locale[] {
-  return [...new Set(floorLocales.filter((tag): tag is Locale => isLocale(tag)))]
+/**
+ * The site's floor languages this web speaks, in the site's order (an unknown tag is left out, never shown raw). owb-fl7: Urdu too
+ * (pick J: a site lists `ur` only with an Urdu worker notice in force; its words are drafts until a native reader checks them).
+ */
+export function floorLanguages(floorLocales: readonly string[]): FloorLocale[] {
+  return [...new Set(floorLocales.filter((tag): tag is FloorLocale => isFloorLocale(tag)))]
 }
 
 /** "Saved on this phone": this person's actions not yet recorded by the office (waiting, or refused and to be sent again). */

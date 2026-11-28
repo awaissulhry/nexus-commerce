@@ -5,7 +5,7 @@ import { CalendarCheck, CheckCheck, Languages, Lightbulb, ListChecks, Type, User
 import { FloorButton } from '@nexus/ui/floor'
 import { DeptChip } from '../../../lib/department/view/DeptChip'
 import type { Department } from '../../../lib/department/model'
-import { LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
+import { FLOOR_LOCALE_NAMES, type FloorLocale } from '../../../lib/i18n/locales'
 import { useT } from '../../../lib/i18n/provider'
 import { TeamChip } from '../../../lib/people-picture/view/TeamChip'
 import { FloorState } from '../../frame/view/FloorState'
@@ -35,7 +35,7 @@ export type MeAction =
   | { readonly type: 'sound' }
   | { readonly type: 'record' }
   | { readonly type: 'person' }
-  | { readonly type: 'language'; readonly locale: Locale }
+  | { readonly type: 'language'; readonly locale: FloorLocale }
   | { readonly type: 'retry' }
 
 export interface MeModel {
@@ -44,8 +44,8 @@ export interface MeModel {
   readonly profile: FloorProfile | null
   readonly state: 'loading' | 'ready' | 'failed'
   readonly departments: readonly Department[]
-  readonly locale: Locale
-  readonly languages: readonly Locale[]
+  readonly locale: FloorLocale
+  readonly languages: readonly FloorLocale[]
   readonly settings: FloorDeviceSettings
   readonly online: boolean
   /** This person's actions saved on this phone and not yet recorded by the office. */
@@ -149,7 +149,7 @@ export function MeView({ model, onAction }: { model: MeModel; onAction: (action:
           <div className="fw-me-langs" role="group" aria-labelledby="fw-me-lang">
             {model.languages.map((locale) => (
               <FloorButton key={locale} size="lg" variant={locale === model.locale ? 'primary' : 'secondary'} aria-pressed={locale === model.locale} onClick={() => send({ type: 'language', locale })}>
-                <span lang={locale}>{LOCALE_NAMES[locale]}</span>
+                <span lang={locale} dir={locale === 'ur' ? 'rtl' : 'ltr'}>{FLOOR_LOCALE_NAMES[locale]}</span>
               </FloorButton>
             ))}
           </div>
