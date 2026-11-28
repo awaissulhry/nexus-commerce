@@ -888,6 +888,47 @@ enum OrderPrintReason {
   ONE_MORE_COPY
 }
 
+/// Where the scan code sits on one page of an order line's design file (owb-ssw, S3 schema wave "structures + units";
+/// _owb-ss-common L8; design order-workflow-2026-11-25 "Place the scan code"): the office places the QR (the line's work order
+/// number, the traveller's form) on a design page before Print and start the work, per line, file and page, in millimetres
+/// from the page's top left corner. Moved by the office (an update: the same line, file and page); never deleted by a person
+/// (the line or the file going takes it with it: Cascade, as OrderLineOwnValue's line). Office only (production.print.start):
+/// the floor reads the printed page, never this row; the customer reads none. Checked by ScanCodePlacement_guard.
+model ScanCodePlacement {
+  id               String         @id @db.Uuid
+  tenantId         String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the order's and the line's foreign keys).
+  companyId        String         @db.Uuid
+  partyId          String         @db.Uuid
+  salesOrderId     String         @db.Uuid
+  /// A line of that order (ScanCodePlacement_guard).
+  salesOrderLineId String         @db.Uuid
+  /// The design file: an image or a PDF of the tenant, of the order's company and customer or of the whole factory, never
+  /// another customer's (ScanCodePlacement_guard).
+  fileId           String         @db.Uuid
+  /// The page of the file, 1 first (an image has one page).
+  page             Int
+  /// The code's top left corner from the page's top left corner, in millimetres, 0 or more.
+  xMm              Decimal        @db.Decimal(8, 2)
+  yMm              Decimal        @db.Decimal(8, 2)
+  /// The code's side, in millimetres: 20 or more, so the floor's cameras read it.
+  sizeMm           Decimal        @db.Decimal(8, 2)
+  version          Int            @default(1)
+  /// When and by whom it was placed (or last moved).
+  placedAt         DateTime       @default(now()) @db.Timestamptz(3)
+  placedById       String?        @db.Uuid
+
+  salesOrder SalesOrder     @relation("ScanCodePlacementOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line       SalesOrderLine @relation("ScanCodePlacementLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  file       StoredFile     @relation("ScanCodePlacementFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  // One place per line, file and page.
+  @@unique([tenantId, salesOrderLineId, fileId, page])
+  // An order's places (the Design desk's "0 of 3 placed", the print); a file's.
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, fileId])
+}
+
 /// One operation scan (MES-069, MES-090, MES-095, MES-096; A1 §2.5 "Operation scan", §3.8): a bundle reported done at an
 /// operation with its good, scrap and rework counts (REPORT), the undo of a report (UNDO), or a lead-approved correction
 /// of an older one (CORRECTION, its right counts); an undo or a correction voids the scan it names, which stays. A

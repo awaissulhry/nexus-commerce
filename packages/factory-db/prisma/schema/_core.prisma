@@ -378,6 +378,8 @@ model Company {
   // company only; its office people given to customers.
   departments          Department[]
   partyOfficePeople    PartyOfficePerson[] @relation("PartyOfficePersonCompany")
+  // owb-ssw structures.prisma (S3 schema wave "structures + units"): its order structures.
+  orderStructures      OrderStructure[]    @relation("OrderStructureCompany")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

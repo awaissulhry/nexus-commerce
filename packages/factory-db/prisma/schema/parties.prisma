@@ -319,6 +319,8 @@ model Party {
   // own columns for order lines and the office people given to it.
   lineColumns             PartyLineColumn[]
   officePeople            PartyOfficePerson[] @relation("PartyOfficePersonParty")
+  // owb-ssw structures.prisma (S3 schema wave "structures + units"): the order structure rules that name it.
+  orderStructureRules     OrderStructureRule[] @relation("OrderStructureRuleParty")
 
   @@unique([tenantId, code])
   // W2b-6 (wave 48/57): one sealed carrier account per party (a secret is never shared).
