@@ -151,5 +151,18 @@
     "failed": "The zip could not be made. Try again.",
     "leftOut_one": "{count} file was left out of the zip: you cannot open it.",
     "leftOut_other": "{count} files were left out of the zip: you cannot open them."
+  },
+  "design": {
+    "send": "Send the design for approval",
+    "busy": "Sending…",
+    "noPicture": "Choose the order’s picture (the mockup) first: it is what the customer approves.",
+    "waits": "The customer already has the design to approve.",
+    "failed": "The design could not be sent. Try again.",
+    "question": "Please approve the design of order {number}. The work goes on meanwhile; your approval makes it sure.",
+    "state": {
+      "WAITS": "Design: waits for the customer’s approval",
+      "APPROVED": "Design approved",
+      "CHANGE": "Design: the customer asks a change"
+    }
   }
 }
