@@ -430,6 +430,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/work-orders/travellers',
   // B-W2b-56: Production › Dispatch (SCR-138) and its print window (a new tab, no navigation row).
   '/production/dispatch',
+  // owb- S5 (fl9): Production › Baskets board and Chains (flipped from DECLARED_PAGES at the land).
+  '/production/baskets',
+  '/production/chains',
   '/production/dispatch/print',
   // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
   // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
@@ -545,9 +548,6 @@ export const DECLARED_PAGES: ReadonlySet<string> = new Set([
   '/people/structure',
   '/warehouse/ready-to-ship',
   '/warehouse/our-warehouses',
-  // S5: Production › Baskets board and Chains (fl9).
-  '/production/baskets',
-  '/production/chains',
   // S2: People › People by customer (of4), Home › Design desk (of7).
   '/people/by-customer',
   '/home/design-desk',
