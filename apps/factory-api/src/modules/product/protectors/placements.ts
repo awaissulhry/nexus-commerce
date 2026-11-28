@@ -16,7 +16,7 @@ import {
 } from '@nexus/factory-domain/product/protectors/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { lockMaterials, readRevisionFor } from '../bom/store'
+import { lockMaterials, readRevisionFor, readRevisionForSizes } from '../bom/store'
 import { contextOf, mayWrite } from '../materials/store'
 import { assertMayEditDraft, mayDesign } from '../drafts/may-edit' // owb-pd1 1.4
 import {
@@ -82,7 +82,8 @@ async function writer(caller: CommandCaller, styleId: string, revisionId: string
 
 /** GET …/protectors: the revision's placement with what to look at. */
 export async function getPlacements(caller: CommandCaller, styleId: string, revisionId: string): Promise<ProtectorPlacementView> {
-  const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
+  // owb-pd4s s.2: product.bom.view or product.styles.view (Sales reads the protectors of the Sizes tab).
+  const { style, revision } = await readRevisionForSizes(caller, styleId, revisionId)
   return caller.withClient((client) => placementView(client, style, revision))
 }
 
