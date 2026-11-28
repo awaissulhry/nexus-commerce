@@ -1567,7 +1567,7 @@ function NewOrderContainer() {
           onClose={() => setPictureOpen(false)}
           number={dw.t('window.yourOrder')}
           subject={title}
-          record={{ source: 'customerOrder', recordId: request.id }}
+          record={{ source: 'customerRequest', recordId: request.id }}
           now={{ fileId: request.picture?.fileId ?? null, version: request.version }}
           choices={pictureChoices}
           save={orderPictureSaver(api, orderPicturePath('portal', 'request', request.id))}

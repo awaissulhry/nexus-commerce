@@ -753,7 +753,18 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     openApprovals: approvals.openApprovals,
     openApprovalsHidden: approvals.openApprovalsHidden,
     // ── end B-OP-020 ──
+    // owb-of1 (order workflow, PL-schema § 3, § 5A row 1): the order's picture choice, and Restrict on the floor (by whom, since when).
+    ...(await workflowFactsOf(db, order.id)),
   }
+}
+
+/** owb-of1: the order's chosen picture (null: the first line's design picture) and its floor restriction ({ by, at } or null). */
+async function workflowFactsOf(db: Reader, orderId: string): Promise<{ pictureFileId: string | null; restricted: { by: string; at: string } | null }> {
+  const row = await db.salesOrder.findUnique({ where: { id: orderId }, select: { pictureFileId: true, floorRestricted: true, floorRestrictedAt: true, floorRestrictedById: true } })
+  if (!row) return { pictureFileId: null, restricted: null }
+  if (!row.floorRestricted || row.floorRestrictedAt === null) return { pictureFileId: row.pictureFileId, restricted: null }
+  const by = row.floorRestrictedById ? await db.user.findUnique({ where: { id: row.floorRestrictedById }, select: { displayName: true } }) : null
+  return { pictureFileId: row.pictureFileId, restricted: { by: by?.displayName ?? '', at: toUtcIso(row.floorRestrictedAt) } }
 }
 
 export type OrderView = Awaited<ReturnType<typeof orderView>>

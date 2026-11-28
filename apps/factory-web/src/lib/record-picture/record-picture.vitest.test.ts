@@ -203,7 +203,16 @@ describe('the reads and the words', () => {
       portalOrder: { path: '/sales/order-requests/pictures', key: 'requestIds' },
       // pg-w2 (D4): the customer's portal list — its OWN orders only (the partner read; no file id in the answer).
       customerOrder: { path: '/portal/sales-orders/pictures', key: 'orderIds' },
+      // owb-po7 (owb-po1): the customer's draft or sent order — the same partner route, its own key.
+      customerRequest: { path: '/portal/sales-orders/pictures', key: 'requestIds' },
     })
+  })
+  it('owb-po7: a draft is asked under requestIds (never orderIds); a request with a chosen picture and no style reads its null style as no words', async () => {
+    const posted: { path: string; body: unknown }[] = []
+    const api = { post: async (path: string, init: { body: unknown; schema: { parse: (value: unknown) => unknown } }) => { posted.push({ path, body: init.body }); return init.schema.parse({ pictures: [{ id: 'r1', styleId: null, styleCode: null, styleName: null, styleCount: 0, fileId: null, contentType: 'image/png', small: { url: 'https://store.example/r1.png', expiresAt: '2026-11-28T10:01:00.000Z' } }], asOf: '2026-11-28T10:00:00.000Z' }) } } as unknown as Parameters<typeof readPictures>[0]
+    const answers = await readPictures(api, 'customerRequest', ['r1'])
+    expect(posted).toEqual([{ path: '/portal/sales-orders/pictures', body: { requestIds: ['r1'] } }])
+    expect(answers[0]).toMatchObject({ id: 'r1', styleId: '', styleCode: '', fileId: 'customerRequest:r1' })
   })
   it('pg-w2 (D4): the customer\'s answer names no file — its small address is kept under its order, in this browser only', async () => {
     const posted: unknown[] = []

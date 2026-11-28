@@ -3,11 +3,11 @@
     "title": "Prepacks",
     "loading": "Loading the prepacks…",
     "failed": "Couldn't load the prepacks",
-    "intro": "Fixed size mixes dealers order as one unit: this style's own, and those of every style of size scale {scale}.",
+    "intro": "Fixed size mixes dealers order as one unit: this product's own, and those of every product of size scale {scale}.",
     "rule": "A prepack is not part of a revision: releasing or starting a revision does not change it. A size with no pieces reads “—”.",
     "add": "New prepack",
     "table": "Prepacks",
-    "count": "{count} active · {usable} this style can sell",
+    "count": "{count} active · {usable} this product can sell",
     "showArchived": "Show archived ({count})",
     "unit": "pcs",
     "cell": "{code}, pieces of size {size}",
@@ -18,16 +18,16 @@
       "prepack": "Prepack",
       "for": "For",
       "pieces": "Pieces per pack",
-      "fit": "This style",
+      "fit": "This product",
       "more": "More",
       "code": "Code",
       "name": "Name"
     },
     "for": {
-      "style": "This style",
+      "style": "This product",
       "scale": "Scale {scale}",
-      "styleLong": "This style only ({style})",
-      "scaleLong": "Every style of size scale {scale}"
+      "styleLong": "This product only ({style})",
+      "scaleLong": "Every product of size scale {scale}"
     },
     "fit": {
       "usable": "Can sell it",
@@ -53,17 +53,17 @@
     },
     "held": {
       "noManage": "Your role can see the prepacks, not change them.",
-      "archivedStyle": "This style is archived: reactivate it before changing its prepacks.",
-      "rule": "The style's lifecycle state holds every change now: its own prepacks wait (the scale's still change).",
+      "archivedStyle": "This product is archived: reactivate it before changing its prepacks.",
+      "rule": "The product's lifecycle state holds every change now: its own prepacks wait (the scale's still change).",
       "archived": "This prepack is archived: restore it to change it."
     },
     "readOnly": {
       "noManage": "Read only: your role can see the prepacks, not change them.",
-      "rule": "The style's lifecycle state holds every change now, so this style's own prepacks are read only; the scale's prepacks still change."
+      "rule": "The product's lifecycle state holds every change now, so this product's own prepacks are read only; the scale's prepacks still change."
     },
     "empty": {
       "title": "No prepacks",
-      "body": "Add a fixed mix of sizes dealers can order as one pack, for this style or every style of its scale."
+      "body": "Add a fixed mix of sizes dealers can order as one pack, for this product or every product of its scale."
     },
     "problem": {
       "write": "The change was not saved.",
@@ -84,7 +84,7 @@
       "add": "Add prepack",
       "save": "Save",
       "codeHint": "Unique in the size scale, no spaces (“PP-7”).",
-      "forHint": "A scale's prepack serves every style made in all of its sizes.",
+      "forHint": "A scale's prepack serves every product made in all of its sizes.",
       "forFixed": "Who a prepack is for does not change: make a new one instead.",
       "byColour": "Pieces per colourway",
       "grid": "Pieces per size",
@@ -113,7 +113,7 @@
     "title": "Protector placement",
     "loading": "Loading the protector placement…",
     "failed": "Couldn't load the protector placement",
-    "noRevision": "The style has no revision yet: start revision 1 to place its protectors.",
+    "noRevision": "The product has no revision yet: start revision 1 to place its protectors.",
     "intro": "Which protector goes in which pocket of revision {revision}, for which sizes, with the standard and level the certified type asks.",
     "rule": "Each pocket takes one protector per size. The list is checked against the revision's BOM and the certificates; what does not agree is said here, it never blocks.",
     "add": "Add placement",
@@ -162,7 +162,7 @@
       "all": "All sizes",
       "run": "{from}–{to}",
       "some": "{sizes}",
-      "every": "Every size (follows the style's range)",
+      "every": "Every size (follows the product's range)",
       "only": "Only these sizes",
       "hint": "Two placements of one pocket never share a size.",
       "pickOne": "Tick at least one size.",
@@ -193,13 +193,13 @@
     "held": {
       "noManage": "Your role can see the protector placement, not change it.",
       "frozen": "The revision in view is frozen: change the placement in a draft revision.",
-      "archived": "This style is archived: reactivate it before changing its protector placement.",
-      "rule": "The style's lifecycle state does not allow changes to its draft now (see Overview).",
+      "archived": "This product is archived: reactivate it before changing its protector placement.",
+      "rule": "The product's lifecycle state does not allow changes to its draft now (see Overview).",
       "noChoice": "No protector material can be placed: add a PROTECTOR material in Materials & trims first."
     },
     "readOnly": {
       "noManage": "Read only: your role can see the protector placement, not change it.",
-      "rule": "Read only: the style's lifecycle state does not allow changes to its draft now (see Overview)."
+      "rule": "Read only: the product's lifecycle state does not allow changes to its draft now (see Overview)."
     },
     "findings": {
       "title": "{count} thing(s) to look at",
@@ -228,10 +228,10 @@
       "write": "The change was not saved.",
       "pocket": "Pick a pocket.",
       "overlap": "That pocket already has a protector for one of these sizes.",
-      "protector": "Pick an active protector material of this style's company.",
+      "protector": "Pick an active protector material of this product's company.",
       "standard": "Write the standard with its edition (“EN 1621-1:2012”), at most 60 characters.",
       "level": "The level is 1 or 2.",
-      "size": "A size of the style's range only.",
+      "size": "A size of the product's range only.",
       "note": "At most 500 characters.",
       "moved": "Someone changed this placement meanwhile: it was read again.",
       "state": "The placement cannot change now: it was read again.",

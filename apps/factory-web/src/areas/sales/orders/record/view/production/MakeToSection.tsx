@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react' // owb-of6: useState (Place the scan code… open)
 import { FileText, Reply } from 'lucide-react'
 import { Button, Tag, ToolbarButton } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
@@ -14,6 +14,8 @@ import { readOf } from '../../overview/model'
 import { specRowsOf, specTone, type SpecRow, type SpecState, type StylePart } from '../../production/specs'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartFailed, PartReading, Quiet, Section } from '../../../../../../lib/record-sections/Kit'
+import { PlaceScanCodeButton } from './FlowProduction' // owb-of6 step 1
+import { PlaceScanCodeWindow } from '../../print/PlaceScanCodeWindow' // owb-of6 step 1: S3's window, through the base's stub (L10)
 
 const DISPOSITIONS = ['FINISH_OLD', 'REWORK', 'SCRAP', 'HOLD']
 
@@ -25,6 +27,9 @@ const DISPOSITIONS = ['FINISH_OLD', 'REWORK', 'SCRAP', 'HOLD']
  * design change… only with product.changes.request (L11). The customer's files open in the ONE viewer (the order's open route).
  */
 export function MakeToSection({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  // owb-of6 step 1 (design § 5k "What we make it to": Place the scan code): production.print.start, or the designer on the order (ss2b).
+  const [placeOpen, setPlaceOpen] = useState(false)
+  const mayPlace = (!!model.can.printStart || !!model.can.viewOwn) && (order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION')
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
@@ -138,7 +143,8 @@ export function MakeToSection({ order, model, actions }: { order: Order; model: 
   )
 
   return (
-    <Section id="specs" title={t('productionTab.specs.title')} answer={answer} info={<p>{t('productionTab.specs.infoBody')}</p>}>
+    <Section id="specs" title={t('productionTab.specs.title')} answer={answer} buttons={mayPlace ? [<PlaceScanCodeButton key="place" onOpen={() => setPlaceOpen(true)} />] : []} info={<p>{t('productionTab.specs.infoBody')}</p>}>
+      <PlaceScanCodeWindow open={placeOpen} onClose={() => setPlaceOpen(false)} companyId={order.companyId} orderId={order.id} />
       <div ref={seenAt} className={pack ? 'fw-pt-mk is-pair' : 'fw-pt-mk'}>
         <div className="fw-pt-now-blk">
           <h3 className="fw-pt-h3">{t('productionTab.specs.ourTitle')}</h3>

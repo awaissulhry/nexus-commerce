@@ -1,11 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { Clock, MessageSquare } from 'lucide-react' // owb-po5.3
 import { Button, Pill } from '@nexus/ui/primitives'
 import { CardState, Fact, FactCols, Group, GroupRow, Groups, OverviewCard, QuietLine, Row, RowAge, RowList, useOverviewWords } from '../../../../../lib/record-overview/Overview'
 import { PiecesGrid } from '../../../../../lib/production/view/PiecesGrid'
 import type { DatesModel, FactsModel, OverviewRow, PayModel, ProgressModel, RequestsModel } from '../../overview/model'
 import { useOrderWords } from '../../words'
+import { usePageWords } from '../../page-words' // owb-po5.3
 import type { OrderRecordActions } from '../OrderRecordView'
 import type { ChangeRequest } from '../../api'
 
@@ -73,9 +75,17 @@ export function DatesCard({ model }: { model: DatesModel }): ReactNode {
 /** 5.3 Requests & changes: by who waits — on you (our counter-offer), on us (ONE Withdraw, every kind: O1-B6), answered. */
 export function RequestsCard({ model, items, actions }: { model: RequestsModel; items: readonly ChangeRequest[]; actions?: OrderRecordActions }): ReactNode {
   const { t } = useOrderWords()
+  const page = usePageWords()
   if (model.state !== 'ready') return <CardState part={model.title} problem={model.failed} onRetry={actions?.onRetryRequests} />
+  // owb-po5.3 (plan § 5i: "Asks & changes" → "All changes"): the ONE log of the order in its window — every change in the customer's
+  // words ("The factory", never a worker, never an office note).
+  const all = actions?.onChanges ? (
+    <Button size="sm" variant="quiet" onClick={actions.onChanges}>
+      <Clock size={14} aria-hidden /> {page('asks.all')}
+    </Button>
+  ) : undefined
   return (
-    <OverviewCard title={model.title}>
+    <OverviewCard title={model.title} aside={all}>
       {model.groups.length === 0 ? (
         <p className="fw-ro-hint">{model.nothing}</p>
       ) : (
@@ -155,6 +165,37 @@ export function FactsCard({ model }: { model: FactsModel }): ReactNode {
           />
         ))}
       </FactCols>
+    </OverviewCard>
+  )
+}
+
+/**
+ * owb-po5.3 (plan § 5i portal Overview: "Linked records") — what the order was made from ("Made from your request #7", its page), as the
+ * band's chip names it; not drawn when it was made from nothing the customer opens.
+ */
+export function LinkedCard({ madeFrom }: { madeFrom: { readonly href: string; readonly label: string } }): ReactNode {
+  const page = usePageWords()
+  return (
+    <OverviewCard title={page('linked.title')}>
+      <Button asChild size="sm" variant="link" inline>
+        <a href={madeFrom.href}>{madeFrom.label}</a>
+      </Button>
+    </OverviewCard>
+  )
+}
+
+/**
+ * owb-po5.3 (plan § 5i, § 5zj: the "Ask the factory designer" card) — one line and one door: the order's chat, its box focused, where
+ * "@" asks the factory's designer for this customer (the thread's own rule, B-TH: "Ask <name>, factory designer").
+ */
+export function DesignerCard({ onAsk, held }: { onAsk: () => void; held: string | null }): ReactNode {
+  const page = usePageWords()
+  return (
+    <OverviewCard title={page('designer.title')}>
+      <p className="fw-ro-hint">{page('designer.line')}</p>
+      <Button size="sm" variant="secondary" heldReason={held} onClick={onAsk}>
+        <MessageSquare size={14} aria-hidden /> {page('designer.ask')}
+      </Button>
     </OverviewCard>
   )
 }
