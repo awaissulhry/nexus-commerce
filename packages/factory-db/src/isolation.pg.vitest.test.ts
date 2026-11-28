@@ -118,6 +118,7 @@ import { seedHeldMail } from './testing/held-mail' // B-TH-038
 import { seedCustomerPage } from './testing/customer-page' // B-CP-005
 import { seedOrderMoney } from './testing/order-money' // B-OM-019
 import { seedOrderFiles } from './testing/order-files' // B-OF-030
+import { seedOrderWorkflow } from './testing/order-workflow' // owb-b1
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -200,6 +201,50 @@ async function adjustCopy(model: string, copy: Record<string, unknown>): Promise
     expect(open, 'another open order of the customer with no accepted difference in force (testing/order-money.ts)').toBeDefined()
     return { ...copy, salesOrderId: open!.id, withdrawnAt: null, withdrawnById: null, withdrawReason: null }
   }
+  // ---- owb-b1 (order workflow build, …_order_workflow_guards): what a partial unique or a guard keeps once moves in the copy.
+  // A customer's open column names are its own once (PartyLineColumn_open_name): the copy takes another name.
+  if (model === 'PartyLineColumn') return { ...copy, name: `Copy ${randomUUID().slice(0, 8)}` }
+  // A department is born ACTIVE at version 1 (G3), whatever its seeded first row went through since.
+  if (model === 'Department') return { ...copy, status: 'ACTIVE', version: 1 }
+  // A team once per order among the open rows, one in charge (OrderTeam_team_once, _one_in_charge): the copy goes to another order
+  // of the same company and customer with no open row of that team, not in charge, with no basket of its own.
+  if (model === 'OrderTeam') {
+    const [other] = await admin(
+      `SELECT o.id::text AS id FROM "SalesOrder" o
+        WHERE o."tenantId" = $1::uuid AND o."companyId" = $2::uuid AND o."partyId" = $3::uuid AND o.id <> $4::uuid
+          AND NOT EXISTS (SELECT 1 FROM "OrderTeam" t WHERE t."tenantId" = o."tenantId" AND t."salesOrderId" = o.id AND t."teamId" = $5::uuid AND t."endedAt" IS NULL)
+        ORDER BY o.id LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId, copy.salesOrderId, copy.teamId],
+    )
+    expect(other, 'another order of the customer with no open row of the team (testing/order-workflow.ts)').toBeDefined()
+    return { ...copy, salesOrderId: other!.id, inCharge: false, bundleIds: [] }
+  }
+  // One leg per shipment (its unique key, made of ids only): the copy goes to another shipment of the same site and customer that
+  // has none and is still on its way (G9: not delivered, returned or cancelled).
+  if (model === 'ShipmentWarehouseLeg') {
+    const [free] = await admin(
+      `SELECT s.id::text AS id FROM "Shipment" s
+        WHERE s."tenantId" = $1::uuid AND s."siteId" = $2::uuid AND s."partyId" = $3::uuid AND s.status::text NOT IN ('DELIVERED', 'RETURNED', 'CANCELLED')
+          AND NOT EXISTS (SELECT 1 FROM "ShipmentWarehouseLeg" l WHERE l."tenantId" = s."tenantId" AND l."shipmentId" = s.id)
+        ORDER BY s.id LIMIT 1`,
+      [copy.tenantId, copy.siteId, copy.partyId],
+    )
+    expect(free, 'another shipment of the customer at the site with no warehouse leg (testing/order-workflow.ts)').toBeDefined()
+    return { ...copy, shipmentId: free!.id }
+  }
+  // One open row per customer and person (PartyOfficePerson_one_open): the copy names another active office person.
+  if (model === 'PartyOfficePerson') {
+    const [person] = await admin(
+      `SELECT u.id::text AS id FROM "User" u
+        WHERE u."tenantId" = $1::uuid AND u.audience::text = 'OFFICE' AND u.status::text = 'ACTIVE'
+          AND NOT EXISTS (SELECT 1 FROM "PartyOfficePerson" p WHERE p."tenantId" = u."tenantId" AND p."partyId" = $2::uuid AND p."userId" = u.id AND p."endedAt" IS NULL)
+        ORDER BY u.id LIMIT 1`,
+      [copy.tenantId, copy.partyId],
+    )
+    expect(person, 'another active office person not in the customer\'s pool (testing/order-workflow.ts)').toBeDefined()
+    return { ...copy, userId: person!.id }
+  }
+  // ---- end owb-b1
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
@@ -613,6 +658,13 @@ beforeAll(async () => {
   await seedOrderFiles({ db: factory, namespace: 'iso-a' })
   await seedOrderFiles({ db: factory, namespace: 'iso-b' })
   // ---- end B-OF-030
+  // ---- owb-b1 (order workflow build, schema wave "order workflow 1/1"; Department comes with seed/product.ts): a WAREHOUSE site of
+  // company A, P1's own columns with a use and a value on SEED-SO-0002, P1's OPEN "I paid", team L1-A in charge of SEED-SO-0002,
+  // its FIRST print, bundle 1's hand move forward and its skipped step, an OPEN late warning at A1, SEED-SH-0002's warehouse leg and
+  // the office member in P1's pool, in each tenant (testing/order-workflow.ts; the first rows the plain ones a copy may repeat).
+  await seedOrderWorkflow({ db: factory, namespace: 'iso-a' })
+  await seedOrderWorkflow({ db: factory, namespace: 'iso-b' })
+  // ---- end owb-b1
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
