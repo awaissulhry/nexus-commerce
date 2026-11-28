@@ -254,7 +254,9 @@ describe('push to phones (PLT-140)', () => {
   it('a worker’s push never shows a price: each office role’s phone gets the amount only with the price grain (PLT-152)', async () => {
     const eventId = newId()
     const browsers = new Map<string, TestBrowser>()
-    const offices = ROLE_TEMPLATES.filter((template) => template.audience === 'office')
+    // owb- (plan.md § 5 D): an offer (extra_*) gives one right beside a person's main role, never alone (no home.view): its holder's phone
+    // is the main role's, so the offers are left out here.
+    const offices = ROLE_TEMPLATES.filter((template) => template.audience === 'office' && !template.key.startsWith('extra_'))
     for (const template of offices) {
       const id = newId()
       await person(id, `role:${template.key}`, template.key)

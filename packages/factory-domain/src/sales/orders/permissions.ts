@@ -24,6 +24,9 @@ import { definePermissions } from '../../auth/permissions/registry'
  */
 export const ORDERS_DEFINITIONS = definePermissions('orders', {
   view: { risk: 'read', description: 'See sales orders: lines and size grids with per-size progress, dates and promises, the record chain and whether an order is settled (prices and costs only with their grains).' },
+  // owb- (order workflow, plan.md § 5 D R20; S2 ask 22:41): the Factory designer sees only the orders it is on. Every orders read
+  // accepts orders.view, OR this one AND the caller is on the order (put on it, or asked for design help: S2 of1).
+  'view.own': { risk: 'read', description: 'See the orders the person is on: put on the order, or asked for design help.' },
   manage: { risk: 'write', description: "Work on sales orders: make an accepted quote's order, change a promise date with a reason, mark an order ready, cancel one before production starts, close a settled one." },
   close: { risk: 'write', description: 'Close a shipped order that is not settled (not every line invoiced and paid), with a reason kept in its history.' },
   waive: { risk: 'stepUp', description: "Waive an order's deposit or a payment step before shipping (and its deposit request while nothing is paid on it), with a reason and a fresh step-up." },
@@ -35,12 +38,13 @@ export const ORDERS_DEFINITIONS = definePermissions('orders', {
 })
 
 export const ORDERS_VIEW = 'orders.view' satisfies Permission
+export const ORDERS_VIEW_OWN = 'orders.view.own' satisfies Permission // owb- (R20)
 export const ORDERS_MANAGE = 'orders.manage' satisfies Permission
 export const ORDERS_CLOSE = 'orders.close' satisfies Permission
 export const ORDERS_WAIVE = 'orders.waive' satisfies Permission
 export const ORDERS_MONEY_PLAN = 'orders.moneyPlan' satisfies Permission // B-OM-010
 
-export const ORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([ORDERS_VIEW, ORDERS_MANAGE, ORDERS_CLOSE, ORDERS_WAIVE, ORDERS_MONEY_PLAN])
+export const ORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([ORDERS_VIEW, ORDERS_VIEW_OWN, ORDERS_MANAGE, ORDERS_CLOSE, ORDERS_WAIVE, ORDERS_MONEY_PLAN])
 
 /**
  * B-OM-010 (order money tab D6, lead L9): who changes an order's money plan by hand (auth/roles/templates; the Owner from every()):

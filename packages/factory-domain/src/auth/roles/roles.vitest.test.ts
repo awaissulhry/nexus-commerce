@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Actor, Permission } from '../../core/permissions'
 import { can, scopeWhere } from '../../core/permissions'
 import { GRAINS, heldGrains, TWO_FACTOR_GRAINS, type Grain } from '../grains/grains'
-import { FACTORY_PERMISSIONS } from '../permissions/catalogue'
+import { FACTORY_PERMISSIONS, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
 import { definePermissions, permissionRegistry } from '../permissions/registry'
 import {
   contentChange,
@@ -80,6 +80,8 @@ describe('role templates', () => {
       'read_only',
       // B-CP-016: the office role "Factory designer".
       'designer',
+      // owb- (plan.md § 5 D): three office offers for People by customer › Extra rights.
+      'extra_allow_production', 'extra_pack_and_send', 'extra_print_and_start',
       'operator', 'cutting_operator', 'floor_inspector', 'team_leader',
       'technician',
     ])
@@ -290,20 +292,25 @@ describe('B-CP-016: the office role "Factory designer" sees no money', () => {
 
   it('works on artwork and samples with customers: exactly the permissions of the design, all declared', () => {
     // B-OF-016 (order files tab; Owner D6): + tasks.manage — the designer may be given tasks and asked for files.
-    expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view', 'parties.view', 'product.bom.view', 'product.styles.view', 'sales.inquiries.view', 'sales.samples.view', 'tasks.manage', 'threads.post', 'threads.read', 'views.save'])
+    // owb- (plan.md § 5 D): R20 orders.view → orders.view.own and no sales.inquiries.view; R40 + product.drafts.edit; F3 + production.calls.answer.
+    expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view.own', 'parties.view', 'product.bom.view', 'product.drafts.edit', 'product.styles.view', 'production.calls.answer', 'sales.samples.view', 'tasks.manage', 'threads.post', 'threads.read', 'views.save'])
     for (const name of designer.permissions) expect(FACTORY_PERMISSIONS.isDeclared(name), name).toBe(true)
     // cp-fx6: templateProblems checks a whole set, which always holds the owner (as above: [owner, …]); the designer adds no problem.
     expect(templateProblems([templateOf('owner')!, designer])).toEqual([])
     // Never a money permission, never a write of an order, a quote or a price; never measurement sheets (body data).
     expect(designer.permissions.filter((name) => name.startsWith('money.'))).toEqual([])
     for (const name of ['orders.manage', 'quotes.view', 'quotes.manage', 'pricelists.view', 'sales.measurements.view', 'product.materials.cost', 'costing.view', 'invoices.view', 'payments.view']) expect(designer.permissions, name).not.toContain(name)
+    // owb-: never every order, never Incoming, never a style release, archive or the size scales, never printing or shipping from the template.
+    for (const name of ['orders.view', 'sales.inquiries.view', 'product.styles.manage', 'product.bom.manage', 'product.bom.release', 'production.print.start', 'shipping.manage', 'workorders.view']) expect(designer.permissions, name).not.toContain(name)
   })
 
   it('a designer session holds no grain: heldGrains is empty, money.price is never granted', () => {
     const actor = office([grantOf({ permissions: designer.permissions, grains: designer.grains }, everywhere)])
     expect([...heldGrains(actor)]).toEqual([])
     expect(can(actor, 'money.price' as Permission, { companyId: A })).toBe(false)
-    expect(can(actor, 'orders.view' as Permission, { companyId: A })).toBe(true)
+    // owb- (R20): the orders it is on only — the API checks "on the order" beside this right (S2 of1).
+    expect(can(actor, 'orders.view.own' as Permission, { companyId: A })).toBe(true)
+    expect(can(actor, 'orders.view' as Permission, { companyId: A })).toBe(false)
   })
 
   it('its key is unique among every system role, and never the portal Designer’s (customer-designer)', () => {
@@ -330,3 +337,60 @@ describe('B-OM-010: orders.moneyPlan — the Owner and Finance; never Sales, Pro
   })
 })
 // ── end B-OM-010 ──
+
+// ── owb- order workflow (plan.md § 5 D, the Owner's yes 2026-11-28; PL-schema § 5A "Rights"; base settles 5, 6, 9) ──
+describe('owb-: the order workflow rights — who holds each, the designer, the three offers, "I paid"', () => {
+  const holders = (name: string) => ROLE_TEMPLATES.filter((entry) => entry.permissions.includes(name as Permission)).map((entry) => entry.key)
+
+  it('declares each new right once, in its area, with its risk; the floor shares only the two basket rights', () => {
+    expect(['production.departments.manage', 'production.print.start', 'production.teams.assign', 'production.baskets.move', 'production.baskets.route', 'production.structures.manage', 'production.structures.rules', 'shipping.plan', 'product.drafts.edit', 'people.structure.manage'].map((name) => FACTORY_PERMISSIONS.get(name)?.risk)).toEqual(Array(10).fill('write'))
+    expect(FACTORY_PERMISSIONS.get('orders.view.own')).toMatchObject({ area: 'orders', risk: 'read' })
+    expect(FACTORY_PERMISSIONS.get('orders.view.own')?.description).toBe('See the orders the person is on: put on the order, or asked for design help.')
+    expect(FACTORY_PERMISSIONS.get('portal.payments.notify')).toMatchObject({ area: 'portal', risk: 'write', partner: true })
+    expect(FLOOR_SHARED_PERMISSIONS).toEqual(expect.arrayContaining(['production.baskets.move', 'production.baskets.route']))
+    for (const name of ['production.departments.manage', 'production.print.start', 'production.teams.assign', 'production.structures.manage', 'production.structures.rules', 'shipping.plan', 'product.drafts.edit', 'people.structure.manage', 'orders.view.own']) expect(FLOOR_SHARED_PERMISSIONS, name).not.toContain(name)
+  })
+
+  it('gives each right to exactly the templates of plan.md § 5 D (the Owner from every permission)', () => {
+    expect(holders('production.departments.manage')).toEqual(['owner', 'production_manager'])
+    // R24: sales starts the work; the designer only by the offer an administrator assigns.
+    expect(holders('production.print.start')).toEqual(['owner', 'sales', 'extra_print_and_start'])
+    expect(holders('production.teams.assign')).toEqual(['owner', 'planner', 'production_manager', 'floor_supervisor'])
+    // R56 / D3: a worker moves forward only; back and the steps: the team leader (and the office's production manager, floor supervisor).
+    expect(holders('production.baskets.move')).toEqual(['owner', 'production_manager', 'floor_supervisor', 'operator', 'cutting_operator', 'floor_inspector', 'team_leader'])
+    expect(holders('production.baskets.route')).toEqual(['owner', 'production_manager', 'floor_supervisor', 'team_leader'])
+    expect(holders('production.structures.manage')).toEqual(['owner', 'production_manager'])
+    expect(holders('production.structures.rules')).toEqual(['owner', 'sales'])
+    expect(holders('shipping.plan')).toEqual(['owner', 'sales', 'production_manager'])
+    // Settle 5 (R40): the product DRAFT, the designer alone (product.styles.manage holders need nothing more).
+    expect(holders('product.drafts.edit')).toEqual(['owner', 'designer'])
+    expect(holders('people.structure.manage')).toEqual(['owner', 'admin', 'hr'])
+    // R20: "the orders the person is on" — the designer; the Owner and read-only from every read.
+    expect(holders('orders.view.own')).toEqual(['owner', 'read_only', 'designer'])
+    expect(templateOf('designer')?.permissions).toContain('production.calls.answer')
+    expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
+  })
+
+  it('the three offers give ONE right each, no grain, no two-factor; held beside a main role, their grants add up', () => {
+    const offers = Object.fromEntries(['extra_allow_production', 'extra_pack_and_send', 'extra_print_and_start'].map((key) => [key, templateOf(key)!]))
+    expect(Object.fromEntries(Object.entries(offers).map(([key, role]) => [key, { audience: role.audience, name: role.name, permissions: role.permissions, grains: role.grains, requireMfa: role.requireMfa }]))).toEqual({
+      extra_allow_production: { audience: 'office', name: 'Allow production', permissions: ['workorders.view'], grains: [], requireMfa: false },
+      extra_pack_and_send: { audience: 'office', name: 'Pack and send', permissions: ['shipping.manage'], grains: [], requireMfa: false },
+      extra_print_and_start: { audience: 'office', name: 'Print and start the work', permissions: ['production.print.start'], grains: [], requireMfa: false },
+    })
+    const designer = templateOf('designer')!
+    const alone = office(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }], false))
+    const withOffer = office(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }, { role: offers.extra_allow_production, scope: onlyA }], false))
+    expect(can(alone, 'workorders.view' as Permission, { companyId: A })).toBe(false)
+    expect(can(withOffer, 'workorders.view' as Permission, { companyId: A })).toBe(true)
+    // The offer's scope holds: company B is not reached by it.
+    expect(can(withOffer, 'workorders.view' as Permission, { companyId: B })).toBe(false)
+    expect([...heldGrains(withOffer)]).toEqual([])
+  })
+
+  it('"I paid": the customer Buyer and the customer Admin (it follows); no other customer role, no office or floor role', () => {
+    expect(PARTNER_ROLE_TEMPLATES.filter((entry) => entry.permissions.includes('portal.payments.notify' as Permission)).map((entry) => entry.key).sort()).toEqual(['customer-admin', 'customer-buyer'])
+    expect(ROLE_TEMPLATES.filter((entry) => entry.permissions.includes('portal.payments.notify' as Permission))).toEqual([])
+  })
+})
+// ── end owb- ──

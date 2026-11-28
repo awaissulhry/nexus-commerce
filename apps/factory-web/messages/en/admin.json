@@ -1205,6 +1205,18 @@
       "company_doctor": {
         "name": "Occupational doctor",
         "description": "The occupational doctor: the safety calendar and organisation; fitness judgements come with the health pages, never a diagnosis; sees no money."
+      },
+      "extra_allow_production": {
+        "name": "Allow production",
+        "description": "An extra right beside a person's role: see the work orders, so the order's Production tab opens; sees no money."
+      },
+      "extra_pack_and_send": {
+        "name": "Pack and send",
+        "description": "An extra right beside a person's role: make shipments of the orders it sees, change them and send them; sees no money."
+      },
+      "extra_print_and_start": {
+        "name": "Print and start the work",
+        "description": "An extra right beside a person's role: print and start the work of a confirmed order, given with the Owner's yes; sees no money."
       }
     },
     "bulk": {
@@ -1720,6 +1732,7 @@
     "product_materials_approve": "Decide a material's approval (approve, on a condition, block)",
     "product_styles_view": "See the styles",
     "product_styles_manage": "Create and edit styles",
+    "product_drafts_edit": "Make a product and change its draft (style, materials, sizes, route); never release, archive or price it",
     "product_mtm_switch": "Turn a measurement template's made-to-measure rules on or off (while off nothing is checked)",
     "product_styles_lifecycle": "Move a style through its lifecycle",
     "product_settings_manage": "Keep product types, edit rules and the consumption tolerance",
@@ -1765,6 +1778,7 @@
     "purchasing_reports_view": "See a company's purchasing reports: spend by supplier, category, material, company and month with sample orders apart, and the late purchase order lines with what they hold up (only from orders you may see; amounts only with the cost grain)",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
+    "shipping_plan": "Plan how an order travels: alone, with the customer's other orders, or to our warehouse first",
     "shipping_pack": "Pack a shipment",
     "shipping_settings_view": "See each site's shipping settings",
     "shipping_settings_manage": "Change a site's shipping settings",
@@ -1859,6 +1873,7 @@
     "orders_close": "Close a shipped order that is not settled",
     "orders_waive": "Waive an order’s deposit or a payment step before shipping",
     "orders_moneyPlan": "Change an order’s money plan by hand: the deposit, the payment steps, their due days and the payment terms",
+    "orders_view_own": "See only the orders the person is on: put on the order, or asked for design help",
     "privacy_view": "See the company's privacy duties",
     "privacy_manage": "Write and publish notices; record acknowledgements",
     "privacy_requests_view": "See the company's data requests: who asked, the kind, the 30-day clock, the state, and what an erasure did and kept",
@@ -2053,6 +2068,7 @@
     "people_team_view": "See the teams you lead or belong to (My team)",
     "people_employees_manage": "Add, change, link and import employees",
     "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
+    "people_structure_manage": "Keep the factory structure: add, change, move, merge or close units and set who leads them",
     "people_loans_manage": "Lend people to another line for hours or days",
     "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
     "people_privacy_view": "See the legal gate of people data per site and purpose, and its impact assessment record",
@@ -2070,6 +2086,13 @@
     "production_labour_answer": "Answer a worker's dispute of their own record, upheld or rejected (never your own)",
     "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
     "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
+    "production_departments_manage": "Keep the factory's departments: add, rename, change the colour or icon, close or open again (a number is never used twice)",
+    "production_print_start": "Print and start the work of a confirmed order (the release checks first), and print its pages and cards again",
+    "production_teams_assign": "Give an order or some of its baskets to a team, and change or end a team's part",
+    "production_baskets_move": "Move a basket forward by hand or take it into your department, without a scan and without pay",
+    "production_baskets_route": "Move a basket back with a reason, undo another person's move, and change a basket's steps",
+    "production_structures_manage": "Keep the order structures (the steps, team and people an order gets) and put one on an order by hand",
+    "production_structures_rules": "Keep the rules that pick an order structure for an order, put them in order and try them",
     "production_calls_manage": "Keep a site's help-call types and who answers them",
     "production_boards_view": "See the line boards: pieces hour by hour against the targets, the WIP heat map, the line TV (line totals only)",
     "production_boards_targets": "Set a line's hourly targets for today or a later day (never per person)",
@@ -2156,6 +2179,7 @@
     "portal_catalogue_view": "See the styles you can buy: colours, sizes, certificate class and, for roles that show prices, your price",
     "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
     "portal_orderDrafts_edit": "Start and fill draft orders with your colleagues (styles, files, dates, notes, messages) and discard one you started; a colleague who may order sends it",
+    "portal_payments_notify": "Tell the factory you paid for an order (how much, when, how, with the receipt); the factory checks it",
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
     "portal_salesOrders_ask": "Ask the factory to change or cancel your organisation's orders within the cut-off rules, and withdraw a request while it waits",

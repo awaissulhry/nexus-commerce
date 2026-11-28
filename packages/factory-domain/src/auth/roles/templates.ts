@@ -207,6 +207,21 @@ import { PRODUCTION_BRAND_ADDS, PRODUCTION_PARTNER_ADDS } from '../../production
 // projects it was added to).
 import { PORTAL_PROJECTS_ADDS, PROJECTS_ADDS } from '../../projects/permissions'
 // ---- end B-TH-066
+// ---- owb- order workflow (plan.md § 5 D, the Owner's yes 2026-11-28): departments, teams and structures to the production
+// manager; print and start (R24), the structure rules and the shipping plan to sales; teams to the planner and the floor
+// supervisor; baskets by hand (R56: a worker forward, the team leader back and the steps); the product draft to the designer
+// (R40); the factory structure to the administrator and HR; "I paid" to the customer Buyer (partner, below).
+import { PRODUCTION_DEPARTMENTS_ADDS } from '../../production/departments/permissions'
+import { PRODUCTION_PRINT_START, PRODUCTION_PRINT_START_ADDS } from '../../production/print-start/permissions'
+import { PRODUCTION_ORDER_TEAMS_ADDS } from '../../production/order-teams/permissions'
+import { PRODUCTION_BASKETS_ADDS, PRODUCTION_BASKETS_FLOOR_ADDS } from '../../production/baskets/permissions'
+import { PRODUCTION_STRUCTURES_ADDS } from '../../production/structures/permissions'
+import { PRODUCT_DRAFTS_ADDS } from '../../product/drafts/permissions'
+import { PEOPLE_STRUCTURE_ADDS } from '../../people/structure/permissions'
+import { SHIPPING_MANAGE, SHIPPING_PLAN_ADDS } from '../../shipping/permissions'
+import { WORKORDERS_VIEW } from '../../production/work-orders/permissions'
+import { PORTAL_PAYMENT_NOTICES_ADDS } from '../../sales/portal-orders/permissions'
+// ---- end owb-
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -988,6 +1003,15 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (CUT_ORDERS_ADDS[key] ?? []) : []),
   // B-W2b-117
   ...((audience === 'office' ? CUTISSUE_ADDS : CUTISSUE_FLOOR_ADDS)[key] ?? []),
+  // owb- order workflow (plan.md § 5 D)
+  ...(audience === 'office' ? (PRODUCTION_DEPARTMENTS_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PRODUCTION_PRINT_START_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PRODUCTION_ORDER_TEAMS_ADDS[key] ?? []) : []),
+  ...((audience === 'office' ? PRODUCTION_BASKETS_ADDS : PRODUCTION_BASKETS_FLOOR_ADDS)[key] ?? []),
+  ...(audience === 'office' ? (PRODUCTION_STRUCTURES_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (SHIPPING_PLAN_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PRODUCT_DRAFTS_ADDS[key] ?? []) : []),
+  ...(audience === 'office' ? (PEOPLE_STRUCTURE_ADDS[key] ?? []) : []),
   // B-W2b-171
   ...(audience === 'office' ? (MEASURE_LINK_ADDS[key] ?? []) : []),
   // B-W2b-172
@@ -1700,14 +1724,46 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   // artwork and samples with customers and sees NO money: no grain, so the API drops every price field and a priced file is locked
   // for it (the priced-file lock, B-CP-014/015/023, which this role lands after: orders.view + files.read would open priced PDFs
   // otherwise); a measurement sheet stays locked (no sales.measurements.view). No two-factor (no price, cost or margin).
+  // owb- order workflow (plan.md § 5 D, the Owner's yes 2026-11-28; S2 asks 22:41, S4 22:27): R20 "the designer sees only his
+  // orders" — orders.view becomes orders.view.own (the orders it is on: put on it, or asked for design help; S2 of1 makes every
+  // orders read take it), and sales.inquiries.view goes (no Incoming for the designer, design § 5f). R40 "the designer makes the
+  // product draft, the owner releases it" — + product.drafts.edit (PRODUCT_DRAFTS_ADDS: a DRAFT revision only, never release,
+  // archive or price). F3 — + production.calls.answer: the floor's asks to the designer come as help calls it answers.
+  // Printing, packing and production reads come only by a per-person offer below (extra_*), never from this template.
   template('designer', {
     name: 'Factory designer',
     description: 'Works on logos, artwork and samples with customers; sees no money.',
     requireMfa: false,
-    permissions: ['home.view', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'parties.view', 'orders.view', 'sales.inquiries.view', 'sales.samples.view', 'product.styles.view', 'product.bom.view', 'views.save'],
+    permissions: ['home.view', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'parties.view', 'orders.view.own', 'sales.samples.view', 'product.styles.view', 'product.bom.view', 'views.save', 'production.calls.answer'],
     grains: [],
   }),
   // ── end B-CP-016 ──
+  // ── owb- order workflow (plan.md § 5 D; S2 ask 22:41, answered by BASE 22:50): three office OFFERS for People by customer ›
+  // Extra rights. Each gives ONE right and nothing else, and grants nothing until an administrator assigns it to a person as a
+  // role assignment beside the person's main role (a person may hold several roles; their grants add up). No grain, no
+  // two-factor (no price, cost or margin).
+  template('extra_allow_production', {
+    name: 'Allow production',
+    description: "An extra right beside a person's role: see the work orders, so the order's Production tab opens; sees no money.",
+    requireMfa: false,
+    permissions: [WORKORDERS_VIEW],
+    grains: [],
+  }),
+  template('extra_pack_and_send', {
+    name: 'Pack and send',
+    description: "An extra right beside a person's role: make shipments of the orders it sees, change them and send them (R38); sees no money.",
+    requireMfa: false,
+    permissions: [SHIPPING_MANAGE],
+    grains: [],
+  }),
+  template('extra_print_and_start', {
+    name: 'Print and start the work',
+    description: "An extra right beside a person's role: print and start the work of a confirmed order, given with the Owner's yes; sees no money.",
+    requireMfa: false,
+    permissions: [PRODUCTION_PRINT_START],
+    grains: [],
+  }),
+  // ── end owb- ──
   floorTemplate('operator', {
     name: 'Operator',
     description: 'Works at a station on an enrolled floor device; sees only their own pay (the piece rates published to them).',
@@ -1849,6 +1905,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PRODUCTION_PARTNER_ADDS,
   // B-TH-066: the projects the person was added to, to every goods role of a customer, supplier or workshop (not Finance, Invoices).
   PORTAL_PROJECTS_ADDS,
+  // owb- (plan.md § 5 D): "I paid" — the customer Buyer tells the factory a payment was made (the customer Admin follows).
+  PORTAL_PAYMENT_NOTICES_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)
