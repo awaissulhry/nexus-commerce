@@ -1,0 +1,81 @@
+{
+  "open": "Open the product page",
+  "tab": {
+    "overview": "Overview",
+    "sizes": "Sizes",
+    "label": "Parts of the product"
+  },
+  "band": {
+    "order": "Order it…"
+  },
+  "state": {
+    "missing": "This product is not in your catalogue.",
+    "failed": "We could not read this product."
+  },
+  "overview": {
+    "sheet": "Product sheet",
+    "answer": {
+      "own": "Your own design.",
+      "range": "From the factory's range, priced for you.",
+      "orders_one": "It is in {count} of your orders.",
+      "orders_other": "It is in {count} of your orders."
+    },
+    "facts": {
+      "title": "Product facts",
+      "info": "What this product is. The factory keeps these facts; ask for a change below.",
+      "type": "Type",
+      "family": "Family",
+      "own": "Your design",
+      "range": "The factory's range",
+      "sizes": "Sizes",
+      "protection": "Protection"
+    },
+    "price": {
+      "title": "Your price",
+      "from": "From {price} for one piece.",
+      "none": "No price agreed yet: ask us.",
+      "notInRole": "Prices are not part of your access.",
+      "info": "The price you agreed with the factory, per colour. Only people who see prices read it.",
+      "colour": "Colour",
+      "each": "For one piece",
+      "ask": "Ask us"
+    },
+    "orders": {
+      "title": "Your orders with it",
+      "answer_one": "{count} order or request names it.",
+      "answer_other": "{count} orders and requests name it.",
+      "info": "Your orders and requests that name this product, newest first (at most six).",
+      "none": "None of your orders names it yet.",
+      "col": {
+        "order": "Order",
+        "state": "State",
+        "pieces": "Pieces"
+      }
+    },
+    "change": {
+      "title": "Ask the factory for a change",
+      "answer": "Tell the factory what to change in this product.",
+      "ask": "Ask for a change",
+      "info": "Your question goes to the factory as a request with this product in it. The factory answers in a new revision.",
+      "how": "For example: a wider collar, another colour, a longer sleeve."
+    }
+  },
+  "sizes": {
+    "title": "Sizes and colours",
+    "answer_one": "{count} size.",
+    "answer_other": "{count} sizes.",
+    "noRange": "No sizes yet",
+    "base": "Base size {size}",
+    "info": "The sizes of the range and which colour comes in which size. Nothing to type here.",
+    "colour": "Colour",
+    "baseColumn": "{size} (base)",
+    "offered": "Yes",
+    "notOffered": "No",
+    "measure": {
+      "title": "Size table and how to measure",
+      "answer": "Not shown in the portal yet.",
+      "info": "The finished measurements of each size, how to measure and the protectors.",
+      "later": "The size table, how to measure, your measurement sheets and the protectors are not in the portal yet: ask us and we send them."
+    }
+  }
+}

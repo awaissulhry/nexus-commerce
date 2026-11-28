@@ -6,16 +6,16 @@
   },
   "header": {
     "import": "Import",
-    "importHint": "Start styles from a Nexus Commerce export file, or a sheet in its columns"
+    "importHint": "Start products from a Nexus Commerce export file, or a sheet in its columns"
   },
   "importer": {
-    "name": "Styles from a Nexus Commerce export",
-    "fills": "One row per SKU, as Nexus Commerce exports a product family: each family becomes a draft style with its colours, sizes, SKU codes and barcodes. Nothing is sent to Nexus Commerce."
+    "name": "Products from a Nexus Commerce export",
+    "fills": "One row per SKU, as Nexus Commerce exports a product family: each family becomes a draft product with its colours, sizes, SKU codes and barcodes. Nothing is sent to Nexus Commerce."
   },
   "source": {
     "title": "Start from a Nexus Commerce product",
-    "subtitle": "Draft styles from the product families of an export file",
-    "label": "Where the styles come from",
+    "subtitle": "Draft products from the product families of an export file",
+    "label": "Where the products come from",
     "continue": "Choose the file",
     "file": {
       "title": "Export file from Nexus Commerce",
@@ -32,7 +32,7 @@
   },
   "makes": {
     "title": "What the import makes",
-    "family": "Each product family becomes a draft style in Concept, with revision 1 as a draft.",
+    "family": "Each product family becomes a draft product in Concept, with revision 1 as a draft.",
     "colours": "Its colours become colourways and its sizes the range, on the size scale that holds them.",
     "skus": "The SKU codes and EAN barcodes stay as they are in Nexus Commerce.",
     "again": "You see every row in a dry run first; the same file again changes nothing.",
@@ -44,10 +44,10 @@
     "columns": "Or download the template in the next step and fill it in the same columns."
   },
   "hold": {
-    "noManage": "Your role can view styles, not start them.",
+    "noManage": "Your role can view products, not start them.",
     "noImport": "Importing a file needs the right to run imports and to upload files.",
-    "reading": "Reading where the styles can come from…",
-    "unread": "Where the styles can come from could not be read: try again."
+    "reading": "Reading where the products can come from…",
+    "unread": "Where the products can come from could not be read: try again."
   },
   "fault": {
     "signed_out": "You are signed out: sign in again.",
@@ -58,26 +58,26 @@
     "internal": "Something went wrong on our side: try again."
   },
   "done": {
-    "title": "Styles from the Nexus Commerce file",
+    "title": "Products from the Nexus Commerce file",
     "subtitle": "What the import wrote",
-    "summary": "New draft styles: {started} · Styles that took new colours or sizes: {added}",
-    "listLabel": "The styles of the import",
+    "summary": "New draft products: {started} · Products that took new colours or sizes: {added}",
+    "listLabel": "The products of the import",
     "started": "New draft",
     "added": "Colours or sizes added",
     "skus_one": "{count} SKU",
     "skus_other": "{count} SKUs",
     "open": "Open {code}",
-    "openLabel": "Open style {code}",
-    "hidden_one": "{count} more style is outside your companies.",
-    "hidden_other": "{count} more styles are outside your companies.",
-    "onlyHidden_one": "The import wrote {count} style outside your companies.",
-    "onlyHidden_other": "The import wrote {count} styles outside your companies.",
+    "openLabel": "Open product {code}",
+    "hidden_one": "{count} more product is outside your companies.",
+    "hidden_other": "{count} more products are outside your companies.",
+    "onlyHidden_one": "The import wrote {count} product outside your companies.",
+    "onlyHidden_other": "The import wrote {count} products outside your companies.",
     "none": {
-      "title": "No style was written",
+      "title": "No product was written",
       "body": "Every row was already in the factory, or refused: Admin › Import & export keeps the import with its rows."
     },
-    "unreadHint": "The import is done: the styles are in the list.",
-    "next": "Each new style is a draft: set its PPE category, base size, BOM and routing on the style."
+    "unreadHint": "The import is done: the products are in the list.",
+    "next": "Each new product is a draft: set its PPE category, base size, BOM and routing on the product."
   },
   "lifecycle": {
     "CONCEPT": "Concept",

@@ -20,7 +20,7 @@
     "ALTERNATE": "Alternativa {priority}"
   },
   "csv": {
-    "style": "Modello",
+    "style": "Prodotto",
     "revision": "Revisione",
     "status": "Stato",
     "line": "Riga",
@@ -69,8 +69,8 @@
     },
     "reach": {
       "noStyles": "Dove è usato non è nel tuo ruolo.",
-      "none": "Nessuna distinta lo contiene ora: una decisione non cambia nessun modello.",
-      "words": "Usato ora in {styles} modello/i: {drafts} revisione/i in bozza e {released} rilasciata/e.",
+      "none": "Nessuna distinta lo contiene ora: una decisione non cambia nessun prodotto.",
+      "words": "Usato ora in {styles} prodotto/i: {drafts} revisione/i in bozza e {released} rilasciata/e.",
       "noWorkOrders": "Gli ordini di lavoro aperti non sono nel tuo ruolo.",
       "workOrders_one": "{count} ordine di lavoro aperto produce una revisione rilasciata.",
       "workOrders_other": "{count} ordini di lavoro aperti producono revisioni rilasciate.",
@@ -168,7 +168,7 @@
     "noOrders": "Nessuno aperto",
     "moreOrders": "+{count}",
     "col": {
-      "style": "Modello",
+      "style": "Prodotto",
       "revision": "Revisione e stato",
       "line": "Riga",
       "placement": "Posizione",
@@ -177,11 +177,11 @@
     },
     "failed": "Impossibile caricare dove è usato",
     "noStyles": {
-      "title": "I modelli non sono nel tuo ruolo",
-      "body": "Dove è usato il materiale lo vede chi legge i modelli."
+      "title": "I prodotti non sono nel tuo ruolo",
+      "body": "Dove è usato il materiale lo vede chi legge i prodotti."
     },
     "empty": "Non usato in nessuna distinta",
-    "emptyBody": "Nessuna revisione di nessun modello contiene questo materiale, come riga o come alternativa.",
+    "emptyBody": "Nessuna revisione di nessun prodotto contiene questo materiale, come riga o come alternativa.",
     "emptyColour": "Nessuna distinta usa questo colore",
     "emptyColourBody": "Scegli un altro colore, o tutti i colori.",
     "more": "Sono mostrate le prime {count} righe.",
@@ -193,13 +193,13 @@
     "export_one": "Esporta {count}",
     "export_other": "Esporta {count}",
     "tile": {
-      "styles": "Modelli",
+      "styles": "Prodotti",
       "drafts": "Revisioni in bozza",
       "released": "Revisioni rilasciate",
       "orders": "Ordini di lavoro aperti"
     },
     "tileHint": {
-      "styles": "Modelli la cui distinta in bozza o rilasciata lo contiene",
+      "styles": "Prodotti la cui distinta in bozza o rilasciata lo contiene",
       "drafts": "Un blocco ne ferma il rilascio",
       "released": "Lo mantengono com'è",
       "orders": "Delle revisioni rilasciate"
@@ -239,8 +239,8 @@
       "unused": "Nessuna distinta in bozza o rilasciata li contiene"
     },
     "notUsed": "Non usato",
-    "usedIn_one": "{count} modello",
-    "usedIn_other": "{count} modelli",
+    "usedIn_one": "{count} prodotto",
+    "usedIn_other": "{count} prodotti",
     "col": {
       "approval": "Approvazione",
       "usedIn": "Usato in"
