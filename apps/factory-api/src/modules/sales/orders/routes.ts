@@ -69,6 +69,14 @@ import { recordPictures } from '../../product/images/small-pictures'
 // owb-of1a (plan.md § 5 D R20): the reads the designer uses (manifest.ts ORDER_READ, signed-in) refuse a caller with neither
 // orders.view nor orders.view.own here, as their manifest did before; each handler checks the order itself (access.ts assertSees).
 import { ordersReader } from './access'
+// owb-of1: the sheet, the band, Restrict, the notices, Download all, Give to the designer.
+import { orderSheetContract, requestBandContract } from './sheet-contract'
+import { orderSheet } from './sheet'
+import { requestBand } from './band'
+import { restrictOrder, restrictOrderContract } from './restrict'
+import { answerNoticeContract, answerPaymentNotice, orderPaymentNotices, paymentNoticesContract } from './notices'
+import { orderFilesZip, orderFilesZipContract } from './files-zip'
+import { giveToDesigner, giveToDesignerContract } from './designer'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -84,6 +92,12 @@ import { ordersReader } from './access'
  * moves.ts), the payment schedule (./schedule) and the order copied as a new quote (quotes/duplicate).
  */
 export default defineRoutes('sales.orders', manifest, async (app) => {
+  // ---- owb-of1 (registered before /sales/orders/:orderId): the ONE orders sheet and the band of a Draft or Sent order
+  app.get('/sales/orders/sheet', { schema: orderSheetContract }, async (request) => orderSheet(ordersReader(request), request.query))
+  app.get('/sales/orders/requests/:requestId/band', { schema: requestBandContract }, async (request) => requestBand(ordersReader(request), request.params.requestId))
+  app.post('/sales/orders/designer', { schema: giveToDesignerContract }, async (request) => giveToDesigner(request, request.body, idempotencyKeyFrom(request)))
+  // ---- end owb-of1
+
   app.get('/sales/orders', { schema: listOrdersContract }, async (request) => listOrders(ordersReader(request), request.query))
 
   app.get('/sales/orders/board', { schema: boardContract }, async (request) => orderBoard(ordersReader(request), request.query))
@@ -197,4 +211,11 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
     return setRequestPicture(writer, request.params.requestId, request.body, idempotencyKeyFrom(request))
   })
   // ---- end owb-
+
+  // ---- owb-of1: Restrict on the floor, the customer's "I paid" notices, Download all
+  app.post('/sales/orders/:orderId/restrict', { schema: restrictOrderContract }, async (request) => restrictOrder(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/sales/orders/:orderId/payment-notices', { schema: paymentNoticesContract }, async (request) => orderPaymentNotices(request, request.params.orderId))
+  app.post('/sales/orders/:orderId/payment-notices/:noticeId/answer', { schema: answerNoticeContract }, async (request) => answerPaymentNotice(request, request.params.orderId, request.params.noticeId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/orders/:orderId/files/zip', { schema: orderFilesZipContract }, async (request, reply) => orderFilesZip(ordersReader(request), reply, request.params.orderId, idempotencyKeyFrom(request)))
+  // ---- end owb-of1
 })
