@@ -56,7 +56,8 @@ async function assertCompany(caller: CommandCaller, companyId: string): Promise<
 
 /** A rate as answered; `inForce` against the other rates of its kind for its company (and the tenant-wide ones). */
 function rateView(row: RateRow, peers: readonly RateRow[], on: string): LabourRateView {
-  const inForce = pickRate(peers.map(rateOf), row.workCentreKind, row.companyId, on)?.id === row.id
+  // owb-pd2 2.5: a department's rate is in force for its department's steps; a kind's rate for the others.
+  const inForce = pickRate(peers.map(rateOf), row.workCentreKind, row.companyId, on, row.departmentId)?.id === row.id
   return {
     id: row.id,
     companyId: row.companyId,
@@ -68,6 +69,7 @@ function rateView(row: RateRow, peers: readonly RateRow[], on: string): LabourRa
     note: row.note,
     status: row.status,
     inForce,
+    departmentId: row.departmentId, // owb-pd2 2.5
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
@@ -113,9 +115,10 @@ async function readRate(caller: CommandCaller, rateId: string): Promise<RateRow>
 /** The words of a rate of a kind and day that exists already. */
 export const taken = (kind: string, day: string) => new ConflictError(`A ${kind} rate from ${day} exists already for this company (or tenant-wide): correct it, or choose another first day.`)
 
-async function assertDayFree(tx: CommandTx, row: { companyId: string | null; workCentreKind: RateRow['workCentreKind']; validFrom: string }, except?: string): Promise<void> {
+async function assertDayFree(tx: CommandTx, row: { companyId: string | null; workCentreKind: RateRow['workCentreKind']; validFrom: string; departmentId?: string | null }, except?: string): Promise<void> {
   const clash = await tx.labourRate.findFirst({
-    where: { companyId: row.companyId, workCentreKind: row.workCentreKind, validFrom: dateOf(row.validFrom), ...(except ? { id: { not: except } } : {}) },
+    // owb-pd2 2.5: one rate per company (or the whole factory), kind, department (none: the kind's) and day.
+    where: { companyId: row.companyId, workCentreKind: row.workCentreKind, departmentId: row.departmentId ?? null, validFrom: dateOf(row.validFrom), ...(except ? { id: { not: except } } : {}) },
     select: { id: true },
   })
   if (clash) throw taken(row.workCentreKind, row.validFrom)
@@ -138,7 +141,7 @@ export async function createRate(caller: CommandCaller, body: CreateRateBody, id
   const note = body.note ?? null
 
   const { result } = await command(caller, { name: 'costing.createRate', idempotencyKey, input: body }, async (tools) => {
-    const id = await createRateInCommand(tools, { companyId, workCentreKind: body.workCentreKind, ...rate, note })
+    const id = await createRateInCommand(tools, { companyId, workCentreKind: body.workCentreKind, ...rate, note, departmentId: body.departmentId ?? null })
     return rateViewIn(tools.tx, id, businessDate(tools.now))
   }).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw taken(body.workCentreKind, rate.validFrom)
@@ -156,6 +159,8 @@ export interface NewRate {
   readonly plannedEfficiencyPct: string
   readonly validFrom: string
   readonly note: string | null
+  /** owb-pd2 2.5: the department the rate is for; left out or null: the kind's rate. */
+  readonly departmentId?: string | null
 }
 
 /**
@@ -165,12 +170,21 @@ export interface NewRate {
  */
 export async function createRateInCommand(tools: CommandTools, rate: NewRate): Promise<string> {
   const { tx, now } = tools
-  const { companyId, workCentreKind, note, ...figures } = rate
+  const { companyId, workCentreKind, note, departmentId: department, ...figures } = rate
+  const departmentId = department ?? null
   if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
-  await assertDayFree(tx, { companyId, workCentreKind, validFrom: figures.validFrom })
+  // owb-pd2 2.5: a department of the rate's kind of work centre, of the rate's company or the whole factory (a tenant-wide rate: a
+  // department of the whole factory) — said in words before the database's LabourRate_department_check.
+  if (departmentId !== null) {
+    const found = await tx.department.findUnique({ where: { id: departmentId }, select: { number: true, companyId: true, workCentreKind: true } })
+    if (!found) throw invalid([{ path: 'body/departmentId', message: 'No such department.' }])
+    if (found.workCentreKind !== workCentreKind) throw invalid([{ path: 'body/departmentId', message: `Department ${found.number} works at ${found.workCentreKind} work centres, not ${workCentreKind}.` }])
+    if (found.companyId !== null && found.companyId !== companyId) throw invalid([{ path: 'body/departmentId', message: `Department ${found.number} belongs to another company than the rate's.` }])
+  }
+  await assertDayFree(tx, { companyId, workCentreKind, validFrom: figures.validFrom, departmentId })
   const id = newId()
   await tx.labourRate.create({
-    data: { id, companyId, workCentreKind, ...figures, validFrom: dateOf(figures.validFrom), note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+    data: { id, companyId, workCentreKind, departmentId, ...figures, validFrom: dateOf(figures.validFrom), note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
     select: { id: true },
   })
   tools.audit({
@@ -178,7 +192,7 @@ export async function createRateInCommand(tools: CommandTools, rate: NewRate): P
     recordType: 'LabourRate',
     recordId: id,
     companyId,
-    after: { companyId, workCentreKind, costPerMinute: markMoney('cost', figures.costPerMinute), currency: figures.currency, plannedEfficiencyPct: figures.plannedEfficiencyPct, validFrom: figures.validFrom, note, status: 'ACTIVE' },
+    after: { companyId, workCentreKind, departmentId, costPerMinute: markMoney('cost', figures.costPerMinute), currency: figures.currency, plannedEfficiencyPct: figures.plannedEfficiencyPct, validFrom: figures.validFrom, note, status: 'ACTIVE' },
   })
   tools.emit({ type: 'labour_rate.created', subject: id, companyId, payload: { rateId: id, workCentreKind, validFrom: figures.validFrom } })
   return id
@@ -219,7 +233,7 @@ export async function updateRate(caller: CommandCaller, rateId: string, body: Up
       }
       const changed = RATE_FIELDS.filter((field) => field in sent && sent[field] !== current[field])
       const next = { ...current, ...sent }
-      if (changed.includes('validFrom')) await assertDayFree(tx, { companyId: row.companyId, workCentreKind: row.workCentreKind, validFrom: next.validFrom! }, rateId)
+      if (changed.includes('validFrom')) await assertDayFree(tx, { companyId: row.companyId, workCentreKind: row.workCentreKind, validFrom: next.validFrom!, departmentId: row.departmentId }, rateId)
       if (changed.length > 0) {
         const data: Prisma.LabourRateUncheckedUpdateInput = Object.fromEntries(changed.map((field) => [field, field === 'validFrom' ? dateOf(next.validFrom!) : next[field]]))
         await tx.labourRate.update({ where: { id: rateId }, data: { ...data, updatedAt: now }, select: { id: true } })

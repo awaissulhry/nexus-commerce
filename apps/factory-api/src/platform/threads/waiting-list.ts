@@ -14,6 +14,9 @@ import { serverClock } from '../../core/time'
 import { ownerKey, workingCalendarsFor } from '../calendars/service'
 import { recordLabelOf } from './labels'
 import { mayOnThread, wallScopesOf } from './records'
+// owb- po2.4 (R20): the designer wall on an order's conversation.
+import { ORDERS_VIEW_OWN } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDER_THREAD_TYPES, orderWallFilter } from './order-wall'
 import { contextOf } from './threads'
 
 /**
@@ -96,7 +99,9 @@ const after = (row: WaitingCandidate, cursor: { at: Date; threadId: string } | n
 /** The side's record types this reader may list at all: it holds threads.read and the type's own view permission somewhere. */
 function typesFor(actor: Actor, query: Pick<WaitingQuery, 'side' | 'recordType'>): string[] {
   if (grantsFor(actor, THREADS_READ).length === 0) return []
-  return typesOfSide(query.side).filter((type) => (query.recordType === undefined || query.recordType === type) && grantsFor(actor, viewGateOf(type)!).length > 0)
+  // owb- po2.4 (R20): an order's conversation is also listed to a reader with orders.view.own (the rows it is on: the wall below).
+  const viewable = (type: string) => grantsFor(actor, viewGateOf(type)!).length > 0 || (ORDER_THREAD_TYPES.has(type) && grantsFor(actor, ORDERS_VIEW_OWN).length > 0)
+  return typesOfSide(query.side).filter((type) => (query.recordType === undefined || query.recordType === type) && viewable(type))
 }
 
 /**
@@ -121,6 +126,7 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
         SELECT m."id", m."at", m."direction"
           FROM "Message" m
          WHERE m."tenantId" = t."tenantId" AND m."threadId" = t."id" AND m."direction" IN ('INBOUND', 'OUTBOUND')
+           AND m."eventKey" IS NULL -- owb- po2.3: a quiet line is no reply of ours (it never takes a row off)
          ORDER BY m."at" DESC, m."id" DESC
          LIMIT 1
       ) last
@@ -142,11 +148,15 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
   const either = [...new Set(candidates.filter((row) => (EITHER_SIDE_TYPES as readonly string[]).includes(row.recordType)).map((row) => row.partyId))]
   const roles = new Map(either.length === 0 ? [] : (await client.party.findMany({ where: { id: { in: either } }, select: { id: true, roles: true } })).map((party) => [party.id, party.roles as string[]]))
   const scopeOf = await wallScopesOf(client, candidates)
+  // owb- po2.4 (R20): an order's conversation by the designer wall (orders.view, or orders.view.own on an order the reader is on) —
+  // checked here, before the page is cut.
+  const wall = await orderWallFilter(client, context)
   const rows = candidates.filter((row) => {
     if (!onSide(row.recordType, query.side, roles.get(row.partyId) ?? [])) return false
     const scope = scopeOf(row)
     const gate = viewGateOf(row.recordType)
-    return gate !== null && mayOnThread(actor, THREADS_READ, row.recordType, scope) && can(actor, gate, scope)
+    if (gate === null || !mayOnThread(actor, THREADS_READ, row.recordType, scope)) return false
+    return ORDER_THREAD_TYPES.has(row.recordType) ? wall({ type: row.recordType, id: row.recordId }, scope) : can(actor, gate, scope)
   })
   return { rows, complete }
 }

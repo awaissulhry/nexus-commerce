@@ -19,7 +19,8 @@ import { readLines as readDraftLines, readPeople as readDraftPeople } from '../p
 import { portalWriter } from '../portal-ordering/writer'
 import type { PortalReader } from './access'
 import type { PortalOrderList } from './orders'
-import { readLines as readOrderLines } from './store'
+import { readLines as readOrderLines, readShipments } from './store'
+import { atWarehouseOf } from '../../shipping/warehouse-leg/portal' // owb- po2.6 (S3's ss1, imported)
 
 /**
  * The portal orders sheet's rows as ONE order (owb- order workflow, S1 po1.1; design § 5b, § 5zi C, § 5zj A; the S1 build's FIXED
@@ -68,9 +69,11 @@ export interface SheetFacts {
 /** What the draft rows say beside their row (from the portal-ordering read). */
 interface DraftFacts {
   readonly openCount: number
-  readonly numbered: boolean
   readonly startedByReader: boolean
 }
+
+/** A shipment at the factory's warehouse that waits for the customer's label: arrived there, not sent on, no label yet. */
+const waitsForLabel = (leg: { readonly since: string | null; readonly sentOn: boolean; readonly labelSent: boolean } | undefined): boolean => leg !== undefined && leg.since !== null && !leg.sentOn && !leg.labelSent
 
 /** The search of a draft row: its subject, title or PO (a number alone: a PO holding it; a draft has no number of its own). */
 function draftFound(q: string | undefined, words: readonly (string | null)[]): boolean {
@@ -109,7 +112,7 @@ export async function draftRows(app: FastifyInstance, request: FastifyRequest, r
     progressPercent: null,
     needsYou: false,
   }))
-  return { rows, facts: new Map(found.map((row) => [row.id, { openCount: row.draft?.openCount ?? 0, numbered: row.number !== null, startedByReader: row.draft?.startedBy.who === 'YOU' }])) }
+  return { rows, facts: new Map(found.map((row) => [row.id, { openCount: row.draft?.openCount ?? 0, startedByReader: row.draft?.startedBy.who === 'YOU' }])) }
 }
 
 /** The facts of every row of the page and the columns they use (see the file's head). */
@@ -129,6 +132,8 @@ export async function sheetFacts(request: FastifyRequest, reader: PortalReader, 
     columns: await ownColumnsOf(client, { requestIds, orderIds }),
     designs: seesDesigns && orderIds.length > 0 ? await client.approvalRequest.findMany({ where: { recordType: 'SalesOrder', recordId: { in: orderIds }, status: 'OPEN', kind: { in: [...DESIGN_APPROVAL_KINDS] } }, select: { recordId: true } }) : [],
     asks: orderIds.length > 0 ? await client.orderChangeRequest.findMany({ where: { orderId: { in: orderIds }, status: { in: ['OPEN', 'COUNTERED'] } }, select: { orderId: true } }) : [],
+    // owb- po2.6: the page's orders' shipments (a shared one is on every order it carries), for "Send the shipping label".
+    shipments: await readShipments(client, orderIds),
   }))
   const styleIds = [...new Set([...own.orderLines.map((line) => line.styleId), ...own.requestLines.flatMap((line) => (line.styleId ? [line.styleId] : []))])]
   const colourwayIds = [...new Set([...own.orderLines.map((line) => line.colourwayId), ...own.requestLines.flatMap((line) => (line.colourwayId ? [line.colourwayId] : []))])]
@@ -139,7 +144,9 @@ export async function sheetFacts(request: FastifyRequest, reader: PortalReader, 
     const allowed = styles.map((style) => style.id)
     const colourways = colourwayIds.length > 0 && allowed.length > 0 ? await client.colourway.findMany({ where: { id: { in: colourwayIds }, styleId: { in: allowed } }, select: { id: true, name: true } }) : []
     const started = sentIds.length > 0 ? await client.portalOrderRequest.findMany({ where: { id: { in: sentIds }, partyId }, select: { id: true, styleIds: true } }) : []
-    return { styles: new Map(styles.map((style) => [style.id, style])), colourways: new Map(colourways.map((colourway) => [colourway.id, colourway.name])), started: new Set(started.filter((row) => row.styleIds.length > 0).map((row) => row.id)) }
+    // owb- po2.6 (S3's seam): which of those shipments wait at the factory's warehouse for the customer's label (arrived, not sent on).
+    const legs = await atWarehouseOf(client, { partyId, shipmentIds: own.shipments.map((row) => row.id) })
+    return { styles: new Map(styles.map((style) => [style.id, style])), colourways: new Map(colourways.map((colourway) => [colourway.id, colourway.name])), started: new Set(started.filter((row) => row.styleIds.length > 0).map((row) => row.id)), legs }
   })
   const unread = new Map(
     (
@@ -197,7 +204,7 @@ export async function sheetFacts(request: FastifyRequest, reader: PortalReader, 
       answer = orderLifeOf({ request: { status: item.kind === 'DRAFT' ? 'DRAFT' : 'SENT' } })
       may =
         item.kind === 'DRAFT'
-          ? { edit: keepsDrafts, send: orders, delete: !reader.session.preview && !(draft?.numbered ?? false) && (orders || (keepsDrafts && (draft?.startedByReader ?? false))), takeBack: false, picture: keepsDrafts }
+          ? { edit: keepsDrafts, send: orders, delete: !reader.session.preview && (orders || (keepsDrafts && (draft?.startedByReader ?? false))), takeBack: false, picture: keepsDrafts }
           : { edit: false, send: false, delete: false, takeBack: orders && !tenant.started.has(item.id), picture: keepsDrafts }
     }
     const draft = drafts.get(item.id)
@@ -211,6 +218,8 @@ export async function sheetFacts(request: FastifyRequest, reader: PortalReader, 
         NEW_MESSAGES: unread.get(item.id) ?? 0,
         DESIGN_APPROVAL: designs.get(item.id) ?? 0,
         ASKED: asks.get(item.id) ?? 0,
+        // owb- po2.6: its shipments at the factory's warehouse that wait for the customer's label.
+        SEND_LABEL: item.kind === 'ORDER' ? own.shipments.filter((row) => row.salesOrderIds.includes(item.id) && waitsForLabel(tenant.legs.get(row.id))).length : 0,
         OPEN_DETAILS: draft?.openCount ?? 0,
         LATE: isLate(item.status, item.promiseDate, today),
       }),

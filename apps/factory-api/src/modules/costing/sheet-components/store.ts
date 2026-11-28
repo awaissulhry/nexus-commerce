@@ -264,7 +264,7 @@ export async function loadComponentFacts(db: Reader, style: CostingStyleRow, rev
 
   // B-W2b-GB02 (G056): each step's minutes per size, the cells it is for, and whether it is worked at a machine.
   const routing = await routingFactsOf(db, revision.id, steps)
-  const componentSteps: ComponentStep[] = steps.map((step) => ({ id: step.id, seq: step.seq, operationId: step.operationId, code: step.code, name: step.name, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes, ...routing.get(step.id) }))
+  const componentSteps: ComponentStep[] = steps.map((step) => ({ id: step.id, seq: step.seq, operationId: step.operationId, code: step.code, name: step.name, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes, departmentId: step.departmentId ?? null /* owb-pd2 2.5 */, ...routing.get(step.id) }))
   // B-W2b-423 (FIN-019, KS4:02): each sub-assembly line at its own cost, every level down.
   const rolledUp = await rolledUpFor(db, { revisionId: revision.id, lines, materials, sizes: style.sizes, colourwayCode: colourway.code, company, on, level: options.rollup?.level ?? 1, path: options.rollup?.path ?? [revision.id], priceOverrides: options.priceOverrides }, loadComponentFacts)
   return {

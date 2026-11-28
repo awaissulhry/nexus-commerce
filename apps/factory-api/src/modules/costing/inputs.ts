@@ -31,6 +31,8 @@ export const RATE_COLUMNS = {
   version: true,
   createdAt: true,
   updatedAt: true,
+  // owb-pd2 2.5: the department the rate is for (null: the kind's rate).
+  departmentId: true,
 } as const satisfies Prisma.LabourRateSelect
 export type RateRow = Prisma.LabourRateGetPayload<{ select: typeof RATE_COLUMNS }>
 
@@ -50,6 +52,7 @@ export const rateOf = (row: RateRow): LabourRate => ({
   plannedEfficiencyPct: text(row.plannedEfficiencyPct),
   validFrom: dayOf(row.validFrom),
   status: row.status,
+  departmentId: row.departmentId, // owb-pd2 2.5
 })
 
 /**

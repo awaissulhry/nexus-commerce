@@ -10,7 +10,7 @@ import { mayOn, officeContextOf } from '../orders/access'
 import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, type DraftFileBody } from './draft-files'
 import { addCustomLine, addPeople, changeCustomLine, changeHeader, changeLine, changePerson, createDraft, removePerson, requestView, type HeaderBody } from './requests'
 import { copyLine, putBackLine, removeLine } from './requests' // owb- po1.3
-import { officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } from './writer'
+import { officeDraftReader, officeDraftWriter, officeWriter, refuseOwnPrice, type DraftWriter } from './writer'
 
 /**
  * od-s s.3 (order start, 13-backend § 4; Owner yes 1a + 2a): the office's door to a customer's draft order — the SAME draft commands
@@ -66,8 +66,9 @@ export async function officeStartDraft(app: FastifyInstance, request: FastifyReq
 }
 
 /** GET /sales/order-requests/:id/draft: the draft as the portal reads it — the same record — for orders.view over its customer. */
+// owb- po2.4 (R20): read with orders.view, or orders.view.own while the reader is on it (officeDraftReader: S2's ONE rule).
 export async function officeDraftView(app: FastifyInstance, request: FastifyRequest, requestId: string) {
-  const { writer, row } = await officeDraftWriter(app, request, requestId, ORDERS_VIEW)
+  const { writer, row } = await officeDraftReader(app, request, requestId)
   return requestView(writer, row)
 }
 
