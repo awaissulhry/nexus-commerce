@@ -711,5 +711,71 @@
       "saved": "Saved",
       "asked": "Asked: it changes after the factory’s yes"
     }
+  },
+  "office": {
+    "chip": {
+      "new": "{count} new",
+      "newHint_one": "A new message: open the order",
+      "newHint_other": "{count} new messages: open the order",
+      "remakeOf": "Remake of {number}",
+      "remakeOfHint": "Open the order this is a remake of",
+      "sentAsText": "Sent as text",
+      "sentAsTextHint": "The order came as text: read it and pick the product",
+      "withDesigner": "With the designer",
+      "withDesignerHint": "The designer works on the graphics",
+      "confirm": "Confirm",
+      "confirmHint": "Confirm the order…",
+      "print": "Print and start…",
+      "printHint": "Print the pages and the basket cards: the work starts",
+      "printAgain": "Print again",
+      "printAgainHint": "The floor lost a page: print it again",
+      "designWaits": "Design: waits",
+      "designWaitsHint": "The design waits for the customer’s yes",
+      "designApproved": "Design approved",
+      "designChange": "Design: change asked",
+      "problems_one": "{count} problem",
+      "problems_other": "{count} problems",
+      "ship": "Ship",
+      "labelReceived": "Label received",
+      "labelWaits": "Waits for the label",
+      "toAnswer": "{count} to answer",
+      "toAnswerHint_one": "The customer asks a change: say yes or no",
+      "toAnswerHint_other": "The customer asks {count} changes: say yes or no",
+      "open": "{count} open",
+      "openHint_one": "{count} detail still open",
+      "openHint_other": "{count} details still open",
+      "late": "Late",
+      "paid": "{count} “I paid”",
+      "paidHint": "The customer says it paid: open Money"
+    },
+    "filter": {
+      "all": "All",
+      "drafts": "Drafts",
+      "incoming": "Incoming",
+      "confirmed": "Confirmed",
+      "production": "In production",
+      "ready": "Ready to ship",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "withdrawn": "Withdrawn"
+    },
+    "tile": {
+      "incoming": "Incoming",
+      "waitingForPrint": "Waiting for the print",
+      "inProduction": "In production",
+      "problems": "Problems",
+      "late": "Late",
+      "readyToShip": "Ready to ship"
+    },
+    "export": {
+      "number": "Number",
+      "subject": "Subject",
+      "customer": "Customer",
+      "state": "State",
+      "wanted": "Wanted for",
+      "promised": "Promised",
+      "lines": "Lines",
+      "pieces": "Pieces"
+    }
   }
 }

@@ -711,5 +711,71 @@
       "saved": "Salvato",
       "asked": "Chiesto: cambia dopo il sì della fabbrica"
     }
+  },
+  "office": {
+    "chip": {
+      "new": "{count} nuovi",
+      "newHint_one": "Un nuovo messaggio: apri l’ordine",
+      "newHint_other": "{count} nuovi messaggi: apri l’ordine",
+      "remakeOf": "Rifacimento di {number}",
+      "remakeOfHint": "Apri l’ordine di cui è il rifacimento",
+      "sentAsText": "Inviato come testo",
+      "sentAsTextHint": "L’ordine è arrivato come testo: leggilo e scegli il prodotto",
+      "withDesigner": "Dal grafico",
+      "withDesignerHint": "Il grafico lavora sulla grafica",
+      "confirm": "Conferma",
+      "confirmHint": "Conferma l’ordine…",
+      "print": "Stampa e avvia…",
+      "printHint": "Stampa le pagine e le schede dei cesti: il lavoro parte",
+      "printAgain": "Stampa di nuovo",
+      "printAgainHint": "Il reparto ha perso una pagina: stampala di nuovo",
+      "designWaits": "Grafica: in attesa",
+      "designWaitsHint": "La grafica aspetta il sì del cliente",
+      "designApproved": "Grafica approvata",
+      "designChange": "Grafica: modifica chiesta",
+      "problems_one": "{count} problema",
+      "problems_other": "{count} problemi",
+      "ship": "Spedisci",
+      "labelReceived": "Etichetta ricevuta",
+      "labelWaits": "Aspetta l’etichetta",
+      "toAnswer": "{count} da rispondere",
+      "toAnswerHint_one": "Il cliente chiede una modifica: rispondi sì o no",
+      "toAnswerHint_other": "Il cliente chiede {count} modifiche: rispondi sì o no",
+      "open": "{count} aperti",
+      "openHint_one": "{count} dettaglio ancora aperto",
+      "openHint_other": "{count} dettagli ancora aperti",
+      "late": "In ritardo",
+      "paid": "{count} “Ho pagato”",
+      "paidHint": "Il cliente dice di aver pagato: apri Pagamenti"
+    },
+    "filter": {
+      "all": "Tutti",
+      "drafts": "Bozze",
+      "incoming": "In arrivo",
+      "confirmed": "Confermati",
+      "production": "In produzione",
+      "ready": "Pronti da spedire",
+      "shipped": "Spediti",
+      "delivered": "Consegnati",
+      "withdrawn": "Ritirati"
+    },
+    "tile": {
+      "incoming": "In arrivo",
+      "waitingForPrint": "In attesa della stampa",
+      "inProduction": "In produzione",
+      "problems": "Problemi",
+      "late": "In ritardo",
+      "readyToShip": "Pronti da spedire"
+    },
+    "export": {
+      "number": "Numero",
+      "subject": "Oggetto",
+      "customer": "Cliente",
+      "state": "Stato",
+      "wanted": "Voluto per",
+      "promised": "Promesso",
+      "lines": "Righe",
+      "pieces": "Pezzi"
+    }
   }
 }
