@@ -1,4 +1,4 @@
-import { scannedOperations, type ScanOperation } from '../scans/rules'
+import type { ScanOperation } from '../scans/rules'
 
 /**
  * A basket's route (owb- order workflow, S5 fl1; build/briefs/owb-fl2.md step 1 is the spec; LF _owb-fl-common.md § 1 and § 2
@@ -17,6 +17,15 @@ import { scannedOperations, type ScanOperation } from '../scans/rules'
  *
  * The answer is in route order (by `seq`), as the scan rules read it.
  */
+
+/**
+ * What the pair reads of an operation (owb-fl2: a reader's own row type fits — the scan rules' ScanOperation, the bundle
+ * tracker's operations — so every reader calls the SAME pair).
+ */
+export type RouteOperation = Pick<ScanOperation, 'id' | 'seq' | 'scanRequired'> & { readonly unplanned?: boolean | undefined }
+
+/** The scanned operations in route order (scans/rules scannedOperations, for any RouteOperation). */
+export const scannedSteps = <Op extends RouteOperation>(operations: readonly Op[]): Op[] => [...operations].filter((operation) => operation.scanRequired).sort((a, b) => a.seq - b.seq)
 
 /** One route edit of ONE basket, as the readers read BasketRouteEdit (oldest first). */
 export interface RouteEditFact {
@@ -45,10 +54,10 @@ export function standingEdits(edits: readonly RouteEditFact[]): { readonly skipp
 }
 
 /** The basket's own route (see the file's head). */
-export function basketRoute<Op extends ScanOperation>(operations: readonly Op[], edits: readonly RouteEditFact[]): (Op & RouteMarks)[] {
+export function basketRoute<Op extends RouteOperation>(operations: readonly Op[], edits: readonly RouteEditFact[]): (Op & RouteMarks)[] {
   if (edits.length === 0) return operations as (Op & RouteMarks)[]
   const { skipped, added } = standingEdits(edits)
-  const scanned = scannedOperations(operations)
+  const scanned = scannedSteps(operations)
   const last = scanned.at(-1) ?? null
   const before = scanned.at(-2) ?? null
   // An added step stands just before the last scanned step: between the step before it and it (fractions keep the order).
