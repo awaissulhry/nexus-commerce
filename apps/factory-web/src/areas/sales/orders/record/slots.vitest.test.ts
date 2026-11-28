@@ -34,7 +34,7 @@ const part = { companyId: 'company-1', orderId: 'order-1' }
 
 const STUBS = [
   { path: 'areas/sales/orders/record/print/PrintStartWindow.tsx', name: 'PrintStartWindow', owner: 'S3 (owb-ss4)', draw: () => PrintStartWindow(windowProps), mounts: [] as string[], filled: false },
-  { path: 'areas/sales/orders/record/print/PrintAgainWindow.tsx', name: 'PrintAgainWindow', owner: 'S3 (owb-ss4)', draw: () => PrintAgainWindow(windowProps), mounts: [] as string[], filled: false },
+  { path: 'areas/sales/orders/record/print/PrintAgainWindow.tsx', name: 'PrintAgainWindow', owner: 'S3 (owb-ss4)', draw: () => PrintAgainWindow(windowProps), mounts: ['areas/production/baskets/BasketsBoardPage.tsx'] as string[], filled: false },
   { path: 'areas/sales/orders/record/print/PlaceScanCodeWindow.tsx', name: 'PlaceScanCodeWindow', owner: 'S3 (owb-ss4)', draw: () => PlaceScanCodeWindow(windowProps), mounts: [] as string[], filled: false },
   { path: 'areas/sales/orders/record/shipments/ShipWholeOrderWindow.tsx', name: 'ShipWholeOrderWindow', owner: 'S3 (owb-ss3)', draw: () => ShipWholeOrderWindow(windowProps), mounts: [] as string[], filled: false },
   { path: 'areas/sales/orders/record/shipments/WarehouseLegWindow.tsx', name: 'WarehouseLegWindow', owner: 'S3 (owb-ss3)', draw: () => WarehouseLegWindow({ ...windowProps, act: 'SEND_ON' }), mounts: [] as string[], filled: false },
@@ -42,7 +42,7 @@ const STUBS = [
   { path: 'areas/production/order-structures/parts/OrderStructurePart.tsx', name: 'OrderStructurePart', owner: 'S3 (owb-ss8)', draw: () => OrderStructurePart(part), mounts: [PRODUCTION_TAB], filled: false },
   { path: 'areas/production/order-structures/parts/CustomerStructurePart.tsx', name: 'CustomerStructurePart', owner: 'S3 (owb-ss8)', draw: () => CustomerStructurePart({ companyId: 'company-1', partyId: 'party-1' }), mounts: [TERMS_TAB], filled: false },
   { path: 'areas/products/_shared/parts/RouteOfEachLinePart.tsx', name: 'RouteOfEachLinePart', owner: 'S4 (owb-pd6)', draw: () => RouteOfEachLinePart(part), mounts: [PRODUCTION_TAB], filled: false },
-  { path: 'areas/production/baskets/parts/FromTheFloorPart.tsx', name: 'FromTheFloorPart', owner: 'S5 (owb-fl9)', draw: () => FromTheFloorPart(part), mounts: [PRODUCTION_TAB], filled: false },
+  { path: 'areas/production/baskets/parts/FromTheFloorPart.tsx', name: 'FromTheFloorPart', owner: 'S5 (owb-fl9)', draw: () => FromTheFloorPart(part), mounts: [PRODUCTION_TAB], filled: true },
 ] as const
 
 function filesOf(folder: string): string[] {

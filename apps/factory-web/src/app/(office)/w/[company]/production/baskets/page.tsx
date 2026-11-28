@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
-import { NotBuiltYet } from '../../../../../../shell/office/NotBuiltYet'
+import { BasketsBoardPage } from '../../../../../../areas/production/baskets/BasketsBoardPage'
 
 export const metadata: Metadata = { title: 'Baskets board · Nexus Factory' }
 
 /**
- * Production › Baskets board (owb- order workflow, base settle 7; areas/production/nav.ts, permission workorders.view): a DECLARED page — its route, its nav row
- * and its place in the approved tree are placed by the base; S5 (fl9) replaces this file with the page. Its address joins
- * OFFICE_PAGES at that land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES), so until then no row shows it.
+ * Production › Baskets board (owb-fl9; design § 2, § 6; areas/production/nav.ts, permission workorders.view): one column per department
+ * in use and Ready to ship, every basket as a card, filters team / department / order; a card opens the basket window. Its address
+ * joins OFFICE_PAGES at the land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES, the lead's flip).
  */
 export default function ProductionBasketsPage() {
-  return <NotBuiltYet />
+  return <BasketsBoardPage />
 }
