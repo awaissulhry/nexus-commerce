@@ -374,8 +374,10 @@ model Company {
   supplierQuestionnaires SupplierQuestionnaire[]
   // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): its projects.
   projects             Project[]
-  // owb-b1 product.prisma (order workflow build, schema wave "order workflow 1/1"): the departments of the company only.
+  // owb-b1 product.prisma, parties.prisma (order workflow build, schema wave "order workflow 1/1"): the departments of the
+  // company only; its office people given to customers.
   departments          Department[]
+  partyOfficePeople    PartyOfficePerson[] @relation("PartyOfficePersonCompany")
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
