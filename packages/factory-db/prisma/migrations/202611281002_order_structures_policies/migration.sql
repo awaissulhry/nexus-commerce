@@ -374,6 +374,17 @@ REVOKE ALL ON TABLE "public"."BankStatement" FROM PUBLIC, "factory_floor_runtime
 GRANT SELECT, INSERT ON TABLE "public"."BankStatement" TO "factory_runtime";
 CREATE POLICY "factory_runtime_select" ON "public"."BankStatement" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."BankStatement" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."BasketFlag"
+ALTER TABLE "public"."BasketFlag" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."BasketFlag" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'BasketFlag' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'BasketFlag'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."BasketFlag" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."BasketFlag" TO "factory_floor_runtime";
+GRANT SELECT ON TABLE "public"."BasketFlag" TO "factory_runtime";
+CREATE POLICY "factory_floor_runtime_select" ON "public"."BasketFlag" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_floor_runtime_insert" ON "public"."BasketFlag" AS PERMISSIVE FOR INSERT TO "factory_floor_runtime" WITH CHECK ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_floor_runtime_update" ON "public"."BasketFlag" AS PERMISSIVE FOR UPDATE TO "factory_floor_runtime" USING ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_select" ON "public"."BasketFlag" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."BasketMove"
 ALTER TABLE "public"."BasketMove" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."BasketMove" FORCE ROW LEVEL SECURITY;
@@ -1547,6 +1558,15 @@ CREATE POLICY "factory_floor_runtime_select" ON "public"."FloorSettings" AS PERM
 CREATE POLICY "factory_runtime_select" ON "public"."FloorSettings" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."FloorSettings" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."FloorSettings" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."FloorSuggestion"
+ALTER TABLE "public"."FloorSuggestion" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."FloorSuggestion" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'FloorSuggestion' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'FloorSuggestion'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."FloorSuggestion" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT INSERT ON TABLE "public"."FloorSuggestion" TO "factory_floor_runtime";
+GRANT SELECT ON TABLE "public"."FloorSuggestion" TO "factory_runtime";
+CREATE POLICY "factory_floor_runtime_insert" ON "public"."FloorSuggestion" AS PERMISSIVE FOR INSERT TO "factory_floor_runtime" WITH CHECK ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_select" ON "public"."FloorSuggestion" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."FloorSyncEvent"
 ALTER TABLE "public"."FloorSyncEvent" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."FloorSyncEvent" FORCE ROW LEVEL SECURITY;

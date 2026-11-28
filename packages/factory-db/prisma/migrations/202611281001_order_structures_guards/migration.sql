@@ -1,4 +1,4 @@
--- Written by hand (Prisma does not model triggers), after the generated 202611281200_order_structures_schema and before the
+-- Written by hand (Prisma does not model triggers), after the generated 202611281000_order_structures_schema and before the
 -- policy migration. When the migrations are renumbered, keep this file as it is under its new timestamp.
 
 -- The S3 schema wave "structures + units" (order workflow build, lane owb-, S3 PR owb-ssw; design order-workflow-build-2026-11-27
