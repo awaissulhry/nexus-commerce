@@ -104,7 +104,8 @@ function ListContainer() {
     try {
       // The sheet's read: the group's rows with their portal columns, and the band's numbers (the server's, before the search). Closed
       // requests hold no order: the read then brings the band's numbers only.
-      const next = await fetchSheet(api, { chip: sheetChipOf(group), q, ...(orders ? {} : { limit: 1 }) }, control.signal)
+      // owb-po7: the drafts come with the sheet (the drafts bar holds them) for a reader who keeps drafts.
+      const next = await fetchSheet(api, { chip: sheetChipOf(group), q, ...(orders ? {} : { limit: 1 }), ...(frame.me.permissions.includes('portal.orderDrafts.edit') ? { drafts: true } : {}) }, control.signal)
       if (control.signal.aborted) return
       setRead(next)
       setRows(orders ? next.items : [])
@@ -415,7 +416,7 @@ function ListContainer() {
           onClose={() => setPicture(null)}
           number={picture.number}
           subject={picture.subject}
-          record={{ source: 'customerOrder', recordId: picture.page.id }}
+          record={{ source: picture.page.kind === 'request' ? 'customerRequest' : 'customerOrder', recordId: picture.page.id }}
           now={{ fileId: picture.fileId, version: picture.version }}
           choices={picture.choices}
           save={orderPictureSaver(api, orderPicturePath('portal', picture.page.kind, picture.page.id))}

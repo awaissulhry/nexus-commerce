@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { everyCase, leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
-import { orderRowSchema, ordersSchema, type OrderRow } from '../api'
+import { fetchSheet, orderRowSchema, ordersSchema, type OrderRow } from '../api'
 import { sheetRowsOf, sheetRowsOfOrder } from './adapter'
 import { designScreen } from './fixtures'
 import { bulkOf, detailsOf, draftsOf, lifeOf, listedRows, pageOf, pictureDoorOf, sentLineOf, waitChipsOf, withdrawnCount } from './model'
@@ -73,15 +73,28 @@ describe('owb-po7.1: the adapter', () => {
     expect((sheetRowsOfOrder(row('ORDER'), 'it')[0] as { yourNumber: string }).yourNumber).toBe('Il vostro ordine 12')
   })
 
+  it('the sheet asks for the drafts with the opt-in flag drafts=true (owb-po1)', async () => {
+    const asked: unknown[] = []
+    const api = { get: async (path: string, init: { query: unknown }) => { asked.push({ path, query: init.query }); return { asOf: 'x', seesPrices: false, chip: 'OPEN', chips: [], count: 0, items: [], live: { events: [] } } } } as unknown as Parameters<typeof fetchSheet>[0]
+    await fetchSheet(api, { chip: 'OPEN', drafts: true })
+    await fetchSheet(api, { chip: 'OPEN' })
+    expect(asked).toEqual([
+      { path: '/portal/sales-orders/sheet', query: { chip: 'OPEN', q: undefined, limit: 50, offset: 0, drafts: 'true' } },
+      { path: '/portal/sales-orders/sheet', query: { chip: 'OPEN', q: undefined, limit: 50, offset: 0, drafts: undefined } },
+    ])
+  })
+
   it('no price key ever, even from a price holder’s read (the orders sheet has no price column for anybody)', () => {
     const read = ordersSchema.parse({ asOf: '2026-11-28T10:00:00Z', seesPrices: true, chip: 'ALL', chips: [], count: 3, items: [row('ORDER'), row('REQUEST'), row('DRAFT')], live: { events: [] } })
     expect(keysOf(read).some((key) => MONEY.test(key))).toBe(true)
     expect(keysOf(sheetRowsOf(read, 'en')).filter((key) => MONEY.test(key))).toEqual([])
   })
 
-  it('a newer answer’s unknown wait kind is left out; a DRAFT row parses (its status is not a customer status)', () => {
+  it('a newer answer’s unknown wait kind is left out; a DRAFT row parses (owb-po1 sends `status: null`); the life note is read', () => {
     expect(row('DRAFT').waits).toEqual([{ kind: 'NEW_MESSAGES', count: 1 }])
-    expect(row('DRAFT').status).toBe('REQUESTED')
+    expect(row('DRAFT', { status: null, netAmount: null }).status).toBe('REQUESTED')
+    expect(row('ORDER', { lifeNote: { kind: 'PARTLY_SHIPPED', shipped: 2, total: 6 } }).lifeNote).toEqual({ kind: 'PARTLY_SHIPPED', shipped: 2, total: 6 })
+    expect(row('ORDER', { lifeNote: { kind: 'SOMETHING_ELSE' } }).lifeNote).toBeUndefined()
     expect(lifeOf({ kind: 'REQUEST', life: undefined })).toBe('SENT')
     expect(pageOf({ kind: 'REQUEST', id: 'r', page: undefined })).toBeNull()
   })

@@ -114,6 +114,9 @@ export function OrdersListView({ model, actions, above }: { model: OrdersListVie
   )
 }
 
+/** owb-po7 (owb-po1): a sent or draft order (a request) asks its picture under requestIds; a confirmed order under orderIds. */
+const pictureSourceOf = (row: ListRow | undefined): 'customerOrder' | 'customerRequest' => (row?.kind === 'order' && row.order.kind !== 'ORDER' ? 'customerRequest' : 'customerOrder')
+
 /** One column's part on the phone card (the list frame's card list). */
 type CardField = NonNullable<ListCards<ListRow>['fields']>[string]
 
@@ -149,7 +152,7 @@ function List({ model, actions, above }: { model: OrdersListViewModel; actions?:
     const PictureCell = ({ data }: ICellRendererParams<ListRow>) => {
       const view = viewOf(data)
       if (!view?.picture) return null
-      const picture = <RecordPicture source="customerOrder" recordId={view.id} number={view.number.text} size="cell" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
+      const picture = <RecordPicture source={pictureSourceOf(data)} recordId={view.id} number={view.number.text} size="cell" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
       // owb-po7.3 (§ 5zj A): for a reader who may change it, the picture is a button (a camera on hover): the window opens here.
       const order = data?.kind === 'order' ? data.order : null
       const onPicture = latest.current.actions?.onPicture
@@ -190,9 +193,10 @@ function List({ model, actions, above }: { model: OrdersListViewModel; actions?:
       const view = viewOf(data)
       if (!view) return null
       const life = data?.kind === 'order' ? lifeOf(data.order) : null
+      const note = data?.kind === 'order' ? (data.order.lifeNote ?? null) : null
       const chips = (
         <span className="fw-sheet-wi">
-          {life ? <StateChip life={life} /> : <StateChip chip={view.state} />}
+          {life ? <StateChip life={life} note={note} /> : <StateChip chip={view.state} />}
           {view.mark ? <MarkChip chip={view.mark} /> : null}
         </span>
       )
@@ -316,7 +320,7 @@ function List({ model, actions, above }: { model: OrdersListViewModel; actions?:
     }
     // owb-po7.4: on a phone the picture is its OWN button (the camera always shows); the card's title stays the order's link.
     const cardPicture = (row: ListRow, view: ListRowView): ReactNode => {
-      const picture = <RecordPicture source="customerOrder" recordId={view.id} number={view.number.text} size="phone" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
+      const picture = <RecordPicture source={pictureSourceOf(row)} recordId={view.id} number={view.number.text} size="phone" read={latest.current.model.pictures ?? null} {...(latest.current.model.demoPictures?.[view.id] ? { demo: latest.current.model.demoPictures[view.id] } : {})} />
       const onPicture = latest.current.actions?.onPicture
       return row.kind === 'order' && onPicture && pictureDoorOf(row.order) ? <PictureButton picture={picture} label={ts('ordersSheet.picture')} onPress={() => onPicture(row.order)} /> : picture
     }
@@ -329,7 +333,7 @@ function List({ model, actions, above }: { model: OrdersListViewModel; actions?:
           sub={view.number.sub ? <span className="fw-ocl-sub fw-pgl-wrap">{view.number.sub}</span> : null}
           chips={
             <>
-              {row.kind === 'order' && lifeOf(row.order) ? <StateChip life={lifeOf(row.order)!} /> : <StateChip chip={view.state} />}
+              {row.kind === 'order' && lifeOf(row.order) ? <StateChip life={lifeOf(row.order)!} note={row.order.lifeNote ?? null} /> : <StateChip chip={view.state} />}
               {view.mark ? <MarkChip chip={view.mark} /> : null}
               {row.kind === 'order' ? <WaitsChips chips={waitChipsOf(row.order.waits)} onChip={(chip) => latest.current.actions?.onWait?.(row.order, chip)} /> : null}
             </>
