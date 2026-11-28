@@ -115,8 +115,12 @@ describe('each value kind as its chip', () => {
     expect(textOf(html)).toContain('Sam Sales')
     expect(html).toContain('<span class="fw-clog-reason">The leather arrives a week later.</span>')
     expect(textOf(html)).toContain('Basket BSK-0042')
-    expect(textOf(html)).toContain('A change')
-    expect(html).toContain('fw-clog-dot')
+    // owb-b7: the floor's move (r6) has its own words now; an action no list knows is still "A change" with a plain dot.
+    expect(textOf(html)).toContain('Changed on the floor')
+    const r6 = OFFICE_ROWS.find((entry) => entry.id === 'r6')!
+    const unknown = draw(model([{ ...r6, id: 'rx', action: 'made.up.action' }]))
+    expect(textOf(unknown)).toContain('A change')
+    expect(unknown).toContain('fw-clog-dot')
   })
 })
 

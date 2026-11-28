@@ -77,13 +77,13 @@ describe('people: the area and who may do what', () => {
     expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(rows)
   })
 
-  it('People sits after Finance and before Plant; HR and the production manager see Employees, sales and a lead-only role do not', () => {
+  it('People sits after Finance and before Plant; HR and the production manager see Employees, a lead-only role does not; sales sees People for the Factory structure only (owb-b7)', () => {
     expect(OFFICE_NAV.areas.map((area) => area.id).slice(-3)).toEqual(['people', 'plant', 'admin'])
     const sees = (key: string) => officeNavFor(permissionCheck(template(key))).areas.some((area) => area.id === 'people')
     expect(sees('admin')).toBe(true)
     expect(sees('production_manager')).toBe(true)
     expect(sees('floor_supervisor')).toBe(true)
-    expect(sees('sales')).toBe(false)
+    expect(sees('sales')).toBe(true) // owb-b7 (R49): people.structure.view opens the Factory structure row
     expect(sees('quality_inspector')).toBe(false)
   })
 
@@ -105,7 +105,7 @@ describe('people: the area and who may do what', () => {
       expect(rows([permission]), permission).toEqual(['people-attendance'])
       expect(firstOfficePage(officeNavFor(permissionCheck([permission])), { areaId: 'people' }), permission).toBe('/people/attendance')
     }
-    expect(rows(template('sales'))).toEqual([])
+    expect(rows(template('sales'))).toEqual(['people-structure']) // owb-b7 (R49): the structure only, never Employees
     // owb-: Factory structure reads people.view too (GET /people/structure); the HR register is still that permission's only other row.
     expect(rows(['people.view'])).toEqual(['people-employees', 'people-structure'])
   })

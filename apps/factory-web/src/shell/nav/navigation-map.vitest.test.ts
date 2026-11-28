@@ -344,7 +344,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     // (B-W2a-65: sales logs them); Compliance's certificate rows since owb-b6 (compliance.certificates.view, the Owner's yes
     // 2026-11-28). Of Planning only Promise dates (B-W2b-336: planning.promise.view, sales asks "when?" on every quote).
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'planning', 'purchasing', 'warehouse', 'production', 'quality', 'compliance', 'finance', 'admin'])
+    // owb-b7 (R49, the Owner's yes 2026-11-28): People › Factory structure (people.structure.view).
+    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'planning', 'purchasing', 'warehouse', 'production', 'quality', 'compliance', 'finance', 'people', 'admin'])
     expect(rows(sales).filter((row) => row.href.startsWith('/planning/')).map((row) => row.href)).toEqual(['/planning/promise'])
     expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/capa', '/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
