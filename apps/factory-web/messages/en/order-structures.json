@@ -1,0 +1,212 @@
+{
+  "head": {
+    "structures_one": "{count} structure",
+    "structures_other": "{count} structures",
+    "rules_one": "{count} rule",
+    "rules_other": "{count} rules",
+    "neverUsed_one": "{count} rule never used",
+    "neverUsed_other": "{count} rules never used",
+    "newRule": "New rule…",
+    "infoLabel": "About this page",
+    "info": "A structure is a named way to handle an order: its steps, its team, its people in the office. A rule says which orders use it: the list is read from the top and the first rule that fits wins, so an exception is a more exact rule above. An order that is not started follows the rules; at the first print it keeps what it has."
+  },
+  "notice": {
+    "dismiss": "Dismiss",
+    "rule": {
+      "added": "The rule is added at its place.",
+      "saved": "The rule is saved.",
+      "closed": "The rule is closed and kept.",
+      "reopened": "The rule is open again."
+    },
+    "structure": {
+      "added": "The structure {name} is added.",
+      "saved": "The structure {name} is saved.",
+      "closed": "The structure {name} is closed and kept.",
+      "reopened": "The structure {name} is open again."
+    }
+  },
+  "failed": "The order structures could not be read.",
+  "rules": {
+    "title": "Rules",
+    "answer": "The first rule that fits wins. A new order takes its structure by itself. An order in work never changes.",
+    "closedStructure": "Its structure is closed",
+    "neverUsed": "Never used",
+    "fits_one": "{count} open order",
+    "fits_other": "{count} open orders",
+    "up": "Move rule {n} up",
+    "upHint": "Up: it is read sooner",
+    "down": "Move rule {n} down",
+    "downHint": "Down: it is read later",
+    "edit": "Change rule {n}",
+    "first": "It is the first rule already.",
+    "last": "It is the last rule already.",
+    "moving": "A rule is being moved.",
+    "dead": "A rule above takes all its orders. So this rule never fits.",
+    "deadBecause": "Rule {n} above takes all its orders. So this rule never fits.",
+    "moveUp": "Move it above rule {n}",
+    "everythingElse": "Everything else",
+    "normalWay": "The normal way",
+    "normalWayHint": "the route of the product · the team by hand, as today",
+    "alwaysLast": "always the last line",
+    "readOnly": "The owner and sales change the rules."
+  },
+  "rule": {
+    "when": "When an order line is from",
+    "andIs": "and is",
+    "handleAs": "handle it as",
+    "anyCustomer": "Any customer",
+    "anyCategory": "any category",
+    "whenCustomer": "When an order line is from",
+    "andIsCategory": "and is",
+    "pickStructure": "Choose a structure",
+    "thisCustomer": "This customer",
+    "title": "Rule {n}",
+    "newTitle": "A new rule",
+    "save": "Save the rule",
+    "add": "Add the rule",
+    "close": "Close this rule",
+    "chooseStructure": "Choose a structure.",
+    "makeOneFirst": "Or make one first: Structures › New structure….",
+    "managerMakes": "The production manager makes a structure.",
+    "doesNow": "What this rule does now",
+    "fitsNow_one": "It fits {count} open order: {orders}.",
+    "fitsNow_other": "It fits {count} open orders: {orders}.",
+    "fitsNone": "No open order fits it now. It waits for the next order.",
+    "place": "It goes to place {n}, above the first rule that would take its orders.",
+    "placeLast": "It goes to place {n}, the last place before “Everything else”.",
+    "keptNote": "An order in work keeps what it started with. Only orders that are not started take a change.",
+    "note": "A note for your colleagues (not needed)",
+    "noteHint": "For example: agreed with the customer in March",
+    "held": {
+      "structure": "Choose a structure first.",
+      "closed": "This structure is closed: choose an open one.",
+      "same": "Rule {n} is for exactly these orders: change that rule."
+    }
+  },
+  "category": {
+    "JACKET": "Jackets",
+    "TROUSERS": "Trousers",
+    "SUIT": "Suits",
+    "GLOVES": "Gloves",
+    "VEST": "Vests",
+    "OTHER": "Other"
+  },
+  "try": {
+    "title": "Try an order",
+    "answer": "Choose a customer and a category: the rule that wins, and why the others do not. Nothing is saved.",
+    "customer": "Customer",
+    "category": "Category",
+    "wins": "Rule {n} wins",
+    "noRule": "No rule fits: the normal way"
+  },
+  "how": {
+    "title": "How it works",
+    "structure": "A structure is a named way to handle an order: its route, its team, its people in the office.",
+    "rule": "A rule says “orders like this use that structure”. The first rule that fits wins. An exception is a more exact rule above.",
+    "order": "One order by hand: on the order, Production › Order structure › “Another structure for this order…”, with a reason.",
+    "kept": "An order that is not started follows the rules. At the first print it keeps what it has."
+  },
+  "structures": {
+    "title": "Structures",
+    "answer": "A rule points to one. The production manager makes a structure.",
+    "new": "New structure…",
+    "none": "No structure yet.",
+    "steps": "Steps: as the product says",
+    "noTeam": "No team: given by hand, as today",
+    "used_one": "Used by {count} rule",
+    "used_other": "Used by {count} rules",
+    "unused": "No rule uses it",
+    "readOnly": "The production manager makes and changes a structure. You choose which orders use it.",
+    "closed": "Closed, and kept",
+    "reopen": "Open again"
+  },
+  "structure": {
+    "title": "Structure · {name}",
+    "newTitle": "A new structure",
+    "save": "Save the structure",
+    "add": "Add the structure",
+    "close": "Close this structure",
+    "copy": "Copy",
+    "newRule": "New rule with it…",
+    "readOnly": "You read this structure. The production manager changes its team and its people. You choose which orders use it: with a rule, or on one order.",
+    "name": "Its name",
+    "nameHint": "For example: Club jackets",
+    "steps": "1 · The steps",
+    "stepsHint": "Each line follows the route of its product (product › Route).",
+    "teamsLabel": "2 · The team",
+    "inCharge": "in charge",
+    "teamsUnread": "The teams could not be read.",
+    "teams": {
+      "none": "No team: the production manager gives the order to a team by hand, as today.",
+      "one": "The order goes to this team at Confirm.",
+      "many": "These teams work together. The first one you chose is in charge."
+    },
+    "peopleLabel": "3 · The people in the office",
+    "peopleUnread": "The office people could not be read.",
+    "peopleHint": "They join the order and its chat at Confirm. A person joins only the orders of a customer that the person works for.",
+    "note": "A note (not needed)",
+    "noteHint": "Why this structure is there",
+    "keptNote": "A change goes to the orders that are not started.",
+    "held": {
+      "name": "Type a name first.",
+      "taken": "A structure with this name is there already. Type another name."
+    }
+  },
+  "order": {
+    "title": "Order structure",
+    "failed": "The order structure could not be read.",
+    "noLines": "This order has no line yet.",
+    "one": "{name}.",
+    "oneKept": "{name}. Kept since the work started.",
+    "normal": "The normal way.",
+    "normalKept": "The normal way. Kept since the work started.",
+    "many_one": "{count} structure on this order: each line follows its own.",
+    "many_other": "{count} structures on this order: each line follows its own.",
+    "manyKept_one": "{count} structure on this order, kept since the work started.",
+    "manyKept_other": "{count} structures on this order, kept since the work started.",
+    "another": "Another structure for this order…",
+    "back": "Back to the rules",
+    "page": "Order structures",
+    "windowTitle": "Another structure for this order",
+    "howRead": "How the rules read it",
+    "byHand": "Or choose by hand, for this order only",
+    "why": "Why is this order different? (needed)",
+    "whyHint": "For example: a show piece, the race team makes it",
+    "use": "Use it for this order",
+    "held": {
+      "pick": "Choose a structure or the normal way.",
+      "why": "Say why this order is different."
+    }
+  },
+  "from": {
+    "rule": "By a rule",
+    "ruleN": "By rule {n}",
+    "order": "By hand, for this order",
+    "orderWhy": "By hand, for this order: {why}",
+    "normal": "No rule fits"
+  },
+  "customer": {
+    "title": "How its orders are handled",
+    "newRule": "New rule for this customer…",
+    "rules_one": "{count} rule names this customer.",
+    "rules_other": "{count} rules name this customer.",
+    "none": "No rule names this customer.",
+    "noneHint": "Its orders go the normal way, or follow a rule for every customer.",
+    "failed": "The rules of this customer could not be read."
+  },
+  "held": {
+    "long": "At most {count} characters."
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "error": {
+    "read": "Something went wrong while reading.",
+    "write": "It was not saved. Try again.",
+    "forbidden": "You may not do this.",
+    "offline": "No answer from the factory: check the network and try again.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again. Check it and try again.",
+    "invalid": "It was refused as it is: check what you chose."
+  }
+}
