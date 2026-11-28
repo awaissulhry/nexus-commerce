@@ -30,6 +30,11 @@ export interface PictureSource {
   readonly kind?: PictureKind | string | null
   readonly icon?: string | null
   readonly colour?: string | null
+  /**
+   * owb-ss7: the letters the API already chose (the owb-ss5 `Picture.letters`); one or two letters or digits win over the name's,
+   * anything else (empty, longer, signs) is ignored and the name's letters show.
+   */
+  readonly letters?: string | null
 }
 
 /** What the picture draws. */
@@ -70,12 +75,18 @@ export function toneOf(colour: string | null | undefined): PictureTone {
   return isTone(colour) ? colour : 'slate'
 }
 
+/** owb-ss7: the API's own letters when they are one or two letters or digits ("TN", "7"), upper case; else null. */
+export function ownLettersOf(letters: string | null | undefined): string | null {
+  const chars = [...(letters ?? '').trim()]
+  return chars.length >= 1 && chars.length <= 2 && chars.every((char) => /\p{L}|\p{N}/u.test(char)) ? chars.join('').toLocaleUpperCase() : null
+}
+
 /** The picture of a person or a team from what the host read. */
 export function pictureOf(source: PictureSource): PictureFace {
   const icon = source.kind === 'ICON' ? iconOf(source.icon) : null
   return {
     look: icon ? 'icon' : 'letters',
-    letters: lettersOf(source.name),
+    letters: ownLettersOf(source.letters) ?? lettersOf(source.name),
     icon,
     tone: toneOf(source.colour),
     who: source.who ?? 'person',
