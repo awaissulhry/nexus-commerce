@@ -199,6 +199,12 @@ export interface OrderFlowModel {
   /** Download all (of1's zip): running, the files it left out (null: not run yet), a refusal in words. */
   readonly zip: { readonly busy: boolean; readonly leftOut: number | null; readonly problem: string | null }
   // ---- end owb-of6
+  /**
+   * owb-of7 step 2: the design's approval — its state (the latest ARTWORK / PROOF request on the order: the band's Design tag), the
+   * door "Send the design for approval" (drawn only for who may: partners.approvals.ask + orders.manage), why it waits (a key), a send
+   * running, a refusal in words.
+   */
+  readonly design: { readonly state: DesignState | null; readonly may: boolean; readonly held: string | null; readonly busy: boolean; readonly problem: string | null }
 }
 
 export interface OrderFlowActions {
@@ -208,6 +214,28 @@ export interface OrderFlowActions {
   onNotice?: (noticeId: string, state: 'RECORDED' | 'DISMISSED') => void
   /** owb-of6: Download all — ONE zip of what this reader may open. */
   onZip?: () => void
+  /** owb-of7: Send the design for approval (ONE `POST /approvals-out`, kind ARTWORK, the order's picture as the mockup). */
+  onSendDesign?: () => void
+}
+
+/** owb-of7 step 2: the design's state from the order's approval requests — the latest ARTWORK or PROOF one (withdrawn, expired: none). */
+export function designStateOf(requests: readonly { readonly kind: string; readonly status: string; readonly createdAt: string }[] | null | undefined): DesignState | null {
+  const latest = [...(requests ?? [])].filter((request) => request.kind === 'ARTWORK' || request.kind === 'PROOF').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  if (!latest) return null
+  if (latest.status === 'OPEN') return 'WAITS'
+  if (latest.status === 'APPROVED') return 'APPROVED'
+  if (latest.status === 'APPROVED_WITH_CHANGES' || latest.status === 'REFUSED') return 'CHANGE'
+  return null
+}
+
+/** owb-of7 step 2: who may send the design for approval (the designer may not today: shared-asks line of owb-of7). */
+export const maySendDesign = (permissions: readonly string[]): boolean => permissions.includes('partners.approvals.ask') && permissions.includes('orders.manage')
+
+/** The ask's due day: the ARTWORK rule's default, 7 days (YYYY-MM-DD plus 7, as an instant at noon UTC). */
+export function designDueOf(today: string): string {
+  const day = new Date(`${today}T12:00:00Z`)
+  day.setUTCDate(day.getUTCDate() + 7)
+  return day.toISOString()
 }
 
 /** The open notices (the Waiting entry and the Money row count them). */

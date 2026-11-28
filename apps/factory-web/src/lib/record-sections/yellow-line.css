@@ -1,0 +1,24 @@
+/* owb-of7 step 4 — the yellow line: mark | words | Go on; the button goes under the words in a narrow room (it wraps). Tokens only:
+   the DS warning tone (light and dark). */
+.fw-yl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-warning-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+  min-width: 0;
+}
+.fw-yl-mark {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-warning-text);
+}
+.fw-yl-words {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

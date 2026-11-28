@@ -1,0 +1,70 @@
+/* owb-of7 step 1 — the Design desk: the counter tiles (buttons, design § 5zl B2) wrap in a narrow page; each row is picture | words |
+   tag | doors, the doors under the words in a narrow room. The page root is the kit's room container (`pt`); tokens only. */
+.fw-desk-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+@container pt (max-width: 719px) {
+  .fw-desk-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fw-desk-tile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-height: var(--nds-density-target-min);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.fw-desk-tile:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-desk-tile-n {
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+.fw-desk-tile-l {
+  flex-basis: 100%;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-desk-anchor {
+  scroll-margin-top: var(--nds-space-24);
+}
+.fw-desk-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.fw-desk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+.fw-desk-row-words {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-desk-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
