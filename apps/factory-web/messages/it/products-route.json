@@ -1,0 +1,91 @@
+{
+  "routes": {
+    "title": "Percorsi",
+    "which": "Quale percorso",
+    "product": "Percorso del prodotto",
+    "answerSteps_one": "Il percorso del prodotto ha {count} passaggio.",
+    "answerSteps_other": "Il percorso del prodotto ha {count} passaggi.",
+    "answerOthers_one": "{count} altro percorso per un modello o un cliente.",
+    "answerOthers_other": "{count} altri percorsi per un modello o un cliente.",
+    "forProduct": "Ogni ordine lo usa quando non è scelto un altro percorso.",
+    "forModel": "Un modello: le vendite lo scelgono sulla riga d'ordine.",
+    "forModelOnly": "Un modello solo per {customer}: le vendite lo scelgono sulle righe d'ordine di quel cliente.",
+    "forCustomer": "Solo per {customer}: si usa da solo sugli ordini di quel cliente.",
+    "tableOf": "I passaggi di {name}",
+    "empty": "Questo percorso non ha ancora passaggi. \"Modifica questo percorso…\" lo costruisce.",
+    "noDepartment": "Nessun reparto",
+    "total": "{minutes} minuti per un pezzo.",
+    "noMinutes": "Nessun minuto ancora inserito.",
+    "rulesTitle_one": "{count} cosa da sistemare in questo percorso",
+    "rulesTitle_other": "{count} cose da sistemare in questo percorso",
+    "outside": "I percorsi si leggono dal server della fabbrica.",
+    "failed": "Non è stato possibile leggere il percorso"
+  },
+  "col": {
+    "step": "Passaggio",
+    "department": "Reparto",
+    "minutes": "Minuti"
+  },
+  "rule": {
+    "TOO_FEW": "Un percorso ha due passaggi o più.",
+    "LAST_NOT_PACKING": "Un percorso finisce con l'Imballaggio.",
+    "DEPARTMENT_CLOSED": "È stato aggiunto un reparto chiuso: toglilo, o riaprilo in Gestisci.",
+    "other": "Il server della fabbrica non accetta questo percorso così com'è.",
+    "NO_QUALITY": "Nessun controllo qualità in questo percorso.",
+    "otherWarning": "Il server della fabbrica ha una nota su questo percorso."
+  },
+  "action": {
+    "edit": "Modifica questo percorso…",
+    "new": "Nuovo percorso…",
+    "takeOut": "Togli",
+    "takeOutOf": "Togli il percorso {name}",
+    "startRevision": "Avvia la revisione {revision}…"
+  },
+  "held": {
+    "noRight": "Solo il responsabile di produzione cambia un percorso.",
+    "archived": "Questo prodotto è archiviato: il suo percorso resta com'è.",
+    "noRevision": "Questo prodotto non ha ancora una revisione.",
+    "draftOpen": "La revisione {revision} è rilasciata e la revisione {draft} è la bozza: apri la revisione {draft} per cambiare il percorso.",
+    "released": "La revisione {revision} è rilasciata. Avvia la revisione {next} per cambiare il percorso.",
+    "busy": "In corso…",
+    "departmentsReading": "Lettura dei reparti…",
+    "departmentsFailed": "Non è stato possibile leggere i reparti: riprova."
+  },
+  "who": {
+    "title": "Chi decide il percorso",
+    "answer": "Vince il livello più preciso. Un prodotto non si fa mai in due modi per sbaglio.",
+    "product": {
+      "label": "1 · Il prodotto",
+      "value": "Il suo percorso normale. Lo costruisce il responsabile di produzione, su una bozza."
+    },
+    "model": {
+      "label": "2 · Un modello o un cliente",
+      "value": "Un percorso proprio per lo stesso prodotto. Lo costruisce il responsabile di produzione; le vendite scelgono il modello sulla riga d'ordine; il percorso di un cliente si usa da solo."
+    },
+    "line": {
+      "label": "3 · Una riga d'ordine",
+      "value": "Un'eccezione, con un motivo. La fa solo il responsabile di produzione, finché non sono stampate le schede dei cesti."
+    }
+  },
+  "more": {
+    "summary_one": "Altro: il dettaglio di {count} passaggio (punti di scansione, in parallelo, laboratori esterni, tempi, controlli, impostazioni macchina)",
+    "summary_other": "Altro: il dettaglio di {count} passaggi (punti di scansione, in parallelo, laboratori esterni, tempi, controlli, impostazioni macchina)",
+    "stepsTitle_one": "{count} passaggio nel dettaglio",
+    "stepsTitle_other": "{count} passaggi nel dettaglio",
+    "stepsIntro": "Revisione {revision}: cosa serve a ogni passaggio in reparto.",
+    "minutesInBuilder": "I passaggi, il loro ordine, i reparti e i minuti si cambiano nel costruttore del percorso (\"Modifica questo percorso…\")."
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "problem": {
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, controlla e riprova.",
+    "invalid": "Qualcosa di scritto non è accettato: controlla i campi.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "rateLimited": "Troppe richieste: aspetta un momento.",
+    "offline": "Il server della fabbrica non risponde: non è cambiato nulla.",
+    "unavailable": "Qualcosa è andato storto sul server: non è cambiato nulla."
+  }
+}

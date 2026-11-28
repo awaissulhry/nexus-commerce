@@ -1,0 +1,91 @@
+{
+  "routes": {
+    "title": "Routes",
+    "which": "Which route",
+    "product": "Product route",
+    "answerSteps_one": "The product's route has {count} step.",
+    "answerSteps_other": "The product's route has {count} steps.",
+    "answerOthers_one": "{count} other route for a model or a customer.",
+    "answerOthers_other": "{count} other routes for a model or a customer.",
+    "forProduct": "Every order uses it when no other route is chosen.",
+    "forModel": "A model: sales picks it on the order line.",
+    "forModelOnly": "A model only for {customer}: sales picks it on that customer's order lines.",
+    "forCustomer": "Only for {customer}: it is used by itself on that customer's orders.",
+    "tableOf": "The steps of {name}",
+    "empty": "This route has no steps yet. \"Edit this route…\" builds it.",
+    "noDepartment": "No department",
+    "total": "{minutes} minutes for one piece.",
+    "noMinutes": "No minutes typed yet.",
+    "rulesTitle_one": "{count} thing to fix in this route",
+    "rulesTitle_other": "{count} things to fix in this route",
+    "outside": "The routes are read from the factory server.",
+    "failed": "The route could not be read"
+  },
+  "col": {
+    "step": "Step",
+    "department": "Department",
+    "minutes": "Minutes"
+  },
+  "rule": {
+    "TOO_FEW": "A route has two steps or more.",
+    "LAST_NOT_PACKING": "A route ends with Packing.",
+    "DEPARTMENT_CLOSED": "A closed department was added: take it out, or open it again under Manage.",
+    "other": "The factory server does not accept this route as it is.",
+    "NO_QUALITY": "No quality check in this route.",
+    "otherWarning": "The factory server has a note on this route."
+  },
+  "action": {
+    "edit": "Edit this route…",
+    "new": "New route…",
+    "takeOut": "Take out",
+    "takeOutOf": "Take out the route {name}",
+    "startRevision": "Start revision {revision}…"
+  },
+  "held": {
+    "noRight": "Only the production manager changes a route.",
+    "archived": "This product is archived: its route stays as it is.",
+    "noRevision": "This product has no revision yet.",
+    "draftOpen": "Revision {revision} is released and revision {draft} is the draft: open revision {draft} to change the route.",
+    "released": "Revision {revision} is released. Start revision {next} to change the route.",
+    "busy": "Working on it…",
+    "departmentsReading": "Reading the departments…",
+    "departmentsFailed": "The departments could not be read: try again."
+  },
+  "who": {
+    "title": "Who decides the route",
+    "answer": "The most exact level wins. One product is never made in two ways by mistake.",
+    "product": {
+      "label": "1 · The product",
+      "value": "Its normal route. The production manager builds it, on a draft."
+    },
+    "model": {
+      "label": "2 · A model or a customer",
+      "value": "Its own route for the same product. The production manager builds it; sales picks the model on the order line; a customer's route is used by itself."
+    },
+    "line": {
+      "label": "3 · One order line",
+      "value": "An exception, with a reason. Only the production manager makes it, until the basket cards are printed."
+    }
+  },
+  "more": {
+    "summary_one": "More: the depth of {count} step (scan points, side by side, outside workshops, times, checkpoints, machine settings)",
+    "summary_other": "More: the depth of {count} steps (scan points, side by side, outside workshops, times, checkpoints, machine settings)",
+    "stepsTitle_one": "{count} step in depth",
+    "stepsTitle_other": "{count} steps in depth",
+    "stepsIntro": "Revision {revision}: what each step needs on the floor.",
+    "minutesInBuilder": "The steps, their order, their departments and their minutes change in the route builder (\"Edit this route…\")."
+  },
+  "common": {
+    "retry": "Try again"
+  },
+  "problem": {
+    "forbidden": "Your role may not do this.",
+    "notFound": "It is not there any more.",
+    "conflict": "Someone changed this meanwhile: it was read again, check it and try once more.",
+    "invalid": "Something typed is not accepted: check the fields.",
+    "signedOut": "You were signed out: sign in again.",
+    "rateLimited": "Too many requests: wait a moment.",
+    "offline": "The factory server is not answering: nothing was changed.",
+    "unavailable": "Something went wrong on the server: nothing was changed."
+  }
+}

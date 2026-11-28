@@ -2,34 +2,37 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowDown, ArrowUp, CircleAlert, CircleX, Flag, Plus, Search, Trash2, Truck } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, MetricStrip } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Select, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
+import { CircleX, Flag, Truck } from 'lucide-react'
+import { Banner, Card, Disclosure, EmptyState, Field, KeyValue, MetricStrip } from '@nexus/ui/components'
+import { Button, Input, RadioCard, Select, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
-import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { RoutingStep, RoutingView, StyleView } from '../../api'
-import { costCellOf, decimalInput, editableRevision, editText, issueWords, minutesText, moneyText, parallelChoices, revisionInView, sideBySideWith, stepLabel } from '../../model'
+import { costCellOf, editableRevision, issueWords, minutesText, moneyText, parallelChoices, revisionInView, sideBySideWith, startRevisionHeld, stepLabel } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName, workshopsFor, type SubcontractDraft } from '../subcontract-model'
 // B-W2b-235: the routing in depth (times, sizes, variants, checkpoints, settings) and the step's run beside its SMV.
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { runWords, type RoutingDepthActions, type StepTimes } from '../depth/model'
 import { DepthSection } from '../depth/view/DepthSection'
+// owb-pd6 (S4, step 6.1): the route face (chips, steps with the department chip, rules, the builder's doors, who decides) reads for itself.
+import { RouteContainer } from '../route/RouteContainer'
+import '../route/route.css'
 
 /**
- * SCR-043 Operations (routing) of the revision in view: the minutes strip (standard minutes per garment, by department
- * — a department tile filters the table —, operations, scan points, and the labour cost with the cost grain), the
- * steps in order (minutes typed here, "Library: x · Use library value" when they differ, scanned or not, the final
- * operation where the batch is given, instructions), Add operations from the library (`n`, several at once, in the
- * order picked), Alt+↑ / Alt+↓ to move a step. A released revision is frozen.
- * B-W2b-88 (MES-025): the "Side by side" column puts steps in one parallel group: they run at once and count as one step
- * (the floor never says a sibling was skipped; dispatch shows them side by side). A step a BOM line uses is not removed.
+ * SCR-043 the product tab "Route" (owb-pd6 step 6.1; design plan § 5u, § 5v, § 5w — was "Operations"): on top the route face
+ * (route/RouteContainer: the product's route and its model and customer routes as chips, the steps of the chosen one with the
+ * department chip and minutes, the rules as notes, "Edit this route…" / "New route…" / "Take out", who decides the route). The
+ * route builder is the ONE place a route changes (steps, their order, departments, minutes): this tab no longer adds, moves or
+ * removes a step itself. Under "More" (one closed section) today's depth of each step stays, nothing lost: the minutes strip by
+ * department, the steps with their scan point, side-by-side group, outside workshop and instructions (B-W2b-88, W2a PRD-120), and
+ * the routing in depth (B-W2b-235: times, sizes, checkpoints, machine settings). A released revision is frozen; the release check
+ * stays on top.
  */
 export function RoutingTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
-  // B-W2b-235: the depth's words beside the routing's.
+  // B-W2b-235: the depth's words beside the routing's; owb-pd6: the route's own words.
   return (
-    <WithMessages namespaces={['products-operations-depth']}>
+    <WithMessages namespaces={['products-operations-depth', 'products-route']}>
       <Routing style={style} model={model} actions={actions} />
     </WithMessages>
   )
@@ -37,26 +40,13 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
 
 function Routing({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
+  const tr = useT('products-route')
   const locale = useLocale()
   const revision = revisionInView(style.revisions, model.revisionId)
   const editable = editableRevision(style, revision) && model.can.routingManage
   const heldWhy = !model.can.routingManage ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
   const [kind, setKind] = useState<string | null>(null)
   const [instructions, setInstructions] = useState<string | null>(null)
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog) return
-      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
-      if (event.key === 'n' && editable) {
-        event.preventDefault()
-        actions?.onDialog?.({ kind: 'addOperations' })
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
 
   if (!revision) return <EmptyState title={t('bom.noRevision.title')} description={t('bom.noRevision.body')} />
   if (model.routing.status === 'loading' || model.routing.status === 'idle')
@@ -78,22 +68,6 @@ function Routing({ style, model, actions }: { style: StyleView; model: StyleReco
 
   return (
     <div className="fw-st-stack-lg">
-      <MetricStrip
-        metrics={[
-          { label: t('routing.strip.total'), value: t('routing.minutes', { minutes: minutesText(routing.minutes.perGarment, locale) }), hint: t('routing.strip.totalHint') },
-          ...routing.minutes.byKind.map((entry) => ({
-            label: t(`department.${entry.workCentreKind}`),
-            value: t('routing.minutes', { minutes: minutesText(entry.minutes, locale) }),
-            hint: t('routing.strip.steps', { count: entry.steps }),
-            onClick: () => setKind((current) => (current === entry.workCentreKind ? null : entry.workCentreKind)),
-            active: kind === entry.workCentreKind,
-          })),
-          { label: t('routing.strip.scans'), value: String(routing.minutes.scanPoints), hint: t('routing.strip.scansHint', { count: routing.minutes.steps }) },
-          { label: t('routing.strip.subcontracted'), value: String(routing.minutes.subcontracted), hint: t('routing.strip.subcontractedHint', { count: routing.minutes.steps }) },
-          ...(model.can.costView ? [{ label: t('routing.strip.labour'), value: model.grains.cost ? (labour ?? '—') : t('cost.notInRole'), hint: model.grains.cost ? t('routing.strip.labourHint') : t('cost.notInRoleHint') }] : []),
-        ]}
-      />
-
       {issues.length > 0 && (
         <Banner tone="danger" title={t('routing.issuesTitle', { count: issues.length })}>
           <ul className="fw-st-checklist">
@@ -121,87 +95,92 @@ function Routing({ style, model, actions }: { style: StyleView; model: StyleReco
         </Banner>
       )}
 
-      <Card
-        header={t('routing.title', { count: routing.steps.length })}
-        description={kind ? t('routing.filtered', { department: t(`department.${kind}`) }) : t('routing.intro', { revision: routing.revision.revision })}
-        headerAction={
-          <span className="fw-st-inline">
-            {kind && (
-              <Button size="sm" variant="quiet" onClick={() => setKind(null)}>
-                {t('routing.showAll')}
-              </Button>
-            )}
-            <Button size="sm" variant="primary" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'addOperations' })} aria-keyshortcuts="n">
-              <Plus size={13} aria-hidden /> {t('routing.add')}
-            </Button>
-          </span>
-        }
-      >
-        {routing.steps.length === 0 ? (
-          <EmptyState
-            title={t('routing.empty.title')}
-            description={t('routing.empty.body')}
-            action={
-              <Button size="sm" variant="primary" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'addOperations' })}>
-                {t('routing.addFirst')}
-              </Button>
-            }
-          />
-        ) : (
-          <div
-            className="fw-st-scroll"
-            onKeyDown={(event) => {
-              if (!editable || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
-              const id = (event.target as HTMLElement).closest<HTMLElement>('[data-step]')?.dataset.step
-              if (!id) return
-              event.preventDefault()
-              actions?.onMoveStep?.(id, event.key === 'ArrowUp' ? -1 : 1)
-            }}
-          >
-            <table className="fw-st-grid fw-st-routing" aria-label={t('routing.title', { count: routing.steps.length })}>
-              <thead>
-                <tr>
-                  <th scope="col">{t('routing.col.seq')}</th>
-                  <th scope="col" className="fw-st-grid-first">
-                    {t('routing.col.operation')}
-                  </th>
-                  <th scope="col">{t('routing.col.department')}</th>
-                  <th scope="col">{t('routing.col.machine')}</th>
-                  <th scope="col">{t('routing.col.minutes')}</th>
-                  <th scope="col">{t('routing.col.scanned')}</th>
-                  <th scope="col">{t('routing.col.parallel')}</th>
-                  <th scope="col">{t('routing.col.subcontracted')}</th>
-                  <th scope="col">{t('routing.col.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((step) => (
-                  <StepRow
-                    key={step.id}
-                    step={step}
-                    routing={routing}
-                    editable={editable}
-                    heldWhy={heldWhy}
-                    actions={actions}
-                    prefix={model.prefix}
-                    costGrain={model.grains.cost}
-                    onInstructions={() => setInstructions(step.id)}
-                    times={model.routingDepth?.times.status === 'ready' ? (model.routingDepth.times.value.steps.find((entry) => entry.stepId === step.id) ?? null) : null}
-                    depthActions={actions?.routingDepth}
-                  />
-                ))}
-              </tbody>
-            </table>
-            {(editable || routing.steps.some((step) => step.parallelGroup !== null)) && <p className="fw-st-hint">{t('routing.parallel.hint')}</p>}
+      {/* owb-pd6 step 6.1: the route face and its builder. */}
+      <RouteContainer
+        style={style}
+        revisionId={revision.id}
+        manage={model.can.routingManage}
+        busy={model.busy}
+        routingVersion={routing.revision.version}
+        onChanged={() => actions?.onReload?.()}
+        onStartRevision={actions?.onDialog && startRevisionHeld(style, model.can) === null ? () => actions.onDialog?.({ kind: 'startRevision' }) : null}
+      />
+
+      {/* owb-pd6 step 6.1: today's depth of the steps, under one closed section ("More"). */}
+      {routing.steps.length > 0 && (
+        <Disclosure summary={tr('more.summary', { count: routing.steps.length })}>
+          <div className="fw-rt-more-body">
+            <MetricStrip
+              metrics={[
+                { label: t('routing.strip.total'), value: t('routing.minutes', { minutes: minutesText(routing.minutes.perGarment, locale) }), hint: t('routing.strip.totalHint') },
+                ...routing.minutes.byKind.map((entry) => ({
+                  label: t(`department.${entry.workCentreKind}`),
+                  value: t('routing.minutes', { minutes: minutesText(entry.minutes, locale) }),
+                  hint: t('routing.strip.steps', { count: entry.steps }),
+                  onClick: () => setKind((current) => (current === entry.workCentreKind ? null : entry.workCentreKind)),
+                  active: kind === entry.workCentreKind,
+                })),
+                { label: t('routing.strip.scans'), value: String(routing.minutes.scanPoints), hint: t('routing.strip.scansHint', { count: routing.minutes.steps }) },
+                { label: t('routing.strip.subcontracted'), value: String(routing.minutes.subcontracted), hint: t('routing.strip.subcontractedHint', { count: routing.minutes.steps }) },
+                ...(model.can.costView ? [{ label: t('routing.strip.labour'), value: model.grains.cost ? (labour ?? '—') : t('cost.notInRole'), hint: model.grains.cost ? t('routing.strip.labourHint') : t('cost.notInRoleHint') }] : []),
+              ]}
+            />
+
+            <Card
+              header={tr('more.stepsTitle', { count: routing.steps.length })}
+              description={kind ? t('routing.filtered', { department: t(`department.${kind}`) }) : tr('more.stepsIntro', { revision: routing.revision.revision })}
+              headerAction={
+                kind ? (
+                  <Button size="sm" variant="quiet" onClick={() => setKind(null)}>
+                    {t('routing.showAll')}
+                  </Button>
+                ) : undefined
+              }
+            >
+              <div className="fw-st-scroll">
+                <table className="fw-st-grid fw-st-routing" aria-label={tr('more.stepsTitle', { count: routing.steps.length })}>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('routing.col.seq')}</th>
+                      <th scope="col" className="fw-st-grid-first">
+                        {t('routing.col.operation')}
+                      </th>
+                      <th scope="col">{t('routing.col.department')}</th>
+                      <th scope="col">{t('routing.col.machine')}</th>
+                      <th scope="col">{t('routing.col.minutes')}</th>
+                      <th scope="col">{t('routing.col.scanned')}</th>
+                      <th scope="col">{t('routing.col.parallel')}</th>
+                      <th scope="col">{t('routing.col.subcontracted')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((step) => (
+                      <StepRow
+                        key={step.id}
+                        step={step}
+                        routing={routing}
+                        editable={editable}
+                        actions={actions}
+                        prefix={model.prefix}
+                        costGrain={model.grains.cost}
+                        onInstructions={() => setInstructions(step.id)}
+                        times={model.routingDepth?.times.status === 'ready' ? (model.routingDepth.times.value.steps.find((entry) => entry.stepId === step.id) ?? null) : null}
+                        depthActions={actions?.routingDepth}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+                {(editable || routing.steps.some((step) => step.parallelGroup !== null)) && <p className="fw-st-hint">{t('routing.parallel.hint')}</p>}
+                <p className="fw-st-hint">{tr('more.minutesInBuilder')}</p>
+              </div>
+            </Card>
+
+            {/* B-W2b-235: the routing in depth (design style.rt.grid's W2b columns and the operation drawer's variants). */}
+            <DepthSection model={model.routingDepth} actions={actions?.routingDepth} />
           </div>
-        )}
-      </Card>
+        </Disclosure>
+      )}
 
-      {/* B-W2b-235: the routing in depth (design style.rt.grid's W2b columns and the operation drawer's variants). */}
-      {routing.steps.length > 0 && <DepthSection model={model.routingDepth} actions={actions?.routingDepth} />}
-
-      {model.dialog?.kind === 'addOperations' && <AddOperationsDialog routing={routing} model={model} actions={actions} />}
-      {model.dialog?.kind === 'removeStep' && <RemoveStepDialog routing={routing} model={model} actions={actions} stepId={model.dialog.stepId} />}
       {model.dialog?.kind === 'subcontract' && routing.steps.some((step) => model.dialog?.kind === 'subcontract' && step.id === model.dialog.stepId) && (
         <SubcontractDialog step={routing.steps.find((step) => model.dialog?.kind === 'subcontract' && step.id === model.dialog.stepId)!} style={style} model={model} editable={editable} heldWhy={heldWhy} actions={actions} />
       )}
@@ -210,11 +189,15 @@ function Routing({ style, model, actions }: { style: StyleView; model: StyleReco
   )
 }
 
+/**
+ * One step's depth under "More" (owb-pd6: the step itself — its department, its place, its minutes — changes in the route builder):
+ * the operation and its instructions, the department kind, the machine, the minutes with where the run comes from and the library's
+ * SMV ("Use library value" copies the approved version: B-W2b-235), the scan point, the side-by-side group, the outside workshop.
+ */
 function StepRow({
   step,
   routing,
   editable,
-  heldWhy,
   actions,
   prefix,
   costGrain,
@@ -225,7 +208,6 @@ function StepRow({
   step: RoutingStep
   routing: RoutingView
   editable: boolean
-  heldWhy: string | null
   actions?: StyleRecordActions
   prefix: string
   costGrain: boolean
@@ -237,23 +219,6 @@ function StepRow({
   const t = useT('products')
   const td = useT('products-operations-depth')
   const locale = useLocale()
-  const [minutes, setMinutes] = useState(editText(step.standardMinutes, locale))
-  const [bad, setBad] = useState(false)
-  useEffect(() => setMinutes(editText(step.standardMinutes, locale)), [step.standardMinutes, locale])
-  const index = routing.steps.findIndex((entry) => entry.id === step.id)
-  const commit = () => {
-    const value = decimalInput(minutes, 6)
-    if (value === undefined || value === null || Number(value) <= 0) {
-      setBad(true)
-      return
-    }
-    setBad(false)
-    if (value === decimalInput(step.standardMinutes, 6)) return
-    // B-W2b-235: a step whose run is copied from an approved version or built from allowances is typed through its minutes
-    // (W1's step change refuses it).
-    if (times && times.run.from !== 'TYPED' && depthActions?.onTypedRun) void depthActions.onTypedRun(step.id, value)
-    else void actions?.onStep?.(step.id, { standardMinutes: value })
-  }
   // B-W2b-235: the library's SMV in force today (an approved version) — "Use library value" copies that version.
   const differs = times ? times.library.differs : step.differsFromLibrary
   const libraryMinutes = times ? times.library.standardMinutes : step.operation.standardMinutes
@@ -303,26 +268,7 @@ function StepRow({
       </td>
       <td>
         <span className="fw-st-cellstack">
-          {editable ? (
-            <Input
-              size="sm"
-              inputMode="decimal"
-              value={minutes}
-              aria-label={t('routing.minutesOf', { step: `${step.seq} · ${step.code}` })}
-              aria-invalid={bad || undefined}
-              onChange={(event) => setMinutes(event.target.value)}
-              onBlur={commit}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  commit()
-                }
-              }}
-              suffix="min"
-            />
-          ) : (
-            <span>{t('routing.minutes', { minutes: minutesText(step.standardMinutes, locale) })}</span>
-          )}
+          <span>{t('routing.minutes', { minutes: minutesText(step.standardMinutes, locale) })}</span>
           {run && <span className="fw-st-hint">{td(run.key, run.params)}</span>}
           {differs && (
             <span className="fw-st-hint fw-st-inline">
@@ -349,118 +295,7 @@ function StepRow({
       <td>
         <SubcontractCell step={step} costGrain={costGrain} editable={editable} onOpen={() => actions?.onDialog?.({ kind: 'subcontract', stepId: step.id })} />
       </td>
-      <td>
-        <span className="fw-st-inline fw-st-nowrap">
-          <Button size="sm" variant="quiet" heldReason={heldWhy ?? (index === 0 ? t('bom.held.first') : null)} onClick={() => actions?.onMoveStep?.(step.id, -1)} aria-label={t('routing.moveUp', { step: step.seq })} aria-keyshortcuts="Alt+ArrowUp">
-            <ArrowUp size={13} aria-hidden />
-          </Button>
-          <Button size="sm" variant="quiet" heldReason={heldWhy ?? (index === routing.steps.length - 1 ? t('bom.held.last') : null)} onClick={() => actions?.onMoveStep?.(step.id, 1)} aria-label={t('routing.moveDown', { step: step.seq })} aria-keyshortcuts="Alt+ArrowDown">
-            <ArrowDown size={13} aria-hidden />
-          </Button>
-          <Button size="sm" variant="quiet" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'removeStep', stepId: step.id })} aria-label={t('routing.removeOne', { step: step.seq })} title={t('routing.removeOne', { step: step.seq })}>
-            <Trash2 size={13} aria-hidden />
-          </Button>
-        </span>
-      </td>
     </tr>
-  )
-}
-
-function AddOperationsDialog({ routing, model, actions }: { routing: RoutingView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
-  const t = useT('products')
-  const locale = useLocale()
-  const [query, setQuery] = useState(model.operationSearch.query)
-  const [kind, setKind] = useState<string | null>(model.operationSearch.kind)
-  const [picked, setPicked] = useState<string[]>([])
-  const search = useRef(actions?.onOperationQuery)
-  search.current = actions?.onOperationQuery
-  useEffect(() => {
-    const timer = setTimeout(() => search.current?.(query, kind), 250)
-    return () => clearTimeout(timer)
-  }, [query, kind])
-  const results = model.operationSearch.results
-  const inRouting = new Set(routing.steps.map((step) => step.operation.id))
-  const held = picked.length === 0 ? t('routing.addHeld') : model.busy ? t('held.busy') : null
-  const run = () => {
-    if (held) return
-    void actions?.onAddSteps?.(picked).then((ok) => ok && actions?.onDialog?.(null))
-  }
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      size="lg"
-      title={t('routing.addTitle')}
-      footer={
-        <>
-          <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
-          <Button variant="primary" heldReason={held} onClick={run} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {t('routing.addN', { count: picked.length })}
-          </Button>
-        </>
-      }
-    >
-      <div
-        className="fw-st-dialog"
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-            event.preventDefault()
-            run()
-          }
-        }}
-      >
-        <div className="fw-st-form-grid">
-          <Field label={t('routing.search')}>
-            <Input type="search" autoFocus leadingIcon={<Search size={13} aria-hidden />} value={query} onChange={(event) => setQuery(event.target.value)} />
-          </Field>
-          <Field label={t('routing.col.department')}>
-            <Select value={kind ?? ''} onChange={(event) => setKind(event.target.value || null)}>
-              <option value="">{t('routing.everyDepartment')}</option>
-              {WORK_CENTRE_KINDS.map((entry) => (
-                <option key={entry} value={entry}>
-                  {t(`department.${entry}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        {model.operationSearch.problem ? (
-          <Banner tone="danger" title={t(model.operationSearch.problem)} />
-        ) : results === null ? (
-          <p className="fw-st-hint" role="status">
-            <Spinner size={14} /> {t('routing.searching')}
-          </p>
-        ) : results.length === 0 ? (
-          <p className="fw-st-hint">{t('routing.noneFound')}</p>
-        ) : (
-          <ul className="fw-st-pick" aria-label={t('routing.libraryList')}>
-            {results.map((operation) => {
-              const at = picked.indexOf(operation.id)
-              return (
-                <li key={operation.id}>
-                  <label className="fw-st-pick-row">
-                    <Checkbox
-                      checked={at >= 0}
-                      onChange={() => setPicked((current) => (current.includes(operation.id) ? current.filter((id) => id !== operation.id) : [...current, operation.id]))}
-                    />
-                    <span className="fw-st-cellstack">
-                      <span>
-                        <b>{operation.code}</b> {operation.name} {at >= 0 && <Tag tone="info">{t('routing.pickOrder', { n: at + 1 })}</Tag>}
-                        {inRouting.has(operation.id) && <Tag tone="neutral">{t('routing.alreadyIn')}</Tag>}
-                      </span>
-                      <span className="fw-st-hint">
-                        {[t(`department.${operation.workCentreKind}`), operation.machineType, operation.skill, t('routing.minutes', { minutes: minutesText(operation.standardMinutes, locale) })].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <p className="fw-st-hint">{t('routing.addOrder')}</p>
-      </div>
-    </Modal>
   )
 }
 
@@ -505,39 +340,6 @@ function ParallelCell({ step, routing, editable, actions }: { step: RoutingStep;
       </Select>
       {withWords && <span className="fw-st-hint">{withWords}</span>}
     </span>
-  )
-}
-
-function RemoveStepDialog({ routing, model, actions, stepId }: { routing: RoutingView; model: StyleRecordViewModel; actions?: StyleRecordActions; stepId: string }) {
-  const t = useT('products')
-  const step = routing.steps.find((entry) => entry.id === stepId)
-  // B-W2b-88: a step a BOM line uses stays until the line names another step (or none); said before the API refuses it.
-  const usedBy = step && model.bom.status === 'ready' ? model.bom.value.lines.filter((line) => line.routingStep?.seq === step.seq) : []
-  const held = model.busy ? t('held.busy') : usedBy.length > 0 ? t('routing.removeUsed', { lines: usedBy.map((line) => `${line.seq} · ${line.item.code}`).join(', ') }) : null
-  const run = () => void actions?.onRemoveStep?.(stepId).then((ok) => ok && actions?.onDialog?.(null))
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      size="sm"
-      title={t('routing.removeTitle', { step: step ? `${step.seq} · ${step.code}` : '' })}
-      footer={
-        <>
-          <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
-          <Button variant="danger" heldReason={held} onClick={run}>
-            {t('bom.remove')}
-          </Button>
-        </>
-      }
-    >
-      <p>{t('routing.removeBody')}</p>
-      {usedBy.length > 0 && <Banner tone="warning" title={t('routing.removeUsed', { lines: usedBy.map((line) => `${line.seq} · ${line.item.code}`).join(', ') })} />}
-      {step?.final && (
-        <p className="fw-st-inline">
-          <CircleAlert size={14} aria-hidden /> {t('routing.removeFinal')}
-        </p>
-      )}
-    </Modal>
   )
 }
 
