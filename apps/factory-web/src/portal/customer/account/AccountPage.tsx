@@ -9,6 +9,7 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import { useTheme } from '../../../lib/theme/use-theme'
 import { usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { localeOfPerson } from '../../shell/model'
+import { pageBuilt } from '../../shell/nav/portal-nav' // owb-po4.3
 import { loading, usePortalPeople, type Load } from '../../shared/account/usePortalPeople'
 import { failedWords } from '../../shared/account/words'
 import { addAddress, archiveAddress, defaultAddress, fetchAddresses, fetchCompany, saveProfile, type CompanyData, type DeliveryAddresses } from './api'
@@ -19,10 +20,10 @@ import { AccountView, type AccountViewModel } from './view/AccountView'
 /**
  * The live Account page (B-W2b-196, SCR-188): reads each section on its own (one failing never empties another), keeps the
  * profile's draft (⌘S saves; leaving with changes asks — the frame's guard), delivery addresses with our check, the
- * company data. The colleagues, the admin's acts behind a fresh e-mail code, the e-mail settings and the person's sessions
- * are the shared account work (usePortalPeople, lifted by B-W2b-193 for the supplier's Profile). Live: our check of an
- * address reads the addresses again. The frame's band: the title, the save status, Invite a colleague (the admin's; held
- * for others with who can), ⋯ Ask a question (the account's conversation).
+ * company data. The e-mail settings and the person's sessions are the shared account work (usePortalPeople, lifted by
+ * B-W2b-193 for the supplier's Profile). owb-po4.3: the colleagues and the admin's acts live on Your people (its card here
+ * opens it). Live: our check of an address reads the addresses again. The frame's band: the title, the save status,
+ * ⋯ Ask a question (the account's conversation).
  */
 
 type OwnDialog = Extract<AccountDialog, { kind: 'address' | 'remove' }>
@@ -171,7 +172,6 @@ export function AccountPage() {
   usePortalBand({
     title: t('title'),
     status: saving ? { label: t('status.saving'), tone: 'info' } : dirty ? { label: t('status.unsaved'), tone: 'warning' } : savedAt > 0 ? { label: t('status.saved'), tone: 'success' } : null,
-    actions: [{ id: 'invite', label: t('users.invite'), variant: 'primary', onClick: people.openInvite, heldReason: people.inviteHeld }],
     keys: [
       { keys: ['⌘', 'S'], words: t('keys.save') },
       { keys: ['Esc'], words: t('keys.cancel') },
@@ -196,7 +196,8 @@ export function AccountPage() {
       readOnly,
     },
     emails: people.emails,
-    colleagues: people.colleagues,
+    // owb-po4.3: the colleagues are on Your people (this page's gate is its permission too).
+    peopleHref: pageBuilt('people') ? `${frame.prefix}/people` : null,
     addresses: {
       state: addresses.state,
       rows: rowsOfAddresses.map((row) => ({
@@ -211,7 +212,6 @@ export function AccountPage() {
     },
     company: { state: company.state, rows: company.value ? companyRows(company.value, locale) : [] },
     security: people.security,
-    inviteHeld: people.inviteHeld,
     receipt,
     dialog: dialog ?? people.dialog,
   }
@@ -231,7 +231,6 @@ export function AccountPage() {
           },
         },
         emails: people.emailActions,
-        colleagues: people.colleaguesActions,
         addresses: {
           onSelected: setAddressSelected,
           onAdd: openAddress,
