@@ -1,13 +1,12 @@
 import type { Metadata } from 'next'
-import { NotBuiltYet } from '../../../../../../shell/office/NotBuiltYet'
+import { ChainsPage } from '../../../../../../areas/production/chains/ChainsPage'
 
 export const metadata: Metadata = { title: 'Chains · Nexus Factory' }
 
 /**
- * Production › Chains (owb- order workflow, base settle 7; areas/production/nav.ts, permission workorders.view): a DECLARED page — its route, its nav row
- * and its place in the approved tree are placed by the base; S5 (fl9) replaces this file with the page. Its address joins
- * OFFICE_PAGES at that land (shell/nav/office-nav.ts: DECLARED_PAGES → OFFICE_PAGES), so until then no row shows it.
+ * Production › Chains (owb-fl9; design § 4.8; areas/production/nav.ts, permission workorders.view): every model and size of a chain at
+ * every step, the slowest step in red with its number and word. Its address joins OFFICE_PAGES at the land (the lead's flip).
  */
 export default function ProductionChainsPage() {
-  return <NotBuiltYet />
+  return <ChainsPage />
 }
