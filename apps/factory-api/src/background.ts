@@ -16,6 +16,7 @@ import { tellBuyerHandler } from './modules/purchasing/confirm/handler'
 import { approvedSendHandler } from './modules/purchasing/po-approvals/approved-send'
 import { afterAcceptanceHandler } from './modules/sales/quotes/after-acceptance'
 import { orderHandlers } from './modules/sales/orders/handlers'
+import { structureHandlers } from './modules/production/structures/handlers'
 import { nightlyPlanCron } from './modules/planning/nightly'
 import { sdiArchiveHandler } from './modules/invoicing/sdi/archive'
 import { sdiCourtesyCopyHandler } from './modules/invoicing/sdi/copy'
@@ -254,7 +255,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), ...structureHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 // B-W2a-20: the notification centre's fan-out (mentions, followed records, assignments, approvals).
 const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
 // B-W2a-32: the search index follows the record events its indexers name (platform/search/indexing.ts).
