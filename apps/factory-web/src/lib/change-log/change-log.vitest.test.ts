@@ -53,9 +53,16 @@ describe('what: the action\'s words, its icon, its subject', () => {
     expect(actionKeyOf('orders.changePromise')).toBe('PROMISE_MOVED')
     expect(actionKeyOf('PROMISE_MOVED')).toBe('PROMISE_MOVED')
     expect(actionKeyOf('orders.picture.set')).toBe('PICTURE_SET')
-    expect(actionKeyOf('production.baskets.move')).toBe('OTHER')
+    // owb-b7 (S5 ask 09:28): a basket's move (its undo, a route change, the route back to normal) reads "Changed on the floor".
+    expect(actionKeyOf('production.baskets.move')).toBe('CHANGED_ON_FLOOR')
+    expect(actionKeyOf('production.baskets.routeNormal')).toBe('CHANGED_ON_FLOOR')
+    expect(actionKeyOf('production.holds.place')).toBe('OTHER')
     expect(actionWordKeyOf('shipping.ship')).toBe('action.SHIPPED')
     expect(en.t('action.OTHER')).toBe('A change')
+    expect(en.t('action.CHANGED_ON_FLOOR')).toBe('Changed on the floor')
+    expect(changeLogWordsFor('it').t('action.CHANGED_ON_FLOOR')).toBe('Cambiato in reparto')
+    // owb-b7 (S2 ask 09:18): the four office acts of an order, each its own word.
+    expect(['orders.restrict', 'orders.paymentNotice.answer', 'orders.files.zip', 'orders.designer.give'].map(actionKeyOf)).toEqual(['RESTRICTION_CHANGED', 'NOTICE_ANSWERED', 'FILES_DOWNLOADED', 'DESIGNER_GIVEN'])
   })
 
   it('every action the domain names has its words in it and en; every icon id it names is a lucide icon; an unknown id is a plain dot', () => {

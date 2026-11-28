@@ -347,8 +347,10 @@ describe('owb-: the order workflow rights — who holds each, the designer, the 
     expect(FACTORY_PERMISSIONS.get('orders.view.own')).toMatchObject({ area: 'orders', risk: 'read' })
     expect(FACTORY_PERMISSIONS.get('orders.view.own')?.description).toBe('See the orders the person is on: put on the order, or asked for design help.')
     expect(FACTORY_PERMISSIONS.get('portal.payments.notify')).toMatchObject({ area: 'portal', risk: 'write', partner: true })
+    // owb-b7 (R49): the structure's read, beside the people register's people.view.
+    expect(FACTORY_PERMISSIONS.get('people.structure.view')).toMatchObject({ area: 'people', risk: 'read' })
     expect(FLOOR_SHARED_PERMISSIONS).toEqual(expect.arrayContaining(['production.baskets.move', 'production.baskets.route']))
-    for (const name of ['production.departments.manage', 'production.print.start', 'production.teams.assign', 'production.structures.manage', 'production.structures.rules', 'shipping.plan', 'product.drafts.edit', 'people.structure.manage', 'orders.view.own']) expect(FLOOR_SHARED_PERMISSIONS, name).not.toContain(name)
+    for (const name of ['production.departments.manage', 'production.print.start', 'production.teams.assign', 'production.structures.manage', 'production.structures.rules', 'shipping.plan', 'product.drafts.edit', 'people.structure.manage', 'people.structure.view', 'orders.view.own']) expect(FLOOR_SHARED_PERMISSIONS, name).not.toContain(name)
   })
 
   it('gives each right to exactly the templates of plan.md § 5 D (the Owner from every permission)', () => {
@@ -369,6 +371,9 @@ describe('owb-: the order workflow rights — who holds each, the designer, the 
     // Settle 5 (R40): the product DRAFT, the designer alone (product.styles.manage holders need nothing more).
     expect(holders('product.drafts.edit')).toEqual(['owner', 'designer'])
     expect(holders('people.structure.manage')).toEqual(['owner', 'admin', 'hr'])
+    // owb-b7 (R49, the Owner's yes of 2026-11-28): Sales reads the structure without the people register; read-only from every read.
+    expect(holders('people.structure.view')).toEqual(['owner', 'sales', 'read_only'])
+    expect(holders('people.view')).not.toContain('sales')
     // R20: "the orders the person is on" — the designer; the Owner and read-only from every read.
     expect(holders('orders.view.own')).toEqual(['owner', 'read_only', 'designer'])
     expect(templateOf('designer')?.permissions).toContain('production.calls.answer')

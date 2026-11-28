@@ -1,22 +1,22 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import { NotFoundError } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, holds } from '@nexus/factory-domain/core/permissions'
+import { anyOf, can, holds, type WhereClause } from '@nexus/factory-domain/core/permissions'
 import { decimalOfMinor, exportCellOf, isMoneyValue, type StoredValue } from '@nexus/factory-domain/fields/values'
 import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { PEOPLE_VIEW } from '@nexus/factory-domain/people/employees/permissions'
-import { PEOPLE_STRUCTURE_MANAGE } from '@nexus/factory-domain/people/structure/permissions'
+import { PEOPLE_STRUCTURE_MANAGE, PEOPLE_STRUCTURE_VIEW } from '@nexus/factory-domain/people/structure/permissions'
 import { personPicture, teamPicture, type Picture } from '@nexus/factory-domain/people/teams/picture'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { fieldsOfModel, fieldsSeen, referenceWords, valuesOfRecords, type FieldRow } from '../../../platform/fields/registry'
-import { assertMay, dayOrNull, officeOf, scopeOf } from '../employees/access'
+import { dayOrNull, may, officeOf, scopeOf, type Placed } from '../employees/access'
 import { nameOf } from '../employees/store'
 
 /**
  * The factory structure's reads (owb-ss5 steps 5.2 + 5.3; the Shape of owb-ss5.md): office only, people.view over each unit's and
- * person's company and site.
+ * person's company and site — owb-b7 (R49): or people.structure.view (Sales), the same two reads only (STRUCTURE_READERS).
  *
  *   GET /people/structure          the units the caller's scope reaches (closed ones too, marked), the active people of those
  *                                  companies and sites with their unit today, and whether the caller keeps the structure
@@ -30,6 +30,25 @@ import { nameOf } from '../employees/store'
  */
 
 type Client = FactoryClient | CommandTx
+
+// ── owb-b7 (R49, the Owner's yes of 2026-11-28): the structure is read with people.view OR people.structure.view ──────────────
+/** The rights that read the structure and one unit's profile (the manifest says `signed-in`: ./manifest.ts). */
+const STRUCTURE_READERS = [PEOPLE_VIEW, PEOPLE_STRUCTURE_VIEW] as const
+
+/** A caller who holds neither right in any grant is refused (403), as the manifest refused before. */
+function assertStructureReader(context: OfficeContext): void {
+  const actor = actorOf(context)
+  if (!STRUCTURE_READERS.some((permission) => holds(actor, permission))) throw new ForbiddenError()
+}
+
+/** A list's filter: the rows of the companies and sites EITHER right reaches (each judged with its own grants). */
+const structureScope = (context: OfficeContext): WhereClause => anyOf(STRUCTURE_READERS.map((permission) => scopeOf(context, permission)))
+
+/** One unit: read with either right over its company and site, else not found (404). */
+function assertSeesUnit(context: OfficeContext, unit: Placed): void {
+  if (!STRUCTURE_READERS.some((permission) => may(context, permission, unit))) throw new NotFoundError('Unit not found.')
+}
+// ── end owb-b7 ──
 
 export const UNIT_SELECT = {
   id: true,
@@ -132,15 +151,16 @@ const personOf = (row: { readonly employeeId: string; readonly isLead: boolean; 
 /** GET /people/structure. */
 export async function structure(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly includeClosed?: boolean | undefined }) {
   const context = officeOf(caller)
+  assertStructureReader(context)
   return caller.withClient(async (client) => {
     const units = await client.team.findMany({
-      where: { AND: [scopeOf(context, PEOPLE_VIEW) as Prisma.TeamWhereInput, query.siteId ? { siteId: query.siteId } : {}, query.includeClosed === false ? { status: 'ACTIVE' } : {}] },
+      where: { AND: [structureScope(context) as Prisma.TeamWhereInput, query.siteId ? { siteId: query.siteId } : {}, query.includeClosed === false ? { status: 'ACTIVE' } : {}] },
       orderBy: [{ siteId: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       take: 2000,
       select: UNIT_SELECT,
     })
     const employees = await client.employee.findMany({
-      where: { AND: [scopeOf(context, PEOPLE_VIEW) as Prisma.EmployeeWhereInput, { status: 'ACTIVE' }, query.siteId ? { siteId: query.siteId } : {}] },
+      where: { AND: [structureScope(context) as Prisma.EmployeeWhereInput, { status: 'ACTIVE' }, query.siteId ? { siteId: query.siteId } : {}] },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
       take: 5000,
       select: { id: true, firstName: true, lastName: true, jobRole: true },
@@ -226,10 +246,11 @@ export async function unitRecordView(client: Client, context: OfficeContext, uni
 /** GET /people/units/:unitId. */
 export async function unitRecord(caller: CommandCaller, unitId: string) {
   const context = officeOf(caller)
+  assertStructureReader(context)
   return caller.withClient(async (client) => {
     const unit = isUuid(unitId) ? await readUnit(client, unitId) : null
     if (!unit) throw new NotFoundError('Unit not found.')
-    assertMay(context, PEOPLE_VIEW, unit, 'Unit')
+    assertSeesUnit(context, unit)
     return unitRecordView(client, context, unit)
   })
 }

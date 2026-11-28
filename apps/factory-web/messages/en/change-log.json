@@ -48,6 +48,11 @@
     "LABEL_RECEIVED": "Shipping label received",
     "SENT_ON": "Sent on to the customer",
     "DELIVERED": "Delivered",
+    "RESTRICTION_CHANGED": "Floor restriction changed",
+    "NOTICE_ANSWERED": "Payment notice answered",
+    "FILES_DOWNLOADED": "Files downloaded",
+    "DESIGNER_GIVEN": "Graphics given to the designer",
+    "CHANGED_ON_FLOOR": "Changed on the floor",
     "OTHER": "A change"
   },
   "subject": {

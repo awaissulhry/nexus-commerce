@@ -2068,6 +2068,7 @@
     "people_team_view": "See the teams you lead or belong to (My team)",
     "people_employees_manage": "Add, change, link and import employees",
     "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
+    "people_structure_view": "See the factory structure: its units and teams, who leads each and who is in it (not the people register)",
     "people_structure_manage": "Keep the factory structure: add, change, move, merge or close units and set who leads them",
     "people_loans_manage": "Lend people to another line for hours or days",
     "people_leavers_manage": "Start, tick and cancel a person's leaver steps",

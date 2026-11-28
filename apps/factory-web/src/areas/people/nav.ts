@@ -19,6 +19,9 @@ export const officeArea: OfficeAreaNav = {
     'people-attendance': ['people.attendance.rollcall', 'people.timesheets.team', 'people.timesheets.lead', 'people.timesheets.hr'],
     // B-W2b-146: the safety readers (the safety officer: no people.skills.view) open Skills & training for its training lenses.
     'people-skills': ['safety.view'],
+    // owb-b7 (R49): Sales reads the Factory structure with people.structure.view (GET /people/structure and one unit's profile
+    // take people.view OR it); the HR register (Employees) stays people.view only.
+    'people-structure': ['people.structure.view'],
   },
   area: {
     id: 'people',
@@ -39,7 +42,8 @@ export const officeArea: OfficeAreaNav = {
           // SCR-263 (B-W2b-60): the roster sheet (GET /people/shifts/roster, people.shifts.view).
           { id: 'people-shifts', label: 'shell:nav.people.shifts', href: '/people/shifts', icon: CalendarClock, permission: 'people.shifts.view' },
           // owb- (order workflow, base settle 7): DECLARED rows — each shows once its page is built (its address in OFFICE_PAGES).
-          // Factory structure (S3 ss8): the units and who leads them (read people.view; keeping it people.structure.manage).
+          // Factory structure (S3 ss8): the units and who leads them (read people.view, or people.structure.view: alsoOpens above;
+          // keeping it people.structure.manage).
           { id: 'people-structure', label: 'shell:nav.people.structure', href: '/people/structure', icon: Network, permission: 'people.view' },
           // People by customer (S2 of4): the factory people given to each customer and their extra rights — role assignments, so
           // the right Admin › Users assigns roles with (roles.assign: the Owner and the administrator).

@@ -1870,7 +1870,8 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   Object.fromEntries(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-invoices', 'supplier-quality', 'subcontractor-jobs', 'guest-accountant'].map((key) => [key, ['portal.home.view' as Permission]])),
   // B-W2b-168: every main partner role searches its portal (SAL-084); each Admin follows.
   Object.fromEntries(partnerRoleTemplates().filter((template) => template.kind !== null && !template.admin).map((template) => [template.key, ['portal.search' as Permission]])),
-  // B-W2b-175: the customer roles that see the orders (status, progress when shared, shipments, tracking); not the Designer.
+  // B-W2b-175: the customer roles that see the orders (status, progress when shared, shipments, tracking); owb-b7 (the Owner's yes
+  // of 2026-11-28): the customer Designer too, its money, prices and Send hidden (sales/portal-orders permissions).
   Object.fromEntries(SALES_ORDER_READER_TEMPLATES.map((key) => [key, [PORTAL_SALES_ORDERS_VIEW]])),
   // B-W2b-174: the supplier's Orders role sees our purchase orders (never a price, C2); answering also needs portal.approve.
   { 'supplier-orders': ['portal.purchaseOrders.view' as Permission] },

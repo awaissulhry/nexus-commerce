@@ -109,6 +109,15 @@ describe('people: the area and who may do what', () => {
     expect(rows(['people.view'])).toEqual(['people-employees'])
   })
 
+  it('owb-b7 (R49): the Factory structure row also opens for people.structure.view (Sales holds it); the HR register stays people.view', () => {
+    expect(officeArea.alsoOpens?.['people-structure']).toEqual(['people.structure.view'])
+    expect(FACTORY_PERMISSIONS.get('people.structure.view')).toMatchObject({ area: 'people', risk: 'read' })
+    expect(template('sales')).toContain('people.structure.view')
+    expect(template('sales')).not.toContain('people.view')
+    // The Employees row (the HR register) has no other way in.
+    expect(officeArea.alsoOpens?.['people-employees']).toBeUndefined()
+  })
+
   it('reads the rights by name: the HR register, My team, each manage, imports, the lines and the audit', () => {
     const hr = peopleCan(template('admin'))
     expect([hr.view, hr.manageEmployees, hr.manageTeams, hr.manageLoans, hr.manageLeavers, hr.manageWorkers, hr.audit, hr.sites]).toEqual([true, true, true, true, true, true, true, true])

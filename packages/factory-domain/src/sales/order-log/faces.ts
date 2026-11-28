@@ -129,6 +129,14 @@ export const ORDER_LOG_ACTIONS = [
   'LABEL_RECEIVED',
   'SENT_ON',
   'DELIVERED',
+  // owb-b7 (S2 ask 09:18, S5 ask 09:28; the base's allow-list): OFFICE words only — none of their actions is on the customer's
+  // ALLOW-list below (the customer never reads the floor restriction, who answered a notice, a download, who was given the order,
+  // a basket's move or a route change).
+  'RESTRICTION_CHANGED',
+  'NOTICE_ANSWERED',
+  'FILES_DOWNLOADED',
+  'DESIGNER_GIVEN',
+  'CHANGED_ON_FLOOR',
   'OTHER',
 ] as const
 export type OrderLogAction = (typeof ORDER_LOG_ACTIONS)[number]
@@ -167,6 +175,11 @@ export const ACTION_ICONS: Readonly<Record<OrderLogAction, string>> = Object.fre
   LABEL_RECEIVED: 'file-text',
   SENT_ON: 'forward',
   DELIVERED: 'check-check',
+  RESTRICTION_CHANGED: 'lock',
+  NOTICE_ANSWERED: 'hand-coins',
+  FILES_DOWNLOADED: 'download',
+  DESIGNER_GIVEN: 'user-plus',
+  CHANGED_ON_FLOOR: 'factory',
   OTHER: 'history',
 })
 
@@ -211,6 +224,20 @@ const ACTION_KEYS: Readonly<Record<string, OrderLogAction>> = Object.freeze({
   'shipping.recordPod': 'DELIVERED',
   'shipping.carrierPod': 'DELIVERED',
   'shipping.collectionDelivered': 'DELIVERED',
+  // ---- owb-b7: office rows only (never CUSTOMER_ALLOWED_ACTIONS) ----
+  // S2 owb-of1 (ask 09:18): Restrict on the floor or open it again (before/after floorRestricted); a customer's "I paid" notice
+  // answered (after { noticeId, state }); Download all (after { files, leftOut }); the order given to the designer (after { userId, added }).
+  'orders.restrict': 'RESTRICTION_CHANGED',
+  'orders.paymentNotice.answer': 'NOTICE_ANSWERED',
+  'orders.files.zip': 'FILES_DOWNLOADED',
+  'orders.designer.give': 'DESIGNER_GIVEN',
+  // S5 owb-fl2 (ask 09:28): a basket moved on the floor, the move taken back, its route changed, its route set back to normal —
+  // ONE office word "Changed on the floor" (_owb-fl-common § 4).
+  'production.baskets.move': 'CHANGED_ON_FLOOR',
+  'production.baskets.moveUndo': 'CHANGED_ON_FLOOR',
+  'production.baskets.route': 'CHANGED_ON_FLOOR',
+  'production.baskets.routeNormal': 'CHANGED_ON_FLOOR',
+  // ---- end owb-b7 ----
 })
 
 /** The per-action map: an audit action → its word key and ONE lucide icon. */

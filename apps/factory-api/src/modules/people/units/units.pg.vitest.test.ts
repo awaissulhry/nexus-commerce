@@ -55,9 +55,9 @@ const KEEPER: Permission[] = [
   'fields.personal.view',
 ]
 const grant = (permissions: readonly Permission[]): Grant => ({ permissions: [...permissions], companies: 'all', sites: 'all', parties: 'all' })
-// The sales template holds no people.view today (reported as a gap to the S3 lead): the sales caller here is the template plus
-// people.view, so the test shows what R49 asks — sales reads the structure and changes nothing.
-const SALES: Permission[] = [...templateOf('sales')!.permissions, 'people.view']
+// owb-b7 (R49, the Owner's yes of 2026-11-28): the sales template holds people.structure.view and NOT people.view — the sales
+// caller here is the template alone: it reads the structure and a unit, changes nothing, and never opens the HR register.
+const SALES: Permission[] = [...templateOf('sales')!.permissions]
 const SESSIONS: Record<string, SessionContext> = {
   keeper: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(KEEPER)] },
   viewer: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.view'])] },
@@ -156,8 +156,20 @@ describe('the factory structure (design § 5zb)', () => {
   })
 
   it('a sales user reads the structure and a unit but changes nothing (403); the designer and the floor have no route', async () => {
-    expect((await ok('sales', 'GET', '/people/structure')).may).toEqual({ manage: false })
+    // owb-b7 (R49): with people.structure.view alone (no people.view) — the same units and people as a people.view reader.
+    expect(SALES).toContain('people.structure.view')
+    expect(SALES).not.toContain('people.view')
+    const seen = await ok('sales', 'GET', '/people/structure')
+    expect(seen.may).toEqual({ manage: false })
+    const viewed = await ok('viewer', 'GET', '/people/structure')
+    expect(seen.units.map((unit: Json) => unit.id).sort()).toEqual(viewed.units.map((unit: Json) => unit.id).sort())
+    expect(seen.people.map((person: Json) => person.employeeId).sort()).toEqual(viewed.people.map((person: Json) => person.employeeId).sort())
     await ok('sales', 'GET', `/people/units/${people.teamIds.a}`)
+    // The HR register and the histories stay people.view only.
+    expect((await call('sales', 'GET', '/people/employees')).statusCode).toBe(403)
+    expect((await call('sales', 'GET', `/people/employees/${people.employeeIds.e1}`)).statusCode).toBe(403)
+    expect((await call('sales', 'GET', `/people/units/${people.teamIds.a}/history`)).statusCode).toBe(403)
+    expect((await call('sales', 'GET', `/people/employees/${people.employeeIds.e1}/history`)).statusCode).toBe(403)
     const a = await unitOf(people.teamIds.a)
     expect((await call('sales', 'POST', '/people/units', { siteId: T.siteA1, name: 'Not mine' })).statusCode).toBe(403)
     expect((await call('sales', 'PATCH', `/people/units/${people.teamIds.a}`, { version: a.version, about: 'x' })).statusCode).toBe(403)
