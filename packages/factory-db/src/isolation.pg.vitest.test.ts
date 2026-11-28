@@ -119,6 +119,7 @@ import { seedCustomerPage } from './testing/customer-page' // B-CP-005
 import { seedOrderMoney } from './testing/order-money' // B-OM-019
 import { seedOrderFiles } from './testing/order-files' // B-OF-030
 import { seedOrderWorkflow } from './testing/order-workflow' // owb-b1
+import { seedFloorBaskets } from './testing/floor-baskets' // owb-fl0
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -245,6 +246,21 @@ async function adjustCopy(model: string, copy: Record<string, unknown>): Promise
     return { ...copy, userId: person!.id }
   }
   // ---- end owb-b1
+  // ---- owb-fl0 (schema wave "floor baskets 2", …_production_floor_baskets_2_guards): one open mark per basket and kind
+  // (BasketFlag_one_open): the copy of the first (open) mark goes to another basket of the same work order at the site with no
+  // open mark of that kind (testing/floor-baskets.ts leaves bundle 2 free).
+  if (model === 'BasketFlag') {
+    const [free] = await admin(
+      `SELECT b.id::text AS id FROM "Bundle" b
+        WHERE b."tenantId" = $1::uuid AND b."siteId" = $2::uuid AND b."workOrderId" = $3::uuid
+          AND NOT EXISTS (SELECT 1 FROM "BasketFlag" f WHERE f."tenantId" = b."tenantId" AND f."bundleId" = b.id AND f.kind::text = $4 AND f."clearedAt" IS NULL)
+        ORDER BY b.id LIMIT 1`,
+      [copy.tenantId, copy.siteId, copy.workOrderId, copy.kind],
+    )
+    expect(free, 'another basket of the work order with no open mark of the kind (testing/floor-baskets.ts)').toBeDefined()
+    return { ...copy, bundleId: free!.id }
+  }
+  // ---- end owb-fl0
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
@@ -665,6 +681,11 @@ beforeAll(async () => {
   await seedOrderWorkflow({ db: factory, namespace: 'iso-a' })
   await seedOrderWorkflow({ db: factory, namespace: 'iso-b' })
   // ---- end owb-b1
+  // ---- owb-fl0 (schema wave "floor baskets 2"): bundle 1's open "Do this first" mark and an idea told at A1 without a name, in
+  // each tenant (testing/floor-baskets.ts; the first rows the plain ones a copy may repeat).
+  await seedFloorBaskets({ db: factory, namespace: 'iso-a' })
+  await seedFloorBaskets({ db: factory, namespace: 'iso-b' })
+  // ---- end owb-fl0
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -709,6 +730,7 @@ it('covers every classified table and every runtime role', () => {
     'BankLine',
     'BankMatch',
     'BankStatement',
+    'BasketFlag', // owb-fl0
     'BasketMove', // owb-b1
     'BasketRouteEdit', // owb-b1
     'BomLine',
@@ -821,6 +843,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'FloorSuggestion', // owb-fl0
     'FloorSyncEvent',
     'GarmentDowngrade',
     'GarmentLabelPrint',

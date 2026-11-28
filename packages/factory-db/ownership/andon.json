@@ -11,7 +11,7 @@
       }
     },
     "HelpCall": {
-      "about": "Help calls: the station's tablet sends one, the team leader on the floor or a responder in the office marks it seen, on the way, solved or cancelled; the escalation job marks it escalated. Never deleted. Personal: the caller (workerId and employeeId, only where the site records workers); the takers (seenById, onTheWayById, solvedById, cancelledById) are actor ids as everywhere.",
+      "about": "Help calls: the station's tablet sends one, the team leader on the floor or a responder in the office marks it seen, on the way, solved or cancelled; the escalation job marks it escalated; owb-fl0: the floor shows the place on the basket's picture (spot 0-8) while it is open. Never deleted. Personal: the caller (workerId and employeeId, only where the site records workers); the takers (seenById, onTheWayById, solvedById, cancelledById) are actor ids as everywhere.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

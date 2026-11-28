@@ -147,6 +147,9 @@ model Employee {
   basketMoves           BasketMove[]       @relation("BasketMoveEmployee")
   basketRouteEdits      BasketRouteEdit[]  @relation("BasketRouteEditEmployee")
   floorLateWarnings     FloorLateWarning[] @relation("FloorLateWarningEmployee")
+  // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): the same, by the person: marks set, suggestions with a name.
+  basketFlags           BasketFlag[]       @relation("BasketFlagEmployee")
+  floorSuggestions      FloorSuggestion[]  @relation("FloorSuggestionEmployee")
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])
