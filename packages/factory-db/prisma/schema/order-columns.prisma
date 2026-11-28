@@ -1,0 +1,128 @@
+// The customer's own columns for order lines (order workflow build, schema wave "order workflow 1/1", owb-b1; LF plan.md § 4,
+// PL-schema § 5A row 5; design order-workflow-2026-11-25 "Own columns"): a customer keeps a few columns of its own ("Rider
+// number", "Logo ready?") and uses them on the lines of its drafts and orders, beside our columns.
+//
+//   PartyLineColumn     one column of one customer: its name (1 to 40, unique among the customer's open columns), its kind
+//                       (TEXT, YES_NO, CHOICE with its choices, NUMBER, DATE) and its place. Never deleted: closed
+//                       (closedAt), and kept with the values written in it.
+//   OrderLineColumnUse  a column used on one record: a sales order or a portal order request (exactly one), in its place.
+//                       Goes with a discarded draft (Cascade, as PortalOrderRequestPerson); an order is never deleted.
+//   OrderLineOwnValue   the value of one column on one line: a sales order line or a portal order request line (exactly
+//                       one), in the one field its column's kind needs. Goes with its line (Cascade: a discarded draft's
+//                       line, an amendment that removes an order line).
+//
+// Every row carries the customer's partyId (the partner role's policy key) in its references, so a use and a value can only
+// name a column, a record and a line of the same customer. One use per column and record, and one value per column and line,
+// are the API's (uniqueness made of ids only, as in portal-sales.prisma); the shapes (a name of 1 to 40, the choices of a
+// CHOICE column, exactly one record or line, the field of the column's kind) are the …_order_workflow_guards trigger's (G8).
+//
+// Who writes what (ownership/order-columns.json): the customer's portal people (factory_partner_runtime behind its party's
+// wall) and the office (factory_runtime) both make, rename, close and use the customer's columns and write their values;
+// nobody deletes a row (a discarded draft or a removed line takes its own rows with it). The floor reads none of it: what a
+// basket card shows of a value comes through the API.
+
+/// One own column of one customer (owb-b1, PL-schema § 5A row 5): "Rider number", "Logo ready?". Made, renamed, moved and
+/// closed by the customer's portal people or the office; never deleted (closed instead, its values kept).
+model PartyLineColumn {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The customer (the partner role's policy key).
+  partyId     String              @db.Uuid
+  /// 1 to 40 trimmed characters, unique (whatever the case) among the customer's open columns (G8).
+  name        String
+  kind        OrderLineColumnKind
+  /// The choices of a CHOICE column (at least one, in order); empty for every other kind (G8).
+  choices     String[]            @default([])
+  /// Its place among the customer's columns (1 first).
+  seq         Int
+  /// When it was closed: no new use or value from then on (the API); its values stay. Null: open.
+  closedAt    DateTime?           @db.Timestamptz(3)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  /// A person of the customer or of the office.
+  createdById String?             @db.Uuid
+
+  party  Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  uses   OrderLineColumnUse[]
+  values OrderLineOwnValue[]
+
+  // The target of its uses' and values' references: a column of the same customer.
+  @@unique([tenantId, partyId, id])
+}
+
+/// What an own column holds (owb-b1): words, yes or no, one of its choices, a number, a date.
+enum OrderLineColumnKind {
+  TEXT
+  YES_NO
+  CHOICE
+  NUMBER
+  DATE
+}
+
+/// An own column used on one record (owb-b1, PL-schema § 5A row 5): a sales order or a portal order request of the column's
+/// customer (exactly one, G8), in its place among the record's columns.
+model OrderLineColumnUse {
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company and customer (the order's foreign key; the request's own, the API).
+  companyId            String   @db.Uuid
+  partyId              String   @db.Uuid
+  /// The record it is used on: exactly one of the two (G8).
+  salesOrderId         String?  @db.Uuid
+  portalOrderRequestId String?  @db.Uuid
+  columnId             String   @db.Uuid
+  /// Its place among the record's own columns (1 first).
+  seq                  Int
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  /// A person of the customer or of the office.
+  createdById          String?  @db.Uuid
+
+  // The order of the same company and customer (Restrict, not Prisma's SetNull default for an optional relation: that would
+  // also clear tenantId, companyId and partyId); the request of the same customer, which takes its uses with it when its
+  // draft is discarded; the column of the same customer.
+  salesOrder SalesOrder?         @relation("OrderLineColumnUseOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  request    PortalOrderRequest? @relation("OrderLineColumnUseRequest", fields: [tenantId, partyId, portalOrderRequestId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  column     PartyLineColumn     @relation(fields: [tenantId, partyId, columnId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A record's columns.
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, portalOrderRequestId])
+  @@index([tenantId, columnId])
+}
+
+/// The value of one own column on one line (owb-b1, PL-schema § 5A row 5): a sales order line or a portal order request
+/// line of the column's customer (exactly one, G8), in the one field the column's kind needs (TEXT valueText, YES_NO
+/// valueBool, CHOICE valueText = one of its choices, NUMBER valueNumber, DATE valueDate; the others null: G8).
+model OrderLineOwnValue {
+  id                       String    @id @db.Uuid
+  tenantId                 String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The line's customer (the partner role's policy key).
+  partyId                  String    @db.Uuid
+  columnId                 String    @db.Uuid
+  /// The line it is on: exactly one of the two (G8).
+  salesOrderLineId         String?   @db.Uuid
+  portalOrderRequestLineId String?   @db.Uuid
+  valueText                String?
+  valueNumber              Decimal?  @db.Decimal(18, 4)
+  valueDate                DateTime? @db.Date
+  valueBool                Boolean?
+  version                  Int       @default(1)
+  createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  /// A person of the customer or of the office.
+  createdById              String?   @db.Uuid
+
+  // The column of the same customer; the line of the same customer, which takes its values with it (a discarded draft's
+  // line, an amendment that removes an order line).
+  column      PartyLineColumn         @relation(fields: [tenantId, partyId, columnId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  orderLine   SalesOrderLine?         @relation("OrderLineOwnValueOrderLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  requestLine PortalOrderRequestLine? @relation("OrderLineOwnValueRequestLine", fields: [tenantId, partyId, portalOrderRequestLineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  // A line's values; a column's values.
+  @@index([tenantId, salesOrderLineId])
+  @@index([tenantId, portalOrderRequestLineId])
+  @@index([tenantId, columnId])
+}

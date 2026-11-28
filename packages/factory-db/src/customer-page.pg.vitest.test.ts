@@ -76,8 +76,10 @@ const LINES_DRAFT = /the lines of order request .* change only while it is a DRA
 const KEEPS_PEOPLE = /has its people; remove them before it is no longer by person/
 const LATER_PARTS = /names the parts it sends later each once, and who saved it last together with when \(both or neither\)/
 // OD s.1 (…_order_start_guards): SENT → SENT is the office's move for the style drafts only; the customer changes nothing of it.
-const NOT_SENT_AGAIN = /was sent; only the office names the style drafts it made for it/
-const SENT_STYLES_ONLY = /\(SENT → SENT\) changes only styleIds, version, updatedAt/
+// owb G1 (b) (order workflow, …_order_workflow_guards): but the order's picture, which both doors change while SENT (was: "only the
+// office names the style drafts it made for it"; the office's list was "styleIds, version, updatedAt").
+const NOT_SENT_AGAIN = /was sent; the customer changes only its picture \(the office names the style drafts it made for it\)/
+const SENT_STYLES_ONLY = /\(SENT → SENT\) changes only styleIds, pictureFileId, pictureSetAt, pictureSetById, version, updatedAt/
 const DECIDED_FROZEN = /is REFUSED; it never changes again/
 // OD s.1 (…_order_start_guards): a line's open choices (factory_portal_draft_choices_ok).
 const CHOICES = /has its open choices as 1 to 10 entries, each a topic of 1 to 60 trimmed characters, 2 to 6 distinct options of 1 to 60 trimmed characters, and the one picked \(one of them\) or none yet; no choice at all is null/

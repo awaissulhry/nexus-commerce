@@ -28,6 +28,11 @@ import { seed as seedParties } from './parties'
  *   colourways  BLK and RED, so 2 x 3 = 6 SKUs
  *   revision 1  DRAFT: the leather in ft² per size with hide wastage and a colour per colourway, the lining in one
  *               colour, two protectors; a routing of cutting, sewing, final inspection and packing with standard minutes
+ *   departments owb-b1 (order workflow build): the factory's nine departments, tenant-wide (1 Pattern … 6 Packing on the
+ *               floor today; 7 Design, 8 Molding, 9 Assembly for the molded parts), written BEFORE the operations, each
+ *               with its ONE default library operation (DEPT-<n>, ids of eight f's: the generated isolation tests copy the
+ *               FIRST operation by id, and a copy of a default would break "one default per department"); every seeded
+ *               operation and route step names its department (seedDepartmentOfKind, the domain's departmentOfKind table)
  *
  * Every name and code is invented. Idempotent: rows are upserted with fixed times. The revision is left DRAFT (a
  * released revision's parts can never be written again, and the generated isolation tests copy a seeded part); when
@@ -43,6 +48,44 @@ export interface ProductSeed {
   readonly colourwayIds: readonly string[]
   readonly leatherId: string
   readonly protectorId: string
+}
+
+/**
+ * owb-b1 (order workflow build, schema wave "order workflow 1/1"; LF PL-schema § 2; design order-workflow-2026-11-25
+ * prototype core.js and § 5zl): the factory's departments. A number is kept for ever; the short name is the ONE name on
+ * every chip, the long name its hint; the tone is one of the 10 grid tones, the icon a lucide id in kebab case (the web chip
+ * maps it). The Urdu names are the prototype's DRAFT words: a native reader checks them before a site switches Urdu on.
+ */
+export const SEED_DEPARTMENTS = [
+  { number: 1, name: 'Pattern', shortName: 'Pattern', it: 'Cartamodello', ur: 'پیٹرن', kind: WorkCentreKind.CUTTING, tone: 'blue', icon: 'ruler', floorReady: true },
+  { number: 2, name: 'Cutting', shortName: 'Cutting', it: 'Taglio', ur: 'کٹنگ', kind: WorkCentreKind.CUTTING, tone: 'orange', icon: 'scissors', floorReady: true },
+  { number: 3, name: 'Patchwork & printing', shortName: 'Patch & print', it: 'Patchwork e stampa', ur: 'پیچ ورک اور پرنٹنگ', kind: WorkCentreKind.FINISHING, tone: 'pink', icon: 'layers', floorReady: true },
+  { number: 4, name: 'Stitching', shortName: 'Stitching', it: 'Cucitura', ur: 'سلائی', kind: WorkCentreKind.SEWING, tone: 'cyan', icon: 'shirt', floorReady: true },
+  { number: 5, name: 'Quality check', shortName: 'Quality', it: 'Controllo qualità', ur: 'کوالٹی چیک', kind: WorkCentreKind.INSPECTION, tone: 'purple', icon: 'shield-check', floorReady: true },
+  { number: 6, name: 'Packing', shortName: 'Packing', it: 'Imballaggio', ur: 'پیکنگ', kind: WorkCentreKind.PACKING, tone: 'yellow', icon: 'package', floorReady: true },
+  { number: 7, name: 'Product design', shortName: 'Design', it: 'Progettazione prodotto', ur: 'پروڈکٹ ڈیزائن', kind: WorkCentreKind.FINISHING, tone: 'violet', icon: 'pen-tool', floorReady: false },
+  { number: 8, name: 'Injection molding', shortName: 'Molding', it: 'Stampaggio a iniezione', ur: 'انجیکشن مولڈنگ', kind: WorkCentreKind.ASSEMBLY, tone: 'slate', icon: 'cylinder', floorReady: false },
+  { number: 9, name: 'Assembly', shortName: 'Assembly', it: 'Assemblaggio', ur: 'اسمبلی', kind: WorkCentreKind.ASSEMBLY, tone: 'emerald', icon: 'puzzle', floorReady: false },
+] as const
+
+/** The seeded department number of a work-centre kind (factory-domain departmentOfKind's table); SUBCONTRACT: none. */
+const DEPARTMENT_OF_KIND: Readonly<Record<WorkCentreKind, number | null>> = {
+  CUTTING: 2,
+  SEWING: 4,
+  ASSEMBLY: 9,
+  FINISHING: 3,
+  INSPECTION: 5,
+  PACKING: 6,
+  SUBCONTRACT: null,
+}
+
+/** The id of a seeded department of the tenant (its number). */
+export const seedDepartmentId = (namespace: string, number: number): string => seedUuid(namespace, `product:department:${number}`)
+
+/** The seeded department a route step or operation of this kind belongs to (null: SUBCONTRACT, outside). */
+export function seedDepartmentOfKind(namespace: string, kind: WorkCentreKind): string | null {
+  const number = DEPARTMENT_OF_KIND[kind]
+  return number === null ? null : seedDepartmentId(namespace, number)
 }
 
 /** The style's size range and the leather (ft²) one jacket of each size takes, before wastage. */
@@ -177,12 +220,41 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
     { id: id('product:measurement-point:JACKET:sleeve'), templateId, code: 'sleeve', name: 'Sleeve', seq: 3, minValue: '50.00', maxValue: '80.00', howTo: 'Shoulder point to wrist, arm bent forward.', ...stamp },
   ]
 
+  // owb-b1: the departments (tenant-wide), then each one's default library operation (ids of eight f's, never the first
+  // row the isolation tests copy), then the style's operations, each in the department of its kind.
+  const departments: (Prisma.DepartmentCreateManyInput & { id: string })[] = SEED_DEPARTMENTS.map((department) => ({
+    id: seedDepartmentId(namespace, department.number),
+    number: department.number,
+    name: department.name,
+    shortName: department.shortName,
+    // `ur`: the prototype's draft words, not yet checked by a native reader (Urdu stays off per site until then).
+    nameI18n: { en: department.name, it: department.it, ur: department.ur },
+    tone: department.tone,
+    icon: department.icon,
+    workCentreKind: department.kind,
+    seq: department.number,
+    floorReady: department.floorReady,
+    ...stamp,
+  }))
+  const lastId = (key: string): string => `ffffffff${id(key).slice(8)}`
+  const departmentDefaults: (Prisma.OperationCreateManyInput & { id: string })[] = SEED_DEPARTMENTS.map((department) => ({
+    id: lastId(`product:operation:DEPT-${department.number}`),
+    code: `DEPT-${department.number}`,
+    name: department.name,
+    nameI18n: { en: department.name, it: department.it, ur: department.ur },
+    workCentreKind: department.kind,
+    standardMinutes: '0.000',
+    departmentId: seedDepartmentId(namespace, department.number),
+    departmentDefault: true,
+    ...stamp,
+  }))
+  const inDepartment = (kind: WorkCentreKind): string | null => seedDepartmentOfKind(namespace, kind)
   const operation = { cut: id('product:operation:CUT'), sew: id('product:operation:SEW'), qc: id('product:operation:QC'), pack: id('product:operation:PACK') }
   const operations: (Prisma.OperationCreateManyInput & { id: string })[] = [
-    { id: operation.cut, code: 'SEED-CUT-LEA', name: 'Cut leather panels', nameI18n: { it: 'Taglio pelle', en: 'Cut leather panels' }, workCentreKind: WorkCentreKind.CUTTING, machineType: 'cutting table', skill: 'cutter', standardMinutes: '14.000', ...stamp },
-    { id: operation.sew, code: 'SEED-SEW-ASM', name: 'Sew and assemble the body', nameI18n: { it: 'Cucitura e montaggio', en: 'Sew and assemble the body' }, workCentreKind: WorkCentreKind.SEWING, machineType: 'post-bed', skill: 'machinist', standardMinutes: '96.500', ...stamp },
-    { id: operation.qc, code: 'SEED-FIN-QC', name: 'Final inspection', workCentreKind: WorkCentreKind.INSPECTION, standardMinutes: '8.000', ...stamp },
-    { id: operation.pack, code: 'SEED-PACK', name: 'Pack', workCentreKind: WorkCentreKind.PACKING, standardMinutes: '3.500', ...stamp },
+    { id: operation.cut, code: 'SEED-CUT-LEA', name: 'Cut leather panels', nameI18n: { it: 'Taglio pelle', en: 'Cut leather panels' }, workCentreKind: WorkCentreKind.CUTTING, machineType: 'cutting table', skill: 'cutter', standardMinutes: '14.000', departmentId: inDepartment(WorkCentreKind.CUTTING), ...stamp },
+    { id: operation.sew, code: 'SEED-SEW-ASM', name: 'Sew and assemble the body', nameI18n: { it: 'Cucitura e montaggio', en: 'Sew and assemble the body' }, workCentreKind: WorkCentreKind.SEWING, machineType: 'post-bed', skill: 'machinist', standardMinutes: '96.500', departmentId: inDepartment(WorkCentreKind.SEWING), ...stamp },
+    { id: operation.qc, code: 'SEED-FIN-QC', name: 'Final inspection', workCentreKind: WorkCentreKind.INSPECTION, standardMinutes: '8.000', departmentId: inDepartment(WorkCentreKind.INSPECTION), ...stamp },
+    { id: operation.pack, code: 'SEED-PACK', name: 'Pack', workCentreKind: WorkCentreKind.PACKING, standardMinutes: '3.500', departmentId: inDepartment(WorkCentreKind.PACKING), ...stamp },
   ]
 
   const styleId = id('product:style:JKT-01')
@@ -261,6 +333,7 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
     nameI18n: op.nameI18n,
     workCentreKind: op.workCentreKind,
     standardMinutes: op.standardMinutes,
+    departmentId: op.departmentId,
     ...stamp,
   }))
 
@@ -279,6 +352,9 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
         await tx.measurementTemplate.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
       }
       for (const { id: rowId, ...data } of points) await tx.measurementPoint.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
+      // owb-b1: the departments before the operations that name them.
+      for (const { id: rowId, ...data } of departments) await tx.department.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
+      for (const { id: rowId, ...data } of departmentDefaults) await tx.operation.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
       for (const { id: rowId, ...data } of operations) await tx.operation.upsert({ where: { id: rowId }, create: { id: rowId, ...data }, update: data })
       {
         const { id: rowId, ...data } = style

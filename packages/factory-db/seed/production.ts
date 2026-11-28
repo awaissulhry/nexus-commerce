@@ -31,6 +31,7 @@ import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
 import { seedWorkerNotice } from './privacy'
+import { seedDepartmentOfKind } from './product' // owb-b1: the department of a seeded route step
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
@@ -210,6 +211,9 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           monitoringReference: 'SEED-RSU-AGREEMENT-2026-01',
           monitoringRecordedAt: T.setup,
           monitoringRecordedById: actorId,
+          // owb-b1 (order workflow build): the demo plant A1 makes its baskets at "Print and start the work" (one per garment,
+          // before cutting); B1 keeps today's bundles made at cutting, so the end walk can try both.
+          basketsAtPrint: true,
           ...stamp(T.setup),
         },
         { id: siteB, companyId: id('company:B'), siteId: siteB, scanSubject: ScanSubject.STATION, ...stamp(T.setup) },
@@ -286,6 +290,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           name: step.name,
           workCentreKind: step.kind,
           standardMinutes: step.minutes,
+          departmentId: seedDepartmentOfKind(namespace, step.kind), // owb-b1: the step's department
           ...stamp(T.setup),
         })),
       })

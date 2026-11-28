@@ -19,6 +19,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedProduct } from './product'
+import { seedDepartmentOfKind } from './product' // owb-b1: the department of a seeded route step
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
 /**
@@ -167,7 +168,7 @@ export async function seed(context: SeedContext): Promise<OptionsSeed> {
       ]
       await tx.item.createMany({ data: newItems })
       await tx.operation.create({
-        data: { id: result.operationId, code: 'SEED-PERF', name: 'Perforate leather panels', nameI18n: words('Foratura pannelli in pelle', 'Perforate leather panels'), workCentreKind: WorkCentreKind.CUTTING, machineType: 'perforating press', skill: 'cutter', standardMinutes: '6.000', ...stamp(T.library) },
+        data: { id: result.operationId, code: 'SEED-PERF', name: 'Perforate leather panels', nameI18n: words('Foratura pannelli in pelle', 'Perforate leather panels'), workCentreKind: WorkCentreKind.CUTTING, machineType: 'perforating press', skill: 'cutter', standardMinutes: '6.000', departmentId: seedDepartmentOfKind(namespace, WorkCentreKind.CUTTING), ...stamp(T.library) },
         select: { id: true },
       })
 
@@ -185,7 +186,7 @@ export async function seed(context: SeedContext): Promise<OptionsSeed> {
         ],
       })
       await tx.routingOperation.create({
-        data: { id: lastId('options:routing:LNR-01:1:SEED-SEW-ASM'), styleId: result.linerStyleId, revisionId: result.linerRevisionId, seq: 10, operationId: sew.id, code: sew.code, name: 'Sew the liner', workCentreKind: sew.workCentreKind, standardMinutes: '18.000', ...stamp(T.library) },
+        data: { id: lastId('options:routing:LNR-01:1:SEED-SEW-ASM'), styleId: result.linerStyleId, revisionId: result.linerRevisionId, seq: 10, operationId: sew.id, code: sew.code, name: 'Sew the liner', workCentreKind: sew.workCentreKind, standardMinutes: '18.000', departmentId: seedDepartmentOfKind(namespace, sew.workCentreKind), ...stamp(T.library) },
         select: { id: true },
       })
       await tx.styleRevision.update({ where: { id: result.linerRevisionId }, data: { status: StyleRevisionStatus.RELEASED, releasedAt: T.released, releasedById: actorId, updatedAt: T.released }, select: { id: true } })
@@ -315,6 +316,7 @@ export async function seed(context: SeedContext): Promise<OptionsSeed> {
         name: op.name,
         workCentreKind: op.workCentreKind,
         standardMinutes: op.standardMinutes.toString(),
+        departmentId: seedDepartmentOfKind(namespace, op.workCentreKind), // owb-b1: the step's department
         appliesToOptionValueIds,
         ...stamp(T.style),
       })
