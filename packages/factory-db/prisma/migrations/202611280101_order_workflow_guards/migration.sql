@@ -1135,6 +1135,63 @@ CREATE TRIGGER "Shipment_warehouse_leg_delivered" BEFORE UPDATE OF "status" ON "
   EXECUTE FUNCTION "factory_shipment_warehouse_leg_delivered_check"();
 
 -- =====================================================================================================================
+-- PartyOfficePerson (parties.prisma; owb G11; settle 10, PL-schema § 5A row 16): the office people of a customer's pool
+-- ("People by customer").
+--   INSERT     open (no end), at version 1; the person an active office user of the tenant (User.audience OFFICE: a portal
+--              user is PARTNER; a floor worker is no User at all).
+--   UPDATE     the company, customer, person and creation never change; the version goes up by one; ending writes when and
+--              who together, once; an ended row never changes again.
+--   DELETE     refused (ended instead). TRUNCATE refused.
+-- Partial unique PartyOfficePerson_one_open: one open row per customer and person.
+CREATE FUNCTION "factory_party_office_person_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  user_audience text;
+  user_status text;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'parties: a person of a customer''s pool is ended, never deleted (row %)', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."endedAt" IS NOT NULL OR NEW."endedById" IS NOT NULL OR NEW."version" <> 1 THEN
+      RAISE EXCEPTION 'parties: a new person of a customer''s pool is open (not ended), at version 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT u."audience"::text, u."status"::text INTO user_audience, user_status FROM "User" u WHERE u."tenantId" = NEW."tenantId" AND u."id" = NEW."userId";
+    IF FOUND AND (user_audience <> 'OFFICE' OR user_status <> 'ACTIVE') THEN
+      RAISE EXCEPTION 'parties: a customer''s pool names an active office person, not one that is % (%)', user_status, user_audience
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NULL;
+    END IF;
+    IF OLD."endedAt" IS NOT NULL THEN
+      RAISE EXCEPTION 'parties: row % of a customer''s pool was ended; it never changes again', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF (NEW."id", NEW."companyId", NEW."partyId", NEW."userId", NEW."createdAt", NEW."createdById")
+       IS DISTINCT FROM (OLD."id", OLD."companyId", OLD."partyId", OLD."userId", OLD."createdAt", OLD."createdById")
+       OR NEW."version" < OLD."version" OR NEW."version" > OLD."version" + 1 THEN
+      RAISE EXCEPTION 'parties: row % of a customer''s pool only ends (its company, customer, person and creation never change; its version goes up by one)', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF (NEW."endedAt" IS NULL) <> (NEW."endedById" IS NULL) THEN
+    RAISE EXCEPTION 'parties: row % of a customer''s pool is ended with when and who, both or neither', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER "PartyOfficePerson_guard" AFTER INSERT OR UPDATE OR DELETE ON "PartyOfficePerson"
+  FOR EACH ROW EXECUTE FUNCTION "factory_party_office_person_guard"();
+CREATE TRIGGER "PartyOfficePerson_no_truncate" BEFORE TRUNCATE ON "PartyOfficePerson"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_order_workflow_refuse_truncate"();
+CREATE UNIQUE INDEX "PartyOfficePerson_one_open" ON "PartyOfficePerson" ("tenantId", "partyId", "userId") WHERE "endedAt" IS NULL;
+
+-- =====================================================================================================================
 -- Bundle (MES-065, MES-068, MES-073; owb G10): REDEFINES factory_bundle_guard (…_production_leftovers_guards, B-W1-40/41: its
 -- newest), word for word but for the lines marked owb G10 (a)-(c): a basket made at "Print and start the work" (madeAtPrint)
 -- only where the site turned it on (ProductionSettings.basketsAtPrint), before its cut (no cut log entry); while ACTIVE it
