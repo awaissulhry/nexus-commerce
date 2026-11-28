@@ -49,6 +49,7 @@ describe('model ownership', () => {
       'BankLine',
       'BankMatch',
       'BankStatement',
+      'BasketFlag', // owb-fl0 (schema wave "floor baskets 2"): a basket's "Do this first" mark (baskets.json)
       'BasketMove', // owb-b1 (order workflow schema wave): a basket moved by hand (baskets.json)
       'BasketRouteEdit', // owb-b1: a step of one basket's route changed (baskets.json)
       'BomLine',
@@ -162,6 +163,7 @@ describe('model ownership', () => {
       'FloorScanRefusal',
       'FloorSession',
       'FloorSettings',
+      'FloorSuggestion', // owb-fl0: a worker's word to the office, with or without the name (baskets.json)
       'FloorSyncEvent',
       'GarmentDowngrade',
       'GarmentLabelPrint',
@@ -864,6 +866,9 @@ describe('model ownership', () => {
           // owb-b1 (order workflow schema wave): who moved a basket, changed its route or said it will be late, purpose
           // PRODUCTION (as HelpCall).
           ...['BasketMove', 'BasketRouteEdit', 'FloorLateWarning'],
+          // owb-fl0 (schema wave "floor baskets 2"): who marked a basket "Do this first", who told the office something with
+          // their name, purpose PRODUCTION.
+          ...['BasketFlag', 'FloorSuggestion'],
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!

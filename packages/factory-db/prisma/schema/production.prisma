@@ -300,6 +300,8 @@ model WorkOrder {
   basketMoves         BasketMove[]         @relation("BasketMoveWorkOrder")
   basketRouteEdits    BasketRouteEdit[]    @relation("BasketRouteEditWorkOrder")
   floorLateWarnings   FloorLateWarning[]   @relation("FloorLateWarningWorkOrder")
+  // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): its baskets' "Do this first" marks.
+  basketFlags         BasketFlag[]         @relation("BasketFlagWorkOrder")
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -788,6 +790,8 @@ model Bundle {
   basketMoves             BasketMove[]       @relation("BasketMoveBundle")
   basketRouteEdits        BasketRouteEdit[]  @relation("BasketRouteEditBundle")
   floorLateWarnings       FloorLateWarning[] @relation("FloorLateWarningBundle")
+  // owb-fl0 baskets.prisma (schema wave "floor baskets 2"): its "Do this first" marks.
+  basketFlags             BasketFlag[]       @relation("BasketFlagBundle")
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])

@@ -276,6 +276,10 @@ model StoredFile {
   paymentNoticeFiles     PaymentNotice[]            @relation("PaymentNoticeFile")
   // owb-b1 shipping.prisma: the warehouse legs whose customer label it is.
   warehouseLegLabels     ShipmentWarehouseLeg[]     @relation("ShipmentWarehouseLegLabel")
+  // owb-fl0 labour.prisma, baskets.prisma (schema wave "floor baskets 2"): the ticked quality steps whose photo it is, the
+  // suggestions whose voice note it is.
+  checklistPhotos        OperationChecklistResult[] @relation("OperationChecklistResultFile")
+  floorSuggestionVoices  FloorSuggestion[]          @relation("FloorSuggestionVoice")
   // owb-ssw production.prisma (S3 schema wave "structures + units"): the places of the scan code on its pages (a design file).
   scanCodePlacements     ScanCodePlacement[]        @relation("ScanCodePlacementFile")
 
