@@ -1,0 +1,53 @@
+/* owb-pd6 step 6.4 (S4; design plan § 5v, § 5y) — "Route of each line" on the order's Production tab: layout only, DS tokens only, no
+   raw colour. Each line wraps in a narrow room (the bar of department chips wraps by itself: lib/department); nothing scrolls sideways. */
+
+.fw-lr-list {
+  display: grid;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.fw-lr-row {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-block: var(--nds-space-10);
+  border-block-end: 1px solid var(--nds-border-subtle);
+}
+.fw-lr-row:last-child {
+  border-block-end: 0;
+}
+.fw-lr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+.fw-lr-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+.fw-lr-route,
+.fw-lr-when {
+  color: var(--nds-text-muted);
+}
+.fw-lr-why {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+.fw-lr-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-lr-acts .nds-select {
+  max-width: 100%;
+}

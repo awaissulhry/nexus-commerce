@@ -10,6 +10,8 @@ import { portalReader } from './access'
 import { listOrders, type ListQuery } from './orders'
 import { listOrdersWithRows } from './orders' // pg-s1 S1.2
 import { requestStatesOf } from '../portal-requests/views' // pg-s1 S1.2: the party's own requests, by the partner read
+// owb- po1.1 (order workflow): the order as ONE thing — drafts as rows, each row's page, life, lines, own columns, waits and acts.
+import { draftRows, sheetFacts, type SheetItem } from './sheet-rows'
 
 /**
  * The customer's own sheet in its portal (B-TH-061; threads plan TH-4, SHEET-G10, Owner decision 13; design SHEET.portal-sheet,
@@ -21,6 +23,10 @@ import { requestStatesOf } from '../portal-requests/views' // pg-s1 S1.2: the pa
  *                                             customer's fields and this customer's own, never another's); pg-s1: and the
  *                                             band's numbers (`groups`, `open`, `needsYou`: factory-domain bandCounts over
  *                                             the party's own orders, catalogue requests and requests, before the search)
+ *                                             owb- po1.1: + with `drafts=true` the party's DRAFT orders on the first page of the OPEN
+ *                                             and ALL chips (kind DRAFT, status null; never counted in `count`, the chips or the band:
+ *                                             the band has no group for them), and every row's `page`, `life`, `lifeNote`, `lines`,
+ *                                             `ownColumnIds`, `waits`, `may`; the answer's `ownColumns` (./sheet-rows.ts)
  *   GET /portal/sales-orders/sheet/download   "Download all (Excel)": EVERY row of the chip and search (not only the loaded page),
  *                                             written by the server here, in the partner's own scope, as Excel or CSV in the
  *                                             customer's language — never through the export job (Owner decision 13: no job, no
@@ -58,7 +64,7 @@ const NO_PRICES: Words = { it: 'I prezzi non fanno parte del vostro accesso: il 
 const ROWS_WORDS = (count: number): Words => ({ it: `${count} ${count === 1 ? 'riga' : 'righe'}`, en: `${count} ${count === 1 ? 'row' : 'rows'}` })
 
 /** GET /portal/sales-orders/sheet: the page of Portal › Orders with its portal columns (see the module's head). */
-export async function orderSheet(app: FastifyInstance, request: FastifyRequest, query: ListQuery, now: Date) {
+export async function orderSheet(app: FastifyInstance, request: FastifyRequest, query: ListQuery & { readonly drafts?: 'true' | 'false' | undefined }, now: Date) {
   const reader = portalReader(app, request)
   const { answer: list, everyRow } = await listOrdersWithRows(app, request, query, now)
   const { columns, rows } = await portalRowValues(request, 'ORDER', list.items.filter((item) => item.kind === 'ORDER').map((item) => item.id), reader.session.company.id)
@@ -68,14 +74,21 @@ export async function orderSheet(app: FastifyInstance, request: FastifyRequest, 
   const states = await requestStatesOf(app, request)
   const band = bandCounts([...everyRow.map((row): BandRow => ({ kind: 'ROW', status: row.status, needsYou: row.needsYou })), ...states.map((state): BandRow => ({ kind: 'INQUIRY', state }))])
   // ---- end pg-s1 S1.2
+  // ---- owb- po1.1: the drafts (asked with drafts=true: an older web reads no DRAFT kind), then every row's facts.
+  const withDrafts = query.drafts === 'true' && query.offset === 0 && (query.chip === 'OPEN' || query.chip === 'ALL')
+  const drafts = withDrafts ? await draftRows(app, request, reader, query.q) : { rows: [], facts: new Map() }
+  const items: SheetItem[] = [...drafts.rows, ...list.items]
+  const { facts, ownColumns } = await sheetFacts(request, reader, items, drafts.facts, businessDate(now))
+  // ---- end owb- po1.1
   return {
     ...list,
     ...band, // pg-s1 S1.2: groups, open, needsYou
     // The contract's arrays are mutable; the shared read's are readonly (copied at this boundary).
     columns: columns.map((column) => ({ ...column, options: column.options && [...column.options] })),
     // Plan §0.5: a row shows the customer's own number only (`yourNumber`), never the office's series (pg-s1 S1.3: the list answers
-    // `number: null` for an order and a request alike).
-    items: list.items.map((item) => ({ ...item, values: rows.get(item.id) ?? {} })),
+    // `number: null` for an order and a request alike). owb- po1.1: + a draft's row (number null too) and every row's facts.
+    items: items.map((item) => ({ ...item, values: rows.get(item.id) ?? {}, ...facts.get(item.id)! })),
+    ownColumns, // owb- po1.1
   }
 }
 

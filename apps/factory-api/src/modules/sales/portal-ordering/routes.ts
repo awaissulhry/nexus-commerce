@@ -37,6 +37,9 @@ import {
   templateContract,
   uploadContract,
   withdrawContract,
+  takeBackContract, // owb- po1.2
+  copyLineContract, // owb- po1.3
+  putBackLineContract,
   // B-CP-075: described and made-to-measure lines, and the people of a by-person line.
   addCustomLineContract,
   changeCustomLineContract,
@@ -58,9 +61,12 @@ import { styleDraftOfRequest } from './style-draft'
 import { acceptRequest, confirmRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
+import { takeBackRequest } from './requests' // owb- po1.2
+import { copyLine, putBackLine, removeLine } from './requests' // owb- po1.3
+import { officeCopyLine, officePutBackLine } from './office-drafts' // owb- po1.3
 import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
 // B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
-import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile, removeLineWithFiles } from './draft-files'
+import { announceDraftFile, completeDraftFile, discardDraftWithFiles, moveDraftFile, removeDraftFile } from './draft-files'
 import { orderTemplate, uploadSheet } from './upload'
 // B-W2b-374 (XF3:04): an option's artwork in the portal.
 import { processFiles } from '../../../platform/files/service'
@@ -88,7 +94,10 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraftWithFiles(processFiles, portalWriter(app, request), request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/lines', { schema: addLinesContract }, async (request) => addLines(portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.put('/portal/order-requests/:requestId/lines/:lineId', { schema: changeLineContract }, async (request) => changeLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLineWithFiles(processFiles, portalWriter(app, request), request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  // owb- po1.3: "Take out" is a soft remove (its people and files stay); a line is copied whole; one taken out is put back.
+  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/lines/:lineId/copy', { schema: copyLineContract }, async (request) => copyLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body.version, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/lines/:lineId/put-back', { schema: putBackLineContract }, async (request) => putBackLine(portalWriter(app, request), request.params.requestId, request.params.lineId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/prices', { schema: pricesContract }, async (request) => takeTodaysPrices(portalWriter(app, request), request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   // B-CP-072: the draft's files.
   app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), portalWriter(app, request), request.params.requestId, request.body, idempotencyKeyFrom(request))))
@@ -108,6 +117,8 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   )
   app.post('/portal/order-requests/:requestId/send', { schema: sendContract }, async (request) => sendRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
+  // owb- po1.2 (order workflow): Take it back — a SENT request back to its DRAFT before the factory answered or started work on it.
+  app.post('/portal/order-requests/:requestId/take-back', { schema: takeBackContract }, async (request) => takeBackRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
 
   // Reorder.
   app.get('/portal/reorder/orders', { schema: pastOrdersContract }, async (request) => pastOrders(app, request, request.query))
@@ -140,7 +151,10 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/sales/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => officeAddCustomLine(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.put('/sales/order-requests/:requestId/custom-lines/:lineId', { schema: changeCustomLineContract }, async (request) => officeChangeCustomLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
   app.put('/sales/order-requests/:requestId/lines/:lineId', { schema: changeLineContract }, async (request) => officeChangeLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/sales/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => officeRemoveLine(processFiles, app, request, request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  app.delete('/sales/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => officeRemoveLine(app, request, request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  // owb- po1.3: the office's twins of copy and put back (the same bodies and answers).
+  app.post('/sales/order-requests/:requestId/lines/:lineId/copy', { schema: copyLineContract }, async (request) => officeCopyLine(app, request, request.params.requestId, request.params.lineId, request.body.version, idempotencyKeyFrom(request)))
+  app.post('/sales/order-requests/:requestId/lines/:lineId/put-back', { schema: putBackLineContract }, async (request) => officePutBackLine(app, request, request.params.requestId, request.params.lineId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/sales/order-requests/:requestId/lines/:lineId/people', { schema: addPeopleContract }, async (request) => officeAddPeople(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
   app.put('/sales/order-requests/:requestId/lines/:lineId/people/:personId', { schema: changePersonContract }, async (request) =>
     officeChangePerson(app, request, request.params.requestId, request.params.lineId, request.params.personId, request.body, idempotencyKeyFrom(request)),

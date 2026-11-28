@@ -27,6 +27,7 @@ import { copyMeasuresInCommand, emptyMeasuresCopy } from '../measures/copy'
 import { changeOrderAtReleaseInCommand, linkDraftInCommand, releaseChangeOrderInCommand, type DraftFor } from '../changes/hooks'
 // B-W2b-231: the release gate (scope, score, what the person released over) in the release.
 import { releaseGateInCommand } from '../release/gate'
+import { assertMayEditDraft } from '../drafts/may-edit' // owb-pd1 1.4
 import {
   assertMayWrite,
   bomStyleOf,
@@ -67,7 +68,9 @@ import {
 export async function copyRevision(caller: CommandCaller, styleId: string, sourceId: string, body: CopyRevisionBody, idempotencyKey?: string, changeOrder?: DraftFor): Promise<BomView> {
   const context = contextOf(caller)
   const { style } = await readRevisionFor(caller, styleId, sourceId)
-  assertMayWrite(context, PRODUCT_BOM_MANAGE, style.companyId)
+  // owb-pd1 1.4: "Start revision n" as a copy of the frozen one — product.bom.manage, or the designer (the revision written is the
+  // new DRAFT; the copy takes the frozen parts as they are, the route and its figures unchanged).
+  assertMayEditDraft(context, style.companyId, 'DRAFT', PRODUCT_BOM_MANAGE)
 
   const { result } = await command(caller, { name: 'product.bom.copyRevision', idempotencyKey, input: { styleId, sourceId, ...body } }, async (tools) => {
     const { tx, now } = tools

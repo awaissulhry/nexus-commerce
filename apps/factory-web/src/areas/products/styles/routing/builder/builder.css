@@ -1,0 +1,287 @@
+/* owb-pd6 step 6.2 (S4; design plan § 5w "Measured", § 5y) — the route builder: layout only, DS tokens only, no raw colour. The window's
+   body is a room (lib/window-shell `fwroom`): from 720 px of ROOM the departments sit left and the route right; under it (a phone's
+   sheet, a narrow window) one column with the route FIRST, the departments below. Measured: every department row has one height,
+   every step row one height, the step's buttons end on one line (the DS ordered list draws ↑ / ↓ after the row's content). */
+
+.fw-rb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'route'
+    'depts'
+    'more';
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+@container fwroom (min-width: 720px) {
+  .fw-rb {
+    grid-template-columns: minmax(15rem, 2fr) minmax(0, 3fr);
+    grid-template-areas:
+      'depts route'
+      'more more';
+    align-items: start;
+  }
+}
+.fw-rb-depts {
+  grid-area: depts;
+}
+.fw-rb-route {
+  grid-area: route;
+}
+.fw-rb-more {
+  grid-area: more;
+  display: grid;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding-block-start: var(--nds-space-12);
+  border-block-start: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rb-col {
+  display: grid;
+  align-content: start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-control-h-sm);
+}
+.fw-rb-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.fw-rb-count {
+  min-width: 1.5em;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.fw-rb-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fw-rb-total {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+.fw-rb-hint,
+.fw-rb-note,
+.fw-rb-label {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rb-label {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-rb-note {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ---- the departments: one row height ---- */
+.fw-rb-list,
+.fw-rb-tpls,
+.fw-rb-keys,
+.fw-rb-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-rb-keys,
+.fw-rb-issues {
+  display: grid;
+  gap: var(--nds-space-4);
+  padding-inline-start: 1.1em;
+  list-style: disc;
+}
+.fw-rb-list {
+  display: grid;
+  gap: var(--nds-space-4);
+}
+.fw-rb-dept {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  height: 2.75rem;
+  min-width: 0;
+  padding: 0 var(--nds-space-6);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  cursor: grab;
+}
+.fw-rb-dept:focus-within {
+  border-color: var(--nds-border-strong);
+}
+.fw-rb-grip {
+  flex: none;
+  color: var(--nds-text-3);
+}
+.fw-rb-dept .fw-dept-chip,
+.fw-rb-step .fw-dept-chip {
+  min-width: 0;
+  overflow: hidden;
+}
+.fw-rb-dept .fw-dept-name,
+.fw-rb-step .fw-dept-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fw-rb-times {
+  flex: none;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the route: one step height, the buttons on one line ---- */
+.fw-rb-drop {
+  display: grid;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-rb-step {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  height: 2.5rem;
+  min-width: 0;
+}
+.fw-rb-no {
+  flex: none;
+  min-width: 1.5em;
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.fw-rb-old {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-danger-text);
+}
+.fw-rb-min {
+  flex: none;
+  width: 6.5rem;
+}
+.fw-rb-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: var(--nds-space-6) var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+}
+.fw-rb-notes {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ---- under them ---- */
+.fw-rb-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rb-copy > * {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.fw-rb-copy > .nds-btn {
+  flex: none;
+}
+.fw-rb-for {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.fw-rb-tpl {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-rb-tpls {
+  display: grid;
+  gap: var(--nds-space-4);
+  margin-block: var(--nds-space-6);
+}
+.fw-rb-tplrow {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: 2.25rem;
+  min-width: 0;
+}
+.fw-rb-tplname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- step 6.3: Manage, inside the departments list (design § 5x) — the same row height as the list to add from ---- */
+.fw-rb-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+.fw-rb-mrow {
+  cursor: default;
+}
+.fw-rb-mrow[data-closed] {
+  background: var(--nds-surface-sunken);
+}
+.fw-rb-mdot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  border-radius: var(--nds-radius-pill);
+  background: var(--fw-dept-fg);
+  color: var(--nds-surface);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-rb-mname {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.fw-rb-mnew {
+  border-style: dashed;
+  cursor: default;
+}
