@@ -124,6 +124,8 @@ const customLine = output({
   sizing: sizing.nullable(),
   /** od-s s.4: the row's open choices (null: none). */
   choices: z.array(choiceView).nullable(),
+  /** owb- po1.3 (settle 4): the line's material in words — its "Material" choice's pick, else the colourway it names; null: none. */
+  material: z.string().nullable(),
 })
 // ---- end B-CP-075
 
@@ -219,7 +221,12 @@ const line = output({
   sizing: sizing.nullable(),
   /** od-s s.4: the row's open choices (null: none). */
   choices: z.array(choiceView).nullable(),
+  /** owb- po1.3 (settle 4): the line's material in words — its "Material" choice's pick, else the colourway's name; null: none. */
+  material: z.string().nullable(),
 })
+
+/** owb- po1.3: a line taken out of a draft ("Put it back"): its place, what it was (style, words or garment type), when it went. */
+const removedLine = output({ id: id(), seq: z.number().int(), words: z.string(), removedAt: at })
 
 const requestBody = output({
   id: id(),
@@ -263,6 +270,8 @@ const requestBody = output({
   files: draftFiles,
   /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
   uploads: output({ open: z.boolean(), words: z.string().nullable() }),
+  /** owb- po1.3: a DRAFT's lines taken out, the last first (they count nowhere until put back); [] once sent. */
+  removedLines: z.array(removedLine),
   // ---- B-CP-075: the lines in the customer's own words (described, made to measure; with `lines`, one draft by seq), the parts it
   // sends later, who of the customer saved it last (a display name, never an id or an e-mail), and made to measure for it.
   customLines: z.array(customLine),
@@ -362,6 +371,9 @@ export const changeLineContract = defineContract({
   response: { 200: record },
 })
 export const removeLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+// owb- po1.3 (order workflow, the ONE lines table): a line copied whole; a line taken out put back (DELETE …/lines/:lineId is the soft take out).
+export const copyLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
+export const putBackLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), body: input({ version }), response: { 200: record } })
 export const pricesContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 export const discardContract = defineContract({ params: requestParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ discarded: z.literal(true) }) } })
 export const sendContract = defineContract({

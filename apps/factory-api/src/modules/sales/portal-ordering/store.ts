@@ -95,10 +95,40 @@ export async function readRequest(db: Reader, requestId: string): Promise<Reques
   return db.portalOrderRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS })
 }
 
+/**
+ * The requests' lines in their order. owb- po1.3 (order workflow, "Take out" / "Put it back"): the LIVE lines only — a line taken out
+ * (`removedAt`) counts nowhere: not in the record's lines, the Send's checks, Still open, the totals, the sheet, Incoming or the
+ * accept. It keeps its sizes, choices, people, files and own values until it is put back (`readRemovedLines`) or its draft is
+ * discarded (`readAllLines`).
+ */
 export async function readLines(db: Reader, requestIds: readonly string[]): Promise<LineRow[]> {
+  if (requestIds.length === 0) return []
+  return db.portalOrderRequestLine.findMany({ where: { requestId: { in: [...requestIds] }, removedAt: null }, select: LINE_COLUMNS, orderBy: [{ requestId: 'asc' }, { seq: 'asc' }] })
+}
+
+// ---- owb- po1.3 (order workflow): lines taken out -----------------------------------------------------------------------------------
+/** Every line of the requests, taken out too (a discarded draft takes them all, with their sizes and files). */
+export async function readAllLines(db: Reader, requestIds: readonly string[]): Promise<LineRow[]> {
   if (requestIds.length === 0) return []
   return db.portalOrderRequestLine.findMany({ where: { requestId: { in: [...requestIds] } }, select: LINE_COLUMNS, orderBy: [{ requestId: 'asc' }, { seq: 'asc' }] })
 }
+
+/** What a line taken out shows ("Put it back"): its place, what it was, when it went (partner-readable columns only). */
+export const REMOVED_LINE_COLUMNS = { id: true, requestId: true, seq: true, kind: true, styleId: true, colourwayId: true, description: true, garmentType: true, removedAt: true } as const satisfies Prisma.PortalOrderRequestLineSelect
+export type RemovedLineRow = Prisma.PortalOrderRequestLineGetPayload<{ select: typeof REMOVED_LINE_COLUMNS }>
+
+/** The lines taken out of these requests, the last taken out first. */
+export async function readRemovedLines(db: Reader, requestIds: readonly string[]): Promise<RemovedLineRow[]> {
+  if (requestIds.length === 0) return []
+  return db.portalOrderRequestLine.findMany({ where: { requestId: { in: [...requestIds] }, removedAt: { not: null } }, select: REMOVED_LINE_COLUMNS, orderBy: [{ removedAt: 'desc' }, { seq: 'asc' }] })
+}
+
+/** The next free place on a request: every line counts, a line taken out too (the place is unique per request, for ever). */
+export async function nextLineSeq(db: Reader, requestId: string): Promise<number> {
+  const top = await db.portalOrderRequestLine.aggregate({ where: { requestId }, _max: { seq: true } })
+  return (top._max.seq ?? 0) + 1
+}
+// ---- end owb- po1.3
 
 /** The request row locked for the command (FOR UPDATE), checked against the version the caller read. */
 export async function lockRequest(tx: CommandTx, requestId: string, expected: number): Promise<RequestRow> {

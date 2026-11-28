@@ -13,12 +13,14 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { acceptRequest, confirmRequest, listOfficeRequests, refuseRequest } from './office'
+import { officeCopyLine, officePutBackLine } from './office-drafts' // po1.3: the office's twins
 
 /**
- * "Take it back" (owb- order workflow, S1 po1.2; design § 5zi; build plan.md § 4 G1) on the local stack, through the real app and the
+ * The order as one thing (owb- order workflow, S1 PR po1): "Take it back" (po1.2; design § 5zi; build plan.md § 4 G1) and the ONE
+ * lines table's moves — copy, take out, put back, material (po1.3) — on the local stack, through the real app and the
  * real portal sign-in by code: the factory-db seeds up to pricing (the brand SEED-C1 = P1, its own label SEED-JKT-02 sold on the
  * base list), its portal and another customer's on; P1's buyer and designer, the other customer's buyer; the office decides through
- * the module's functions. Every name and number is made up. Run with `node scripts/factory/run-pg-tests.mjs portal-ordering/take-back`.
+ * the module's functions. Every name and number is made up. Run with `node scripts/factory/run-pg-tests.mjs portal-ordering/one-order`.
  *
  *   - send → take it back → change a line → send again: the SAME number; when and who sent it cleared while it is a draft again;
  *     the base's audit action `portalOrdering.takeBack`; the event `portal_order_request.taken_back` (ids only); Incoming drops it
@@ -26,6 +28,8 @@ import { acceptRequest, confirmRequest, listOfficeRequests, refuseRequest } from
  *   - a style draft made for it (G1 (c2)): 409 "The factory has already started work on this order: ask the factory."
  *   - a Designer (no portal.orderRequests.manage): 403; another customer: 404; a draft taken back is never discarded (G1 (e))
  *   - the office's Confirm of a taken-back draft keeps its number too
+ *   - po1.3: a line copied (even the same style and colour), taken out (soft: its choices stay) and put back as it was; a line taken out
+ *     counts nowhere (the record's lines and totals, the Send); the office's twins; the Designer copies too (a draft's right)
  */
 
 let h: Harness
@@ -201,5 +205,84 @@ describe('Take it back (owb- po1.2)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     expect((await one('SELECT count(*)::int AS n FROM "PortalOrderRequest" WHERE id = $1', [sent.id])).n).toBe(1)
     const confirmed = await confirmRequest(office(), sent.id, { version: back.request.version, as: 'ORDER' })
     expect(confirmed.request).toMatchObject({ status: 'ACCEPTED', number: sent.number })
+  })
+})
+
+describe('the ONE lines table: copy, take out, put back, material (owb- po1.3)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const material = [{ topic: 'Material', options: ['Cowhide', 'Kangaroo'], picked: 'Kangaroo' }]
+
+  /** A draft with a catalogue line (SEED-JKT-02 black, 2 × 50) and a described line (3 pieces, its material a choice). */
+  async function twoLines(subject: string): Promise<{ id: string; record: Json; catalogueId: string; describedId: string }> {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { source: 'PICKER', subject }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    const added = await ok(browsers.buyer, 'POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 2 }] }] })
+    const record = await ok(browsers.buyer, 'POST', `${url}/custom-lines`, { version: added.request.version, line: { description: 'Made-up race suit', quantity: 3, choices: material } })
+    return { id: made.request.id, record, catalogueId: record.request.lines[0].id, describedId: record.request.customLines[0].id }
+  }
+
+  it('material: the "Material" choice, else the colourway’s name', async () => {
+    const draft = await twoLines('Made-up material')
+    expect(draft.record.request.customLines[0].material).toBe('Kangaroo')
+    expect(draft.record.request.lines[0].material).toBe(draft.record.request.lines[0].colourway.name)
+  })
+
+  it('a line is copied whole at the end — the same style and colour too; the picker still refuses a second one', async () => {
+    const draft = await twoLines('Made-up copies')
+    const url = `/portal/order-requests/${draft.id}`
+    const copied = await ok(browsers.buyer, 'POST', `${url}/lines/${draft.catalogueId}/copy`, { version: draft.record.request.version })
+    expect(copied.request.lines).toHaveLength(2)
+    const [first, copy] = copied.request.lines
+    expect(copy).toMatchObject({ style: first.style, colourway: first.colourway, pieces: 2, seq: 3 })
+    expect(copy.id).not.toBe(first.id)
+    const copiedCustom = await ok(browsers.buyer, 'POST', `${url}/lines/${draft.describedId}/copy`, { version: copied.request.version })
+    expect(copiedCustom.request.customLines.map((line: Json) => [line.description, line.material, line.pieces])).toEqual([['Made-up race suit', 'Kangaroo', 3], ['Made-up race suit', 'Kangaroo', 3]])
+    expect(copiedCustom.request.summary).toMatchObject({ lines: 4, pieces: 10 })
+    // The picker (where merging is the point) still refuses the same style and colour.
+    expect((await call(browsers.buyer, 'POST', `${url}/lines`, { version: copiedCustom.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '52', quantity: 1 }] }] })).status).toBe(400)
+    // The Designer keeps drafts too: it copies (no price in its answer).
+    const byDesigner = await ok(browsers.designer, 'POST', `${url}/lines/${draft.describedId}/copy`, { version: copiedCustom.request.version })
+    expect(byDesigner.request.customLines).toHaveLength(3)
+    expect(JSON.stringify(byDesigner.request.lines)).not.toContain('unitPriceShown')
+  })
+
+  it('take out is soft: the line counts nowhere, keeps its choices, and comes back as it was with Put it back', async () => {
+    const draft = await twoLines('Made-up take out')
+    const url = `/portal/order-requests/${draft.id}`
+    const out = await ok(browsers.buyer, 'DELETE', `${url}/lines/${draft.describedId}?version=${draft.record.request.version}`)
+    expect(out.request.customLines).toEqual([])
+    expect(out.request.summary).toMatchObject({ lines: 1, pieces: 2 })
+    expect(out.request.removedLines).toEqual([expect.objectContaining({ id: draft.describedId, seq: 2, words: 'Made-up race suit' })])
+    const row = await one('SELECT "removedAt", "removedById", choices FROM "PortalOrderRequestLine" WHERE id = $1', [draft.describedId])
+    expect(row.removedAt).not.toBeNull()
+    expect(row.choices).toEqual(material)
+    // A line taken out is not changed, copied or taken out again: not found.
+    expect((await call(browsers.buyer, 'POST', `${url}/lines/${draft.describedId}/copy`, { version: out.request.version })).status).toBe(404)
+    expect((await call(browsers.buyer, 'DELETE', `${url}/lines/${draft.describedId}?version=${out.request.version}`)).status).toBe(404)
+    // Put it back: in its own place, as it was.
+    const back = await ok(browsers.buyer, 'POST', `${url}/lines/${draft.describedId}/put-back`, { version: out.request.version })
+    expect(back.request.removedLines).toEqual([])
+    expect(back.request.customLines[0]).toMatchObject({ id: draft.describedId, seq: 2, material: 'Kangaroo', pieces: 3 })
+    // A line on the draft has nothing to put back (409 in words); another customer finds nothing.
+    expect((await call(browsers.buyer, 'POST', `${url}/lines/${draft.describedId}/put-back`, { version: back.request.version })).status).toBe(409)
+    expect((await call(browsers.other, 'POST', `${url}/lines/${draft.describedId}/put-back`, { version: back.request.version })).status).toBe(404)
+  })
+
+  it('the Send ignores a line taken out: the request goes with its live lines only', async () => {
+    const draft = await twoLines('Made-up send without it')
+    const url = `/portal/order-requests/${draft.id}`
+    const out = await ok(browsers.buyer, 'DELETE', `${url}/lines/${draft.describedId}?version=${draft.record.request.version}`)
+    const sent = await ok(browsers.buyer, 'POST', `${url}/send`, { version: out.request.version })
+    expect(sent.request).toMatchObject({ status: 'SENT', summary: { lines: 1, pieces: 2 }, customLines: [], removedLines: [] })
+    const event = await one<{ payload: Json }>('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2', ['portal_order_request.sent', draft.id])
+    expect(event.payload).toMatchObject({ lines: 1, pieces: 2 })
+  })
+
+  it('the office’s twins copy and put back the same way (orders.manage over that customer)', async () => {
+    const draft = await twoLines('Made-up office twins')
+    const out = await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${draft.id}/lines/${draft.describedId}?version=${draft.record.request.version}`)
+    const copied = await officeCopyLine(h.app, office() as never, draft.id, draft.catalogueId, out.request.version)
+    expect(copied.request.lines).toHaveLength(2)
+    const back = await officePutBackLine(h.app, office() as never, draft.id, draft.describedId, copied.request.version)
+    expect(back.request.customLines.map((line) => line.id)).toEqual([draft.describedId])
   })
 })
