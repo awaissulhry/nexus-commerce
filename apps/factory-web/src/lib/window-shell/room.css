@@ -1,0 +1,61 @@
+/*
+ * owb-b5 (w5.3; design plan § 5y "the page follows its room", R42) — the room rules every page and window shares. Layout only, DS
+ * tokens only. A page or a part opts in by its class; nothing here changes a page that does not use it.
+ *
+ *  R1  The page keeps 600 px and the chat gives way: the record frame's own rule (areas/_shared/record-frame), not repeated here.
+ *  R2  A part follows ITS OWN room: every rule for a narrow screen (@media, max-width 719px) has its twin for a narrow room
+ *      (@container fwroom, max-width 719px) — the same number as lib/window-shell/model.ts ROOM_NARROW_BELOW (a test pins it).
+ *      `.fw-room` makes a box a room; the window's body is one already. In code: useRoomWidth(roomOf, …) (lib/order-cells), no new hook.
+ *  R3  A table never crushes a column: it keeps its smallest width (`--fw-room-min` on its `.fw-room-scroll` box, model.ts
+ *      tableMinWidth: 120 px a column) and scrolls inside its card; the page never scrolls sideways.
+ *  R4  One button height in a title bar (`.fw-room-bar`): every button there is the small control tier (§ 5s: the main button was 34
+ *      high and the others 30).
+ */
+
+/* R2: a room — its children choose by its width. */
+.fw-room {
+  container: fwroom / inline-size;
+  min-width: 0;
+}
+
+/* R2: two (or more) parts side by side while there is room, stacked in a narrow room AND on a narrow screen (the twins). */
+.fw-room-stack {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+@media (max-width: 719px) {
+  .fw-room-stack {
+    grid-auto-flow: row;
+  }
+}
+@container fwroom (max-width: 719px) {
+  .fw-room-stack {
+    grid-auto-flow: row;
+  }
+}
+
+/* R3: the table keeps its smallest width and scrolls inside its card. */
+.fw-room-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.fw-room-scroll > table {
+  min-width: var(--fw-room-min, 100%);
+}
+
+/* R4: one button height in a title bar. */
+.fw-room-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-room-bar .nds-btn {
+  height: var(--nds-control-h-sm);
+}

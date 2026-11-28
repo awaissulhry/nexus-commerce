@@ -1,0 +1,39 @@
+/*
+ * owb-b5 (w5.3) — the window frame's own layout (lib/window-shell/view/WindowShell.tsx). The DS Modal draws the frame (name, scrolling
+ * body, fixed foot, the phone's bottom sheet); this only lays out what the frame holds. The body is a room (`fwroom`): a part inside
+ * follows the window's width, never the screen's (room.css). DS tokens only (no raw colour): light and dark come from the tokens.
+ */
+.fw-wsh-body {
+  container: fwroom / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* The host's other doors, at the foot's left: one row, wrapping before they push the act off the window. */
+.fw-wsh-more {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The lab's made-up content (design index only). */
+.fw-wsh-lab-line {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-wsh-lab-table {
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+.fw-wsh-lab-table th,
+.fw-wsh-lab-table td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  text-align: start;
+  white-space: nowrap;
+}
