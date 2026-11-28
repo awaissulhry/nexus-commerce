@@ -50,6 +50,8 @@ export interface StartStep {
 
 export const NAME_MAX = 80
 export const REASON_MAX = 500
+/** owb-pd8 (pd2 LINE_EXCEPTION_STEPS_MAX): a line's own route has at most 50 steps (the wave's guard). */
+export const LINE_STEPS_MAX = 50
 export const TEMPLATE_NAME_MAX = 80
 const MINUTES = /^\d{1,5}(?:\.\d{1,3})?$/
 
@@ -181,6 +183,7 @@ export function builderProblems(state: BuilderState, looks: readonly DeptLook[])
   if ((state.mode === 'new' || state.mode === 'route') && !state.name.trim()) errors.push({ code: 'NAME_NEEDED', words: { key: 'builder.error.NAME_NEEDED' } })
   if ((state.mode === 'new' || state.mode === 'route') && state.forWhom === 'CUSTOMER' && !state.partyId) errors.push({ code: 'CUSTOMER_NEEDED', words: { key: 'builder.error.CUSTOMER_NEEDED' } })
   if (state.mode === 'line' && !state.reason.trim()) errors.push({ code: 'REASON_NEEDED', words: { key: 'builder.error.REASON_NEEDED' } })
+  if (state.mode === 'line' && state.steps.length > LINE_STEPS_MAX) errors.push({ code: 'TOO_MANY', words: { key: 'builder.error.TOO_MANY', params: { max: LINE_STEPS_MAX } } })
   const notes: BuilderIssue[] = rules.errors.length === 0 && rules.warnings.includes('NO_QUALITY') ? [{ code: 'NO_QUALITY', words: { key: 'builder.note.NO_QUALITY' } }] : []
   const twice = state.steps.find((step, index) => index > 0 && step.departmentId !== '' && state.steps[index - 1]!.departmentId === step.departmentId)
   const twiceDept = twice ? looks.find((entry) => entry.id === twice.departmentId) : undefined
@@ -295,9 +298,16 @@ export function stepRowsOf(state: BuilderState, looks: readonly DeptLook[]): Ste
 // ---- a refusal in words -----------------------------------------------------------------------------------------------------------
 
 /** The refusal codes the server sends that this window says in its own words (the server's English is for logs). */
-/** The departments' (pd1, `refusal/<code>`: D/production/departments/rules.ts) and the routes' refusals. */
-export const REFUSAL_CODES = ['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'CLOSED', 'CODE_TAKEN', 'FROZEN', 'PRINTED', 'NOT_DRAFT'] as const
+/**
+ * The departments' (pd1, `refusal/<code>`: D/production/departments/rules.ts) and the routes' refusals. owb-pd8 (pd2, landed): the route
+ * rules come as 400 with each code at `refusal/<code>` (TOO_FEW, LAST_NOT_PACKING, DEPARTMENT_CLOSED → the rule's words); a line's
+ * FROZEN 409, ONLY_PRODUCTION_MANAGER 403, NOT_A_MODEL 400; NAME_TAKEN 409 means another thing by what was saved (a department, a route
+ * of the revision, an open ready-made route).
+ */
+export const REFUSAL_CODES = ['NAME_EMPTY', 'NAME_TAKEN', 'FLOOR_FIXED', 'CLOSED', 'CODE_TAKEN', 'FROZEN', 'PRINTED', 'NOT_DRAFT', 'ONLY_PRODUCTION_MANAGER', 'NOT_A_MODEL'] as const
 const RULE_CODES: readonly string[] = ['TOO_FEW', 'LAST_NOT_PACKING', 'DEPARTMENT_CLOSED']
+/** What a refused write was about: NAME_TAKEN says the department's, the route's or the ready-made route's words. */
+export type RefusalAbout = 'department' | 'route' | 'template' | 'line'
 
 /** Every code a refusal carries: its own, each issue's, the last part of each issue's path (`name/NAME_TAKEN`). */
 export function refusalCodesOf(error: unknown): string[] {
@@ -314,9 +324,11 @@ export function refusalCodesOf(error: unknown): string[] {
 }
 
 /** A refused write in this web's words: a known refusal or rule code first, else by the kind of answer (conflict, forbidden …). */
-export function refusalOf(error: unknown): Words {
+export function refusalOf(error: unknown, about: RefusalAbout = 'department'): Words {
   const codes = refusalCodesOf(error)
   const known = codes.find((code) => (REFUSAL_CODES as readonly string[]).includes(code))
+  if (known === 'NAME_TAKEN' && about === 'route') return { key: 'refusal.NAME_TAKEN_ROUTE' }
+  if (known === 'NAME_TAKEN' && about === 'template') return { key: 'refusal.NAME_TAKEN_TEMPLATE' }
   if (known) return { key: `refusal.${known}` }
   const rule = codes.find((code) => RULE_CODES.includes(code))
   if (rule) return { key: `rule.${rule}` }
