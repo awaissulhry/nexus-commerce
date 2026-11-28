@@ -1,4 +1,10 @@
 {
+  "change-log": {
+    "action": {
+      "AT_OUR_WAREHOUSE": "Nel magazzino della fabbrica",
+      "SENT_ON": "Inoltrato a voi"
+    }
+  },
   "ds-words": {
     "fileDropzone": {
       "prompt": "Trascinate qui un file o fate clic per caricarlo"

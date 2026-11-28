@@ -1,4 +1,10 @@
 {
+  "change-log": {
+    "action": {
+      "AT_OUR_WAREHOUSE": "At the factory’s warehouse",
+      "SENT_ON": "Sent on to you"
+    }
+  },
   "ds-words": {
     "fileDropzone": {
       "prompt": "Drag & drop or click to upload"

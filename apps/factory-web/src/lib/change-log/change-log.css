@@ -1,0 +1,179 @@
+/* owb-b4 w4.4 (design § 8, § 5s, § 5y; prototype v2.css .logt / .loglist / .fromto) — the change log: layout only, DS tokens only. The
+   part's OWN room decides its form (a container query, never the window: a narrow page beside an open chat reads as a phone): a table
+   from 720 px (when · who · what · from → to, a smallest width, scrolling in its card), a list under it. 720 = model.ts
+   CHANGE_LOG_WIDE_PX. */
+
+.fw-clog {
+  container: fw-clog / inline-size;
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ---- the table (a PC's room) ---- */
+.fw-clog-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+.fw-clog-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+.fw-clog-table th {
+  padding: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  text-align: start;
+  white-space: nowrap;
+}
+.fw-clog-table td {
+  padding: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  vertical-align: top;
+}
+.fw-clog-table tr:last-child td {
+  border-bottom: 0;
+}
+.fw-clog-table td:nth-child(3) {
+  min-width: 150px;
+}
+.fw-clog-when {
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+
+/* ---- the list (a phone's room) ---- */
+.fw-clog-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-clog-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-10) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.fw-clog-item:first-child {
+  border-top: 0;
+}
+.fw-clog-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.fw-clog-item-body {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-clog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* The room decides: one form at a time (the other leaves the page and the accessibility tree). */
+@container fw-clog (min-width: 720px) {
+  .fw-clog-list {
+    display: none;
+  }
+}
+@container fw-clog (max-width: 719.98px) {
+  .fw-clog-scroll {
+    display: none;
+  }
+}
+
+/* ---- the cells ---- */
+.fw-clog-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.fw-clog-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--nds-radius-full);
+  background: currentColor;
+}
+.fw-clog-what {
+  display: grid;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.fw-clog-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-clog-subject,
+.fw-clog-reason {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+.fw-clog-label {
+  font-family: var(--nds-font-mono);
+}
+.fw-clog-who {
+  overflow-wrap: anywhere;
+}
+.fw-clog-fromto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-clog-from,
+.fw-clog-to {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.fw-clog-arrow {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--nds-text-2);
+}
+/* Right to left (the floor in Urdu): the arrow points the way the eye reads. */
+[dir='rtl'] .fw-clog-arrow {
+  transform: scaleX(-1);
+}
+.fw-clog-none,
+.fw-clog-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* ---- Load more / Try again: a 48 px target on the floor (the floor density's own minimum) ---- */
+.fw-clog-more {
+  display: grid;
+  justify-items: start;
+  gap: var(--nds-space-6);
+}
+.fw-clog-more .nds-btn {
+  min-height: var(--nds-density-target-min, auto);
+}
