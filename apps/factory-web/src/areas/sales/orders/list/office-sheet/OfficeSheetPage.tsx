@@ -19,6 +19,7 @@ import { DeleteDraftsWindow } from './windows/DeleteDraftsWindow'
 import { PickCustomerWindow } from './windows/PickCustomerWindow'
 import { ReviewChangeWindow } from './windows/ReviewChangeWindow'
 import { SheetPictureWindow } from './windows/SheetPictureWindow'
+import { GiveDesignerWindow } from './windows/GiveDesignerWindow' // owb-of4
 import './office-sheet.css'
 
 /**
@@ -130,6 +131,7 @@ function Page() {
       {shown?.kind === 'asks' && <AsksWindow row={shown.row} onClose={close} onDone={done} />}
       {shown?.kind === 'review' && <ReviewChangeWindow row={shown.row} lineId={shown.lineId} sizes={shown.sizes} prefix={model.prefix} onClose={close} onDone={done} />}
       {shown?.kind === 'picture' && <SheetPictureWindow row={shown.row} pictures={model.pictures} onClose={close} onDone={done} />}
+      {shown?.kind === 'designer' && <GiveDesignerWindow rows={shown.rows} skipped={shown.skipped} onClose={close} onDone={done} />}
       {shown?.kind === 'print' && <PrintStartWindow open onClose={() => done(null)} companyId={model.companyId} orderId={shown.orderId} />}
       {shown?.kind === 'printAgain' && <PrintAgainWindow open onClose={() => done(null)} companyId={model.companyId} orderId={shown.orderId} />}
       {shown?.kind === 'ship' && <ShipWholeOrderWindow open onClose={() => done(null)} companyId={model.companyId} orderId={shown.orderId} />}

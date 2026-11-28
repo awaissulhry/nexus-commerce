@@ -18,7 +18,7 @@ import { listTouches, partyFromAddress } from '../../model'
 import { confirmDraft, officeDraftPort } from '../../draft/api'
 import type { DraftRecord } from '../../../../../lib/order-draft/schema'
 import { isSheetFilter, readSheet, restrictOrder, type SheetFilter, type SheetRowRead, type SheetTiles } from './api'
-import { NS, commitRouteOf, confirmPlanOf, csvOf, deletePlanOf, orderKeyOf, pageOf, patchRow, restrictPlanOf, rowOfKey, sheetOrderOf } from './map'
+import { NS, commitRouteOf, confirmPlanOf, csvOf, deletePlanOf, designerPlanOf, orderKeyOf, pageOf, patchRow, restrictPlanOf, rowOfKey, sheetOrderOf } from './map'
 
 /**
  * owb-of3 steps 3–4 — the office Orders sheet's state: its read (`GET /sales/orders/sheet`, the filter and the search in the address:
@@ -34,6 +34,7 @@ export type OfficeWindowState =
   | { readonly kind: 'review'; readonly row: SheetRowRead; readonly lineId: string; readonly sizes: Readonly<Record<string, number>> }
   | { readonly kind: 'picture'; readonly row: SheetRowRead }
   | { readonly kind: 'print' | 'printAgain' | 'ship'; readonly orderId: string }
+  | { readonly kind: 'designer'; readonly rows: readonly SheetRowRead[]; readonly skipped: number } /* owb-of4: Give to the designer */
 
 export interface OfficeSheetModel {
   readonly prefix: string
@@ -337,18 +338,24 @@ export function useOfficeSheet(): { model: OfficeSheetModel; actions: OfficeShee
     },
     [t],
   )
+  // owb-of4 extra step: Give to the designer — the confirmed orders not with the designer yet; the rest skipped and counted.
+  const openDesigner = useCallback((keys: readonly string[]) => {
+    const plan = designerPlanOf(rowsRef.current ?? [], keys)
+    setShown({ kind: 'designer', rows: plan.go, skipped: plan.already + plan.other })
+  }, [])
   const bulk = useMemo(
     () => [
       ...(manage
         ? [
             { id: 'confirm', words: t('office.bulk.confirm'), icon: 'check', primary: true, run: (keys: readonly string[]) => void runConfirm(keys) },
+            { id: 'designer', words: t('office.bulk.designer'), icon: 'image', run: openDesigner },
             { id: 'deleteDrafts', words: t('office.bulk.deleteDrafts'), icon: 'trash-2', run: openDelete },
             { id: 'restrict', words: t('office.bulk.restrict'), icon: 'lock', run: (keys: readonly string[]) => void runRestrict(keys) },
           ]
         : []),
       { id: 'export', words: t('office.bulk.export'), icon: 'download', run: runExport },
     ],
-    [manage, t, runConfirm, openDelete, runRestrict, runExport],
+    [manage, t, runConfirm, openDesigner, openDelete, runRestrict, runExport],
   )
 
   const orders = useMemo(() => (rows ?? []).map((row) => sheetOrderOf(row, prefix, t)), [rows, prefix, t])
