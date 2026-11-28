@@ -871,6 +871,8 @@ model StyleRevision {
   changeOrdersFrom          ChangeOrder[]      @relation("ChangeOrderFromRevision")
   changeOrdersTo            ChangeOrder[]      @relation("ChangeOrderToRevision")
   sampleRounds              SampleRound[]
+  // owb-pd2w (S4 schema wave "routes"): its model and customer routes (parts of the revision, frozen with it).
+  styleRoutes               StyleRoute[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.
@@ -945,6 +947,14 @@ model BomLine {
   mtmScalePointId String?  @db.Uuid
   mtmScaleFactor  Decimal? @db.Decimal(7, 4)
   note            String?
+  /// owb-pd2w (order workflow build, S4 schema wave "routes"; design order-workflow-2026-11-25 § "Materials": "Main material:
+  /// the leathers the customer can pick on an order line; it cannot be taken out"): the line the customer's chosen leather goes
+  /// into, at most one per revision (the partial unique BomLine_one_main of …_product_routes_guards), frozen with the revision
+  /// like every other column. The leathers the customer may pick stay the style's offered MATERIAL option group
+  /// (options.prisma StyleOptionGroup); an option names no BOM line, so this column says which line they replace. The API
+  /// refuses taking the main line out (MAIN_REQUIRED). The default is the database's (dbgenerated, as
+  /// Operation.departmentDefault's), so a Prisma insert leaves the column out.
+  isMain          Boolean  @default(dbgenerated("('false'::text)::boolean"))
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -1081,6 +1091,11 @@ model Department {
   routingOperations RoutingOperation[]
   // owb-fl0 floor-auth.prisma (schema wave "floor baskets 2"): the phone sessions that picked it ("where am I").
   floorSessions     FloorSession[]     @relation("FloorSessionDepartment")
+  // owb-pd2w (S4 schema wave "routes"): the steps of model and customer routes and of ready-made routes in it; its own labour
+  // rates (costing.prisma).
+  styleRouteSteps    StyleRouteStep[]
+  routeTemplateSteps RouteTemplateStep[]
+  labourRates        LabourRate[]
 
   @@unique([tenantId, number])
   // The target of the operations' and route steps' tenant-safe references.
@@ -1154,6 +1169,8 @@ model Operation {
   optionEffects    OptionEffect[]
   // W2b-2 production.prisma (B-W2b-74): the unplanned operations made from it.
   unplannedOperations WorkOrderOperation[]
+  // owb-pd2w (S4 schema wave "routes"): the steps of model and customer routes made from it (a department's default).
+  styleRouteSteps     StyleRouteStep[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -1245,6 +1262,208 @@ model RoutingOperation {
   // W2b-4: the target of its size times' and machine settings' reference: a step of the same revision.
   @@unique([tenantId, revisionId, id])
 }
+
+// ── owb-pd2w (order workflow build, S4 schema wave "routes"; design order-workflow-2026-11-25 § 5u, § 5v, § 5w; build brief
+// owb-pd-server step 2.1; S4 settles 2, 3, 5, 8): the routes of a product beside its own (the revision's RoutingOperation
+// steps), the factory's ready-made routes, and the route of one order line.
+//
+//   StyleRoute + StyleRouteStep        a MODEL route ("Double check": any customer, or "Only for ⟨customer⟩") or a CUSTOMER
+//                                      route of one style revision, its steps one department each. Parts of the revision:
+//                                      written only while it is DRAFT, frozen once released (…_product_guards' part rule,
+//                                      reused as it is by …_product_routes_guards). copyRevision copies them into the next draft.
+//   RouteTemplate + RouteTemplateStep  a ready-made route ("Leather garment", "Molded part" …) the route builder starts from a
+//                                      copy of. A copy is independent: closing a template changes no product (S4 settle 8).
+//                                      Closed, never deleted.
+//   SalesOrderLineRoute                one order line's route choice, 1:1 (S4 settle 2: its own table, no SalesOrderLine
+//                                      column): the picked style route and/or "Only this order" (exception steps with why).
+//                                      Nothing of it changes once the order's work papers are printed (an OrderPrint FIRST).
+//
+// A line's route is read ONLY through factory-domain routeOfLine() (line exception → picked model route → order structure (S3)
+// → customer route → structure rule (S3) → the product's route). Who writes (ownership/product.json): the office only — routes
+// and ready-made routes product.routing.manage (the production manager), a line's pick orders.manage (MODEL only, the API), a
+// line's exception product.routing.manage. The floor reads routes through the API; the customer never reads a route.
+
+/// A model or customer route of one style revision (owb-pd2w; design § 5v "The route is decided in levels"): its name, its
+/// kind and, for a customer route (or a model "Only for ⟨customer⟩"), the customer. A part of the revision: inserted, changed
+/// and deleted only while the revision is DRAFT, then frozen with it (…_product_routes_guards: factory_style_revision_part_guard
+/// and StyleRoute_check). Its steps are StyleRouteStep rows.
+model StyleRoute {
+  id          String         @id @db.Uuid
+  tenantId    String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The style's company (null: a tenant-wide style), as the style says (StyleRoute_check).
+  companyId   String?        @db.Uuid
+  styleId     String         @db.Uuid
+  /// The revision it belongs to (of the style: the foreign key); a route never moves to another revision.
+  revisionId  String         @db.Uuid
+  /// 1 to 80 trimmed characters, unique among the revision's routes ("Double check", "For Seed Racing").
+  name        String
+  /// MODEL: offered to sales on an order line (any customer, or only the one named); CUSTOMER: the route of one customer's
+  /// lines of this revision (the customer required).
+  kind        StyleRouteKind
+  /// The customer: required on a CUSTOMER route, optional on a MODEL route ("Only for ⟨customer⟩"); a party of the tenant of
+  /// no other company than the route's (StyleRoute_check).
+  partyId     String?        @db.Uuid
+  /// Its place among the revision's routes, 1 or more (not unique: a move renumbers them, the API).
+  seq         Int
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?        @db.Uuid
+
+  revision   StyleRevision         @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company    Company?              @relation("StyleRouteCompany", fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party?                @relation("StyleRouteParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  steps      StyleRouteStep[]
+  // The order lines that picked it.
+  lineRoutes SalesOrderLineRoute[]
+
+  // A revision's routes have different names.
+  @@unique([tenantId, revisionId, name])
+  // The target of its steps' reference: a route of the same revision.
+  @@unique([tenantId, revisionId, id])
+  // The target of the order lines' reference.
+  @@unique([tenantId, id])
+  // A style's routes (the Route tab, "Start from a copy"); a customer's routes (the brand wall's read).
+  @@index([tenantId, styleId])
+  @@index([tenantId, partyId])
+}
+
+/// What a style route is (owb-pd2w): a model route sales may pick on a line, or a customer's own route.
+enum StyleRouteKind {
+  MODEL
+  CUSTOMER
+}
+
+/// One step of a style route (owb-pd2w): a department, the library operation it runs (the department's default, as a route
+/// step of the builder: an operation of that department) and its minutes. A part of the route's revision, under the same rule
+/// (revisionId copied from the route: the foreign key). Removed with its route.
+model StyleRouteStep {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The route's revision (the part rule reads it); never changes.
+  revisionId   String   @db.Uuid
+  routeId      String   @db.Uuid
+  /// Its place in the route, 1 or more, unique per route.
+  seq          Int
+  /// The department of the step: of the tenant, of the route's company or the whole factory, open when newly named
+  /// (StyleRouteStep_check).
+  departmentId String   @db.Uuid
+  /// The library operation it runs: an operation of that department (StyleRouteStep_check).
+  operationId  String   @db.Uuid
+  /// Minutes per piece, 0 to 10000; null: not typed (the operation's standard minutes).
+  minutes      Decimal? @db.Decimal(10, 3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  route      StyleRoute @relation(fields: [tenantId, revisionId, routeId], references: [tenantId, revisionId, id], onDelete: Cascade, onUpdate: Restrict)
+  department Department @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation  Operation  @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, routeId, seq])
+}
+
+/// A ready-made route of the factory (owb-pd2w; design § 5u "Ready-made routes": Leather garment, Textile on a line, Molded
+/// part, Molded and assembled): a name and its steps, offered in the route builder's "Start from a copy". A copy is
+/// independent of it, so closing one changes no product (S4 settle 8). OPEN or CLOSED (gone from "Start from a copy", kept);
+/// never deleted. The name is unique among the OPEN ones of the same company (or of the whole factory), whatever its letter
+/// case (the partial uniques of …_product_routes_guards).
+model RouteTemplate {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: the whole factory (A1 §2.1). Never changes.
+  companyId   String?             @db.Uuid
+  /// 1 to 80 trimmed characters.
+  name        String
+  status      RouteTemplateStatus @default(OPEN)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company?            @relation("RouteTemplateCompany", fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  steps   RouteTemplateStep[]
+
+  // The target of its steps' reference.
+  @@unique([tenantId, id])
+  // "Start from a copy": the open ones of a company and of the whole factory.
+  @@index([tenantId, companyId, status])
+}
+
+/// Where a ready-made route stands (owb-pd2w): OPEN (offered), or CLOSED (gone from "Start from a copy", kept).
+enum RouteTemplateStatus {
+  OPEN
+  CLOSED
+}
+
+/// One step of a ready-made route (owb-pd2w): a department and its minutes. Rewritten with its route (the API replaces the
+/// steps); a department of the template's company or the whole factory, open when newly named (RouteTemplateStep_check).
+model RouteTemplateStep {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  templateId   String   @db.Uuid
+  /// Its place in the route, 1 or more, unique per template.
+  seq          Int
+  departmentId String   @db.Uuid
+  /// Minutes per piece, 0 to 10000; null: not typed.
+  minutes      Decimal? @db.Decimal(10, 3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  template   RouteTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict)
+  department Department    @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, templateId, seq])
+}
+
+/// The route choice of ONE order line (owb-pd2w; S4 settle 2; design § 5v): the style route picked on it (a MODEL route, or a
+/// CUSTOMER route of the order's customer, of the line's style and revision) and/or "Only this order" — exception steps
+/// [{ departmentId, minutes }] with why, when and by whom. One row per line (its unique key), no column on SalesOrderLine (its
+/// guard stays as it is). Nothing of it changes, and it is not removed, once the order has an OrderPrint of kind FIRST ("a
+/// route of a line is fixed when the basket cards are printed", § 5v); the line going takes it with it (Cascade).
+/// Checked by SalesOrderLineRoute_guard. Read only through routeOfLine() (factory-domain) and the API's lineRouteFacts().
+model SalesOrderLineRoute {
+  id               String    @id @db.Uuid
+  tenantId         String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the order's and the line's foreign keys).
+  companyId        String    @db.Uuid
+  partyId          String    @db.Uuid
+  salesOrderId     String    @db.Uuid
+  /// A line of that order (SalesOrderLineRoute_guard), one row per line.
+  salesOrderLineId String    @db.Uuid
+  /// The style route picked on the line: of the line's style and revision (the style's RELEASED revision when the line names
+  /// none), a MODEL route (of any customer or of the order's) or a CUSTOMER route of the order's customer; null: none picked.
+  styleRouteId     String?   @db.Uuid
+  /// When and by whom the route was picked: when exactly with a picked route; by whom only with when.
+  pickedAt         DateTime? @db.Timestamptz(3)
+  pickedById       String?   @db.Uuid
+  /// "Only this order": the steps [{ "departmentId": uuid, "minutes": "12.5" | null }], 1 to 50, each a department of the tenant
+  /// of the line's company or the whole factory; null: none. With it, why (1 to 500 characters, not blank) and when, always;
+  /// by whom only with them.
+  exceptionSteps   Json?
+  exceptionReason  String?
+  exceptionAt      DateTime? @db.Timestamptz(3)
+  exceptionById    String?   @db.Uuid
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?   @db.Uuid
+
+  salesOrder SalesOrder     @relation("SalesOrderLineRouteOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line       SalesOrderLine @relation("SalesOrderLineRouteLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  styleRoute StyleRoute?    @relation(fields: [tenantId, styleRouteId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One row per line.
+  @@unique([tenantId, salesOrderLineId])
+  // An order's line routes (GET /sales/orders/:orderId/line-routes); the lines that picked a route.
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, styleRouteId])
+}
+// ── end owb-pd2w
 
 /// Which body measures to take for a made-to-measure garment of one type (PRD-200; about 23 for a race suit). A
 /// measurement profile (parties.prisma) names it by its code (garmentType).
