@@ -5,6 +5,8 @@ import { defineManifest } from '../../../core/manifest'
  * session is refused by audience). A shipment belongs to a company, a site and a party, so the handlers check each
  * record with can() and filter the lists with scopeWhere() (`record`).
  */
+// owb- (order workflow, S3 ss1 step 1.1; settle L3): the PLAN routes ask shipping.view here (the manifest takes one right) and
+// shipping.plan OR shipping.manage in their handler (../access.ts mayPlanShipments), over each shipment's company, site and customer.
 export const manifest = defineManifest({
   'GET /shipping/ready': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/shipments': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
@@ -12,12 +14,12 @@ export const manifest = defineManifest({
   // B-OP-040 (order page N6): the customer's orders that may join a shipment, and the DRAFT shipments an order may join.
   'GET /shipping/shipments/:shipmentId/orders/candidates': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/shipments/joinable': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
-  'POST /shipping/shipments': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
-  'PATCH /shipping/shipments/:shipmentId': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
-  'POST /shipping/shipments/:shipmentId/lines': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
-  'PATCH /shipping/shipments/:shipmentId/lines/:lineId': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
-  'DELETE /shipping/shipments/:shipmentId/lines/:lineId': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
-  'POST /shipping/shipments/:shipmentId/cancel': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
+  'POST /shipping/shipments': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'PATCH /shipping/shipments/:shipmentId': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/lines': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'PATCH /shipping/shipments/:shipmentId/lines/:lineId': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'DELETE /shipping/shipments/:shipmentId/lines/:lineId': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/cancel': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/packing-list': { audiences: ['office'], permission: 'shipping.pack', scope: 'record' },
   // B-W2a-48 (LOG-004, LOG-012, LOG-105): the backorder, the packing list's versions, the freight charged.
   'GET /shipping/backorders': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },

@@ -354,6 +354,9 @@ describe('B-OS-012: merge a DRAFT into another', () => {
 
 // ---- S2.5 walls (13-backend §4): the real Sales template is refused every act (no shipping.manage) and reads no amount; a person
 // limited to Brand Beta gets, on every act of S2 over Alpha's shipments, the same not-found as for an unknown id ------------------
+// owb- (order workflow, S3 ss1 step 1.1; settle L3): flipped for the PLAN acts — the real Sales template holds shipping.plan now, so
+// split, move, merge and take-off pass its right check (the plan cases are in ../warehouse-leg/warehouse-leg.pg); what sends the
+// goods (ship, ddt-required, eta, own transport) stays refused (403). The Brand Beta wall is unchanged.
 describe('S2 walls: the real Sales template, and a person limited to another customer', () => {
   const acts = (shipmentId: string, other: string) => [
     { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/split`, body: { reason: 'OTHER', lines: [{ lineId: newId(), quantity: 1 }] } },
@@ -366,9 +369,16 @@ describe('S2 walls: the real Sales template, and a person limited to another cus
     { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/own-transport/events`, body: { status: 'DELIVERED', reason: 'Seed: signed by hand.' } },
   ]
 
-  it('the real Sales template: every S2 act 403 (it reads the targets, with no amount); nothing changed', async () => {
+  // owb- (S3 ss1): split and move pass the right now (each body names an unknown line, so nothing moves: 400/404/409, never 403); merge
+  // and take-off are left out here (a real target or order would act). Every act that sends the goods stays 403. Nothing changed.
+  it('the real Sales template: the plan acts pass its right (shipping.plan), every act that sends the goods 403 (it reads the targets, with no amount); nothing changed', async () => {
     const before = await shipmentOf(ids.child1!)
-    for (const act of acts(ids.child1!, ids.shared!)) expect((await call('sales', act.method, act.url, act.body)).statusCode, `${act.method} ${act.url}`).toBe(403)
+    const PLAN = /\/(split|move)$/
+    for (const act of acts(ids.child1!, ids.shared!).filter((entry) => !entry.url.endsWith('/merge') && !entry.url.endsWith('/take-off'))) {
+      const status = (await call('sales', act.method, act.url, act.body)).statusCode
+      if (PLAN.test(act.url)) expect(status, `${act.method} ${act.url}`).not.toBe(403)
+      else expect(status, `${act.method} ${act.url}`).toBe(403)
+    }
     const targets = await ok('sales', 'GET', `/shipping/shipments/${ids.child2}/move-targets`)
     expect(JSON.stringify(targets)).not.toMatch(/freight|declaredValue|insuredValue|price|amount/i)
     expect((await shipmentOf(ids.child1!)).version).toBe(before.version)

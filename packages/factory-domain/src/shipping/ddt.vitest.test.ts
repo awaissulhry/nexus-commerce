@@ -3,6 +3,7 @@ import { composeDocument } from '../documents/compose'
 import type { CompanyLegal } from '../documents/model'
 import { canTransition } from '../state/machine'
 import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, goodsDescription, invoicesOfDdt, issueStateProblems, SHIPMENT_DDT_REASONS, type DdtFacts, type DdtGoods, type DdtRequest } from './ddt'
+import { ddtReasonOf, type DdtLegFacts } from './ddt' // owb- (S3 ss1)
 import { ddtNotNeededWords, ddtRequiredRefusal } from './ddt' // B-OS-017
 import { handOverTimeProblems } from './shipments' // B-OS-014
 import { events } from './events'
@@ -314,3 +315,53 @@ describe('this shipment travels without a DDT (B-OS-017, L13)', () => {
   })
 })
 // ---- end B-OS-014, B-OS-017
+
+// ---- owb- (order workflow, S3 ss1 step 1.3): a shipment through OUR warehouse first ----------------------------------------------
+describe('a shipment to our warehouse first: the TRANSFER DDT, then the sale DDT of Send on (settle L5)', () => {
+  const WAREHOUSE = { name: 'Magazzino Esempio Nord', line1: 'Via Magazzino 3', postalCode: '20900', city: 'Monza', province: 'MB', country: 'IT' }
+  const CUSTOMER = { name: 'Officina Esempio', line1: 'Via Consegna 12', postalCode: '40121', city: 'Bologna', province: 'BO', country: 'IT' }
+  const leg = (fields: Partial<DdtLegFacts> = {}): DdtLegFacts => ({ arrived: false, forwardedAt: null, customerShipTo: CUSTOMER, ...fields })
+  const toWarehouse = (fields: Partial<DdtLegFacts> = {}, shipment: Partial<DdtFacts['shipment']> = {}) => facts({ warehouseLeg: leg(fields) }, { shipTo: WAREHOUSE, ...shipment })
+
+  it('TRANSFER is refused without a leg (as before) and accepted with one: the default reason then, the company itself the recipient', () => {
+    expect(problemsOf({ reason: 'TRANSFER' })).toEqual(["body/reason: A transfer between sites travels with the transfer's own DDT, not a shipment to a customer."])
+    const { draft, problems } = draftDdt(toWarehouse(), {}, NOW)
+    expect(problems).toEqual([])
+    expect(draft.reason).toBe('TRANSFER')
+    expect(draft.recipient).toMatchObject({ name: COMPANY.legalName, vatNumber: COMPANY.vatNumber, address: expect.objectContaining({ line1: 'Via Magazzino 3', city: 'Monza' }) })
+    // The warehouse is the recipient's own address: no other place of delivery is printed.
+    expect(draft.destination).toBeNull()
+    expect(draftDdt(toWarehouse(), { reason: 'TRANSFER' }, NOW).problems).toEqual([])
+    expect(ddtReasonOf({ warehouseLeg: leg() }, {})).toBe('TRANSFER')
+    expect(ddtReasonOf({ warehouseLeg: leg({ arrived: true }) }, {})).toBe('SALE')
+    expect(ddtReasonOf({ warehouseLeg: null }, {})).toBe('SALE')
+  })
+
+  it('until the goods arrived no other reason: the sale DDT follows at Send on; after they arrived no TRANSFER', () => {
+    expect(problemsOf({ reason: 'SALE' }, toWarehouse())).toEqual(['body/reason: Goods going to our own warehouse travel with a transfer DDT (TRANSFER): the sale DDT follows when they are sent on to the customer.'])
+    expect(problemsOf({ reason: 'TRANSFER' }, toWarehouse({ arrived: true }, { status: 'SHIPPED', shippedAt: new Date('2026-11-20T08:00:00.000Z') }))).toEqual(['body/reason: The goods are at our warehouse: they are sent on to the customer with a sale DDT (SALE).'])
+  })
+
+  it('the sale DDT of Send on names the buyer and the customer’s delivery address, and starts when it is issued (a new transport)', () => {
+    const arrived = toWarehouse({ arrived: true }, { status: 'SHIPPED', shippedAt: new Date('2026-11-20T08:00:00.000Z') })
+    const { draft, problems } = draftDdt(arrived, {}, NOW)
+    expect(problems).toEqual([])
+    expect(draft).toMatchObject({ reason: 'SALE', recipient: { name: 'Cliente Esempio S.r.l.' }, destination: expect.objectContaining({ name: 'Officina Esempio', line1: 'Via Consegna 12', city: 'Bologna' }), startAt: NOW.toISOString() })
+    expect(problemsOf({ startAt: minutes(-11) }, arrived)).toEqual(['body/startAt: The transport starts once the DDT is issued (DPR 472/1996: the DDT travels with the goods), not before.'])
+    // A replacement of it once the goods were sent on keeps the time they were sent on.
+    const forwardedAt = new Date('2026-11-23T10:00:00.000Z')
+    expect(draftDdt(toWarehouse({ arrived: true, forwardedAt }, { status: 'SHIPPED', shippedAt: new Date('2026-11-20T08:00:00.000Z') }), {}, NOW).draft.startAt).toBe(forwardedAt.toISOString())
+  })
+
+  it('a second live DDT only after it arrived, while the live one is the TRANSFER and the new one a SALE', () => {
+    const sendOn = (fields: { legArrived?: boolean; liveDdtReason?: 'TRANSFER' | 'SALE' | null; reason?: 'SALE' | 'TRANSFER' | 'SAMPLE' }) => ({ legArrived: true, liveDdtReason: 'TRANSFER' as const, reason: 'SALE' as const, ...fields })
+    expect(issueStateProblems('SHIPPED', '150/2026', false, sendOn({}))).toEqual([])
+    expect(issueStateProblems('SHIPPED', '150/2026', false, sendOn({ legArrived: false }))).toEqual(['DDT 150/2026 is live for this shipment: cancel it first (a shipment has one live DDT).'])
+    expect(issueStateProblems('SHIPPED', '151/2026', false, sendOn({ liveDdtReason: 'SALE' }))).toEqual(['DDT 151/2026 is live for this shipment: cancel it first (a shipment has one live DDT).'])
+    expect(issueStateProblems('SHIPPED', '150/2026', false, sendOn({ reason: 'SAMPLE' }))).toHaveLength(1)
+    expect(issueStateProblems('PACKED', '150/2026', false, sendOn({}))).toHaveLength(1)
+    // Byte-identical without a leg.
+    expect(issueStateProblems('SHIPPED', '150/2026', false)).toEqual(issueStateProblems('SHIPPED', '150/2026', false, null))
+  })
+})
+// ---- end owb- (S3 ss1)

@@ -336,7 +336,8 @@ describe('the goods leave: the goods\' invoice deducts every TD02 of the order e
       await wall('warehouse', 'PATCH', `/shipping/packing/${sh2}/parcels/${parcelId}`, { grossWeightKg: weight }, 200)
     }
     expect((await wall('warehouse', 'POST', `/shipping/packing/${sh2}/pack`, {}, 200)).body.shipment.status).toBe('PACKED')
-    S.ddt = (await wall('warehouse', 'POST', `/shipping/shipments/${sh2}/ddt`, { ship: true, carrier: { name: 'Seed Express' } }, 201)).body.ddt
+    // owb- (order workflow, S3 ss1 step 1.4; R39 (a)): SO-0003's balance before shipping is open: the goods leave with the warning passed on.
+    S.ddt = (await wall('warehouse', 'POST', `/shipping/shipments/${sh2}/ddt`, { ship: true, carrier: { name: 'Seed Express' }, overrides: ['PAYMENT_DUE_AT_SHIP'] }, 201)).body.ddt
   }, 60_000)
 
   it('the invoice of the DDT deducts the deposit\'s TD02 and the balance\'s TD02, each once, and is issued', async () => {
