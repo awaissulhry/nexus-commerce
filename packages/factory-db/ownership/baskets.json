@@ -1,0 +1,35 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/baskets.prisma (rules: src/ownership.ts; roles: src/roles.ts). owb-b1 (order workflow build, schema wave \"order workflow 1/1\"; PL-schema § 4, § 5A row 12): the floor (factory_floor_runtime, its OWN site: a phone or a tablet; production.baskets.move, production.baskets.route) and the office (factory_runtime; the production manager and the floor supervisor) move baskets by hand and change a basket's route through apps/factory-api, always with floorCommand() or command(); both are append-only (`@append-only`; the …_order_workflow_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login, and check the steps, the undo and the reason: G5). A team leader tells the office a work order will be late (FloorLateWarning); the office answers it once (G6). Personal: the worker who acted (workerId, only where the site's floor rules name workers) and their employee (the subject), for production traceability, as HelpCall. The partner and link sessions read nothing here; no money column. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "BasketMove": {
+      "about": "owb-b1: the site's floor and the office move a basket by hand (forward, back with a reason, taken here, an earlier move undone) and read the moves (a basket's place is its scans plus its moves); nobody changes or removes a move (append-only). A move writes no scan, no pay and no cost. The worker is named only where the site names workers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": { "subject": "employeeId", "columns": { "workerId": ["PRODUCTION"] } }
+    },
+    "BasketRouteEdit": {
+      "about": "owb-b1: a team leader on the floor (or the office) skips a step of a basket's route, puts it back, adds an extra step or makes the route normal again, with a reason; both read the edits (a basket's route is its work order's steps plus its edits); nobody changes or removes one (append-only). The worker is named only where the site names workers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": { "subject": "employeeId", "columns": { "workerId": ["PRODUCTION"] } }
+    },
+    "FloorLateWarning": {
+      "about": "owb-b1: a team leader on the floor tells the office a work order (or a basket) will be late by some days and why (insert); the office reads every warning of the tenant (the API scopes it by company and site) and answers each once: the date holds (KEPT) or the promise moves (CHANGED). The floor reads its own site's warnings and the answers. Never deleted. The worker is named only where the site names workers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": { "subject": "employeeId", "columns": { "workerId": ["PRODUCTION"] } }
+    }
+  }
+}

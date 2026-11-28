@@ -72,12 +72,12 @@
       }
     },
     "SalesOrder": {
-      "about": "The office (or the system context) makes an order from an accepted version, amends, moves, closes and cancels it; W2b-5 (B-W2b-281): an order may wait for a yes (PENDING_APPROVAL), carries the office's priority and the confirmation sent. A portal or link session reads its own party's orders without the cost, the internal note or the office's priority and its reason. TH-1b (B-TH-104): its customerSeq (the customer's own running number, given by the database) is readable by its customer's portal people. B-PR-15 (production plan, schema wave 3/5; L20, PW-15): the office's priority number is hidden from the partner role too (the customer's own urgency is BrandOrderProduction's). B-OM-019 (order money tab, schema wave \"order money 1/1\"): so is the target margin % (targetMarginPct, the margin grain).",
+      "about": "The office (or the system context) makes an order from an accepted version, amends, moves, closes and cancels it; W2b-5 (B-W2b-281): an order may wait for a yes (PENDING_APPROVAL), carries the office's priority and the confirmation sent. A portal or link session reads its own party's orders without the cost, the internal note or the office's priority and its reason. TH-1b (B-TH-104): its customerSeq (the customer's own running number, given by the database) is readable by its customer's portal people. B-PR-15 (production plan, schema wave 3/5; L20, PW-15): the office's priority number is hidden from the partner role too (the customer's own urgency is BrandOrderProduction's). B-OM-019 (order money tab, schema wave \"order money 1/1\"): so is the target margin % (targetMarginPct, the margin grain). owb-b1 (order workflow build, schema wave \"order workflow 1/1\"): the office sets the order's picture (a customer's choice is written by the API in the system context) and restricts the order on the floor; its customer sees the picture, never who set it, and nothing of the floor restriction (pictureSetById, floorRestricted, floorRestrictedAt, floorRestrictedById hidden).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "priority", "priorityLevel", "urgentReason", "createdById", "backlogRank", "targetMarginPct"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "priority", "priorityLevel", "urgentReason", "createdById", "backlogRank", "targetMarginPct", "pictureSetById", "floorRestricted", "floorRestrictedAt", "floorRestrictedById"] }
       }
     },
     "SalesOrderLine": {

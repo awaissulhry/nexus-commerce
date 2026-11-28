@@ -676,7 +676,19 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `choices` are null or 1 to 10 {topic, options, picked}; every line cell optional: a CATALOGUE line needs its style but not its
    colourway, a DESCRIBED line no words, a MADE_TO_MEASURE line no garment type (still by person); kind MADE_TO_MEASURE exactly
    when `sizing` is MADE_TO_MEASURE), and adds `factory_portal_draft_choices_ok` and
-   `factory_portal_order_request_style_drafts_check` (a copy of the Inquiry's, without its party-change part)):
+   `factory_portal_order_request_style_drafts_check` (a copy of the Inquiry's, without its party-change part)),
+   `…_order_workflow_guards` (order workflow build owb-b1, schema wave 'order workflow 1/1', between its generated schema and
+   policy folders: it REDEFINES the portal's `factory_portal_order_request_guard` from `…_order_start_guards` (the order's picture
+   a draft column; SENT → SENT: the office's `styleIds` and the picture, the customer's picture only; NEW SENT → DRAFT "Take it
+   back" by both doors, the number kept for the next Send, refused once the office named a style draft; a numbered DRAFT is
+   never deleted, it may be withdrawn) and production's `factory_bundle_guard` from `…_production_leftovers_guards` (a basket
+   made at print, `madeAtPrint`, only where the site's `ProductionSettings.basketsAtPrint` is on and with no cut log; its cut
+   logs only grow later; `madeAtPrint` never changes); NEW: the order picture's file check `factory_order_picture_check` on
+   SalesOrder and PortalOrderRequest (G2), the Department guard and one default library operation per department (G3), the
+   OrderTeam guard and its partial uniques (G4), OrderPrint, BasketMove and BasketRouteEdit append-only with their insert checks
+   (G5), FloorLateWarning and PaymentNotice answered once (G6, G7), the own columns' shapes (G8), the warehouse leg and the
+   trigger `Shipment_warehouse_leg_delivered` (no DELIVERED while a leg waits to be sent on; no shipment function redefined;
+   G9), the People-by-customer pool PartyOfficePerson (G11)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

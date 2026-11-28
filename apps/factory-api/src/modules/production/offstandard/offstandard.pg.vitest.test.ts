@@ -151,7 +151,8 @@ describe('off-standard and indirect codes with their pay rules (MES-155, MES-158
     expect(byCode.get('WAIT_MATERIAL')).toMatchObject({ kind: 'OFF_STANDARD', payRule: 'AVERAGE', needsApproval: true, active: true })
     expect(byCode.get('CLEANING')).toMatchObject({ kind: 'INDIRECT', payRule: 'BASE', needsApproval: false })
     expect(byCode.get('TRAINING')).toMatchObject({ kind: 'INDIRECT', payRule: 'AVERAGE', needsApproval: true })
-    expect((byCode.get('WAIT_HELP') as Json).callTypes).toEqual(['MAINTENANCE', 'MATERIAL', 'TEAM_LEADER'])
+    // owb-b1 (order workflow seed): A1's floor problems and asks book their waiting to WAIT_HELP too (B1's PAPER to none).
+    expect((byCode.get('WAIT_HELP') as Json).callTypes).toEqual(['ASK_LOGO', 'ASK_OTHER', 'ASK_PATCH', 'ASK_TO_PATCH', 'ASK_UNCLEAR', 'DAMAGED', 'MACHINE', 'MAINTENANCE', 'MATERIAL', 'PAPER', 'TEAM_LEADER', 'UNCLEAR'])
     expect((byCode.get('WAIT_MATERIAL') as Json).usedCount).toBeGreaterThanOrEqual(1)
     expect((await ok('viewer', 'GET', '/production/offstandard/codes')).canManage).toBe(false)
   })
@@ -185,7 +186,7 @@ describe('off-standard and indirect codes with their pay rules (MES-155, MES-158
     const waitHelp = (await ok('manager', 'GET', `/production/offstandard/codes?companyId=${companyA}`)).codes.find((row: Json) => row.code === 'WAIT_HELP')
     const booked = await no('manager', 'PATCH', `/production/offstandard/codes/${waitHelp.id}`, { version: waitHelp.version, active: false }, 409)
     expect(refusalOf(booked)).toBe('refusal/BOOKED_BY_CALLS')
-    expect(booked.message).toMatch(/MAINTENANCE, MATERIAL, TEAM_LEADER/)
+    expect(booked.message).toMatch(/Help calls ASK_LOGO, ASK_OTHER, ASK_PATCH, ASK_TO_PATCH, ASK_UNCLEAR, DAMAGED, MACHINE, MAINTENANCE, MATERIAL, PAPER, TEAM_LEADER, UNCLEAR book/)
     const samples = await codeId(companyA, 'SAMPLES')
     expect((await ok('manager', 'PATCH', `/production/offstandard/codes/${samples}`, { version: 2, active: false })).code.active).toBe(false)
     expect((await outbox('production.off_standard_code_changed', samples)).map((row) => row.payload.change)).toEqual(['CREATED', 'EDITED', 'DEACTIVATED'])

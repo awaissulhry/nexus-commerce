@@ -107,9 +107,10 @@ afterAll(async () => {
 describe('the operation library (PRD-109, PRD-111)', () => {
   it('lists the seed operations by code with where each is used', async () => {
     const page = await list('')
-    expect(page).toMatchObject({ count: 4, nextCursor: null })
-    expect(codesOf(page)).toEqual(['SEED-CUT-LEA', 'SEED-FIN-QC', 'SEED-PACK', 'SEED-SEW-ASM'])
-    expect(page.operations[3]).toMatchObject({ id: SEW, companyId: null, workCentreKind: 'SEWING', machineType: 'post-bed', skill: 'machinist', standardMinutes: '96.5', status: 'ACTIVE', usedIn: 1, differing: 0, version: 1 })
+    // owb-b1 (order workflow seed): the nine departments' default operations DEPT-1 … DEPT-9 (tenant-wide, unused) come first.
+    expect(page).toMatchObject({ count: 13, nextCursor: null })
+    expect(codesOf(page)).toEqual(['DEPT-1', 'DEPT-2', 'DEPT-3', 'DEPT-4', 'DEPT-5', 'DEPT-6', 'DEPT-7', 'DEPT-8', 'DEPT-9', 'SEED-CUT-LEA', 'SEED-FIN-QC', 'SEED-PACK', 'SEED-SEW-ASM'])
+    expect(page.operations[12]).toMatchObject({ id: SEW, companyId: null, workCentreKind: 'SEWING', machineType: 'post-bed', skill: 'machinist', standardMinutes: '96.5', status: 'ACTIVE', usedIn: 1, differing: 0, version: 1 })
     const record = (await ok('developer', 'GET', `/product/operations/${CUT}`)).operation
     expect(record).toMatchObject({ code: 'SEED-CUT-LEA', nameI18n: { it: 'Taglio pelle', en: 'Cut leather panels' }, instructions: null, usedIn: 1 })
     expect(record.whereUsed).toEqual([
@@ -148,7 +149,7 @@ describe('the operation library (PRD-109, PRD-111)', () => {
     expect((await refused('engineer', 'POST', '/product/operations', { code: '-BAD', name: 'Bad', workCentreKind: 'SEWING', standardMinutes: '1' }, 400)).code).toBe('validation_failed')
     expect((await refused('engineer', 'POST', '/product/operations', { code: 'OP-DE', name: 'German', nameI18n: { de: 'Nähen' }, workCentreKind: 'SEWING', standardMinutes: '1' }, 400)).code).toBe('validation_failed')
     expect((await refused('engineer', 'POST', '/product/operations', { code: 'OP-WELD', name: 'Weld', workCentreKind: 'WELDING', standardMinutes: '1' }, 400)).code).toBe('validation_failed')
-    expect((await list('?status=ALL')).count).toBe(6)
+    expect((await list('?status=ALL')).count).toBe(15)
   })
 
   it('changes what is sent (versioned), keeps the code of a used operation, and leaves the routings with their copy', async () => {
@@ -186,7 +187,7 @@ describe('the operation library (PRD-109, PRD-111)', () => {
     expect(
       (await refused('developer', 'POST', `/product/styles/${jacket}/revisions/${revision1}/routing/steps`, { version, operations: [{ operationId: press.id }] }, 400)).issues,
     ).toEqual([{ path: 'body/operations/0/operationId', message: 'Operation OP-PRESS-2 is archived: reactivate it, or choose another.' }])
-    expect((await list('')).count).toBe(5)
+    expect((await list('')).count).toBe(14)
     expect(codesOf(await list('?status=ARCHIVED'))).toEqual(['OP-PRESS-2'])
     press = (await ok('engineer', 'POST', `/product/operations/${press.id}/reactivate`, { version: 3 })).operation
     expect(press.status).toBe('ACTIVE')
@@ -198,16 +199,17 @@ describe('the operation library (PRD-109, PRD-111)', () => {
   it('filters by search, kind, status, company and use; pages by code', async () => {
     expect(codesOf(await list('?q=press'))).toEqual(['OP-B-PRESS', 'OP-PRESS-2'])
     expect(codesOf(await list('?q=POST-BED'))).toEqual(['SEED-SEW-ASM'])
-    expect(codesOf(await list('?kind=cutting,inspection'))).toEqual(['SEED-CUT-LEA', 'SEED-FIN-QC'])
+    // owb-b1: 1 Pattern and 2 Cutting are CUTTING, 5 Quality INSPECTION.
+    expect(codesOf(await list('?kind=cutting,inspection'))).toEqual(['DEPT-1', 'DEPT-2', 'DEPT-5', 'SEED-CUT-LEA', 'SEED-FIN-QC'])
     expect((await refused('engineer', 'GET', '/product/operations?kind=WELDING', undefined, 400)).code).toBe('validation_failed')
-    expect(codesOf(await list('?usage=UNUSED'))).toEqual(['OP-B-PRESS', 'OP-PRESS-2'])
+    expect(codesOf(await list('?usage=UNUSED'))).toEqual(['DEPT-1', 'DEPT-2', 'DEPT-3', 'DEPT-4', 'DEPT-5', 'DEPT-6', 'DEPT-7', 'DEPT-8', 'DEPT-9', 'OP-B-PRESS', 'OP-PRESS-2'])
     expect(codesOf(await list('?usage=DIFFERS'))).toEqual(['SEED-SEW-ASM'])
-    expect(codesOf(await list(`?companyId=${companyA}`))).toEqual(['OP-PRESS-2', 'SEED-CUT-LEA', 'SEED-FIN-QC', 'SEED-PACK', 'SEED-SEW-ASM'])
+    expect(codesOf(await list(`?companyId=${companyA}`))).toEqual(['DEPT-1', 'DEPT-2', 'DEPT-3', 'DEPT-4', 'DEPT-5', 'DEPT-6', 'DEPT-7', 'DEPT-8', 'DEPT-9', 'OP-PRESS-2', 'SEED-CUT-LEA', 'SEED-FIN-QC', 'SEED-PACK', 'SEED-SEW-ASM'])
     const first = await list('?limit=2')
-    expect(codesOf(first)).toEqual(['OP-B-PRESS', 'OP-PRESS-2'])
+    expect(codesOf(first)).toEqual(['DEPT-1', 'DEPT-2'])
     const second = await list(`?limit=2&cursor=${first.nextCursor}`)
-    expect(codesOf(second)).toEqual(['SEED-CUT-LEA', 'SEED-FIN-QC'])
-    expect(second.count).toBe(6)
+    expect(codesOf(second)).toEqual(['DEPT-3', 'DEPT-4'])
+    expect(second.count).toBe(15)
     expect((await refused('engineer', 'GET', '/product/operations?cursor=nonsense', undefined, 400)).issues).toEqual([{ path: 'querystring/cursor', message: 'Send back nextCursor as it came.' }])
   })
 })

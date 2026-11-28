@@ -49,6 +49,8 @@ describe('model ownership', () => {
       'BankLine',
       'BankMatch',
       'BankStatement',
+      'BasketMove', // owb-b1 (order workflow schema wave): a basket moved by hand (baskets.json)
+      'BasketRouteEdit', // owb-b1: a step of one basket's route changed (baskets.json)
       'BomLine',
       'BomLineAlternate',
       'BomLineColour',
@@ -122,6 +124,7 @@ describe('model ownership', () => {
       'DefaultLocation',
       'DefectCode',
       'DeliveryTolerance',
+      'Department', // owb-b1: a department of the factory (product.json)
       'DepositCancellationRule',
       'DepositRequest',
       'Device',
@@ -154,6 +157,7 @@ describe('model ownership', () => {
       'FirstLoadStep',
       'FitnessJudgement',
       'FittingResult',
+      'FloorLateWarning', // owb-b1: "Will be late" from the floor (baskets.json)
       'FloorRefusedAction',
       'FloorScanRefusal',
       'FloorSession',
@@ -311,7 +315,11 @@ describe('model ownership', () => {
       'OrderCostLine', // B-OM-019 (order money schema wave): a hand cost line of an order's margin (costing.json)
       'OrderFreezeRule',
       'OrderGate',
+      'OrderLineColumnUse', // owb-b1: a customer's own column used on a record (order-columns.json)
+      'OrderLineOwnValue', // owb-b1: a customer's own column value on a line (order-columns.json)
       'OrderPriceAcceptance', // B-OM-019: a price difference accepted by hand (sales-brand-prices.json)
+      'OrderPrint', // owb-b1: a print of an order's work papers (production.json)
+      'OrderTeam', // owb-b1: a team that owns an order's work (brand-production.json)
       'OrgArea',
       'OutboxEvent',
       'OverheadRule',
@@ -331,6 +339,8 @@ describe('model ownership', () => {
       'PartyCompanyTerms',
       'PartyContact',
       'PartyHold',
+      'PartyLineColumn', // owb-b1: a customer's own column for order lines (order-columns.json)
+      'PartyOfficePerson', // owb-b1: an office person given to a customer (parties.json)
       'PartyPriceListAssignment',
       'PartyTaxIdentity',
       'PasswordReset',
@@ -340,6 +350,7 @@ describe('model ownership', () => {
       'Payment',
       'PaymentAllocation',
       'PaymentIntent',
+      'PaymentNotice', // owb-b1: the customer's "I paid" (portal-sales.json)
       'PaymentProposal',
       'PaymentProposalLine',
       'PaymentReminder',
@@ -533,6 +544,7 @@ describe('model ownership', () => {
       'Shipment',
       'ShipmentHold',
       'ShipmentLine',
+      'ShipmentWarehouseLeg', // owb-b1: a shipment's leg through our warehouse (shipping.json)
       'ShippingMarkTemplate',
       'ShippingSettings',
       'Site',
@@ -844,6 +856,9 @@ describe('model ownership', () => {
           ...['FitnessJudgement', 'HealthVisit', 'InailFiling', 'IncidentPerson', 'ProtectedView'],
           // W2b-4 work instructions (wave 25/33): who saw which instruction version, a training record, purpose SAFETY.
           'InstructionAcknowledgement',
+          // owb-b1 (order workflow schema wave): who moved a basket, changed its route or said it will be late, purpose
+          // PRODUCTION (as HelpCall).
+          ...['BasketMove', 'BasketRouteEdit', 'FloorLateWarning'],
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!

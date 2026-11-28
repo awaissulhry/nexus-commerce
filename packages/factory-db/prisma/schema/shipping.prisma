@@ -77,6 +77,13 @@
 // outside Nexus, recorded afterwards: DRAFT → SHIPPED in one step, at most 60 days back, with the paper DDT's number and
 // date unless an immediate invoice travelled instead; Nexus never issues a DDT of it). A carrier booked by hand may also
 // carry its typed tracking link.
+//
+// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 13, PL-review § 5; design "3 ways"):
+// a shipment may go through OUR warehouse first (ShipmentWarehouseLeg, one per shipment): it arrives there, then is sent
+// on to the customer, maybe with the customer's own label (a CUSTOMER_LABEL file). Its own table, so no shipment function
+// is redefined (the shipment guard freezes a SHIPPED row); the …_order_workflow_guards trigger holds the leg (arrived only
+// while SHIPPED, once; sent on only after it arrived, once; the label a CUSTOMER_LABEL file) and refuses DELIVERED while a
+// leg waits to be sent on (G9).
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -353,6 +360,8 @@ model Shipment {
   podFile             StoredFile?      @relation("ShipmentPodFile", fields: [tenantId, podFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   trackingExceptions  TrackingException[]
   customsDeclarations CustomsDeclaration[]
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): its leg through our warehouse, if any.
+  warehouseLeg        ShipmentWarehouseLeg?
 
   @@unique([tenantId, companyId, number])
   // The target of the references from its lines, parcels, DDTs and tracking events: the same site and party.
@@ -385,6 +394,55 @@ enum ShipmentStatus {
   /// The carrier brought the goods back (not delivered).
   RETURNED
   CANCELLED
+}
+
+/// A shipment's leg through our own warehouse (owb-b1, schema wave "order workflow 1/1"; PL-schema § 5A row 13): the goods
+/// go to a WAREHOUSE site of the company first, arrive there (once, while the shipment is SHIPPED), and are sent on to the
+/// customer (once, after they arrived), with the customer's own label or without one (forwardedWithoutLabel). One per
+/// shipment. Never deleted. The office writes it (shipping.manage); the customer's label is uploaded through the portal and
+/// written by the API; the customer reads its own shipments' legs, never who in the office acted (the
+/// …_order_workflow_guards trigger, G9).
+model ShipmentWarehouseLeg {
+  id                    String    @id @db.Uuid
+  tenantId              String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The shipment's company, site (the floor role's policy key) and customer (the partner role's policy key).
+  companyId             String    @db.Uuid
+  siteId                String    @db.Uuid
+  partyId               String    @db.Uuid
+  shipmentId            String    @db.Uuid
+  /// Our warehouse it goes through: a WAREHOUSE site of the company (G9).
+  warehouseSiteId       String    @db.Uuid
+  /// It arrived at our warehouse: when and by whom (the office), once, only while the shipment is SHIPPED (G9).
+  arrivedAt             DateTime? @db.Timestamptz(3)
+  arrivedById           String?   @db.Uuid
+  /// It was sent on to the customer: when and by whom (the office), once, only after it arrived (G9). The DDT of goods
+  /// sent to our own warehouse is a transfer's; its reason exists before Send on ships (the API; PL-review § 5).
+  forwardedAt           DateTime? @db.Timestamptz(3)
+  forwardedById         String?   @db.Uuid
+  /// Sent on without the customer's label (the office said so at Send on). The default is the database's (dbgenerated, as
+  /// StoredFile.legalHold's), so a Prisma insert leaves the column out; a cast from text, so Prisma reads it back as written.
+  forwardedWithoutLabel Boolean   @default(dbgenerated("('false'::text)::boolean"))
+  /// The customer's own label: a CUSTOMER_LABEL file of the shipment (G9), when it came and who gave it (a person of the
+  /// customer or of the office); null: none yet.
+  customerLabelFileId   String?   @db.Uuid
+  customerLabelAt       DateTime? @db.Timestamptz(3)
+  customerLabelById     String?   @db.Uuid
+  version               Int       @default(1)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?   @db.Uuid
+
+  // The shipment's site of its company, the shipment (same site and customer), our warehouse (a site of the same company);
+  // the label (Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId).
+  site          Site        @relation("ShipmentWarehouseLegSite", fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipment      Shipment    @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  warehouse     Site        @relation("ShipmentWarehouseLegWarehouse", fields: [tenantId, companyId, warehouseSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  customerLabel StoredFile? @relation("ShipmentWarehouseLegLabel", fields: [tenantId, customerLabelFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One leg per shipment.
+  @@unique([tenantId, siteId, partyId, shipmentId])
+  // Our warehouse's legs ("Our warehouses": waiting to arrive, to be sent on).
+  @@index([tenantId, warehouseSiteId])
 }
 
 /// One line of a shipment (LOG-001): garments of one cell (colourway x size) of a work order that makes a line of the

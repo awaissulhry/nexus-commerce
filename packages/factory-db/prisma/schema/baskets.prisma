@@ -1,0 +1,222 @@
+// Baskets on the floor (order workflow build, schema wave "order workflow 1/1", owb-b1; LF plan.md § 4, PL-schema § 4,
+// § 5A row 12; design order-workflow-2026-11-25 "the basket on a phone", R56): a basket is a Bundle (production.prisma). Its
+// place is its scans PLUS its moves; its route is its work order's steps PLUS its route edits (factory-domain
+// production/baskets: one pure basketRoute / basketPlace that, with no move and no edit, gives exactly today's answers).
+//
+//   BasketMove        a basket moved by hand: FORWARD (a second Done where a report already stands, or a move on), BACK (to
+//                     an earlier step, with a reason), TAKEN_HERE ("Take it here" at a step of its route), UNDO (names the
+//                     move it undoes). A move writes no scan, no pay (EarningsEntry) and no cost entry; the scan guard does
+//                     not change. Append-only.
+//   BasketRouteEdit   a step of one basket's route changed by a team leader: SKIP, PUT_BACK (a skipped step back), ADD (an
+//                     extra step of its work order), NORMAL (back to the work order's route), with a reason. Append-only.
+//   FloorLateWarning  "Will be late": a team leader tells the office a work order (or one basket) will be late by 1, 2, 3 or
+//                     5 days and why; the office answers once (KEPT: the date holds; CHANGED: the promise moves).
+//
+// Who writes what (ownership/baskets.json): the floor (factory_floor_runtime, its own site; production.baskets.move: a worker
+// moves forward only; production.baskets.route: back, undo another's move and route edits, the team leader) and the office
+// (production manager, floor supervisor) insert moves and route edits, never change or remove one (the
+// …_order_workflow_guards triggers, G5: steps of the basket's own work order, an UNDO of an earlier move of the same basket
+// and only once, a BACK with its reason). The floor inserts late warnings; the office answers them (G6). The worker is named
+// only where the site's floor rules name workers (production settings), as on every floor record; the partner reads none
+// of it.
+
+/// A basket moved by hand (owb-b1, PL-schema § 4, § 5A row 12): from a step to a step of its work order (toOperationId null
+/// = Ready to ship), with no scan, no pay and no cost entry. FORWARD, BACK (with a reason), TAKEN_HERE, UNDO (of an earlier
+/// move of the same basket, once). The moves of one act share a groupId ("all baskets of the order"). Written by the floor
+/// or the office; never changed or removed (the triggers, for every login: G5).
+/// @append-only
+model BasketMove {
+  id              String            @id @db.Uuid
+  tenantId        String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The basket's site (the floor role's policy key), work order and basket.
+  siteId          String            @db.Uuid
+  workOrderId     String            @db.Uuid
+  bundleId        String            @db.Uuid
+  /// The step it left (an operation of its work order; null: no step yet, "Waiting for the first step") and the step it
+  /// went to (null: Ready to ship). Steps of the basket's own work order (the foreign keys; G5).
+  fromOperationId String?           @db.Uuid
+  toOperationId   String?           @db.Uuid
+  kind            BasketMoveKind
+  /// Why it went back: required on BACK (G5), else optional.
+  reason          BasketMoveReason?
+  /// The words beside the reason (with OTHER); null: none.
+  note            String?
+  /// UNDO: the earlier move of the same basket it undoes (the foreign key), once (G5); null otherwise.
+  undoesId        String?           @db.Uuid
+  /// The act it is part of: every move of one act shares it (one basket or all baskets of the order).
+  groupId         String            @db.Uuid
+  /// Who moved it: the worker (only where the site names workers) and their employee, or the office person (userId);
+  /// the floor device it was done on (null: the office).
+  workerId        String?           @db.Uuid
+  employeeId      String?           @db.Uuid
+  userId          String?           @db.Uuid
+  deviceId        String?           @db.Uuid
+  /// The device's id for the event (A1 §3.8; the offline floor queue): a resent event moves each basket once.
+  clientEventId   String?
+  /// When it happened, by the device's clock (null: the device did not say), and when the server recorded it.
+  deviceTime      DateTime?         @db.Timestamptz(3)
+  serverTime      DateTime          @default(now()) @db.Timestamptz(3)
+
+  workOrder     WorkOrder           @relation("BasketMoveWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle        Bundle              @relation("BasketMoveBundle", fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and the work
+  // order or the basket.
+  fromOperation WorkOrderOperation? @relation("BasketMoveFrom", fields: [tenantId, siteId, workOrderId, fromOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  toOperation   WorkOrderOperation? @relation("BasketMoveTo", fields: [tenantId, siteId, workOrderId, toOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  undoes        BasketMove?         @relation("BasketMoveUndo", fields: [tenantId, siteId, bundleId, undoesId], references: [tenantId, siteId, bundleId, id], onDelete: Restrict, onUpdate: Restrict)
+  undoneBy      BasketMove[]        @relation("BasketMoveUndo")
+  worker        Worker?             @relation("BasketMoveWorker", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee      Employee?           @relation("BasketMoveEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device        Device?             @relation("BasketMoveDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The target of an undo's reference: a move of the same basket.
+  @@unique([tenantId, siteId, bundleId, id])
+  @@unique([tenantId, deviceId, clientEventId, bundleId])
+  // A basket's moves in time (basketPlace); a work order's (the board); one act's; a person's (the privacy export).
+  @@index([tenantId, bundleId, serverTime])
+  @@index([tenantId, workOrderId, serverTime])
+  @@index([tenantId, groupId])
+  @@index([tenantId, employeeId])
+}
+
+/// How a basket was moved by hand (owb-b1): on (FORWARD), back (BACK), to a step of its route where it was found
+/// (TAKEN_HERE), or an earlier move undone (UNDO).
+enum BasketMoveKind {
+  FORWARD
+  BACK
+  TAKEN_HERE
+  UNDO
+}
+
+/// Why a basket went back (owb-b1): to be done again, a mistake, or another reason (with words).
+enum BasketMoveReason {
+  REDO
+  MISTAKE
+  OTHER
+}
+
+/// A step of one basket's route changed (owb-b1, PL-schema § 5A row 12; design "Change the steps"): SKIP a step of its work
+/// order, PUT_BACK a skipped one, ADD an extra step of its work order (placed before its last step by basketRoute), NORMAL
+/// (the work order's route again), with a reason. The edits of one act share a groupId. Written by a team leader on the floor
+/// or the office (production.baskets.route); never changed or removed (the triggers, for every login: G5).
+/// @append-only
+model BasketRouteEdit {
+  id            String                @id @db.Uuid
+  tenantId      String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The basket's site (the floor role's policy key), work order and basket.
+  siteId        String                @db.Uuid
+  workOrderId   String                @db.Uuid
+  bundleId      String                @db.Uuid
+  /// The step changed: an operation of the basket's own work order (the foreign key; G5).
+  operationId   String                @db.Uuid
+  kind          BasketRouteEditKind
+  reason        BasketRouteEditReason
+  /// The words beside the reason (with OTHER); null: none.
+  note          String?
+  /// The act it is part of: every edit of one act shares it (one basket or all baskets of the order).
+  groupId       String                @db.Uuid
+  /// Who changed it: the team leader (only where the site names workers) and their employee, or the office person
+  /// (userId); the floor device it was done on (null: the office).
+  workerId      String?               @db.Uuid
+  employeeId    String?               @db.Uuid
+  userId        String?               @db.Uuid
+  deviceId      String?               @db.Uuid
+  /// The device's id for the event (A1 §3.8): a resent event changes each step of each basket once.
+  clientEventId String?
+  /// When it happened, by the device's clock (null: the device did not say), and when the server recorded it.
+  deviceTime    DateTime?             @db.Timestamptz(3)
+  serverTime    DateTime              @default(now()) @db.Timestamptz(3)
+
+  workOrder WorkOrder          @relation("BasketRouteEditWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle    Bundle             @relation("BasketRouteEditBundle", fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation WorkOrderOperation @relation("BasketRouteEditOperation", fields: [tenantId, siteId, workOrderId, operationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  worker    Worker?            @relation("BasketRouteEditWorker", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?          @relation("BasketRouteEditEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?            @relation("BasketRouteEditDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId, bundleId, operationId])
+  // A basket's edits in time (basketRoute); a work order's; one act's; a person's (the privacy export).
+  @@index([tenantId, bundleId, serverTime])
+  @@index([tenantId, workOrderId, serverTime])
+  @@index([tenantId, groupId])
+  @@index([tenantId, employeeId])
+}
+
+/// How a step of a basket's route was changed (owb-b1): skipped, put back, added, or the route made normal again.
+enum BasketRouteEditKind {
+  SKIP
+  PUT_BACK
+  ADD
+  NORMAL
+}
+
+/// Why a basket's route was changed (owb-b1): the step is not needed, to do it again, the customer asked, or another reason
+/// (with words).
+enum BasketRouteEditReason {
+  NOT_NEEDED
+  REDO
+  CUSTOMER
+  OTHER
+}
+
+/// "Will be late" (owb-b1, PL-schema § 5A row 12; design "From the floor"): a team leader tells the office that a work order
+/// (or one of its baskets) will be late by 1, 2, 3 or 5 days, and why. The office answers once: KEPT (the date holds) or
+/// CHANGED (the promise moves; the promise itself is changed by its own command), with when and by whom (G6). Never deleted.
+model FloorLateWarning {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's site (the floor role's policy key), the work order, and the basket when it is about one (null: the
+  /// whole work order).
+  siteId        String          @db.Uuid
+  workOrderId   String          @db.Uuid
+  bundleId      String?         @db.Uuid
+  /// How many days late: 1, 2, 3 or 5.
+  days          Int
+  reason        FloorLateReason
+  state         FloorLateState  @default(OPEN)
+  /// The office's answer: when and by whom, set exactly with KEPT or CHANGED, once (G6).
+  answeredAt    DateTime?       @db.Timestamptz(3)
+  answeredById  String?         @db.Uuid
+  /// Who told: the team leader (only where the site names workers) and their employee; the floor device (null: the
+  /// office).
+  workerId      String?         @db.Uuid
+  employeeId    String?         @db.Uuid
+  deviceId      String?         @db.Uuid
+  /// The device's id for the event (A1 §3.8): a resent warning is made once.
+  clientEventId String?
+  deviceTime    DateTime?       @db.Timestamptz(3)
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  workOrder WorkOrder  @relation("FloorLateWarningWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and the work
+  // order.
+  bundle    Bundle?    @relation("FloorLateWarningBundle", fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker    Worker?    @relation("FloorLateWarningWorker", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?  @relation("FloorLateWarningEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?    @relation("FloorLateWarningDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The office's open warnings of a site ("From the floor"); a work order's; a person's (the privacy export).
+  @@index([tenantId, siteId, state])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, employeeId])
+}
+
+/// Why a work order will be late (owb-b1): material, a machine, people, a redo.
+enum FloorLateReason {
+  MATERIAL
+  MACHINE
+  PEOPLE
+  REDO
+}
+
+/// Where a late warning stands (owb-b1): OPEN → KEPT (the date holds) | CHANGED (the promise moves). The last two are final.
+enum FloorLateState {
+  OPEN
+  KEPT
+  CHANGED
+}
