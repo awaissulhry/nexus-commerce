@@ -10,7 +10,9 @@ import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { bodyIssue, floorOf, refuse } from './access'
 import type { SendBody } from './contract'
 import { endWaitingInCommand, startWaitingInCommand } from './waiting'
-import { callByClientEvent, callRecord, devicePlaceOf, lockCall, openCallOf, readCall, readType, siteOf, stationOf, typesOfSite, typeViews, type CallRow } from './store'
+import { callByClientEvent, callPlaceOf, callRecord, lockCall, openCallOf, readCall, readType, siteOf, stationOf, typesOfSite, typeViews, type CallRow } from './store'
+// owb-fl3 (S5 server B; settle 2): a phone's call goes to its department pick's station; its words when there is none.
+import { noStationRefusal } from '@nexus/factory-domain/production/baskets/signals'
 
 /**
  * The station's side of help calls (B-W2b-35; MES-142, MES-143, MES-145, MES-137; design floor.help SCR-172 "Who do you
@@ -37,18 +39,21 @@ import { callByClientEvent, callRecord, devicePlaceOf, lockCall, openCallOf, rea
 const keyOf = (context: FloorContext, clientEventId: string) => `${context.deviceId}.${clientEventId}`
 
 /** The worker a floor record names at the site now: the signed-in worker where the site names workers and they acknowledged the notice. */
-async function namedWorker(tx: Pick<CommandTx, 'productionSettings' | 'workerNoticeAck' | 'site' | 'privacyNotice' | 'worker'>, siteId: string, workerId: string): Promise<{ readonly workerId: string; readonly employeeId: string | null } | null> {
+export async function namedWorker(tx: Pick<CommandTx, 'productionSettings' | 'workerNoticeAck' | 'site' | 'privacyNotice' | 'worker'>, siteId: string, workerId: string): Promise<{ readonly workerId: string; readonly employeeId: string | null } | null> {
   if ((await scanSubjectFor(tx, siteId)) !== 'WORKER' || !(await hasAcknowledgedNotice(tx, siteId, workerId))) return null
   const worker = await tx.worker.findUnique({ where: { id: workerId }, select: { employeeId: true } })
   return { workerId, employeeId: worker?.employeeId ?? null }
 }
 
-/** The tablet's station and line, and the site. */
+/**
+ * The station a call goes to and its line, and the site. owb-fl3 (settle 2): the session's department pick first
+ * (FloorSession.stationId: a phone), else the device's station (a fixed tablet, unchanged); `deviceStationId` is the tablet's own.
+ */
 async function placeOf(caller: CommandCaller, context: FloorContext) {
   return caller.withClient(async (db) => {
     const site = await siteOf(db, context.siteId)
     if (!site) throw new NotFoundError('Site not found.')
-    return { site, ...(await devicePlaceOf(db, context.deviceId)) }
+    return { site, ...(await callPlaceOf(db, context)) }
   })
 }
 
@@ -100,7 +105,8 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
 
   const place = await placeOf(caller, context)
   const stationId = body.stationId ?? place.stationId
-  if (!stationId) refuse(CALL_REFUSALS.NO_STATION)
+  // owb-fl3: a phone with no department pick (or a department with no station at the site) is told so in its own words.
+  if (!stationId) refuse(noStationRefusal(place, CALL_REFUSALS.NO_STATION))
   const station = await caller.withClient((db) => stationOf(db, stationId!))
   if (!station || station.siteId !== context.siteId || station.status !== 'ACTIVE') throw new NotFoundError('Station not found at this site.')
   if (stationId !== place.stationId && !can(actorOf(context), 'floor.lead', { companyId: station.companyId, siteId: station.siteId })) refuse(CALL_REFUSALS.OTHER_STATION)
@@ -173,7 +179,8 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
           payload: { callId: id, typeId: type.id, code: type.code, kind: type.kind as CallKind, stationId: station.id, lineId: station.lineId, responderTeamId: type.responderTeamId, workOrderId: body.workOrderId ?? null, bundleId: body.bundleId ?? null, by: 'FLOOR' },
         })
         // MES-148: the station's waiting books to the type's off-standard code while the call is open (B-W2b-29's writes).
-        if (type.offStandardCodeId && station.id === place.stationId) {
+        // owb-fl3: only a fixed tablet's own station books it; a phone's department pick is no work place (no pay time moves).
+        if (type.offStandardCodeId && station.id === place.deviceStationId) {
           await startWaitingInCommand(tools, { tenantId: context.tenantId, site: place.site, station, codeId: type.offStandardCodeId, named, callId: id, workOrderId: body.workOrderId ?? null, at: sentAt, deviceId: context.deviceId })
         }
         return { call: await callRecord(tx, (await readCall(tx, id))!, context, tools.now), existing: false }
@@ -195,7 +202,8 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
 async function stationsCall(caller: CommandCaller, context: FloorContext, callId: string): Promise<CallRow> {
   const call = isUuid(callId) ? await caller.withClient((db) => readCall(db, callId)) : null
   if (!call || call.siteId !== context.siteId) throw new NotFoundError('Call not found.')
-  const place = await caller.withClient((db) => devicePlaceOf(db, context.deviceId))
+  // owb-fl3: a phone answers for its department pick's station as a tablet for its own.
+  const place = await caller.withClient((db) => callPlaceOf(db, context))
   if (call.deviceId !== context.deviceId && call.stationId !== place.stationId) refuse(CALL_REFUSALS.NOT_THIS_STATION)
   return call
 }

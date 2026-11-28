@@ -1,7 +1,7 @@
 import { events as andonEvents } from '@nexus/factory-domain/andon/events'
 import { can, holds } from '@nexus/factory-domain/core/permissions'
 import { HOME_VIEW } from '@nexus/factory-domain/insights/permissions'
-import { PRODUCTION_CALLS_ANSWER } from '@nexus/factory-domain/production/calls/permissions'
+import { PRODUCTION_CALLS_ANSWER, PRODUCTION_CALLS_MANAGE } from '@nexus/factory-domain/production/calls/permissions'
 import type { Draft, FanOutRule, RuleContext } from '../../../platform/notifications/fan-out'
 import { respondersOf } from './store'
 import { reachesWorkOrder } from '../work-orders/scope' // B-PR-04a
@@ -16,6 +16,8 @@ import { reachesWorkOrder } from '../work-orders/scope' // B-PR-04a
  */
 
 const payloadSchema = andonEvents.find((event) => event.type === 'help_call.raised')!.payload
+// owb-fl3 (S5 server B; R53): the escalation's notice.
+const escalatedSchema = andonEvents.find((event) => event.type === 'help_call.escalated')!.payload
 
 const TITLE_MAX = 80
 
@@ -55,4 +57,47 @@ export const CALL_RULES: readonly FanOutRule[] = Object.freeze([
       return drafts
     },
   },
+  // ── owb-fl3 (S5 server B; R53, design "after 10 min: It is at the office now") ──
+  // When the job escalates a call nobody came to (`help_call.escalated`, ./escalation.ts), the office is told: the people who keep
+  // the site's help calls (production.calls.manage: the production manager) and, again, the type's responders, each only if they
+  // still reach Home and may answer calls at the site now, and the call's work order (the brand wall). Anchored to the call's
+  // escalation (a replay tells nobody twice). The words reuse the raise's message with the minutes in its title (a message key of
+  // its own is asked in LF/shared-asks.md: the notification templates are not S5's file).
+  {
+    name: 'calls.escalated',
+    events: ['help_call.escalated'],
+    async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
+      const payload = escalatedSchema.parse(raw) as { callId: string; code: string; lineId: string | null; responderTeamId: string | null; minutes: number }
+      const call = await context.tx.helpCall.findUnique({
+        where: { id: payload.callId },
+        select: { siteId: true, status: true, station: { select: { companyId: true, code: true } }, line: { select: { code: true } }, type: { select: { code: true } }, workOrder: { select: { partyId: true } } },
+      })
+      // Someone came or it closed before the fan-out ran: nobody needs telling.
+      if (!call || call.status === 'ON_THE_WAY' || call.status === 'SOLVED' || call.status === 'CANCELLED') return []
+      const scope = { companyId: call.station.companyId, siteId: call.siteId }
+      const words = await context.tx.reasonCode.findFirst({ where: { list: 'HELP_CALL', code: call.type.code }, select: { labelEn: true } })
+      const title = `${words?.labelEn ?? call.type.code}${call.line ? ` · ${call.line.code}` : ''} · ${payload.minutes} min`.slice(0, TITLE_MAX)
+      const { userIds: responders } = await respondersOf(context.tx, { siteId: call.siteId, responderTeamId: payload.responderTeamId, lineId: payload.lineId }, { accounts: true })
+      const everyone = await context.people()
+      const drafts: Draft[] = []
+      for (const userId of new Set([...everyone, ...responders])) {
+        const reader = await context.reader(userId)
+        if (!reader || !holds(reader.actor, HOME_VIEW) || !can(reader.actor, PRODUCTION_CALLS_ANSWER, scope)) continue
+        if (!responders.includes(userId) && !can(reader.actor, PRODUCTION_CALLS_MANAGE, scope)) continue
+        if (call.workOrder && !reachesWorkOrder(reader.actor, PRODUCTION_CALLS_ANSWER, { ...scope, partyId: call.workOrder.partyId })) continue
+        drafts.push({
+          userId,
+          category: 'ALERT',
+          record: { type: 'HelpCall', id: payload.callId, label: call.station.code },
+          companyId: scope.companyId,
+          anchor: `call-escalated:${payload.callId}`,
+          messageKey: 'notifications.calls.raised',
+          params: { title, callId: payload.callId, code: payload.code },
+          actorId: null,
+        })
+      }
+      return drafts
+    },
+  },
+  // ── end owb-fl3 ──
 ])
