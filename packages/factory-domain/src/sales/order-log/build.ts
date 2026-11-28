@@ -1,7 +1,7 @@
 import { orderLifeOf, type OrderLife } from '../order-life'
 import type { SalesOrderStatus } from '../orders/orders'
 import type { RequestStatus } from '../portal-ordering/rules'
-import { actionFaceOf, customerMayRead, PICTURE_SET_ACTION, whoFaceOf, type FaceGate, type LogAudience, type LogDoor, type WhoOfRow } from './faces'
+import { actionFaceOf, customerMayRead, PICTURE_SET_ACTION, whoFaceOf, type FaceGate, type LogAudience, type LogDoor, type OrderLogAction, type WhoOfRow } from './faces'
 
 /**
  * The ONE order log's builder (owb- order workflow, b3.1; research R-base D): the AuditLog rows of ONE order's records (the
@@ -47,7 +47,7 @@ export interface OrderLogRow {
   readonly id: string
   readonly at: string
   readonly who: WhoOfRow
-  readonly action: string
+  readonly action: OrderLogAction
   readonly icon: string
   readonly subject: { readonly kind: LogSubjectKind; readonly label: string | null }
   readonly from: LogValue | null

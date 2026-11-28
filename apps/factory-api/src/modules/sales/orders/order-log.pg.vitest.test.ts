@@ -42,7 +42,6 @@ let app: FastifyInstance
 const NS = 'owb-order-log'
 const id = (key: string): string => seedUuid(NS, key)
 const tenant = id('tenant')
-const P1 = id('party:P1')
 const R1 = id('party:P4')
 
 const grant = (permissions: readonly Permission[], parties: Grant['parties'] = 'all'): Grant => ({ permissions, companies: 'all', sites: 'all', parties })
