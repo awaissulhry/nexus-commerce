@@ -108,5 +108,17 @@
       "WAITING": "Waiting",
       "READY": "Ready"
     }
+  },
+  "log": {
+    "chipsLabel": "Show the changes of one kind",
+    "chips": {
+      "all": "All",
+      "asks": "Asks",
+      "lines": "Lines",
+      "dates": "Dates",
+      "design": "Design",
+      "status": "Status"
+    },
+    "emptyChip": "No change of this kind yet."
   }
 }

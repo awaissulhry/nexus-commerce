@@ -108,5 +108,17 @@
       "WAITING": "In attesa",
       "READY": "Pronto"
     }
+  },
+  "log": {
+    "chipsLabel": "Mostra le modifiche di un tipo",
+    "chips": {
+      "all": "Tutte",
+      "asks": "Richieste",
+      "lines": "Righe",
+      "dates": "Date",
+      "design": "Grafica",
+      "status": "Stato"
+    },
+    "emptyChip": "Ancora nessuna modifica di questo tipo."
   }
 }
