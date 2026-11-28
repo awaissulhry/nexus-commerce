@@ -127,6 +127,9 @@ function OverviewTab({ model, page }: { model: ProductPageModel; page: PortalPro
           )}
         </Section>
       ) : null}
+      {/* owb-pd7 (web B, only if design round 38 is done): the "Tech pack" card of the customer's OWN design goes HERE — after Your
+          orders with it, before Ask for a change (prototype prodBody: techPortalCard, then prodChanges); web B adds its part in this
+          folder and one line at this spot. */}
       <Section
         id="pp-change"
         title={t('overview.change.title')}
