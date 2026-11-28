@@ -172,7 +172,7 @@ export interface BasketCallView {
   readonly answer: string | null
   readonly answeredAt: string | null
   readonly spot: number | null
-  readonly files: readonly { readonly id: string; readonly kind: 'PHOTO' | 'AUDIO' }[]
+  readonly files: { readonly id: string; readonly kind: 'PHOTO' | 'AUDIO' }[]
 }
 
 const BASKET_CALLS_MAX = 50

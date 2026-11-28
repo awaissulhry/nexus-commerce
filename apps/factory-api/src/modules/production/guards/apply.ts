@@ -16,6 +16,8 @@ import { OVERRIDDEN_ACTION } from './store'
 export async function overrideReport(request: FastifyRequest, body: { readonly report: Omit<ReportInput, 'override'>; readonly lead: LeadInput; readonly reasonCode: OverrideReasonCode; readonly note?: string | undefined }) {
   const override = await verifyOverride(request, { lead: body.lead, reasonCode: body.reasonCode, note: body.note })
   const result = await reportScan(request, { ...body.report, override })
+  // owb-fl2: a second Done moved the basket on: no scan, so no check held it and nothing was overridden.
+  if (result.scan === null) return { ...result, override: null }
   const row = await systemView(request).withClient((db) => db.auditLog.findFirst({ where: { recordType: 'OperationScan', recordId: result.scan.id, action: OVERRIDDEN_ACTION }, select: { after: true } }))
   const after = row?.after && typeof row.after === 'object' && !Array.isArray(row.after) ? (row.after as Record<string, unknown>) : null
   const guards = after && Array.isArray(after.guards) ? [...new Set(after.guards.map((entry) => (entry as { kind?: unknown }).kind).filter((kind): kind is GuardKind => (GUARD_KINDS as readonly unknown[]).includes(kind)))].sort() : []

@@ -150,5 +150,6 @@ export async function reportOnChain(caller: CommandCaller, body: ChainReportBody
   if (picked.replay) return { scan: { id: picked.replay.id }, bundle: { id: picked.bundle.id, code: picked.bundle.code, quantity: picked.bundle.quantity }, operationId: picked.replay.workOrderOperationId, replayed: true }
   // Today's REPORT, as a scan of the bundle at the step (the device's own session: its worker, its station, its guards).
   const answer = await reportScan(caller, { clientScanId: body.clientEventId, bundleId: picked.bundle.id, workOrderOperationId: body.operationId, good: picked.bundle.quantity })
-  return { scan: { id: answer.scan.id }, bundle: { id: picked.bundle.id, code: picked.bundle.code, quantity: picked.bundle.quantity }, operationId: body.operationId, replayed: answer.replayed }
+  // owb-fl2: a basket moved back to this step by hand and reported again moves on (the second Done): no scan, nothing to undo.
+  return { scan: answer.scan === null ? null : { id: answer.scan.id }, bundle: { id: picked.bundle.id, code: picked.bundle.code, quantity: picked.bundle.quantity }, operationId: body.operationId, replayed: answer.replayed }
 }

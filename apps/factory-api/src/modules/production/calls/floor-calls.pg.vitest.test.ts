@@ -37,7 +37,7 @@ import { runCallEscalation } from './escalation'
 
 let h: Harness
 let app: FastifyInstance
-let andon: AndonSeed
+let andon: AndonSeed | undefined
 
 const ns = { a: 'calls-floor-a', b: 'calls-floor-b' } as const
 const idOf = (namespace: string, key: string) => seedUuid(namespace, key)

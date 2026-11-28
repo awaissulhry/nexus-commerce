@@ -159,8 +159,8 @@ export interface OrderFacts {
 /** Read through the tenant's system view (or the office's own client): the basket's order, customer code, picture, teams. */
 export async function orderFactsOf(db: Reader, input: { readonly workOrderId: string; readonly workOrderSizeId: string; readonly siteId: string }): Promise<OrderFacts> {
   const cell = await db.workOrderSize.findUnique({ where: { id: input.workOrderSizeId }, select: { salesOrderLineId: true } })
-  const line = cell?.salesOrderLineId ? await db.salesOrderLine.findUnique({ where: { id: cell.salesOrderLineId }, select: { salesOrderId: true } }) : null
-  const salesOrderId = line?.salesOrderId ?? null
+  const line = cell?.salesOrderLineId ? await db.salesOrderLine.findUnique({ where: { id: cell.salesOrderLineId }, select: { orderId: true } }) : null
+  const salesOrderId = line?.orderId ?? null
   const order = salesOrderId ? await db.salesOrder.findUnique({ where: { id: salesOrderId }, select: { floorRestricted: true } }) : null
   const customerCode = (await customerCodesOf(db, [input.workOrderId])).get(input.workOrderId) ?? null
   const picture = salesOrderId ? await floorOrderPicture(db, { salesOrderId, siteId: input.siteId }) : null

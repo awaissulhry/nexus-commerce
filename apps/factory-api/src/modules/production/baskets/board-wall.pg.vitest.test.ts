@@ -110,7 +110,7 @@ describe('the brand wall on the office board (workorders.view)', () => {
     const p1 = await ok('onlyP1', 'GET', '/production/baskets/board')
     const ours = cardsOf(p1).filter((card) => card.bundleId === A.bundle1)
     expect(ours).toHaveLength(1)
-    expect(ours[0].customer.name).toEqual(expect.any(String))
+    expect(ours[0]!.customer.name).toEqual(expect.any(String))
     const p2 = await ok('onlyP2', 'GET', '/production/baskets/board')
     expect(cardsOf(p2).map((card) => card.bundleId)).not.toContain(A.bundle1)
     expect(cardsOf(p2).map((card) => card.bundleId)).not.toContain(A.bundle2)

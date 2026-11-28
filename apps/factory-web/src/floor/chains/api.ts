@@ -22,7 +22,8 @@ export const floorChainSchema = z.object({
 export type FloorChain = z.infer<typeof floorChainSchema>
 export type FloorChainLot = FloorChain['lots'][number]
 
-const reported = z.object({ scan: z.object({ id: z.string() }), bundle: z.object({ id: z.string(), code: z.string(), quantity: z.number() }), operationId: z.string().optional() })
+// `scan` null (owb-fl2): the basket had been moved back to this step by hand, so this Done moved it on: no scan, no −12.
+const reported = z.object({ scan: z.object({ id: z.string() }).nullable(), bundle: z.object({ id: z.string(), code: z.string(), quantity: z.number() }), operationId: z.string().optional() })
 export type ChainReported = z.infer<typeof reported>
 
 export const readFloorChain = (api: ApiClient, lineId: string, operationId?: string | null): Promise<TaskOutcome<FloorChain>> =>

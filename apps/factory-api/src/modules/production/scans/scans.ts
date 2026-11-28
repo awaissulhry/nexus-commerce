@@ -245,8 +245,8 @@ export type Outcome =
   | { readonly status: 'accepted' | 'duplicate'; readonly scan: ScanView; readonly request?: undefined; readonly refusal?: undefined; readonly moved?: undefined }
   // owb-fl2: a second Done moved the basket on (a FORWARD move): no scan.
   | { readonly status: 'accepted' | 'duplicate'; readonly moved: MovedOn; readonly scan?: undefined; readonly request?: undefined; readonly refusal?: undefined }
-  | { readonly status: 'accepted' | 'duplicate'; readonly request: RequestView; readonly scan?: undefined; readonly refusal?: undefined }
-  | { readonly status: 'refused'; readonly refusal: ScanRefusal; readonly scan?: undefined; readonly request?: undefined }
+  | { readonly status: 'accepted' | 'duplicate'; readonly request: RequestView; readonly scan?: undefined; readonly refusal?: undefined; readonly moved?: undefined }
+  | { readonly status: 'refused'; readonly refusal: ScanRefusal; readonly scan?: undefined; readonly request?: undefined; readonly moved?: undefined }
 
 const refused = (refusal: ScanRefusal): Outcome => ({ status: 'refused', refusal })
 
@@ -806,8 +806,9 @@ function scanAnswer(outcome: Outcome): { scan: ScanView; replayed: boolean } {
 
 export async function reportScan(caller: CommandCaller, input: ReportInput) {
   const outcome = await report(caller, sessionOf(caller, 'online'), input)
-  // owb-fl2: a second Done moved the basket on (200/201 with no scan; `to`: the next step, null for Ready to ship).
-  if (outcome.status !== 'refused' && outcome.moved) return { scan: null, replayed: outcome.status === 'duplicate', moved: true, to: outcome.moved.to }
+  // owb-fl2: a second Done moved the basket on (200/201 with no scan; `to`: the next step, null for Ready to ship). `movedGroupId`
+  // names the move for a caller that answers it (the floor queue's on-behalf entry); the route's answer has no such field.
+  if (outcome.status !== 'refused' && outcome.moved) return { scan: null, replayed: outcome.status === 'duplicate', moved: true, to: outcome.moved.to, movedGroupId: outcome.moved.groupId }
   return { ...scanAnswer(outcome), moved: false, to: null }
 }
 

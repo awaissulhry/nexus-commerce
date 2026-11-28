@@ -67,7 +67,7 @@ async function targetsOf(caller: CommandCaller, input: { readonly bundleIds?: re
   let ids = input.bundleIds ? [...new Set(input.bundleIds)] : []
   if (input.salesOrderId) {
     const cells = await systemView(caller).withClient(async (db: Reader) => {
-      const lines = await db.salesOrderLine.findMany({ where: { salesOrderId: input.salesOrderId }, select: { id: true } })
+      const lines = await db.salesOrderLine.findMany({ where: { orderId: input.salesOrderId }, select: { id: true } })
       return lines.length === 0 ? [] : db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lines.map((line) => line.id) } }, select: { id: true } })
     })
     ids = cells.length === 0 ? [] : (await caller.withClient((db: Reader) => db.bundle.findMany({ where: { workOrderSizeId: { in: cells.map((cell) => cell.id) }, status: 'ACTIVE' }, select: { id: true }, take: MAX_BASKETS_PER_ACT + 1 }))).map((row) => row.id)
@@ -86,7 +86,7 @@ async function ordersOf(caller: CommandCaller, cellIds: readonly string[]): Prom
   return systemView(caller).withClient(async (db: Reader) => {
     const cells = await db.workOrderSize.findMany({ where: { id: { in: [...new Set(cellIds)] } }, select: { id: true, salesOrderLineId: true } })
     const lineIds = [...new Set(cells.flatMap((cell) => (cell.salesOrderLineId ? [cell.salesOrderLineId] : [])))]
-    const lines = new Map(lineIds.length === 0 ? [] : (await db.salesOrderLine.findMany({ where: { id: { in: lineIds } }, select: { id: true, salesOrderId: true } })).map((line) => [line.id, line.salesOrderId]))
+    const lines = new Map(lineIds.length === 0 ? [] : (await db.salesOrderLine.findMany({ where: { id: { in: lineIds } }, select: { id: true, orderId: true } })).map((line) => [line.id, line.orderId]))
     return new Map(cells.flatMap((cell) => (cell.salesOrderLineId && lines.has(cell.salesOrderLineId) ? [[cell.id, lines.get(cell.salesOrderLineId)!] as const] : [])))
   })
 }

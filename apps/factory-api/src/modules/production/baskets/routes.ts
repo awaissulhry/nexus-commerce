@@ -42,12 +42,12 @@ export default defineRoutes('production.baskets', manifest, async (app) => {
   // owb-fl2: moves by hand, their undo, route edits (201 a new act; 200 a resend of its key).
   app.post('/production/baskets/move', { schema: moveContract }, async (request, reply) => {
     const { replayed, ...answer } = await moveBaskets(request, request.body, idempotencyKeyFrom(request))
-    return reply.code(replayed ? 200 : 201).send(answer)
+    return reply.code(replayed ? 200 : 201).send({ ...answer, stayWords: [...answer.stayWords], baskets: [...answer.baskets] })
   })
 
   app.post('/production/baskets/moves/:groupId/undo', { schema: undoMovesContract }, async (request, reply) => {
     const { replayed, ...answer } = await undoMoves(request, request.params.groupId, request.body, idempotencyKeyFrom(request))
-    return reply.code(replayed ? 200 : 201).send(answer)
+    return reply.code(replayed ? 200 : 201).send({ ...answer, stayWords: [...answer.stayWords] })
   })
 
   app.post('/production/baskets/route', { schema: routeContract }, async (request) => {
