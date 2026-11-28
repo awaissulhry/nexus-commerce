@@ -11,6 +11,8 @@ const manage = { audiences: ['office'], permission: 'product.routing.manage', sc
 export const manifest = defineManifest({
   'GET /product/styles/:styleId/revisions/:revisionId/routing': view,
   'POST /product/styles/:styleId/revisions/:revisionId/routing/steps': manage,
+  // owb-pd2 2.2: the route builder's ONE save of the product route (the whole list, under the revision's version; DRAFT only).
+  'PUT /product/styles/:styleId/revisions/:revisionId/routing/steps': manage,
   'PATCH /product/styles/:styleId/revisions/:revisionId/routing/steps/:stepId': manage,
   'DELETE /product/styles/:styleId/revisions/:revisionId/routing/steps/:stepId': manage,
   'PUT /product/styles/:styleId/revisions/:revisionId/routing/order': manage,
