@@ -1,4 +1,7 @@
 {
+  "kit": {
+    "goOn": "Procedi"
+  },
   "common": {
     "retry": "Riprova",
     "dismiss": "Chiudi",

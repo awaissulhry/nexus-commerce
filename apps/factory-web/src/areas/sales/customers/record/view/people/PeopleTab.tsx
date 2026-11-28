@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { PortalAccessMessages, PortalStepUp } from '../../../portal/view/parts'
 import { PortalDialogs } from '../../../portal/view/PortalDialogs'
@@ -43,6 +44,8 @@ export interface PeopleTabProps {
   readonly privacy?: { readonly model: PrivacyModel; readonly actions?: PrivacyActions | undefined } | null | undefined
   /** F-CA-209: Made-to-measure's windows (New measurements, Send a measurement link); null: none mounted. */
   readonly mtm?: PeopleMtm | null | undefined
+  /** owb-of7 step 3: the card "Factory people" (the container's; null: not read, or the read refused this reader). */
+  readonly factory?: ReactNode
 }
 
 /** The section a chip opens. */
@@ -56,7 +59,7 @@ export function PeopleTab(props: PeopleTabProps) {
   )
 }
 
-function PeopleTabBody({ model, actions, portal, recordHref, mtm, privacy }: PeopleTabProps) {
+function PeopleTabBody({ model, actions, portal, recordHref, mtm, privacy, factory }: PeopleTabProps) {
   if (!model)
     return (
       <div className="fw-pt fw-ca">
@@ -73,6 +76,8 @@ function PeopleTabBody({ model, actions, portal, recordHref, mtm, privacy }: Peo
     <div className="fw-pt fw-ca">
       <PeopleAnswer answer={model.answer} filter={model.filter} onChip={onChip} />
       <PeopleSection model={model} actions={actions} recordHref={recordHref} />
+      {/* owb-of7 step 3: who of the factory is given to this customer (People by customer). */}
+      {factory}
       <AddressesSection model={model} actions={actions} />
       <RidersSection model={model} actions={actions} />
       <PrivacySection model={model} actions={actions} />
