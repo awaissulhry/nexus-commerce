@@ -8,6 +8,7 @@ import type { CommandCaller, CommandTx } from '../../../core/command'
 import { floorOrderPicture } from '../../sales/orders/floor-picture'
 import { designFilesOf, goodsLinesOf, printOrder, printsOf, workOrdersOf } from '../print-start/store'
 import { printBasketsOf } from './again'
+import { placeKey, placementsOf } from './placements' // owb-ss2b
 
 /**
  * GET /production/orders/:orderId/print-sheet?printId= (production.print.start; owb- order workflow, S3 ss2 step 2.3; settles L7,
@@ -17,8 +18,8 @@ import { printBasketsOf } from './again'
  *   printId given     that print: FIRST — every design page and every basket made at it; AGAIN — the pages and cards it names
  *   printId left out  the order's CURRENT sheet for "Print again": every design page and every ACTIVE basket card of its FIRST print
  *   pages             a goods line's design page: its newest design file, the page, the line's WORK ORDER NUMBER as the QR (the
- *                     traveller's form; a work order has no scan id), the place of the code (null: the usual place, top right,
- *                     20 mm — owb-ss2b keeps the placements), the print number ("Print N · date" from 2)
+ *                     traveller's form; a work order has no scan id), the place of the code saved by Place the scan code
+ *                     (owb-ss2b; null: the usual place, top right, 20 mm), the print number ("Print N · date" from 2)
  *   cards             a basket: its BN code, its number for the eye, its pieces, the picture (the order's, as the floor of its site
  *                     sees it, else the line's design), the customer's CODE (never the name, never a price), the due date, the
  *                     route's steps with their department's number, names (Urdu too) and look, the print number, and `shipped`
@@ -50,6 +51,7 @@ export async function printSheet(caller: CommandCaller, orderId: string, query: 
     const dueDate = due ? due.toISOString().slice(0, 10) : null
 
     // Pages: FIRST / the current sheet — every design page (page 1 of each line with a design file); AGAIN — its own.
+    const places = await placementsOf(db, order.id) // owb-ss2b
     const pageAsks = shown.kind === 'AGAIN' ? shown.pages : lines.filter((line) => files.has(line.id)).map((line) => ({ salesOrderLineId: line.id, page: 1 }))
     const pages = pageAsks.flatMap((page) => {
       const line = lineOf.get(page.salesOrderLineId)
@@ -66,8 +68,8 @@ export async function printSheet(caller: CommandCaller, orderId: string, query: 
           contentType: file.contentType,
           qr: workOrder.number,
           workOrderNumber: workOrder.number,
-          // owb-ss2b: the place saved for this line, file and page (ScanCodePlacement); null until then: top right, 20 mm.
-          placement: null as { xMm: number; yMm: number; sizeMm: number } | null,
+          // owb-ss2b: the place saved for this line, file and page (ScanCodePlacement); none: the usual place, top right, 20 mm.
+          placement: places.get(placeKey(line.id, file.fileId, page.page)) ?? null,
           printNo: pagePrintNo(upTo, page),
         },
       ]
