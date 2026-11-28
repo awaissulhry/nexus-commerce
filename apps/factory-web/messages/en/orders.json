@@ -1884,8 +1884,8 @@
       "all": "All dates ›"
     },
     "requests": {
-      "title": "Requests & changes",
-      "nothing": "No request or change waits",
+      "title": "Asks & changes",
+      "nothing": "No ask or change waits",
       "still": "Still to do · {count}"
     },
     "linked": {
@@ -2067,7 +2067,7 @@
     "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
     "act": {
       "note": "Note…",
-      "hold": "Hold…",
+      "hold": "Put on hold…",
       "lift": "Lift the hold…",
       "release": "Release…",
       "split": "Split…",
@@ -2494,7 +2494,7 @@
       "noSupervisor": "No supervisor yet: the production managers get it after 1 working day"
     },
     "wo": {
-      "title": "Work orders",
+      "title": "Baskets",
       "summary_one": "{count} work order",
       "summary_other": "{count} work orders",
       "pieces_one": "{count} piece for this order",

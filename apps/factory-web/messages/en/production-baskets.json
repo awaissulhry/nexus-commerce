@@ -1,0 +1,121 @@
+{
+  "board": {
+    "label": "Baskets by department",
+    "count_one": "{count} basket",
+    "count_other": "{count} baskets",
+    "keys": "Tab moves from basket to basket · Enter opens the basket · Esc closes its window",
+    "loading": "Reading the baskets…",
+    "retry": "Try again",
+    "empty": "No basket is on the floor now.",
+    "emptyHint": "A basket appears here when its order is printed and the work starts. Change a filter to see more."
+  },
+  "filter": {
+    "team": "Team",
+    "allTeams": "All teams",
+    "department": "Department",
+    "allDepartments": "All departments",
+    "order": "Order",
+    "allOrders": "All orders"
+  },
+  "column": {
+    "ready": "Ready to ship",
+    "none": "—"
+  },
+  "card": {
+    "open": "Open basket {code}",
+    "progress": "{done} of {total} steps",
+    "first": "First",
+    "problem": "Problem",
+    "late": "Late",
+    "lateDays_one": "Late {count} day",
+    "lateDays_other": "Late {count} days"
+  },
+  "state": {
+    "WAITING": "Waiting",
+    "WORKING": "Working",
+    "PAUSED": "Paused",
+    "READY": "Ready to ship"
+  },
+  "window": {
+    "title": "Basket {code}",
+    "busy": "Working on it…",
+    "loading": "Reading its route…",
+    "routeFailed": "Its route could not be read now. Close and open the basket again.",
+    "readOnly": "You read this basket. The production manager or the team leader moves it.",
+    "has": "{name} has it",
+    "designPage": "Design page",
+    "openOrder": "Open the order",
+    "solved": "Problem solved",
+    "solvedDone": "The problem is solved. The floor is told.",
+    "moveTo": "Move it to",
+    "moveHint": "Forward or back, to a step of its route. Back asks why. The history keeps who moved it.",
+    "back": "back",
+    "why": "Why back?",
+    "packFirst": "Pack it first: Packed at Packing makes it ready to ship.",
+    "backLeader": "Only the production manager or the team leader moves a basket back.",
+    "moved": "Moved. The floor sees it at once.",
+    "stayed": "The basket stays where it is.",
+    "giveTo": "Give it to",
+    "given": "Given. The person sees it first.",
+    "printAgain": "Print its card and pages again…",
+    "failed": "It did not go. Try again."
+  },
+  "reason": {
+    "REDO": "Work again",
+    "MISTAKE": "Moved by mistake",
+    "OTHER": "Other"
+  },
+  "floor": {
+    "title": "From the floor",
+    "loading": "Reading what the floor sent…",
+    "failed": "What the floor sent could not be read now.",
+    "empty": "Nothing from the floor for this order yet.",
+    "late": "Will be late",
+    "lateDays_one": "{count} day late",
+    "lateDays_other": "{count} days late",
+    "lateNote": "The customer hears it from sales, never from the floor.",
+    "holds": "The date holds",
+    "changePromise": "Change the promise…",
+    "photos": "Photos from the floor",
+    "share": "Share with the customer",
+    "keep": "Keep inside",
+    "shared": "Shared with the customer",
+    "kept": "Kept inside",
+    "inside": "Inside the factory",
+    "changed": "Changed on the floor",
+    "why": "Why: {why}"
+  },
+  "lateReason": {
+    "MATERIAL": "Material missing",
+    "MACHINE": "Machine problem",
+    "PEOPLE": "People missing",
+    "REDO": "Work again"
+  },
+  "lateState": {
+    "OPEN": "Waits for an answer",
+    "KEPT": "The date holds",
+    "CHANGED": "Promise changed"
+  },
+  "changeReason": {
+    "REDO": "Work again",
+    "MISTAKE": "Moved by mistake",
+    "OTHER": "Other",
+    "NOT_NEEDED": "Not needed here",
+    "CUSTOMER": "The customer asked"
+  },
+  "promise": {
+    "title": "Change the promise",
+    "current": "The promise now: {date}",
+    "none": "The order has no promise yet.",
+    "date": "The new promise",
+    "reason": "Why (the customer reads it)",
+    "note": "The customer sees the new date and its reason. The floor's warning is then answered.",
+    "save": "Change the promise",
+    "pickDate": "Pick the new date first.",
+    "readFailed": "The order could not be read now. Close and try again."
+  },
+  "error": {
+    "read": "The baskets could not be read now.",
+    "forbidden": "You may not see the baskets board."
+  }
+}

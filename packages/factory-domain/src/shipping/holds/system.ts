@@ -6,7 +6,11 @@ import { inForce } from './holds'
  * not left (DRAFT or PACKED) the system wants a hold while its cause stands:
  *
  *   BALANCE_UNPAID   FIN-079: the order's payment terms ask the balance before shipping (an OPEN BEFORE_SHIPPING step of
- *                    its payment schedule): held until it is paid (or waived, or no longer due), then it lifts itself
+ *                    its payment schedule). owb- (order workflow, S3 ss1 step 1.4; settle L2, Owner R39 (a), plan.md § 5 A
+ *                    "warn only where you already said yes"): NO LONGER PLACED. A payment due is a warning in words at the
+ *                    moment the goods leave to the customer (modules/shipping: ship, and a warehouse leg's Send on; the base's
+ *                    PAYMENT_DUE_AT_SHIP), never a hold that stops packing. The reason stays (the enum value, a person's own
+ *                    hold, the words below); the sync lifts the system's open BALANCE_UNPAID holds with LIFT_WORDS.
  *   CREDIT           LQ1:01: the customer's account is on hold for credit with the shipment's company, or the credit
  *                    check of a shipment leaving would hold it now (over the limit where the company's rules hold) and no
  *                    yes let this shipment through
@@ -39,7 +43,10 @@ const ACCOUNT_WORDS: Readonly<Record<string, string>> = Object.freeze({
 export interface SystemHoldFacts {
   readonly customerCode: string
   readonly orderNumber: string
-  /** The order's OPEN before-shipping steps: since when the earliest is due (its step was made); null: none open. */
+  /**
+   * The order's OPEN before-shipping steps: since when the earliest is due (its step was made); null: none open. owb- (S3 ss1):
+   * read for the words only — the system no longer holds for it (R39 (a): a warning when the goods leave).
+   */
   readonly balanceOpenSince: Date | null
   /** The customer's account holds in force for the shipment's company (or every company). */
   readonly accountHolds: readonly { readonly reason: string; readonly placedAt: Date }[]
@@ -62,13 +69,9 @@ const latest = (dates: readonly Date[]): Date => dates.reduce((best, date) => (d
 /** The holds the system wants on the shipment now, one per reason. */
 export function wantedHolds(facts: SystemHoldFacts): WantedHold[] {
   const wanted: WantedHold[] = []
-  if (facts.balanceOpenSince) {
-    wanted.push({
-      reason: 'BALANCE_UNPAID',
-      since: facts.balanceOpenSince,
-      words: `The balance before shipping of order ${facts.orderNumber} is not paid: the shipment waits until it is paid, and the hold lifts itself then.`,
-    })
-  }
+  // owb- (S3 ss1 step 1.4, R39 (a)): no BALANCE_UNPAID any more — the payment due is a warning when the goods leave to the
+  // customer (apps/factory-api modules/shipping/warehouse-leg/payment.ts), so a shipment is never held for it; CREDIT, DEPOSIT,
+  // QUALITY and OTHER stay (R0 E-34).
   const byReason = new Map<ShipmentHoldReason, { reasons: string[]; dates: Date[] }>()
   for (const hold of facts.accountHolds) {
     const reason = ACCOUNT_HOLD_REASONS[hold.reason] ?? 'OTHER'
@@ -96,7 +99,8 @@ export function wantedHolds(facts: SystemHoldFacts): WantedHold[] {
 export const LIFT_WORDS: Readonly<Record<ShipmentHoldReason, string>> = Object.freeze({
   CREDIT: "The customer's credit allows the shipment now: the account hold for credit is released and the credit check lets it go.",
   DEPOSIT: 'The deposit is paid or no longer due.',
-  BALANCE_UNPAID: 'The balance before shipping is paid or no longer due.',
+  // owb- (S3 ss1, R39 (a)): the system lifts its old balance holds because a payment due no longer holds a shipment.
+  BALANCE_UNPAID: 'A payment due before shipping no longer holds the shipment: whoever sends the goods sees it as a warning.',
   QUALITY: "The customer's account hold for a quality dispute is released.",
   CUSTOMER_REQUEST: "The customer's request is over.",
   OTHER: "The customer's account hold is released.",

@@ -6,7 +6,7 @@ import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
-import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
+import { usePortalApi, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { addAddress } from '../account/api'
 import { addressBody, addressProblems, addressTyped, EMPTY_ADDRESS, type AddressDraft } from '../account/model'
 import { fetchCatalogue, fetchStyle } from '../catalogue/api'
@@ -24,7 +24,6 @@ import {
   reorderInto,
   sendDraft,
   SHEET_MAX_BYTES,
-  takeTodaysPrices,
   templateHref,
   uploadSheet,
   type DraftLine,
@@ -32,7 +31,7 @@ import {
   type DraftRow,
   type NewLine,
 } from './api'
-import { newOrderBandOf, type NewOrderPhase } from './band'
+import type { NewOrderPhase } from './band'
 import {
   headerChanges,
   headerDirty,
@@ -56,14 +55,12 @@ import {
 } from './model'
 import type { PickerModel } from './view/Dialogs'
 import { pickerLineCount } from './view/Dialogs'
-import { NewOrderView } from './view/NewOrderView'
 import type { ReorderModel } from './view/ReorderPanel'
 import type { SheetState } from './view/UploadPanel'
 import { NotInAccess } from './view/parts'
 import { useOrderingWords } from './words'
 import { DRAFT_NS, useDraftWords } from '../../../lib/order-draft/words'
 // ---- F-CP-150 (customer page plan C5, D9–D11): the draft order page — its conversation docked, who may send, who changed it.
-import { PortalThread } from '../../shell/thread/PortalThread'
 import { fetchColleagues } from './api'
 import { draftDiscardHeld, draftSendHeld, draftTitleOf, mayOf, whoMayOrder } from './model'
 // ---- end F-CP-150
@@ -88,6 +85,26 @@ import type { SavedBy } from '../../../lib/order-draft/schema'
 import { piecesOpenOf, type PiecesMode } from '../../../lib/order-draft/view/RowWindows'
 import { CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 // ---- end F-CP-154
+// ---- owb-po3 (design § 5zi B–E): the New order WINDOW over the orders page — the ONE lines table, columns of your own, the picture of
+// the order, the after-Send state. The window is the shared part's (lib/order-draft/view/DraftWindow); the commands stay here.
+import { recordSchema } from './api'
+import { DraftWindow, type DraftWindowModel } from '../../../lib/order-draft/view/DraftWindow'
+import { savedByWords, shipToOptions, stillOpenEntries } from '../../../lib/order-draft/model'
+import { lineRowsOfDraft, modelFields, nextLineFields, ownColumnsOfRecord, piecesOfRows, type LinePrices, type ModelStyle, type NewDesignKind } from '../../../lib/order-lines/model'
+import { ownColumnsPort } from '../../../lib/order-lines/api'
+import type { OwnColumn, OwnValue } from '../../../lib/order-lines/schema'
+import { OwnColumnsWindow } from '../../../lib/order-lines/own-columns/OwnColumnsWindow'
+import { OrderPictureWindow } from '../../../lib/record-picture/OrderPictureWindow'
+import { orderPicturePath, orderPictureSaver } from '../../../lib/record-picture/api'
+import { pictureKindOf, type PictureChoice } from '../../../lib/record-picture/order-picture'
+import { Button } from '@nexus/ui/primitives'
+import { NewAddressDialog, StylePickerDialog } from './view/Dialogs'
+import { ReorderPanel } from './view/ReorderPanel'
+import { UploadPanel } from './view/UploadPanel'
+import { OptionsWindow, PiecesWindow, RowFilesWindow } from '../../../lib/order-draft/view/RowWindows'
+import { PersonDialog } from '../../../lib/order-draft/view/PeopleRoster'
+import { closedOf, draftRowWords, reorderHeldKey } from './model'
+// ---- end owb-po3
 
 /**
  * `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=&reorder=&line=` for a customer (B-W2b-194, SCR-185, on
@@ -118,6 +135,10 @@ export function CustomerNewOrderPage() {
 type Load = 'loading' | 'error' | 'missing' | 'ready'
 type Async<T> = { state: 'loading' | 'error' | 'ready'; value: T }
 interface SentInfo {
+  /** owb-po3.4: the after-Send state of the window — its subject, the day wanted, the request (Open the order). */
+  subject: string
+  wanted: string | null
+  requestId: string
   customerRef: string | null
   lines: number
   pieces: number
@@ -239,13 +260,19 @@ function NewOrderContainer() {
   const [ownPriceProblems, setOwnPriceProblems] = useState<Record<string, string>>({})
   // ---- od-w1.2 (R1): the row "Add a product" drew (saved on its first input), the styles the Product cell offers, a row's windows.
   const [pending, setPending] = useState(false)
-  const [styles, setStyles] = useState<{ id: string; code: string; name: string }[] | null>(null)
+  const [styles, setStyles] = useState<ModelStyle[] | null>(null)
   const [piecesWin, setPiecesWin] = useState<PiecesState | null>(null)
   const [optionsWin, setOptionsWin] = useState<OptionsState | null>(null)
   const [rowFilesId, setRowFilesId] = useState<string | null>(null)
   const ownPricesRef = useRef(ownPrices)
   ownPricesRef.current = ownPrices
   // ---- end F-CP-154
+  // ---- owb-po3: "Columns of your own" (the customer's columns: null while read), the picture window, a line's refusal in words.
+  const ownPort = useMemo(() => ownColumnsPort(api, 'portal'), [api])
+  const [ownWin, setOwnWin] = useState<{ columns: OwnColumn[] | null; busy: boolean; refused: string | null } | null>(null)
+  const [pictureOpen, setPictureOpen] = useState(false)
+  const [lineRefusals, setLineRefusals] = useState<Record<string, string>>({})
+  // ---- end owb-po3
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -346,10 +373,9 @@ function NewOrderContainer() {
       setLoad('loading')
       setSent(null)
       void read()
-    } else {
-      setRecord(null)
-      readDrafts()
-    }
+    } else setRecord(null)
+    // owb-po3.1: the window's head always says "Drafts n" (the customer's other drafts).
+    readDrafts()
   }, [allowed, draftId, read, readDrafts])
 
   useEffect(() => {
@@ -406,7 +432,8 @@ function NewOrderContainer() {
   useEffect(() => {
     if (!allowed || styles !== null) return
     fetchCatalogue(api, {})
-      .then((read) => setStyles(read.styles.map((style) => ({ id: style.id, code: style.code, name: style.name }))))
+      // owb-po3: the Model cell's groups (own label = Your designs) and a style's colourways (the line's Material).
+      .then((read) => setStyles(read.styles.map((style) => ({ id: style.id, code: style.code, name: style.name, ownLabel: style.ownLabel, colours: style.colours.map((colour) => ({ id: colour.id, name: colour.name })) }))))
       .catch(() => setStyles([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, api])
@@ -499,6 +526,12 @@ function NewOrderContainer() {
 
   const remove = async (lineId: string) => {
     const current = recordRef.current
+    // owb-po3.2: a line taken out is kept (owb-po1: soft) and comes back with "Put it back" (the table lists it): no notice, no Undo.
+    if (current?.request.removedLines !== undefined) {
+      await write(`remove:${lineId}`, (version, key) => port.removeLine(current.request.id, lineId, version, key))
+      setOwnPrices(({ [lineId]: _drop, ...rest }) => rest)
+      return
+    }
     // F-CP-154: a described or made-to-measure line goes out the same way (its people with it); no Undo: its people would not come back.
     const custom = current ? customLinesOf(current.request).find((entry) => entry.id === lineId) : undefined
     if (current && custom) {
@@ -528,10 +561,6 @@ function NewOrderContainer() {
     if (next) setNotice({ lines: [t('notice.back', { style: line.style.code, colour: line.colourway.name })], undo: null })
   }
 
-  const takePrices = () => {
-    const id = recordRef.current?.request.id
-    if (id) void write('prices', (version, key) => takeTodaysPrices(api, id, version, key))
-  }
 
   // ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6): a line in the customer's own words, its people, "Your price" ----------
   // ---- od-w1.2 (R3; 10-design-r1 § 3): the products table — every cell optional, each saved at once with the draft's version -------
@@ -877,7 +906,7 @@ function NewOrderContainer() {
       await enqueue(() => discardDraft(api, current.request.id, recordRef.current!.request.version, keyFor('discard', { id: current.request.id })))
       setDiscard(null)
       setHeader(headerDraftOf(current.request))
-      router.replace(newOrderHref(frame.prefix))
+      router.push(`${frame.prefix}/orders`) // owb-po3.1: the window closes onto the orders page
     } catch (error) {
       setDiscard({ busy: false, failed: refusalOf(kindOf(error)) })
     }
@@ -897,6 +926,9 @@ function NewOrderContainer() {
       })
       apply(answer)
       setSent({
+        subject: draftTitleOf(answer.request, dw.t, locale, words.day),
+        wanted: answer.request.requestedDate,
+        requestId: answer.request.id,
         customerRef: answer.request.customerRef,
         lines: answer.request.summary.lines,
         pieces: answer.request.summary.pieces,
@@ -1059,22 +1091,7 @@ function NewOrderContainer() {
   const discardKey = record ? draftDiscardHeld(record.request, { preview, offline, busy: false }) : held
   const discardWords = discardKey ? t(discardKey) : null
   const title = record ? draftTitleOf(record.request, dw.t, locale, words.day) : null // od-w1.2 (R2): the subject first
-  const draftAsk = record && title ? { type: 'PortalOrderRequest', id: record.request.id, label: title } : null
-  usePortalBand(
-    allowed
-      ? newOrderBandOf({
-          words,
-          phase,
-          prefix: frame.prefix,
-          template: templateHref(locale),
-          customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
-          discardHeld: discardWords,
-          title, // F-CP-150 (od-w1.2: the subject, else row 1's product, else "Draft order {date}")
-          ask: draftAsk, // F-CP-150
-          onDiscard: () => setDiscard({ busy: false, failed: null }),
-        })
-      : { title: t('band.title') },
-  )
+  // owb-po3.1: no band of its own — the orders page behind the window keeps the band.
 
   if (!allowed) return <NotInAccess admins={admins} homeHref={frame.prefix} />
 
@@ -1087,263 +1104,480 @@ function NewOrderContainer() {
   const draftName = record ? draftMailName(record.request, dw.t) : ''
   const fileCap = record ? filesAddHeld(record.request, { preview: false, offline: false, busy: false }) : null
 
+  // ── owb-po3: the window ─────────────────────────────────────────────────────────────────────────────────────────────
+  const request = record?.request ?? null
+  const kinds: NewDesignKind[] = (request?.madeToMeasure?.garmentTypes ?? []).map((type) => ({ code: type.code, words: type.words[locale] }))
+  const lineRows = request ? lineRowsOfDraft(request, { styles: styles ?? [], kinds }) : []
+  const isDraft = !request || request.status === 'DRAFT'
+  const prices: LinePrices | null =
+    record?.seesPrices && request
+      ? {
+          currency: request.currency,
+          edit: isDraft && held === null,
+          byLine: Object.fromEntries([
+            ...request.lines.map((line) => [line.id, { list: line.priceNow ?? null, own: ownPrices[line.id] ?? line.brandUnitPrice ?? null }] as const),
+            ...customLinesOf(request).map((line) => [line.id, { list: null, own: ownPrices[line.id] ?? line.brandUnitPrice ?? null }] as const),
+          ]),
+        }
+      : null
+  const sum = prices
+    ? lineRows.reduce<number | null>((total, row) => {
+        const price = prices.byLine[row.id]
+        const each = Number(price?.own ?? price?.list ?? Number.NaN)
+        return Number.isFinite(each) && row.pieces.count ? (total ?? 0) + each * row.pieces.count : total
+      }, null)
+    : null
+  const od = request ? productRowsOf(request, locale) : []
+  const entries = request ? stillOpenEntries(request.stillOpen, od, dw.t) : []
+  const ownFiles = request ? draftFilesOf(request) : null
+  const refusals = { ...Object.fromEntries(Object.entries(ownPriceProblems).map(([lineId, key]) => [lineId, t(key)])), ...lineRefusals }
+  const usedIds = ownColumnsOfRecord(request?.ownColumns).map((column) => column.id)
+  const windowPhase: DraftWindowModel['phase'] =
+    phase === 'sent' ? 'sent' : phase === 'closed' ? 'closed' : draftId && load === 'missing' ? 'missing' : draftId && load === 'error' ? 'failed' : draftId && load === 'loading' ? 'loading' : 'draft'
+  const end =
+    windowPhase === 'missing'
+      ? { title: t('missing.title'), body: t('missing.body'), openHref: null }
+      : windowPhase === 'closed' && request
+        ? (() => {
+            const closed = closedOf(request.status, seesOrders)
+            return { title: t('closed.titleNone'), body: t(closed.body), openHref: request.salesOrder ? `${frame.prefix}/orders/${encodeURIComponent(request.salesOrder.id)}` : closed.open ? `${frame.prefix}/orders/requests/${encodeURIComponent(request.id)}` : null }
+          })()
+        : null
+  const banner: DraftWindowModel['banner'] = offlineSince
+    ? { tone: 'warning', title: t('offline.title', { time: words.time(offlineSince) }) }
+    : stale
+      ? {
+          tone: 'warning',
+          // F-CP-150: who changed it meanwhile — a colleague by name; any office save is "the factory" (never a worker's name).
+          title: staleBy ? `${dw.t('draft.stale')} ${staleBy.who === 'FACTORY' ? dw.t('save.changedByFactory') : dw.t('draftPage.changedBy', { name: staleBy.name ?? '' })}` : dw.t('draft.stale'),
+          action: { words: dw.t('draft.reload'), run: 'reload' },
+        }
+      : problem
+        ? { tone: 'danger', title: t(problem) }
+        : notice
+          ? { tone: 'success', title: notice.lines[0] ?? '', action: notice.undo ? { words: dw.t('notice.undo'), run: 'undo' } : { words: dw.t('notice.hide'), run: 'dismiss' } }
+          : null
+  const otherDrafts = drafts.value.filter((row) => row.id !== request?.id && row.status === 'DRAFT')
+  const pictureChoices: PictureChoice[] = ownFiles
+    ? [...ownFiles.logos, ...ownFiles.references]
+        .filter((file) => file.contentType.startsWith('image/') || file.contentType === 'application/pdf')
+        .map((file) => ({ fileId: file.id, name: file.originalName ?? '—', kind: pictureKindOf({ type: file.contentType, name: file.originalName ?? '' }), small: null }))
+    : []
+
+  /** owb-po3.2: a line's own value, saved at once with its own version (it changes no price and no promise; the draft's version stays). */
+  const saveOwnValue = (lineId: string, columnId: string, value: OwnValue['value'], version: number | null) => {
+    if (writeHeld({ preview, offline, busy: false })) return
+    void enqueue(async () => {
+      try {
+        const saved = await ownPort.putValue({ line: { kind: 'REQUEST_LINE', id: lineId }, columnId, value, ...(version !== null ? { version } : {}) }, keyFor('own', { lineId, columnId, value, version }))
+        const now = recordRef.current
+        if (!now) return
+        const own = now.request.ownColumns ?? { used: [], values: {} }
+        apply({ ...now, request: { ...now.request, ownColumns: { ...own, values: { ...own.values, [lineId]: { ...(own.values[lineId] ?? {}), [columnId]: saved } } } } })
+      } catch (error) {
+        refused(error)
+      }
+    })
+  }
+  /** owb-po3.3: the columns this draft uses (≤ 8, in order); a column going off with values clears them only on `dropValues`. */
+  const useColumns = async (ids: string[], dropValues: boolean) => {
+    const current = await ensureDraft().catch((error: unknown) => {
+      refused(error)
+      return null
+    })
+    if (!current) return
+    setOwnWin((now) => (now ? { ...now, busy: true, refused: null } : now))
+    let failed: string | null = null
+    await write(`columns:${ids.join(',')}:${dropValues}`, (version, key) => ownPort.useOnRequest(current.request.id, { version, columnIds: ids, ...(dropValues ? { dropValues: true } : {}) }, recordSchema, key), (kind) => {
+      failed = t(refusalOf(kind))
+    })
+    setOwnWin((now) => (now ? { ...now, busy: false, refused: failed } : now))
+  }
+  const readColumns = () =>
+    ownPort
+      .list()
+      .then((columns) => setOwnWin((now) => (now ? { ...now, columns } : now)))
+      .catch(() => setOwnWin((now) => (now ? { ...now, columns: [], refused: t('refusal.other') } : now)))
+  /** A picture from the computer or the phone: it goes up as a file of the draft (a reference), then it is a choice of the window. */
+  const uploadPicture = async (file: File): Promise<PictureChoice> => {
+    const current = await ensureDraft()
+    const contentType = contentTypeOf(file).split(';')[0]!.trim().toLowerCase()
+    const bytes = await file.arrayBuffer()
+    const { file: announced, upload } = await port.announceFile(current.request.id, { part: 'REFERENCE', originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, newIdempotencyKey())
+    await putToStore(upload, new Blob([bytes], { type: contentType }))
+    await port.completeFile(current.request.id, announced.id, newIdempotencyKey())
+    void refreshFiles()
+    return { fileId: announced.id, name: file.name, kind: pictureKindOf({ type: contentType, name: file.name }), small: null }
+  }
+  const close = () => {
+    void flush().finally(() => router.push(`${frame.prefix}/orders`))
+  }
+  const reorderHeld = reorderHeldKey(mayOrder)
+  // The windows' and panels' actions (as the page form gave them; the window stacks the windows over itself).
+  const piecesActions = {
+    onMode: (mode: PiecesMode) => setPiecesWin((now) => (now ? { ...now, mode, typed: true, failed: null } : now)),
+    onTotal: (text: string) => setPiecesWin((now) => (now ? { ...now, total: text, typed: true, failed: null } : now)),
+    onCells: (cells: Record<string, number>) => setPiecesWin((now) => (now ? { ...now, cells, typed: true } : now)),
+    onSave: () => void savePieces(),
+    onClose: () => setPiecesWin((now) => (now?.busy ? now : null)),
+    // By person: the person's window takes the place of the Pieces window (one window at a time over the New order).
+    people: {
+      onAddPerson: (lineId: string) => {
+        setPiecesWin(null)
+        openPerson(lineId)
+      },
+      onChangePerson: (lineId: string, personId: string) => {
+        setPiecesWin(null)
+        openPerson(lineId, personId)
+      },
+      onRemovePerson: removePersonRow,
+      onFiles: (part: DraftFilePart, list: File[], lineId?: string | null) => void addFiles(part, list, lineId ?? null),
+    },
+  }
+  const optionsActions = {
+    onPick: (topic: string, picked: string | null) => {
+      const row = optionsRow
+      if (row) void writeChoices(row.id, row.choices.map((choice) => (choice.topic === topic ? { ...choice, picked } : choice)))
+    },
+    onRemove: (topic: string) => {
+      const row = optionsRow
+      if (row) void writeChoices(row.id, row.choices.filter((choice) => choice.topic !== topic))
+    },
+    onTopic: (text: string) => setOptionsWin((now) => (now ? { ...now, topic: text } : now)),
+    onTyped: (text: string) => setOptionsWin((now) => (now ? { ...now, typed: text } : now)),
+    onAdd: () => void addOption(),
+    onClose: () => setOptionsWin(null),
+  }
+  const reorderActions = {
+    onSearch: (q: string) => readPastOrders(q),
+    onOpenOrder: (orderId: string) => openPastOrder(orderId),
+    onBack: () => setReorder((current) => ({ ...current, order: null, selected: [], colours: {} })),
+    onSelect: (ids: string[]) => setReorder((current) => ({ ...current, selected: ids })),
+    onColour: (orderLineId: string, colourwayId: string) =>
+      setReorder((current) => ({
+        ...current,
+        colours: { ...current.colours, [orderLineId]: colourwayId },
+        selected: colourwayId ? (current.selected.includes(orderLineId) ? current.selected : [...current.selected, orderLineId]) : current.selected.filter((id) => id !== orderLineId),
+      })),
+    onAdd: () => void addReorder(),
+    onRetryOrders: () => readPastOrders(reorder.q),
+    onRetryOrder: () => (reorder.order ? openPastOrder(reorder.order.id) : undefined),
+  }
+  const uploadActions = {
+    onFile: (file: File) => void readFile(file),
+    onApply: () => void applySheet(),
+    onRefusedCsv: () => (sheet.state === 'read' && sheet.answer.dryRun.refusedCsv ? saveText(t('upload.refusedFile'), sheet.answer.dryRun.refusedCsv) : undefined),
+    onOther: () => {
+      sheetFile.current = null
+      setSheet({ state: 'idle' })
+    },
+  }
+  const pickerActions = {
+    onSearch: (q: string) => setPicker((now) => (now ? { ...now, q } : now)),
+    onFilter: (patch: Partial<PickerState>) => setPicker((now) => (now ? { ...now, ...patch } : now)),
+    onToggle: (styleId: string) => setPicker((now) => (now ? { ...now, selected: now.selected.includes(styleId) ? now.selected.filter((id) => id !== styleId) : [...now.selected, styleId] } : now)),
+    onNext: () => {
+      if (!picker || picker.selected.length === 0) return
+      setPicker({ ...picker, step: 'sizes' })
+      for (const styleId of picker.selected) if (!picker.details[styleId] || picker.details[styleId]!.state === 'error') loadDetail(styleId)
+    },
+    onBack: () => setPicker((now) => (now ? { ...now, step: 'styles', problem: null } : now)),
+    onCells: (styleId: string, next: Record<string, Record<string, number>>) => setPicker((now) => (now ? { ...now, cells: { ...now.cells, [styleId]: next } } : now)),
+    onAdd: () => void addFromPicker(),
+    onClose: () => setPicker(null),
+    onRetry: () => openPicker(picker?.selected ?? []),
+    onRetryStyle: loadDetail,
+  }
+  const addressActions = {
+    onField: (field: keyof AddressDraft, value: string) => {
+      setAddress((now) => {
+        if (!now) return now
+        const { [field]: _gone, ...refused } = now.refused
+        return { ...now, draft: { ...now.draft, [field]: value }, failed: null, refused }
+      })
+    },
+    onSave: () => void saveAddress(),
+    onClose: () => setAddress((now) => (now?.busy ? now : null)),
+  }
+  const personActions = {
+    onField: <Key extends keyof PersonDraft>(field: Key, value: PersonDraft[Key]) => setPersonDialog((now) => (now ? { ...now, draft: { ...now.draft, [field]: value }, failed: null, typed: true } : now)),
+    onSave: () => void savePerson(),
+    onClose: () => setPersonDialog((now) => (now?.busy ? now : null)),
+  }
+
+  const windowModel: DraftWindowModel = {
+    open: true,
+    phase: windowPhase,
+    title: title ?? dw.t('window.newOrder'),
+    saved: save.kind === 'saving' ? dw.t('window.saving') : save.kind === 'failed' ? (save.reason ?? t('refusal.other')) : request ? savedByWords(request, dw.t, { time: words.time, day: words.day, today, door: 'portal' }) : dw.t('save.notYet'),
+    drafts: otherDrafts.length > 0 ? otherDrafts.map((row) => ({ id: row.id, title: row.draft?.title ?? row.subject ?? draftTitleOf({ lines: [], createdAt: row.createdAt }, dw.t, locale, words.day), line: draftRowWords(row, t, words.day) })) : null,
+    picture: request ? { chosen: (request.picture?.fileId ?? null) !== null, held: heldWords } : null,
+    header,
+    headerErrors,
+    shipTo: shipToOptions(record?.addresses ?? [], header.shipToAddressId || null),
+    today,
+    lines: {
+      rows: lineRows,
+      mode: isDraft ? 'draft' : 'sent',
+      columns: ownColumnsOfRecord(request?.ownColumns),
+      styles: styles ?? [],
+      kinds,
+      prices,
+      pending,
+      removed: request?.removedLines ?? [],
+      writeHeld: heldWords,
+      saving,
+      columnsDoor: true,
+      refusals,
+      door: 'portal',
+    },
+    files: {
+      files: ownFiles ? [...ownFiles.logos, ...ownFiles.references].filter((file) => file.lineId === null) : [],
+      logos: ownFiles ? ownFiles.logos.map((file) => file.id) : [],
+      sheets: ownFiles ? ownFiles.sheets.filter((file) => file.lineId === null) : [],
+      uploading: uploads.filter((row) => !row.lineId),
+      open: request ? uploadsOpenOf(request) : true,
+      addHeld: heldWords ?? (fileCap ? dw.t(fileCap) : null),
+      removeHeld: heldWords,
+      draftName,
+      dropKey: 'mail.drop',
+      accept: ACCEPT.REFERENCE,
+    },
+    side: { lines: lineRows.length, pieces: words.pieces(piecesOfRows(lineRows)), sum: sum !== null && request ? words.price(sum.toFixed(2), request.currency) : null, stillOpen: entries, openCount: request?.stillOpen?.openCount ?? entries.length },
+    sendHeld: request ? sendWords : dw.t('window.sendFirst'),
+    busy,
+    deleteHeld: request ? discardWords : dw.t('window.sendFirst'),
+    deleteAsk: discard !== null,
+    writeHeld: heldWords,
+    banner,
+    sent: sent ? { subject: sent.subject, lines: sent.lines, pieces: words.pieces(sent.pieces), wanted: sent.wanted ? words.day(sent.wanted) : null, openHref: `${frame.prefix}/orders/requests/${encodeURIComponent(sent.requestId)}` } : null,
+    end,
+  }
+
+  const addFrom = (
+    <span className="fw-pno-addfrom">
+      <span className="fw-pno-quiet">{dw.t('add.from')}</span>
+      <span className="fw-pno-addways">
+        {(['pick', 'reorder', 'upload'] as const).map((way) => (
+          <Button key={way} size="sm" variant="quiet" heldReason={way === 'reorder' && reorderHeld ? t(reorderHeld) : heldWords} onClick={() => chooseWay(way)}>
+            {dw.t(way === 'pick' ? 'add.catalogue' : way === 'reorder' ? 'add.pastOrder' : 'add.sheet')}
+          </Button>
+        ))}
+      </span>
+    </span>
+  )
+  const panels = (
+    <>
+      {way === 'reorder' && mayOrder ? <ReorderPanel model={{ ...reorder, currency: request?.currency ?? 'EUR', writeHeld: heldWords }} actions={reorderActions} /> : null}
+      {way === 'upload' ? <UploadPanel model={{ sheet, templateHref: templateHref(locale), writeHeld: heldWords }} actions={uploadActions} /> : null}
+    </>
+  )
+  const personModel = (() => {
+    if (!personDialog || !record) return null
+    const line = customLinesOf(record.request).find((entry) => entry.id === personDialog.lineId)
+    if (!line) return null
+    const sheets = draftFilesOf(record.request).sheets
+    return {
+      mode: personDialog.personId ? ('change' as const) : ('add' as const),
+      seq: line.seq,
+      name: personDialog.personId ? (line.people.find((entry) => entry.id === personDialog.personId)?.name ?? null) : null,
+      draft: personDialog.draft,
+      problems: personProblems(personDialog.draft, sheets),
+      showProblems: personDialog.showProblems,
+      sheets,
+      busy: personDialog.busy,
+      failed: personDialog.failed ? t(personDialog.failed) : null,
+    }
+  })()
+
   return (
-    <NewOrderView
-      model={{
-        state: draftId ? load : 'ready',
-        phase,
-        prefix: frame.prefix,
-        today,
-        start: { state: drafts.state, drafts: drafts.value },
-        way,
-        record,
-        header,
-        headerErrors,
-        save,
-        writeHeld: heldWords,
-        addAddressHeld,
-        reorder: way === 'reorder' && mayOrder ? { ...reorder, currency: record?.request.currency ?? 'EUR', writeHeld: heldWords } : null, // F-CP-150
-        upload: way === 'upload' ? { sheet, templateHref: templateHref(locale), writeHeld: heldWords } : null,
-        problem,
-        stale,
-        notice: notice ? { lines: notice.lines, undo: notice.undo !== null } : null,
-        sendHeld: sendWords,
-        sent,
-        closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
-        offlineSince,
-        pending,
-        styles,
-        saving,
-        uploads, // F-CP-151
-        // ---- F-CP-154
-        ownPrices,
-        ownPriceProblems,
-        // ---- end F-CP-154
-        // ---- F-CP-150
-        staleBy,
-        seesOrders,
-        mayOrder,
-        // ---- end F-CP-150
-        dialogs: {
-          picker: picker ? { ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords } : null,
-          address: address ? { ...address, problems: addressProblems(address.draft) } : null,
-          discard: discard && record ? { ...discard, lines: lineCountOf(record.request) } : null, // F-CP-154: lines of every kind
-          person: (() => {
-            if (!personDialog || !record) return null
-            const line = customLinesOf(record.request).find((entry) => entry.id === personDialog.lineId)
-            if (!line) return null
-            const sheets = draftFilesOf(record.request).sheets
-            return {
-              mode: personDialog.personId ? ('change' as const) : ('add' as const),
-              seq: line.seq,
-              name: personDialog.personId ? (line.people.find((entry) => entry.id === personDialog.personId)?.name ?? null) : null,
-              draft: personDialog.draft,
-              problems: personProblems(personDialog.draft, sheets),
-              showProblems: personDialog.showProblems,
-              sheets,
-              busy: personDialog.busy,
-              failed: personDialog.failed,
-            }
-          })(),
-          // ---- od-w1.2: a row's windows.
-          pieces:
-            piecesWin && piecesRow && record
-              ? {
-                  row: piecesRow,
-                  mode: piecesWin.mode,
-                  total: piecesWin.total,
-                  cells: piecesWin.cells,
-                  roster: { draft: draftViewOf(record), writeHeld: heldWords, uploadsOpen: uploadsOpenOf(record.request), addHeld: fileCap ? dw.t(fileCap) : null, draftName },
-                  rosterLine: piecesLine,
-                  busy: piecesWin.busy,
-                  failed: piecesWin.failed,
-                  writeHeld: heldWords,
-                }
-              : null,
-          options:
-            optionsWin && optionsRow
-              ? { row: optionsRow, topic: optionsWin.topic, typed: optionsWin.typed, addHeld: optionHeld(optionsRow.choices, optionsWin.topic, optionsWin.typed), busy: optionsWin.busy, failed: optionsWin.failed, writeHeld: heldWords }
-              : null,
-          rowFiles:
-            filesRow && record
-              ? {
-                  row: filesRow,
-                  files: {
-                    files: filesRow.files,
-                    uploading: uploads.filter((row) => row.lineId === filesRow.id),
-                    open: uploadsOpenOf(record.request),
-                    addHeld: heldWords ?? (fileCap ? dw.t(fileCap) : null),
-                    removeHeld: heldWords,
-                    draftName,
-                    dropKey: 'mail.drop',
-                    accept: filesRow.sizing === 'MADE_TO_MEASURE' ? ACCEPT.SHEET : ACCEPT.REFERENCE,
-                  },
-                }
-              : null,
-        },
-      }}
-      actions={{
-        onWay: chooseWay,
-        onContinue: (id) => router.push(newOrderHref(frame.prefix, { draft: id })),
-        onRetryStart: readDrafts,
-        onHeader: (field, value) => {
-          setHeader((now) => ({ ...now, [field]: value }))
-          headerRef.current = { ...headerRef.current, [field]: value }
-          // od-fx12: the draft saves as you type — after a short pause (the first words make the draft), and again on leaving the box.
-          if (typingTimer.current) clearTimeout(typingTimer.current)
-          typingTimer.current = setTimeout(() => {
-            typingTimer.current = null
-            void saveHeader(field)
-          }, TYPING_PAUSE_MS)
-        },
-        onHeaderLeave: (field) => void saveHeader(field),
-        onAddAddress: () => setAddress({ draft: EMPTY_ADDRESS, showProblems: false, busy: false, failed: null, refused: {} }),
-        onSend: () => void send(),
-        onTakePrices: takePrices,
-        onUndo: () => void undo(),
-        onDismissNotice: () => setNotice(null),
-        onReload: () => void read(),
-        onRetry: () => {
-          setLoad('loading')
-          void read()
-        },
-        onRetrySave: () => void flush(),
-        // ---- od-w1.2 (R2, R3): the mail's Attachments; the products table; a row's windows; a Still open item.
-        files: {
-          onFiles: (list) => void addFiles('REFERENCE', list, null),
-          onRemove: removeFile,
-          // od-w2.4: the Logo mark — the draft's version, one write (the artwork carry reads the logos).
+    <>
+      <DraftWindow
+        model={windowModel}
+        slots={{ addFrom, panels }}
+        actions={{
+          onClose: close,
+          onSend: () => void send(),
+          onHeader: (field, value) => {
+            setHeader((now) => ({ ...now, [field]: value }))
+            headerRef.current = { ...headerRef.current, [field]: value }
+            // od-fx12: the draft saves as you type — after a short pause (the first words make the draft), and again on leaving the box.
+            if (typingTimer.current) clearTimeout(typingTimer.current)
+            typingTimer.current = setTimeout(() => {
+              typingTimer.current = null
+              void saveHeader(field)
+            }, TYPING_PAUSE_MS)
+          },
+          onHeaderLeave: (field) => void saveHeader(field),
+          ...(addAddressHeld === null ? { onAddAddress: () => setAddress({ draft: EMPTY_ADDRESS, showProblems: false, busy: false, failed: null, refused: {} }) } : {}),
+          onPicture: () => setPictureOpen(true),
+          onOpenDraft: (id) => router.push(newOrderHref(frame.prefix, { draft: id })),
+          onDeleteDraft: (id) => {
+            const row = drafts.value.find((entry) => entry.id === id)
+            if (!row || writeHeld({ preview, offline, busy: false })) return
+            discardDraft(api, id, row.version, keyFor('discardOther', { id, version: row.version }))
+              .then(() => readDrafts())
+              .catch((error: unknown) => refused(error))
+          },
+          onAsk: () => setDiscard({ busy: false, failed: null }),
+          onAskCancel: () => setDiscard((now) => (now?.busy ? now : null)),
+          onDelete: () => void confirmDiscard(),
+          onFiles: (part, list) => void addFiles(part, list, null),
+          onRemoveFile: removeFile,
           onLogo: (file, on) => {
             const id = recordRef.current?.request.id
             if (id) void write(`logo:${file.id}:${on}`, (version, key) => port.markFile(id, file.id, { version, part: on ? 'LOGO' : 'REFERENCE' }, key))
           },
-        },
-        table: {
-          onProduct: (rowId, value) => void writeRow(rowId, 'styleId' in value ? { styleId: value.styleId } : { description: value.words === '' ? null : value.words }),
-          onSizing: (rowId, sizing) => void writeRow(rowId, { sizing }),
-          onColour: (rowId, value) => void writeRow(rowId, 'colourwayId' in value ? { colourwayId: value.colourwayId } : { colourText: value.words === '' ? null : value.words }),
-          onPieces: openPieces,
-          onOptions: (rowId) => setOptionsWin({ rowId, topic: '', typed: '', busy: false, failed: null }),
-          onFiles: (rowId) => setRowFilesId(rowId),
-          onRemove: (rowId) => void remove(rowId),
-          onAdd: () => setPending(true),
-          onDropPending: () => setPending(false),
-        },
-        pieces: {
-          onMode: (mode) => setPiecesWin((now) => (now ? { ...now, mode, typed: true, failed: null } : now)),
-          onTotal: (text) => setPiecesWin((now) => (now ? { ...now, total: text, typed: true, failed: null } : now)),
-          onCells: (cells) => setPiecesWin((now) => (now ? { ...now, cells, typed: true } : now)),
-          onSave: () => void savePieces(),
-          onClose: () => setPiecesWin((now) => (now?.busy ? now : null)),
-          // By person: the person's window takes the place of the Pieces window (one centred window at a time).
-          people: {
-            onAddPerson: (lineId) => {
-              setPiecesWin(null)
-              openPerson(lineId)
+          onStillOpen: ({ rowId }) => {
+            const element = document.getElementById(rowId ? `line-${rowId}` : 'od-date')
+            element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+            element?.querySelector<HTMLElement>('input, select, button')?.focus({ preventScroll: true })
+          },
+          onBanner: (run) => (run === 'reload' ? void read() : run === 'undo' ? void undo() : setNotice(null)),
+          onOpenOrder: () => {
+            const href = windowModel.sent?.openHref ?? windowModel.end?.openHref
+            if (href) router.push(href)
+          },
+          onNewOrder: () => router.push(newOrderHref(frame.prefix)),
+          lines: {
+            onModel: (rowId, choice) => void writeRow(rowId, modelFields(choice)),
+            onMaterial: (rowId, value) => {
+              const row = lineRows.find((entry) => entry.id === rowId)
+              if (!row) return
+              if (row.material.how === 'COLOURWAY') {
+                if (value !== '') void writeRow(rowId, { colourwayId: value })
+                return
+              }
+              const choices = rowOf(rowId)?.choices ?? []
+              void writeRow(rowId, { choices: choices.map((choice) => (choice.topic === row.material.topic ? { ...choice, picked: value === '' ? null : value } : choice)) })
             },
-            onChangePerson: (lineId, personId) => {
-              setPiecesWin(null)
-              openPerson(lineId, personId)
+            onAddMaterial: (rowId) => setOptionsWin({ rowId, topic: dw.t('window.materialTopic'), typed: '', busy: false, failed: null }),
+            onSizes: openPieces,
+            onPieces: (rowId, count) => {
+              setLineRefusals(({ [rowId]: _drop, ...rest }) => rest)
+              void writeRow(rowId, { byPerson: false, quantity: count, sizes: [] })
             },
-            onRemovePerson: removePersonRow,
-            onFiles: (part, list, lineId) => void addFiles(part, list, lineId ?? null),
+            onOwnValue: (rowId, columnId, value, version) => {
+              setLineRefusals(({ [rowId]: _drop, ...rest }) => rest)
+              saveOwnValue(rowId, columnId, value, version)
+            },
+            onPrice: (rowId, text) => {
+              setOwnPrices((now) => ({ ...now, [rowId]: text }))
+              ownPricesRef.current = { ...ownPricesRef.current, [rowId]: text }
+              setOwnPriceProblems(({ [rowId]: _drop, ...rest }) => rest)
+              void saveOwnPrice(rowId)
+            },
+            ...(port.copyLine
+              ? {
+                  onCopy: (rowId: string) => {
+                    const id = recordRef.current?.request.id
+                    if (id) void write(`copy:${rowId}`, (version, key) => port.copyLine!(id, rowId, version, key))
+                  },
+                }
+              : {}),
+            onTakeOut: (rowId) => void remove(rowId),
+            ...(port.putBackLine
+              ? {
+                  onPutBack: (lineId: string) => {
+                    const id = recordRef.current?.request.id
+                    if (id) void write(`putBack:${lineId}`, (version, key) => port.putBackLine!(id, lineId, version, key))
+                  },
+                }
+              : {}),
+            onAdd: () => {
+              // A new line takes the model and the material of the line above; the first one asks "Choose the model…".
+              const fields = nextLineFields(lineRows[lineRows.length - 1])
+              if (fields) void writeRow(null, fields)
+              else setPending(true)
+            },
+            onDropPending: () => setPending(false),
+            onColumns: () => {
+              setOwnWin({ columns: null, busy: false, refused: null })
+              void readColumns()
+            },
+            onRefused: (rowId, refusal) => setLineRefusals((now) => ({ ...now, [rowId]: refusal })),
           },
-        },
-        options: {
-          onPick: (topic, picked) => {
-            const row = optionsRow
-            if (row) void writeChoices(row.id, row.choices.map((choice) => (choice.topic === topic ? { ...choice, picked } : choice)))
-          },
-          onRemove: (topic) => {
-            const row = optionsRow
-            if (row) void writeChoices(row.id, row.choices.filter((choice) => choice.topic !== topic))
-          },
-          onTopic: (text) => setOptionsWin((now) => (now ? { ...now, topic: text } : now)),
-          onTyped: (text) => setOptionsWin((now) => (now ? { ...now, typed: text } : now)),
-          onAdd: () => void addOption(),
-          onClose: () => setOptionsWin(null),
-        },
-        rowFiles: {
-          onFiles: (list) => (filesRow ? void addFiles(filesRow.sizing === 'MADE_TO_MEASURE' ? 'SHEET' : 'REFERENCE', list, filesRow.id) : undefined),
-          onRemove: removeFile,
-          onClose: () => setRowFilesId(null),
-        },
-        onStillOpen: ({ rowId }) => {
-          const element = document.getElementById(rowId ? `row-${rowId}` : 'od-date')
-          element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-          element?.querySelector<HTMLElement>('input, select, button')?.focus({ preventScroll: true })
-        },
-        reorder: {
-          onSearch: (q) => readPastOrders(q),
-          onOpenOrder: (orderId) => openPastOrder(orderId),
-          onBack: () => setReorder((current) => ({ ...current, order: null, selected: [], colours: {} })),
-          onSelect: (ids) => setReorder((current) => ({ ...current, selected: ids })),
-          onColour: (orderLineId, colourwayId) =>
-            setReorder((current) => ({
-              ...current,
-              colours: { ...current.colours, [orderLineId]: colourwayId },
-              selected: colourwayId ? (current.selected.includes(orderLineId) ? current.selected : [...current.selected, orderLineId]) : current.selected.filter((id) => id !== orderLineId),
-            })),
-          onAdd: () => void addReorder(),
-          onRetryOrders: () => readPastOrders(reorder.q),
-          onRetryOrder: () => (reorder.order ? openPastOrder(reorder.order.id) : undefined),
-        },
-        upload: {
-          onFile: (file) => void readFile(file),
-          onApply: () => void applySheet(),
-          onRefusedCsv: () => (sheet.state === 'read' && sheet.answer.dryRun.refusedCsv ? saveText(t('upload.refusedFile'), sheet.answer.dryRun.refusedCsv) : undefined),
-          onOther: () => {
-            sheetFile.current = null
-            setSheet({ state: 'idle' })
-          },
-        },
-        picker: {
-          onSearch: (q) => setPicker((now) => (now ? { ...now, q } : now)),
-          onFilter: (patch) => setPicker((now) => (now ? { ...now, ...patch } : now)),
-          onToggle: (styleId) => setPicker((now) => (now ? { ...now, selected: now.selected.includes(styleId) ? now.selected.filter((id) => id !== styleId) : [...now.selected, styleId] } : now)),
-          onNext: () => {
-            if (!picker || picker.selected.length === 0) return
-            setPicker({ ...picker, step: 'sizes' })
-            for (const styleId of picker.selected) if (!picker.details[styleId] || picker.details[styleId]!.state === 'error') loadDetail(styleId)
-          },
-          onBack: () => setPicker((now) => (now ? { ...now, step: 'styles', problem: null } : now)),
-          onCells: (styleId, next) => setPicker((now) => (now ? { ...now, cells: { ...now.cells, [styleId]: next } } : now)),
-          onAdd: () => void addFromPicker(),
-          onClose: () => setPicker(null),
-          onRetry: () => openPicker(picker?.selected ?? []),
-          onRetryStyle: loadDetail,
-        },
-        address: {
-          onField: (field, value) => {
-            setAddress((now) => {
-              if (!now) return now
-              const { [field]: _gone, ...refused } = now.refused
-              return { ...now, draft: { ...now.draft, [field]: value }, failed: null, refused }
-            })
-          },
-          onSave: () => void saveAddress(),
-          onClose: () => setAddress((now) => (now?.busy ? now : null)),
-        },
-        discard: { onConfirm: () => void confirmDiscard(), onCancel: () => setDiscard((now) => (now?.busy ? now : null)) },
-        // ---- F-CP-154: the roster's person window, "Your price".
-        price: {
-          onType: (lineId, text) => {
-            setOwnPrices((now) => ({ ...now, [lineId]: text }))
-            ownPricesRef.current = { ...ownPricesRef.current, [lineId]: text }
-            setOwnPriceProblems(({ [lineId]: _drop, ...rest }) => rest)
-          },
-          onLeave: (lineId) => void saveOwnPrice(lineId),
-        },
-        person: {
-          onField: (field, value) => setPersonDialog((now) => (now ? { ...now, draft: { ...now.draft, [field]: value }, failed: null, typed: true } : now)),
-          onSave: () => void savePerson(),
-          onClose: () => setPersonDialog((now) => (now?.busy ? now : null)),
-        },
-        // ---- end F-CP-154
-      }}
-    >
-      {/* F-CP-150 (D10): the draft's ONE conversation, docked from its first save; it stays once the draft is sent. */}
-      {record && draftId && phase !== 'start' ? <PortalThread type="PortalOrderRequest" id={record.request.id} /> : null}
-    </NewOrderView>
+        }}
+      />
+      {/* The windows over the window (the DS stacks them): a row's sizes, its options, its files, a person, the catalogue, an address. */}
+      {picker ? <StylePickerDialog model={{ ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords }} actions={pickerActions} /> : null}
+      {address ? <NewAddressDialog model={{ ...address, problems: addressProblems(address.draft) }} actions={addressActions} /> : null}
+      {piecesWin && piecesRow && record ? (
+        <PiecesWindow
+          model={{
+            row: piecesRow,
+            mode: piecesWin.mode,
+            total: piecesWin.total,
+            cells: piecesWin.cells,
+            roster: { draft: draftViewOf(record), writeHeld: heldWords, uploadsOpen: uploadsOpenOf(record.request), addHeld: fileCap ? dw.t(fileCap) : null, draftName },
+            rosterLine: piecesLine,
+            busy: piecesWin.busy,
+            failed: piecesWin.failed,
+            writeHeld: heldWords,
+          }}
+          actions={piecesActions}
+        />
+      ) : null}
+      {optionsWin && optionsRow ? (
+        <OptionsWindow
+          model={{ row: optionsRow, topic: optionsWin.topic, typed: optionsWin.typed, addHeld: optionHeld(optionsRow.choices, optionsWin.topic, optionsWin.typed), busy: optionsWin.busy, failed: optionsWin.failed, writeHeld: heldWords }}
+          actions={optionsActions}
+        />
+      ) : null}
+      {filesRow && record ? (
+        <RowFilesWindow
+          model={{
+            row: filesRow,
+            files: { files: filesRow.files, uploading: uploads.filter((row) => row.lineId === filesRow.id), open: uploadsOpenOf(record.request), addHeld: heldWords ?? (fileCap ? dw.t(fileCap) : null), removeHeld: heldWords, draftName, dropKey: 'mail.drop', accept: filesRow.sizing === 'MADE_TO_MEASURE' ? ACCEPT.SHEET : ACCEPT.REFERENCE },
+          }}
+          actions={{ onFiles: (list) => void addFiles(filesRow.sizing === 'MADE_TO_MEASURE' ? 'SHEET' : 'REFERENCE', list, filesRow.id), onRemove: removeFile }}
+          onClose={() => setRowFilesId(null)}
+        />
+      ) : null}
+      {personModel ? <PersonDialog model={personModel} actions={personActions} /> : null}
+      {ownWin ? (
+        <OwnColumnsWindow
+          model={{ open: true, door: 'portal', columns: ownWin.columns, used: usedIds, values: request?.ownColumns?.values ?? {}, busy: ownWin.busy || busy, refused: ownWin.refused, writeHeld: heldWords }}
+          actions={{
+            onClose: () => setOwnWin(null),
+            onUse: (ids, dropValues) => void useColumns(ids, dropValues),
+            onCreate: (input) => {
+              setOwnWin((now) => (now ? { ...now, busy: true, refused: null } : now))
+              ownPort
+                .create(input, keyFor('ownCreate', input))
+                .then(async (column) => {
+                  await readColumns()
+                  if (usedIds.length < 8) await useColumns([...usedIds, column.id], false)
+                  else setOwnWin((now) => (now ? { ...now, busy: false } : now))
+                })
+                .catch((error: unknown) => setOwnWin((now) => (now ? { ...now, busy: false, refused: t(refusalOf(kindOf(error))) } : now)))
+            },
+            onCloseColumn: (column) => {
+              ownPort
+                .close(column.id, column.version, keyFor('ownClose', { id: column.id, version: column.version }))
+                .then(() => readColumns())
+                .catch((error: unknown) => setOwnWin((now) => (now ? { ...now, refused: t(refusalOf(kindOf(error))) } : now)))
+            },
+          }}
+        />
+      ) : null}
+      {pictureOpen && request ? (
+        <OrderPictureWindow
+          open
+          onClose={() => setPictureOpen(false)}
+          number={dw.t('window.yourOrder')}
+          subject={title}
+          record={{ source: 'customerRequest', recordId: request.id }}
+          now={{ fileId: request.picture?.fileId ?? null, version: request.version }}
+          choices={pictureChoices}
+          save={orderPictureSaver(api, orderPicturePath('portal', 'request', request.id))}
+          upload={uploadPicture}
+          onSaved={(saved) => {
+            const now = recordRef.current
+            if (now) apply({ ...now, request: { ...now.request, version: saved.version, picture: { fileId: saved.pictureFileId, setAt: saved.pictureSetAt, contentType: null } } })
+          }}
+        />
+      ) : null}
+    </>
   )
 }

@@ -30,6 +30,7 @@
 .fw-os-bar { display: flex; height: 12px; border-radius: var(--nds-radius-sm); overflow: hidden; background: var(--nds-surface-sunken); box-shadow: inset 0 0 0 1px var(--nds-border-subtle); min-width: 0; }
 .fw-os-bar i { display: block; height: 100%; min-width: 3px; }
 .fw-os-b-shipped { background: var(--nds-primary); }
+.fw-os-b-atWarehouse { background: var(--nds-text-muted); } /* owb-ss3: At our warehouse (the design's slate) */
 .fw-os-b-packed { background: var(--nds-info); }
 .fw-os-b-draft { background: repeating-linear-gradient(135deg, var(--nds-info) 0 3px, var(--nds-info-soft) 3px 6px); }
 .fw-os-b-planned { background: repeating-linear-gradient(135deg, var(--nds-info) 0 3px, var(--nds-surface) 3px 6px); }

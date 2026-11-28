@@ -3,12 +3,16 @@
     "home": "Home",
     "waiting": "Cosa vi aspetta",
     "orders": "Ordini",
-    "ordersRequests": "Ordini e richieste",
+    "prices": "Prezzi",
+    "agreedPrices": "Prezzi concordati",
     "newOrder": "Nuovo ordine",
     "production": "Produzione",
-    "quotesSamples": "Preventivi e campioni",
+    "customers": "Clienti",
+    "yourCustomers": "I vostri clienti",
+    "payments": "Pagamenti",
+    "products": "Prodotti",
+    "people": "Persone",
     "quotes": "Preventivi e richieste",
-    "catalogue": "Catalogo",
     "samples": "Campioni e schede tecniche",
     "documents": "Documenti",
     "returns": "Resi e reclami",
@@ -22,7 +26,6 @@
     "auditRoom": "Sala revisione"
   },
   "rail": {
-    "label": "Aree del portale",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -79,8 +82,11 @@
     "portal": "Portale",
     "ask": "Fate una domanda",
     "more": "Altre azioni",
-    "pages": "Pagine",
-    "pagesOf": "Pagine di {area}"
+    "pagesOf": "Pagine di {area}",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "peopleLabel": "Le persone di questo ordine",
+    "pictureChange": "Cambiate la foto dell'ordine"
   },
   "live": {
     "offline": "Non in linea"
@@ -210,12 +216,12 @@
       "other": "Documento"
     },
     "frame": {
-      "messages": "Messaggi",
-      "messagesNew_one": "Messaggi ({count} nuovo)",
-      "messagesNew_other": "Messaggi ({count} nuovi)",
-      "messagesMany": "Messaggi ({count}+ nuovi)",
-      "messagesNewLabel_one": "Messaggi, {count} nuovo",
-      "messagesNewLabel_other": "Messaggi, {count} nuovi",
+      "messages": "Chat",
+      "messagesNew_one": "Chat · {count} nuovo",
+      "messagesNew_other": "Chat · {count} nuovi",
+      "messagesMany": "Chat · {count}+ nuovi",
+      "messagesNewLabel_one": "Chat, {count} messaggio nuovo",
+      "messagesNewLabel_other": "Chat, {count} messaggi nuovi",
       "back": "Indietro"
     },
     "summary": {
@@ -400,5 +406,22 @@
     "partner-comment": "Può commentare",
     "partner-upload": "Può inviare file",
     "partner-approve": "Può approvare"
+  },
+  "chat": {
+    "title": "Chat",
+    "labelNew_one": "Chat, {count} messaggio nuovo",
+    "labelNew_other": "Chat, {count} messaggi nuovi",
+    "open": "Le vostre chat, accanto alla pagina",
+    "close": "Chiudi la chat",
+    "back": "Tutte le chat",
+    "list": "Le vostre chat",
+    "reading": "Stiamo leggendo le vostre chat…",
+    "failed": "Non siamo riusciti a leggere le vostre chat.",
+    "retry": "Riprovate",
+    "none": "Ancora nessuna chat.",
+    "new_one": "{count} nuovo",
+    "new_other": "{count} nuovi",
+    "rowNew_one": "{name}, {count} messaggio nuovo",
+    "rowNew_other": "{name}, {count} messaggi nuovi"
   }
 }

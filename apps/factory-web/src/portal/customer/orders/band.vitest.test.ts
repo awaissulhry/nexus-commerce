@@ -179,7 +179,8 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('the office’s words in both languages, a link each, the old addresses landing on their new tabs', () => {
     expect(tabsOf().map((tab) => [tab.id, tab.label])).toEqual([['overview', 'Overview'], ['lines', 'Lines'], ['shipments', 'Shipments'], ['files', 'Files']])
     expect(tabsOf({}, 'it').map((tab) => tab.label)).toEqual(['Panoramica', 'Righe', 'Spedizioni', 'File'])
-    expect(tabsOf().map((tab) => tab.id)).toEqual([...RECORD_TABS])
+    // owb-po5.2: Money only for a person who sees prices (`money`).
+    expect(tabsOf({ money: true }).map((tab) => tab.id)).toEqual([...RECORD_TABS])
     expect(tabsOf()[3]!.href).toBe(`${PREFIX}/orders/${orderRecord().order.id}?tab=files`)
     expect([tabOf('status'), tabOf('documents'), tabOf('messages'), tabOf(null)]).toEqual(['overview', 'files', 'overview', 'overview'])
     for (const locale of ['en', 'it'] as const) for (const old of ['tabs.status', 'tabs.documents']) expect(CATALOGUE[locale]['portal-orders']![old], `${locale} ${old}`).toBeUndefined()
@@ -238,7 +239,9 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
   it('G10: on a phone the band’s row 1 holds ‹ · the title · ⋯; the reference, the pills and Pages go to row 2 (one shell rule)', () => {
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
-    for (const rule of ['.fw-pband .nds-detailhdr.dense .back {', '.fw-pband .nds-detailhdr.dense .fw-ppages {\n    order: 2;', 'flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));']) expect(phone, rule).toContain(rule)
+    // owb-po4.2: the band's Pages menu is gone (the office's sub-sidebar toggle sits beside the band); the rail is not drawn on a phone.
+    for (const rule of ['.fw-pband .nds-detailhdr.dense .back {', 'flex-basis: calc(100% - var(--nds-control-h-sm) - var(--nds-space-12));', '.fw-pbody > .h10-rail {\n    display: none;']) expect(phone, rule).toContain(rule)
+    expect(css).not.toContain('.fw-ppages')
     // pp-fx2 (W-02): the pill never in row 1 — the title fills row 1 whole: alone with no back link (a list, Home), beside it when there is
     // one (only then the back link's room is taken off). Before, a list's "Updated" pill took the back link's free 44 px, under ⋯.
     expect(phone).toContain('.fw-pband .nds-detailhdr.dense .nds-detailhdr-title h1 {\n    flex-basis: 100%;\n  }')
@@ -328,7 +331,8 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
 
 describe('L4 — the band’s status is the shared status chip (lib/order-cells StateChip: the orders list’s chip, the office’s tone)', () => {
   it('the band names the order’s status; the shell draws the shared chip with its group’s mark; another page keeps its pill', () => {
-    expect(bandOf({}, 'IN_PRODUCTION').status).toMatchObject({ order: 'IN_PRODUCTION', tone: customerStatusTone('IN_PRODUCTION') })
+    // owb-po5.1: the band names the order's life (`{ life, note }`, the nine words) for the shared StateChip.
+    expect(bandOf({}, 'IN_PRODUCTION').status).toMatchObject({ life: 'IN_PRODUCTION', note: null, tone: customerStatusTone('IN_PRODUCTION') })
     for (const status of CUSTOMER_ORDER_STATUSES) expect(bandOf({}, status).status?.tone, status).toBe(customerStatusTone(status))
     const html = drawBand(bandOf(), 'en')
     expect(html).toContain('fw-sheet-st')

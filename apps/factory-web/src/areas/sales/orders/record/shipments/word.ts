@@ -6,7 +6,7 @@
  */
 
 /** The catalogues a word comes from: the tab's own (default), the order page's, and Warehouse's (shipments, its depth, deliveries). */
-export type WordNs = 'os' | 'orders' | 'shipments' | 'depth' | 'dv' | 'complaints'
+export type WordNs = 'os' | 'orders' | 'shipments' | 'depth' | 'dv' | 'complaints' | /* owb-ss3: the ship ways and the warehouse leg */ 'ways'
 
 export interface ShipWord {
   /** Absent: the tab's own catalogue (`order-shipments`). */
@@ -29,10 +29,11 @@ export const NAMESPACE_OF: Readonly<Record<WordNs, string>> = Object.freeze({
   depth: 'warehouse-shipments-depth',
   dv: 'shipping-delivery',
   complaints: 'complaints',
+  ways: 'ship-ways', // owb-ss3
 })
 
 /** The catalogues the tab brings beside the page's own (the page loads `orders` and `order-shipments`, RECORD_NAMESPACES). */
-export const SHIPMENTS_TAB_NS = ['order-shipments', 'shipments', 'warehouse-shipments-depth', 'shipping-delivery', 'complaints'] as const
+export const SHIPMENTS_TAB_NS = ['order-shipments', 'shipments', 'warehouse-shipments-depth', 'shipping-delivery', 'complaints', /* owb-ss3 */ 'ship-ways'] as const
 
 /** A word of the tab's own catalogue. */
 export const word = (key: string, params?: Readonly<Record<string, string | number>>, more: Omit<ShipWord, 'key' | 'params' | 'ns'> = {}): ShipWord => ({ key, ...(params ? { params } : {}), ...more })

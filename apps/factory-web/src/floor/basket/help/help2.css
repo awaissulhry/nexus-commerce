@@ -1,0 +1,305 @@
+/*
+ * owb-fl8 — a basket's problems, asks, photo and notes on a phone: layout only, inside the DS FloorFrame and the DS Modal sheet.
+ * Sizes read the floor tier's `--nds-density-*` tokens (nothing to tap under 48 px: every control is a FloorButton or reads
+ * `--nds-density-target-min`), colours are semantic `--nds-*` roles, each tone painted as the floor kit paints it
+ * (`--nds-<tone>-text` on `--nds-<tone>-soft`, the stripe in `--nds-<tone>`). No raw colour, no physical left/right (Urdu reads
+ * right to left: logical properties only).
+ */
+
+/* ── the four tiles of a basket: icon above its word, one height for the row ───────────────────────────────────────── */
+.fw-h2-tile.nds-floor-btn {
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: var(--nds-density-control-h-primary);
+  padding-block: var(--nds-space-8);
+  padding-inline: var(--nds-space-4);
+}
+.fw-h2-tile .nds-floor-btn-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nds-density-font-label);
+}
+.fw-h2-tile-count {
+  margin-inline-start: var(--nds-space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── a card on the basket: the red card of a problem, the ask, the answer ───────────────────────────────────────────── */
+.fw-h2-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-14);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 4px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.fw-h2-card[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-h2-card[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.fw-h2-card[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+.fw-h2-card[data-tone='success'] {
+  border-inline-start-color: var(--nds-success);
+}
+.fw-h2-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-h2-card-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--nds-density-control-h-sm);
+  height: var(--nds-density-control-h-sm);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-h2-card-icon[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.fw-h2-card-icon[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-h2-card-icon > svg {
+  width: 60%;
+  height: 60%;
+}
+.fw-h2-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-h2-card-title {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.fw-h2-card-words {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+.fw-h2-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-h2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: calc(var(--nds-density-control-h-sm) * 0.6);
+  padding-inline: var(--nds-space-10);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-h2-chip > svg {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+}
+.fw-h2-chip[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.fw-h2-chip[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.fw-h2-chip[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-h2-chip[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-h2-chip[data-tone='primary'] {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.fw-h2-minutes {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the buttons of a card and of a window: as many a row as fit, one height for the group ────────────────────────────── */
+.fw-h2-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-h2-actions > .nds-floor-btn {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── the picture with the place of the problem (three by three) ─────────────────────────────────────────────────────── */
+.fw-h2-spotpic {
+  position: relative;
+  flex: none;
+  width: calc(var(--nds-density-control-h-primary) * 1.1);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.fw-h2-spotpic > img,
+.fw-h2-spots > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fw-h2-dot {
+  position: absolute;
+  width: 22%;
+  aspect-ratio: 1;
+  border: 3px solid var(--nds-danger);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-danger-soft);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.fw-h2-spots {
+  position: relative;
+  width: min(100%, 22rem);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  /* A picture is not text: the nine places keep their order in every language. */
+  direction: ltr;
+}
+.fw-h2-spot-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+.fw-h2-spot-grid > button {
+  min-width: var(--nds-density-target-min);
+  min-height: var(--nds-density-target-min);
+  border: 1px dashed var(--nds-border-strong);
+  background: transparent;
+  color: var(--nds-text);
+  cursor: pointer;
+}
+.fw-h2-spot-grid > button[aria-pressed='true'] {
+  border: 3px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+}
+.fw-h2-spot-grid > button:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: calc(var(--nds-density-focus-offset) * -1);
+}
+
+/* ── a window's body (the DS Modal sheet on a phone, centred from 720 px) ─────────────────────────────────────────── */
+.fw-h2-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.fw-h2-basket {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.fw-h2-basket-pic {
+  flex: none;
+  width: var(--nds-density-control-h-primary);
+  height: var(--nds-density-control-h-primary);
+  overflow: hidden;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.fw-h2-basket-pic > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fw-h2-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-h2-depts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-h2-depts > .nds-floor-btn {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+/* ── the office's notes for the floor ─────────────────────────────────────────────────────────────────────────────── */
+.fw-h2-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-h2-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-h2-note-text {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* ── the two ticks of an action saved on this phone ────────────────────────────────────────────────────────────────── */
+.fw-h2-ticks {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+/* The tile's icon repeats its meaning in colour (the word says it): a problem red, an ask blue. */
+.fw-h2-tile[data-tone='danger'] .nds-floor-icon {
+  color: var(--nds-danger);
+}
+.fw-h2-tile[data-tone='info'] .nds-floor-icon {
+  color: var(--nds-info);
+}

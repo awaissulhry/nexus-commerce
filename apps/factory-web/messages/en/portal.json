@@ -3,12 +3,16 @@
     "home": "Home",
     "waiting": "Waiting for you",
     "orders": "Orders",
-    "ordersRequests": "Orders & requests",
+    "prices": "Prices",
+    "agreedPrices": "Agreed prices",
     "newOrder": "New order",
     "production": "Production",
-    "quotesSamples": "Quotes & samples",
+    "customers": "Customers",
+    "yourCustomers": "Your customers",
+    "payments": "Payments",
+    "products": "Products",
+    "people": "People",
     "quotes": "Quotes & requests",
-    "catalogue": "Catalogue",
     "samples": "Samples & tech packs",
     "documents": "Documents",
     "returns": "Returns & claims",
@@ -22,7 +26,6 @@
     "auditRoom": "Audit room"
   },
   "rail": {
-    "label": "Portal areas",
     "withBadge": "{area}, {badge}"
   },
   "top": {
@@ -79,8 +82,11 @@
     "portal": "Portal",
     "ask": "Ask a question",
     "more": "More actions",
-    "pages": "Pages",
-    "pagesOf": "Pages of {area}"
+    "pagesOf": "Pages of {area}",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "peopleLabel": "The people of this order",
+    "pictureChange": "Change the picture of the order"
   },
   "live": {
     "offline": "Offline"
@@ -210,12 +216,12 @@
       "other": "Record"
     },
     "frame": {
-      "messages": "Messages",
-      "messagesNew_one": "Messages ({count} new)",
-      "messagesNew_other": "Messages ({count} new)",
-      "messagesMany": "Messages ({count}+ new)",
-      "messagesNewLabel_one": "Messages, {count} new",
-      "messagesNewLabel_other": "Messages, {count} new",
+      "messages": "Chat",
+      "messagesNew_one": "Chat · {count} new",
+      "messagesNew_other": "Chat · {count} new",
+      "messagesMany": "Chat · {count}+ new",
+      "messagesNewLabel_one": "Chat, {count} new message",
+      "messagesNewLabel_other": "Chat, {count} new messages",
       "back": "Back"
     },
     "summary": {
@@ -400,5 +406,22 @@
     "partner-comment": "Can comment",
     "partner-upload": "Can send files",
     "partner-approve": "Can approve"
+  },
+  "chat": {
+    "title": "Chat",
+    "labelNew_one": "Chat, {count} new message",
+    "labelNew_other": "Chat, {count} new messages",
+    "open": "Your chats, beside the page",
+    "close": "Close the chat",
+    "back": "All chats",
+    "list": "Your chats",
+    "reading": "Reading your chats…",
+    "failed": "Your chats could not be read.",
+    "retry": "Try again",
+    "none": "No chat yet.",
+    "new_one": "{count} new",
+    "new_other": "{count} new",
+    "rowNew_one": "{name}, {count} new message",
+    "rowNew_other": "{name}, {count} new messages"
   }
 }
