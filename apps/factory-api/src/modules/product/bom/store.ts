@@ -75,6 +75,8 @@ export const LINE_COLUMNS = {
   note: true,
   // B-W2b-88: the routing step that uses the line.
   routingSeq: true,
+  // owb-pd3: the main material (one line of a revision).
+  isMain: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -105,6 +107,8 @@ const textOrNull = (value: { toString(): string } | null): string | null => (val
 
 /** A stored line, as the domain reads it, with its row's version and times. */
 export interface LineRecord extends BomLineData {
+  /** owb-pd3: the main material (optional for records built by hand). */
+  readonly isMain?: boolean
   readonly version: number
   readonly createdAt: Date
   readonly updatedAt: Date
@@ -198,6 +202,7 @@ export async function readLines(client: FactoryClient | CommandTx, revisionId: s
     supplierId: row.supplierId,
     note: row.note,
     routingSeq: row.routingSeq,
+    isMain: row.isMain,
     sizes: sizesOf(row.id),
     colours: cellsOf(row.id),
     version: row.version,
@@ -237,6 +242,35 @@ export interface LoadedBom {
   readonly colourways: readonly ColourwayRow[]
   readonly sizeLabels: ReadonlyMap<string, string | null>
   readonly suppliers: ReadonlyMap<string, { id: string; code: string; name: string }>
+  /** owb-pd3: each material's wait in calendar days (null: none known); absent: not read. */
+  readonly leadTimes?: ReadonlyMap<string, number | null>
+}
+
+/**
+ * owb-pd3 step 3.3: each material's wait — the Item's own `leadTimeDays` (its default supplier's terms), else its preferred source's
+ * (an ACTIVE PRIMARY SupplierItem, the one for every colour first), else that supplier's usual lead time; null: none known.
+ */
+export async function leadTimesOf(client: FactoryClient | CommandTx, itemIds: readonly string[]): Promise<Map<string, number | null>> {
+  const ids = [...new Set(itemIds)]
+  const out = new Map<string, number | null>()
+  if (ids.length === 0) return out
+  const items = await client.item.findMany({ where: { id: { in: ids } }, select: { id: true, leadTimeDays: true } })
+  for (const item of items) out.set(item.id, item.leadTimeDays)
+  const waiting = ids.filter((id) => out.get(id) == null)
+  if (waiting.length === 0) return out
+  const sources = await client.supplierItem.findMany({
+    where: { itemId: { in: waiting }, status: 'ACTIVE', preference: 'PRIMARY' },
+    select: { itemId: true, itemColourId: true, leadTimeDays: true, partyId: true },
+    orderBy: [{ itemId: 'asc' }, { createdAt: 'asc' }],
+  })
+  const partyIds = [...new Set(sources.filter((source) => source.leadTimeDays === null).map((source) => source.partyId))]
+  const usual = new Map((partyIds.length === 0 ? [] : await client.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, leadTimeDays: true } })).map((party) => [party.id, party.leadTimeDays]))
+  for (const itemId of waiting) {
+    const mine = sources.filter((source) => source.itemId === itemId).sort((a, b) => Number(a.itemColourId !== null) - Number(b.itemColourId !== null))
+    const first = mine[0]
+    out.set(itemId, first ? (first.leadTimeDays ?? usual.get(first.partyId) ?? null) : (out.get(itemId) ?? null))
+  }
+  return out
 }
 
 export async function loadBom(client: FactoryClient | CommandTx, style: BomStyleRow, revision: RevisionRow): Promise<LoadedBom> {
@@ -248,10 +282,12 @@ export async function loadBom(client: FactoryClient | CommandTx, style: BomStyle
   const parties = supplierIds.length === 0 ? [] : await client.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   const steps = await readSteps(client, revision.id)
   const routingOperations = await readOperations(client, steps.map((step) => step.operationId))
+  const leadTimes = await leadTimesOf(client, lines.map((line) => line.itemId)) // owb-pd3
   return {
     style,
     revision,
     lines,
+    leadTimes,
     steps,
     routingOperations,
     materials,
@@ -384,6 +420,9 @@ export function bomViewOf(loaded: LoadedBom): BomView {
       sizes: line.sizeDependent ? line.sizes.map((row) => ({ size: row.size, qty: row.qty })) : [],
       colours: line.colourDependent ? line.colours.map((cell) => ({ colourwayId: cell.colourwayId, itemColour: colourRef(cell.itemColourId) })) : [],
       bySize: lineBySize(line, style.sizes, item.units, ROUND),
+      // owb-pd3 step 3.3: the main material and the material's wait.
+      isMain: line.isMain === true,
+      leadTimeDays: loaded.leadTimes ? (loaded.leadTimes.get(line.itemId) ?? null) : null,
       version: line.version,
       createdAt: toUtcIso(line.createdAt),
       updatedAt: toUtcIso(line.updatedAt),

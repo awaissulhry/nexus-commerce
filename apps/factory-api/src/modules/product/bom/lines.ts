@@ -1,7 +1,8 @@
-import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { AddLineBody, BomView, SetColoursBody, SetSizesBody, UpdateLineBody, UpdateRevisionBody } from '@nexus/factory-domain/product/bom/contracts'
 import { PRODUCT_BOM_MANAGE } from '@nexus/factory-domain/product/bom/permissions'
+import { MAIN_REFUSAL_WORDS, mainRefusalOf, removeRefusalOf, type MainRefusal } from '@nexus/factory-domain/product/bom/main'
 import { hideYieldProblem, MAX_BOM_LINES, nextSeq, planLine, routingSeqProblem, type LineChange } from '@nexus/factory-domain/product/bom/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -35,7 +36,26 @@ import {
  * database's own refusal), compares and sets the revision's version, then writes the parts; it records an audit row on
  * the line and one on the revision, and `style.bom_changed`. B-W2b-88: a line may name the step of the revision's routing
  * that uses it (`routingSeq`; the routing and the BOM are one versioned record, so the style row's lock holds both).
+ * owb-pd3 step 3.3 (design plan § 5zc): the main material — `isMain` on add or change moves the one mark of the revision to the line
+ * (the index BomLine_one_main holds one); the main line is never taken out nor unmarked (MAIN_REQUIRED); a line added or changed to a
+ * material another line uses at the same placement for the same colourways is refused (SAME_MATERIAL). Refusals 409 `refusal/<CODE>`.
  */
+
+const mainRefused = (code: MainRefusal): DomainError => new DomainError('conflict', MAIN_REFUSAL_WORDS[code], [{ path: `refusal/${code}`, message: MAIN_REFUSAL_WORDS[code] }])
+
+/** The revision's main-material mark moved to `lineId` (the old one cleared first: one per revision). */
+async function markMain(tools: CommandTools, revisionId: string, lineId: string): Promise<void> {
+  const { tx, now } = tools
+  await tx.bomLine.updateMany({ where: { revisionId, isMain: true, NOT: { id: lineId } }, data: { isMain: false, version: { increment: 1 }, updatedAt: now } })
+  await tx.bomLine.update({ where: { id: lineId }, data: { isMain: true, updatedAt: now }, select: { id: true } })
+}
+
+/** Refuses a change the main-material rules refuse (the duplicate rule only when the line's material, placement or colourway moves). */
+function assertMainRules(lines: readonly LineRecord[], current: LineRecord | null, line: { readonly itemId: string; readonly placement: string | null; readonly colourwayId: string | null }, wantsMain: boolean | undefined): void {
+  const refusal = mainRefusalOf(lines, { lineId: current?.id ?? null, itemId: line.itemId, placement: line.placement, colourwayId: line.colourwayId, wantsMain })
+  if (refusal === 'SAME_MATERIAL' && current && current.itemId === line.itemId && (current.placement ?? '') === (line.placement ?? '') && current.colourwayId === line.colourwayId) return
+  if (refusal) throw mainRefused(refusal)
+}
 
 function recordChange(tools: CommandTools, draft: LockedDraft, lineIds: readonly string[], change: Record<string, unknown>): void {
   const { style } = draft
@@ -78,15 +98,17 @@ export async function addLine(caller: CommandCaller, styleId: string, revisionId
   const context = contextOf(caller)
   const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
   assertMayEditDraft(context, style.companyId, revision.status, PRODUCT_BOM_MANAGE) // owb-pd1 1.4: or the designer on a DRAFT
-  const { version, ...change } = body
+  const { version, isMain, ...change } = body
 
   const { result } = await command(caller, { name: 'product.bom.addLine', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
     const draft = await lockDraft(tools, styleId, revisionId, version)
     const lines = await readLines(tools.tx, revisionId)
     if (lines.length >= MAX_BOM_LINES) throw new ValidationError('The BOM is full.', [{ path: 'body', message: `A BOM has at most ${MAX_BOM_LINES} lines.` }])
     const line = await plan(tools, draft, null, change, lines)
+    assertMainRules(lines, null, line, isMain) // owb-pd3
     const id = newId()
     await writeLine(tools, { styleId, revisionId, lineId: id }, line, null)
+    if (isMain === true) await markMain(tools, revisionId, id)
     const after = auditedLine(line)
     tools.audit({ recordType: 'BomLine', recordId: id, companyId: draft.style.companyId, after: { revisionId, ...after } })
     recordChange(tools, draft, [id], { added: id, seq: line.seq, itemId: line.itemId })
@@ -116,6 +138,8 @@ async function changeLine(
   change: LineChange,
   input: unknown,
   idempotencyKey: string | undefined,
+  /** owb-pd3: the main-material mark asked (updateLine only). */
+  wantsMain?: boolean,
 ): Promise<BomView> {
   const context = contextOf(caller)
   const { styleId, revisionId, lineId } = target
@@ -127,8 +151,10 @@ async function changeLine(
     const lines = await readLines(tools.tx, revisionId)
     const current = lineOf(lines, lineId)
     const line = await plan(tools, draft, current, change, lines)
+    assertMainRules(lines, current, line, wantsMain) // owb-pd3
     await writeLine(tools, { styleId, revisionId, lineId }, line, current)
-    tools.audit({ recordType: 'BomLine', recordId: lineId, companyId: draft.style.companyId, before: auditedLine(current), after: auditedLine(line) })
+    if (wantsMain === true && current.isMain !== true) await markMain(tools, revisionId, lineId)
+    tools.audit({ recordType: 'BomLine', recordId: lineId, companyId: draft.style.companyId, before: { ...auditedLine(current), isMain: current.isMain === true }, after: { ...auditedLine(line), isMain: wantsMain ?? current.isMain === true } })
     recordChange(tools, draft, [lineId], { changed: lineId })
     return bomViewInTx(tools.tx, styleId, revisionId)
   }).catch(seqTaken)
@@ -137,8 +163,8 @@ async function changeLine(
 
 /** product.bom.updateLine: the fields sent (material, placement, unit, quantity, wastage, dependence, colour, supplier …). */
 export function updateLine(caller: CommandCaller, styleId: string, revisionId: string, lineId: string, body: UpdateLineBody, idempotencyKey?: string): Promise<BomView> {
-  const { version, ...change } = body
-  return changeLine(caller, 'product.bom.updateLine', { styleId, revisionId, lineId }, version, change, { styleId, revisionId, lineId, ...body }, idempotencyKey)
+  const { version, isMain, ...change } = body
+  return changeLine(caller, 'product.bom.updateLine', { styleId, revisionId, lineId }, version, change, { styleId, revisionId, lineId, ...body }, idempotencyKey, isMain)
 }
 
 /** product.bom.setSizes: a size-dependent line's quantities (PRD-079), merged: 0 where a size does not use it, null clears. */
@@ -160,6 +186,8 @@ export async function removeLine(caller: CommandCaller, styleId: string, revisio
   const { result } = await command(caller, { name: 'product.bom.removeLine', idempotencyKey, input: { styleId, revisionId, lineId, version } }, async (tools) => {
     const draft = await lockDraft(tools, styleId, revisionId, version)
     const current = lineOf(await readLines(tools.tx, revisionId), lineId)
+    const refusal = removeRefusalOf(current) // owb-pd3: the main material stays
+    if (refusal) throw mainRefused(refusal)
     await deleteLine(tools, current)
     tools.audit({ recordType: 'BomLine', recordId: lineId, companyId: draft.style.companyId, before: { revisionId, ...auditedLine(current) }, after: { removed: true } })
     recordChange(tools, draft, [lineId], { removed: lineId, seq: current.seq, itemId: current.itemId })
