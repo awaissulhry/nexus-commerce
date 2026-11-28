@@ -4,6 +4,7 @@ import { MAX_ATTACHMENTS, MAX_BODY_LENGTH, MESSAGE_CHANNELS, RECORD_TYPE, THREAD
 import { COMPOSER_REASONS, PARTNER_SIDES, PARTNER_THREADS_MAX, PARTNER_THREADS_PAGE } from '@nexus/factory-domain/threads/partner/rules'
 import { attachmentView } from '../contract'
 import { linkedMessageView } from '../contract' // B-TH-050
+import { quietEventView } from '../contract' // owb- po2.3
 
 /**
  * A record's thread as the partner sees it (B-W2b-168; COL-059, COL-060; design portal.frame › thread, portal.customer.home
@@ -35,6 +36,8 @@ export const partnerMessageView = output({
   id: id(),
   /** COMPANY: we sent it; PARTNER: they wrote it (by mail or in the portal). */
   side: z.enum(PARTNER_SIDES),
+  /** owb- po2.3: a quiet line's event (key, args, count — grouped at read time); null: an ordinary message. */
+  event: quietEventView.nullable().optional(),
   /** EMAIL: by mail (our mail, or their reply to it); PORTAL: written in the portal; APP: by us in the app. */
   channel: z.enum(MESSAGE_CHANNELS),
   author: output({

@@ -121,6 +121,7 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
         SELECT m."id", m."at", m."direction"
           FROM "Message" m
          WHERE m."tenantId" = t."tenantId" AND m."threadId" = t."id" AND m."direction" IN ('INBOUND', 'OUTBOUND')
+           AND m."eventKey" IS NULL -- owb- po2.3: a quiet line is no reply of ours (it never takes a row off)
          ORDER BY m."at" DESC, m."id" DESC
          LIMIT 1
       ) last
