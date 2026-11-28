@@ -13,7 +13,7 @@ import { SheetImportDialog } from '../../import/view/SheetImportDialog'
 import { decimalInput, decimalText, draftOf, editableRevision, editText, isRoutingIssue, issueWords, mayEditDraftParts, moneyText, nextRevisionNumber, revisionInView, stepLabel } from '../../model'
 // ---- owb-pd5 (steps 5.1, 5.2): the Materials tab in the section kit ----
 import { PartFailed, PartReading, Quiet, Section } from '../../../../../lib/record-sections/Kit'
-import { ceRecheckOf, costsOf, customerSent, isMainLine, lineFactsOf, longestWaits, mainOf, openOrdersNeedOf, orderNeedOf, piecesOf, stepOf, topLineOf, type CeRecheck, type LineFacts, type MaterialsTop, type NeedRow } from '../materials-model'
+import { bomRefusalOf, ceRecheckOf, costsOf, customerSent, isMainLine, lineFactsOf, longestWaits, mainOf, openOrdersNeedOf, orderNeedOf, piecesOf, stepOf, topLineOf, type CeRecheck, type LineFacts, type MaterialsTop, type NeedRow } from '../materials-model'
 // ---- end owb-pd5
 import type { BomViewMode, StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 // B-W2b-241: the BOM in depth (sections and group rows, the sub-assembly tree, alternates, customer-supplied and option
@@ -61,6 +61,7 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
   const heldWhy = !mayEdit ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
   // B-W2b-241: the BOM in depth (its own read; design cases without one draw W1's data with "—" in the W2b columns).
   const depth = model.bomDepth ?? { ...NO_BOM_DEPTH, canManage: mayEdit }
+  const bomRefused = bomRefusalOf(model.refused)
   const depthActions = actions?.bomDepth
   // W2a Import BOM (importer product.bom): rows go into a style's DRAFT revision, so a frozen one says where to go first.
   const draft = draftOf(style.revisions)
@@ -207,6 +208,8 @@ function BomTabBody({ style, model, actions }: { style: StyleView; model: StyleR
           </Card>
         )
       )}
+      {/* owb-pd8b (pd3): the BOM's own refusal the last write met, in the tab's words (the studio's notice points here). */}
+      {bomRefused && <Banner tone="danger" title={td(`mat.refusal.${bomRefused}`)} />}
       {depth.notice && (
         <Banner
           tone={depth.notice.tone}

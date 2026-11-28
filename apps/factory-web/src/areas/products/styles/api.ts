@@ -342,6 +342,8 @@ export interface BomLineInput {
   note?: string | null
   /** B-W2b-88: the routing step that uses the line (its place); null: not tied to one step. */
   routingSeq?: number | null
+  /** owb-pd8b (pd3): true moves the main-material mark to this line (one per revision). */
+  isMain?: boolean
 }
 
 export function addBomLine(api: ApiClient, styleId: string, revision: { id: string; version: number }, input: BomLineInput & { itemId: string }): Promise<BomView> {

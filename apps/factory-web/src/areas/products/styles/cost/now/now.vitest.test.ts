@@ -14,11 +14,14 @@ import {
   costTabOpen,
   flagOf,
   howOf,
+  KEEP_REFUSALS,
   keepDoneOf,
   keepHeldOf,
   linesOfPart,
   marginBarOf,
   partOf,
+  keepsAlone,
+  priceAgainstCostOpen,
   refusalOf,
   topLineOf,
   type ComponentLine,
@@ -137,6 +140,25 @@ describe('no tab without the cost grain', () => {
     expect(costTabOpen({ costView: false }, { cost: true })).toBe(false)
   })
 
+  it('owb-pd8b: Keep keeps it alone only with the company\'s own switch AND the right to approve cost sheets', () => {
+    expect(keepsAlone(true, (permission) => permission === 'costing.sheets.approve')).toBe(true)
+    expect(keepsAlone(true, () => false)).toBe(false)
+    expect(keepsAlone(false, () => true)).toBe(false)
+    expect(readFileSync(join(HERE, '../page/CostPage.tsx'), 'utf8')).toContain('setAlone(keepsAlone(settingsInForce(settings).oneKeeper, can))')
+  })
+
+  it('owb-pd8b: price against cost only with the price, the cost AND the margin grain; without one the page does not ask and says why', () => {
+    expect(priceAgainstCostOpen({ price: true, cost: true, margin: true })).toBe(true)
+    expect(priceAgainstCostOpen({ price: true, cost: true, margin: false })).toBe(false)
+    expect(priceAgainstCostOpen({ price: false, cost: true, margin: true })).toBe(false)
+    const page = readFileSync(join(HERE, '../page/CostPage.tsx'), 'utf8')
+    expect(page).toContain('const pricesOpen = priceAgainstCostOpen(model.grains)')
+    expect(page).toContain("if (!revisionId || !pricesOpen) return")
+    expect(page).toContain("const price: Read<PriceAgainstCost> = pricesOpen ? priceRead : { status: 'failed', problem: 'problem.forbidden' }")
+    expect(page).toContain("!pricesOpen ? { key: 'keep.held.noGrains' }")
+    expect(textOf(render(createElement(PriceCard, { model: { state: 'failed', problem: 'problem.forbidden', targetPct: '35', rows: [], lowest: null, money: (amount) => amount ?? '' }, onRetry: () => undefined })))).toContain('the margin right')
+  })
+
   it('the tab mounts the new page only with the grain; the record\'s cost-sheets slot draws nothing then (read once)', () => {
     const tab = readFileSync(join(HERE, '../view/CostTab.tsx'), 'utf8')
     expect(tab).toContain('if (!costTabOpen(model.can, model.grains)) return sheet')
@@ -194,7 +216,7 @@ describe('price against cost', () => {
 
   it('without the price or the cost grain the server refuses: the card says so plainly, no Try again', () => {
     const text = textOf(render(createElement(PriceCard, { model: { state: 'failed', problem: 'problem.forbidden', targetPct: '35', rows: [], lowest: null, money: euro }, onRetry: () => undefined })))
-    expect(text).toContain('Prices against costs need both the price and the cost right.')
+    expect(text).toContain('Prices against costs need the price, the cost and the margin right')
     expect(text).not.toContain('Try again')
   })
 })
@@ -216,6 +238,9 @@ describe('Keep', () => {
     expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/SAME_AS_KEPT' }] })).toEqual({ key: 'refusal.SAME_AS_KEPT' })
     expect(refusalOf({ kind: 'conflict', code: 'TOTAL_MOVED' })).toEqual({ key: 'refusal.TOTAL_MOVED' })
     expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ code: 'MISSING_PARTS' }] })).toEqual({ key: 'refusal.MISSING_PARTS' })
+    // owb-pd8b: pd3 as landed — a second Keep the same day; nobody to approve (four eyes).
+    expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/KEPT_TODAY' }] })).toEqual({ key: 'refusal.KEPT_TODAY' })
+    expect(refusalOf({ kind: 'conflict', code: 'conflict', issues: [{ path: 'refusal/NO_APPROVER' }] })).toEqual({ key: 'refusal.NO_APPROVER' })
     expect(refusalOf({ kind: 'forbidden' })).toEqual({ key: 'problem.forbidden' })
   })
 })
@@ -253,7 +278,7 @@ describe('words and looks', () => {
     const files = ['model.ts', 'view/CostNowCard.tsx', 'view/PriceCard.tsx', 'view/KeepWindow.tsx', '../page/CostPage.tsx', '../page/view/CostPageView.tsx', '../whatif/model.ts', '../whatif/view/WhatIfCard.tsx']
     const sources = files.map((file) => readFileSync(join(HERE, file), 'utf8')).join('\n')
     const keys = [...sources.matchAll(/['"`]((?:top|part|now|price|keep|whatif|more|common|refusal|problem)\.[A-Za-z_.]+[A-Za-z_])['"`]/g)].map((match) => match[1]!)
-    const built = [...['materials', 'work', 'overhead', 'other'].map((part) => `part.${part}`), ...['KEEPS', 'UNDER_TARGET', 'UNDER_COST'].map((verdict) => `whatif.verdict.${verdict}`)]
+    const built = [...['materials', 'work', 'overhead', 'other'].map((part) => `part.${part}`), ...['KEEPS', 'UNDER_TARGET', 'UNDER_COST'].map((verdict) => `whatif.verdict.${verdict}`), ...KEEP_REFUSALS.map((code) => `refusal.${code}`)]
     const named = [...new Set([...keys, ...built])]
     expect(named.length).toBeGreaterThan(60)
     for (const locale of LOCALES) expect(named.filter((key) => !has(locale, key)), locale).toEqual([])

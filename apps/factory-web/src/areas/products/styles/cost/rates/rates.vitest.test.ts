@@ -9,7 +9,7 @@ import { render } from '../../../../../lib/record-thread/parts/testing'
 import { DEPT_ROWS } from '../../routing/route/fixtures'
 import { deptLooksOf } from '../../routing/route/model'
 import { costingSettings, type CostingSettings, type RateRow } from './api'
-import { deptRatesOf, draftOf, draftProblems, mayChangeRates, previewOf, RATES_RIGHT, ratesHeldOf, settingsInForce, writesOf } from './model'
+import { deptRatesOf, draftOf, draftProblems, keeperShown, mayChangeRates, previewOf, RATES_RIGHT, ratesHeldOf, settingsInForce, writesOf } from './model'
 import { RatesWindow, type RatesWindowModel } from './view/RatesWindow'
 
 /**
@@ -94,9 +94,36 @@ describe('what Save sends: only what changed', () => {
     expect(draftProblems(rows, { ...draft, depts: { 'dept-6': { cpm: '', eff: '90' } } }, SETTINGS)).toEqual({ 'cpm.dept-6': { key: 'rates.bad.cpmFirst' } })
   })
 
-  it('the company\'s switch is read from the answer (the row of the company, else the tenant\'s)', () => {
+  it('the company\'s switch is read from the company\'s own row only (none: off)', () => {
     expect(settingsInForce(SETTINGS)).toEqual({ row: SETTINGS.settings.company, oneKeeper: false })
-    expect(settingsInForce(costingSettings.parse({ settings: { tenant: null, company: null, inForce: null }, oneKeeperAllowed: true }))).toEqual({ row: null, oneKeeper: true })
+    expect(settingsInForce(costingSettings.parse({ settings: { tenant: { id: 'set-t', companyId: null, overheadPct: '10', oneKeeperAllowed: true, version: 2 }, company: null, inForce: 'set-t' } }))).toEqual({ row: expect.objectContaining({ id: 'set-t' }), oneKeeper: false })
+  })
+
+  // owb-pd8b (pd3 as landed): the server takes the switch on the company's own row only (400 on the whole factory's).
+  const TENANT_IN_FORCE: CostingSettings = costingSettings.parse({
+    settings: { tenant: { id: 'set-t', companyId: null, overheadPct: '10', version: 2 }, company: { id: 'set-c', companyId: 'company-1', overheadPct: '0', overheadFromTenant: true, oneKeeperAllowed: false, version: 5 }, inForce: 'set-t' },
+  })
+  const TENANT_ONLY: CostingSettings = costingSettings.parse({ settings: { tenant: { id: 'set-t', companyId: null, overheadPct: '10', version: 2 }, company: null, inForce: 'set-t' } })
+  const keep = { oneKeeper: true, reason: 'The owner keeps the costs alone' }
+
+  it('the switch on a company row that follows the whole factory\'s overhead: its own write, still following (0), under its version', () => {
+    expect(writesOf(rows, { ...draftOf(TENANT_IN_FORCE), ...keep }, TENANT_IN_FORCE, 'company-1', '2026-11-28')).toEqual([
+      { kind: 'settings', body: { companyId: 'company-1', overheadPct: '0', overheadFromTenant: true, version: 5, oneKeeperAllowed: true, reason: 'The owner keeps the costs alone' } },
+    ])
+    // The overhead stays on the row in force (the whole factory's); the switch on the company's own.
+    expect(writesOf(rows, { ...draftOf(TENANT_IN_FORCE), overhead: '11', ...keep }, TENANT_IN_FORCE, 'company-1', '2026-11-28')).toEqual([
+      { kind: 'settings', body: { companyId: null, overheadPct: '11', version: 2 } },
+      { kind: 'settings', body: { companyId: 'company-1', overheadPct: '0', overheadFromTenant: true, version: 5, oneKeeperAllowed: true, reason: 'The owner keeps the costs alone' } },
+    ])
+  })
+
+  it('no company row yet: a new one that follows the whole factory\'s overhead carries the switch; without a company no switch at all', () => {
+    expect(writesOf(rows, { ...draftOf(TENANT_ONLY), ...keep }, TENANT_ONLY, 'company-1', '2026-11-28')).toEqual([
+      { kind: 'settings', body: { companyId: 'company-1', overheadPct: '0', overheadFromTenant: true, oneKeeperAllowed: true, reason: 'The owner keeps the costs alone' } },
+    ])
+    expect(keeperShown(null)).toBe(false)
+    expect(keeperShown('company-1')).toBe(true)
+    expect(writesOf(rows, { ...draftOf(TENANT_ONLY), ...keep }, TENANT_ONLY, null, '2026-11-28')).toEqual([])
   })
 })
 
@@ -110,6 +137,7 @@ describe('who changes the rates', () => {
     state: 'ready',
     problem: null,
     change,
+    keeper: true,
     rows: rows.map((entry) => ({ departmentId: entry.departmentId, dept: entry.dept, preview: previewOf(entry, undefined), kind: entry.kindRate ? { cpm: entry.kindRate.costPerMinute ?? null, eff: entry.kindRate.plannedEfficiencyPct } : null, draft: { cpm: '', eff: '' } })),
     overhead: '12',
     oneKeeper: false,
@@ -126,7 +154,7 @@ describe('who changes the rates', () => {
   it('the WindowShell draws only in a browser: the window is read through its source — the act and the switch only with the right', () => {
     const view = readFileSync(join(HERE, 'view/RatesWindow.tsx'), 'utf8')
     expect(view).toContain("act={model.change && model.state === 'ready' ? { words: t('rates.save')")
-    expect(view).toMatch(/\{model\.change && \(\s*<section aria-labelledby="fw-ct-rates-keeper"/)
+    expect(view).toMatch(/\{model\.change && model\.keeper && \(\s*<section aria-labelledby="fw-ct-rates-keeper"/)
     // The dialog renders nothing on the server: the rendered window is empty, never a crash.
     expect(render(createElement(RatesWindow, { model: model(false), actions: { onCpm: () => undefined, onEff: () => undefined, onOverhead: () => undefined, onOneKeeper: () => undefined, onReason: () => undefined, onSave: () => undefined, onClose: () => undefined, onRetry: () => undefined } }))).not.toContain('One person may keep a cost')
   })

@@ -36,6 +36,8 @@ export interface RatesWindowModel {
   readonly problem: string | null
   /** costing.rates.manage: the fields and the switch. */
   readonly change: boolean
+  /** owb-pd8b: the switch is a company's (its own costing settings): not shown for the whole factory. */
+  readonly keeper: boolean
   readonly rows: readonly RateRowModel[]
   readonly overhead: string
   readonly oneKeeper: boolean
@@ -158,7 +160,7 @@ export function RatesWindow({ model, actions }: { model: RatesWindowModel; actio
               </section>
             </div>
 
-            {model.change && (
+            {model.change && model.keeper && (
               <section aria-labelledby="fw-ct-rates-keeper" className="fw-ct-body">
                 <label className="fw-ct-name">
                   <Toggle size="sm" checked={model.oneKeeper} onChange={actions.onOneKeeper} />

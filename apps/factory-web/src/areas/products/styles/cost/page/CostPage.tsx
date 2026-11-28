@@ -12,7 +12,7 @@ import { useOfficeReach } from '../../routing/route/office'
 import { CS_NS } from '../../versions/model'
 import { useCostSheets } from '../../versions/use-cost-sheets'
 import { keepCost, readPriceAgainstCost, type PriceAgainstCost } from '../now/api'
-import { costOfOne, costSizeOf, howOf, keepDoneOf, keepHeldOf, linesOfPart, problemKeyOf, refusalOf, topLineOf, type Words } from '../now/model'
+import { costOfOne, costSizeOf, howOf, keepDoneOf, keepHeldOf, keepsAlone, linesOfPart, priceAgainstCostOpen, problemKeyOf, refusalOf, topLineOf, type Words } from '../now/model'
 import { readSettings } from '../rates/api'
 import { settingsInForce } from '../rates/model'
 import { RatesDoor } from '../rates/RatesDoor'
@@ -38,11 +38,11 @@ export interface CostPageProps {
 }
 
 export function CostPage(props: CostPageProps): ReactElement | null {
-  const { api, companyId } = useOfficeReach()
+  const { api, companyId, can } = useOfficeReach()
   if (!api) return <>{props.fallback ?? null}</>
   return (
     <WithMessages namespaces={[CS_NS, 'products-cost']}>
-      <Page {...props} api={api} companyId={props.style.companyId ?? companyId} />
+      <Page {...props} api={api} companyId={props.style.companyId ?? companyId} can={can} />
     </WithMessages>
   )
 }
@@ -51,7 +51,7 @@ type Read<T> = { status: 'reading' } | { status: 'failed'; problem: string } | {
 
 const NO_INPUT: WhatIfInput = { materialsPct: '', workPct: '', price: '' }
 
-function Page({ style, model, actions, detail, api, companyId }: CostPageProps & { api: ApiClient; companyId: string | null }): ReactElement {
+function Page({ style, model, actions, detail, api, companyId, can }: CostPageProps & { api: ApiClient; companyId: string | null; can: (permission: string) => boolean }): ReactElement {
   const t = useT('products-cost')
   const ts = useT(CS_NS)
   const tp = useT('products')
@@ -59,7 +59,10 @@ function Page({ style, model, actions, detail, api, companyId }: CostPageProps &
   const revision = revisionInView(style.revisions, model.revisionId)
   const revisionId = revision?.id ?? null
   const sheets = useCostSheets({ style, revisionId, cell: model.costCell })
-  const [price, setPrice] = useState<Read<PriceAgainstCost>>({ status: 'reading' })
+  const [priceRead, setPrice] = useState<Read<PriceAgainstCost>>({ status: 'reading' })
+  // owb-pd8b: without the price, cost and margin grains the server refuses (403): not asked, the card says why.
+  const pricesOpen = priceAgainstCostOpen(model.grains)
+  const price: Read<PriceAgainstCost> = pricesOpen ? priceRead : { status: 'failed', problem: 'problem.forbidden' }
   const [alone, setAlone] = useState(false)
   const [round, setRound] = useState(0)
   const again = useCallback(() => setRound((value) => value + 1), [])
@@ -71,7 +74,7 @@ function Page({ style, model, actions, detail, api, companyId }: CostPageProps &
   const [input, setInput] = useState<WhatIfInput>(NO_INPUT)
 
   useEffect(() => {
-    if (!revisionId) return
+    if (!revisionId || !pricesOpen) return
     const control = new AbortController()
     readPriceAgainstCost(api, style.id, revisionId, control.signal).then(
       (value) => setPrice({ status: 'ready', value }),
@@ -80,17 +83,18 @@ function Page({ style, model, actions, detail, api, companyId }: CostPageProps &
       },
     )
     return () => control.abort()
-  }, [api, style.id, revisionId, round])
+  }, [api, style.id, revisionId, round, pricesOpen])
 
   // The company's switch "one person may keep a cost": the Keep window says before the press who keeps it.
   useEffect(() => {
     const control = new AbortController()
     readSettings(api, companyId, control.signal).then(
-      (settings) => setAlone(settingsInForce(settings).oneKeeper),
+      // owb-pd8b: alone only with the company's own switch AND the right to approve cost sheets (the server's rule).
+      (settings) => setAlone(keepsAlone(settingsInForce(settings).oneKeeper, can)),
       () => undefined, // unknown: the window says Finance approves it (the default); the server's answer says what happened
     )
     return () => control.abort()
-  }, [api, companyId, round])
+  }, [api, companyId, round, can])
 
   const pac = price.status === 'ready' ? price.value : null
   const currency = pac?.currency ?? 'EUR'
@@ -150,7 +154,7 @@ function Page({ style, model, actions, detail, api, companyId }: CostPageProps &
       rows,
       missing: view ? view.missing.filter((entry) => entry.size === null || entry.size === size).length : 0,
       money,
-      keepHeld: pac ? keepHeldOf({ costNow: pac.costNow, kept: pac.kept, reason: '·', busy: keeping }) : price.status === 'reading' ? { key: 'keep.held.reading' } : { key: 'keep.held.noPrices' },
+      keepHeld: pac ? keepHeldOf({ costNow: pac.costNow, kept: pac.kept, reason: '·', busy: keeping }) : !pricesOpen ? { key: 'keep.held.noGrains' } : price.status === 'reading' ? { key: 'keep.held.reading' } : { key: 'keep.held.noPrices' },
     },
     price: { state: price.status, problem: price.status === 'failed' ? price.problem : null, targetPct: target, rows: pac?.rows ?? [], lowest: pac?.lowestPriceForTarget ?? null, money },
     whatIf: cost ? { input, answer: whatIf(whatIfBaseOf(cost), input, Number(target)), targetPct: Number(target), partial: !cost.complete, money } : null,

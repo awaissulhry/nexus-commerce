@@ -179,7 +179,8 @@
       "rate_limited": "Too many changes at once: wait a moment and do it again.",
       "unavailable": "The factory server did not answer: nothing was saved, try again.",
       "internal": "Something went wrong: nothing was saved, try again.",
-      "piecesUse": "Pattern pieces are cut from this line: change them in Patterns first."
+      "piecesUse": "Pattern pieces are cut from this line: change them in Patterns first.",
+      "bomRule": "The materials list refused this: the Materials tab says why. Nothing was saved."
     }
   },
   "notice": {

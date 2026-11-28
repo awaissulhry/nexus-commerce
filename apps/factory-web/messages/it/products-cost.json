@@ -58,7 +58,7 @@
     "none": "Nessun cliente ha ancora un prezzo concordato per questo prodotto.",
     "lowest": "Il prezzo più basso che rispetta il {target} %: {amount}.",
     "lowestUnknown": "Il prezzo più basso che rispetta il {target} % non è ancora noto: al costo manca un dato.",
-    "noGrains": "I prezzi contro i costi richiedono sia il diritto sui prezzi sia quello sui costi.",
+    "noGrains": "I prezzi contro i costi richiedono il diritto sui prezzi, sui costi e sui margini: chiedi a chi gestisce i ruoli.",
     "failed": "Non è stato possibile leggere i prezzi concordati",
     "col": {
       "customer": "Cliente",
@@ -100,7 +100,8 @@
       "same": "Questo costo è già fissato.",
       "reason": "Scrivi perché cambia il costo standard.",
       "reading": "Lettura del costo…",
-      "noPrices": "Non è stato possibile leggere il costo attuale: riprova."
+      "noPrices": "Non è stato possibile leggere il costo attuale: riprova.",
+      "noGrains": "Per fissare un costo qui servono il diritto sui prezzi, sui costi e sui margini: chiedi a chi gestisce i ruoli."
     },
     "done": {
       "kept": "Fissato: versione {version}, {amount}. Ora gli ordini contano con questo.",
@@ -186,7 +187,9 @@
   "refusal": {
     "SAME_AS_KEPT": "Questo costo è già fissato.",
     "TOTAL_MOVED": "Il costo si è mosso nel frattempo: è stato riletto, controllalo e fissalo di nuovo.",
-    "MISSING_PARTS": "Mancano parti del costo: il costo attuale elenca cosa aggiungere prima."
+    "MISSING_PARTS": "Mancano parti del costo: il costo attuale elenca cosa aggiungere prima.",
+    "KEPT_TODAY": "Un costo standard di questo prodotto è già stato fissato oggi: uno nuovo si può fissare da domani.",
+    "NO_APPROVER": "Nessuno può ancora approvare questo costo: chiedi a chi gestisce i ruoli di far approvare i fogli costo a un ruolo Finanza."
   },
   "problem": {
     "forbidden": "Il tuo ruolo non può farlo.",

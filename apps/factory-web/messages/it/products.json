@@ -179,7 +179,8 @@
       "rate_limited": "Troppe modifiche insieme: attendi un momento e ripeti.",
       "unavailable": "Il server della fabbrica non ha risposto: nulla è stato salvato, riprova.",
       "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova.",
-      "piecesUse": "Da questa riga si tagliano pezzi del cartamodello: modificali prima in Cartamodelli."
+      "piecesUse": "Da questa riga si tagliano pezzi del cartamodello: modificali prima in Cartamodelli.",
+      "bomRule": "La lista dei materiali l'ha rifiutato: la scheda Materiali dice perché. Non è stato salvato nulla."
     }
   },
   "notice": {

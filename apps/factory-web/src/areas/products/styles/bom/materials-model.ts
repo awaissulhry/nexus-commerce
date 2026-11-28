@@ -13,11 +13,28 @@ import { costCellOf, defaultCostCell, type Grains } from '../model'
 
 /**
  * pd3 (owb-pd-server § Shape pd3) gives a BOM line `leadTimeDays` (the material's wait, else its preferred source's) and `isMain`
- * (the main material). Read here before pd3 lands: absent → null / false (the tab says "—", never 0 days).
+ * (the main material). Absent (an older answer) → null / false (the tab says "—", never 0 days).
  */
-type WithPd3 = { readonly leadTimeDays?: number | null; readonly isMain?: boolean }
-export const waitOf = (line: BomLine): number | null => (line as BomLine & WithPd3).leadTimeDays ?? null
-export const isMainLine = (line: BomLine): boolean => (line as BomLine & WithPd3).isMain === true
+// owb-pd8b: pd3 as landed — the BOM line view (factory-domain bomLineView) carries both, optional.
+export const waitOf = (line: BomLine): number | null => line.leadTimeDays ?? null
+export const isMainLine = (line: BomLine): boolean => line.isMain === true
+
+/**
+ * owb-pd8b (pd3 as landed): the BOM's own refusals (409 at `refusal/<CODE>`) — the main material is never taken out nor unmarked
+ * (MAIN_REQUIRED), the same material twice at the same place (SAME_MATERIAL). The Materials tab says them in its own words.
+ */
+export const BOM_REFUSALS = ['MAIN_REQUIRED', 'SAME_MATERIAL'] as const
+export type BomRefusal = (typeof BOM_REFUSALS)[number]
+
+/** The BOM rule the last refused write named (the record's refused paths), or null. */
+export function bomRefusalOf(paths: readonly string[] | undefined): BomRefusal | null {
+  for (const path of paths ?? []) {
+    const code = /^refusal\/([A-Z_]+)$/.exec(path)?.[1]
+    const hit = BOM_REFUSALS.find((known) => known === code)
+    if (hit) return hit
+  }
+  return null
+}
 
 export interface LineFacts {
   id: string

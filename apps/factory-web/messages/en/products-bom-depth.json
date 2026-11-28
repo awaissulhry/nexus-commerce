@@ -460,6 +460,10 @@
       "answer": "{pieces} open pieces in {orders} orders, counted at the base size {size}.",
       "none": "No open order needs it now.",
       "info": "The open pieces of the open orders with this product, all counted at the base size: the sizes of each order are not split here."
+    },
+    "refusal": {
+      "MAIN_REQUIRED": "The main material cannot be taken out, nor unmarked: mark another line as the main material first.",
+      "SAME_MATERIAL": "This material is in the list already at the same place: change that line instead."
     }
   }
 }

@@ -194,7 +194,7 @@ export function LinesGrid({ bom, model, actions, recordActions, prefix, extras }
       const isMain = now.extras?.facts.find((fact) => fact.id === data.id)?.main ?? false
       const items: MenuItemDef[] = [
         { id: 'open', label: t('menu.open'), onSelect: () => now.actions?.onDialog?.({ kind: 'line', lineId: data.id, part: 'structure' }) },
-        ...(now.extras?.editable && !isMain && !lineWhy ? [{ id: 'main', label: t('mat.main.make'), onSelect: () => void now.recordActions?.onEditLine?.(data.id, { isMain: true } as unknown as BomLineInput) }] : []),
+        ...(now.extras?.editable && !isMain && !lineWhy ? [{ id: 'main', label: t('mat.main.make'), onSelect: () => void now.recordActions?.onEditLine?.(data.id, { isMain: true }) }] : []),
         { id: 'alternates', label: t('menu.alternates', { count: fresh.depth?.alternates.length ?? fresh.structure?.alternates ?? 0 }), onSelect: () => now.actions?.onDialog?.({ kind: 'line', lineId: data.id, part: 'alternates' }) },
         { id: 'edit', label: tp('bom.editOne', { line: data.seq }), disabled: !!lineWhy, description: lineWhy, onSelect: () => now.recordActions?.onDialog?.({ kind: 'bomLine', lineId: data.id }) },
         { id: 'up', label: tp('bom.moveUp', { line: data.seq }), disabled: !!lineWhy || at <= 0, description: lineWhy ?? (at <= 0 ? tp('bom.held.first') : undefined), onSelect: () => moveRef.current(data, -1) },

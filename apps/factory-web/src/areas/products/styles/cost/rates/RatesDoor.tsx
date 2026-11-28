@@ -13,7 +13,7 @@ import { deptLooksOf } from '../../routing/route/model'
 import { useOfficeReach } from '../../routing/route/office'
 import { problemKeyOf, refusalOf, type Words } from '../now/model'
 import { createRate, readLeatherBases, readRates, readSettings, saveSettings, updateRate, type CostingSettings, type LeatherBasis, type RateRow } from './api'
-import { deptRatesOf, draftOf, draftProblems, mayChangeRates, previewOf, ratesHeldOf, writesOf, type RatesDraft } from './model'
+import { deptRatesOf, draftOf, draftProblems, keeperShown, mayChangeRates, previewOf, ratesHeldOf, writesOf, type RatesDraft } from './model'
 import { RatesWindow, type RatesWindowModel } from './view/RatesWindow'
 
 /**
@@ -115,6 +115,7 @@ function Door({ api, change, companyId, onSaved }: { api: ApiClient; change: boo
     state: loaded.status,
     problem: loaded.status === 'failed' ? loaded.problem : null,
     change,
+    keeper: keeperShown(companyId),
     rows: rows.map((row) => ({
       departmentId: row.departmentId,
       dept: row.dept,

@@ -35,6 +35,8 @@ export function writeProblem(error: unknown): WriteProblem {
   if (error.kind === 'conflict') {
     const moved = error.code === 'version_conflict' || paths.some((path) => path.split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true, paths }
+    // owb-pd8b (pd3): the BOM's own rules (the main material, the same material twice): nothing moved, the Materials tab says why.
+    if (paths.some((path) => /^refusal\/(MAIN_REQUIRED|SAME_MATERIAL)$/.test(path))) return { key: 'problem.write.bomRule', reload: false, paths }
     // B-W2b-95: a BOM line that pattern pieces are cut from (removed, or turned into a material their grades cannot take).
     if (paths.some((path) => /^pieces\//.test(path))) return { key: 'problem.write.piecesUse', reload: false, paths }
     // A release refused with its blockers: the check on the page says which.
