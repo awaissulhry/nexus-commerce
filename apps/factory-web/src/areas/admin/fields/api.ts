@@ -11,7 +11,8 @@ import type { ApiClient } from '../../../lib/api/client'
  */
 
 /** The record types that take custom fields, in the API's order (platform/fields/records.ts CUSTOM_RECORD_KEYS). */
-export const RECORD_KEYS = ['CUSTOMER', 'SUPPLIER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER'] as const
+// owb-ss5 5.3: + a team or unit and a person (the API's records.ts, "your own facts").
+export const RECORD_KEYS = ['CUSTOMER', 'SUPPLIER', 'QUOTE', 'ORDER', 'STYLE', 'MATERIAL', 'PURCHASE_ORDER', 'LOT', 'WORK_ORDER', 'TEAM', 'EMPLOYEE'] as const
 export type RecordKey = (typeof RECORD_KEYS)[number]
 
 const recordKey = z.enum(RECORD_KEYS)

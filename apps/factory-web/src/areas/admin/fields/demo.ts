@@ -32,6 +32,9 @@ const RECORD_WORDS: Readonly<Record<RecordKey, [string, string, string, string]>
   PURCHASE_ORDER: ['PurchaseOrder', 'Ordine di acquisto', 'Purchase order', 'purchasing.orders'],
   LOT: ['Lot', 'Lotto', 'Lot', 'warehouse.lots'],
   WORK_ORDER: ['WorkOrder', 'Ordine di lavoro', 'Work order', 'production.work-orders'],
+  // owb-ss5 5.3: a team or unit and a person (the API's records.ts).
+  TEAM: ['Team', 'Squadra o unità', 'Team or unit', 'people.teams'],
+  EMPLOYEE: ['Employee', 'Dipendente', 'Employee', 'people.employees'],
 }
 
 const COUNTS: Partial<Record<RecordKey, number>> = { CUSTOMER: 2, SUPPLIER: 2, ORDER: 10, STYLE: 1 }
