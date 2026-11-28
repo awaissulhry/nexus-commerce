@@ -424,7 +424,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // B-W2b-233: the Sizes & measurements tab's prepacks (the style's read) and protector placement (the BOM's), read while the tab is open.
   const prepacks = usePrepacks({ api, styleId, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'sizes' && can.view && !sheet, canManage: session.permissions.includes('product.prepacks.manage'), write: run })
   // owb-pd4: the protectors are on the Product sheet too.
-  const protectors = useProtectors({ api, styleId, revisionId, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.bomView, write: run })
+  // owb-pd5 (step 5.0; pd4s s.2): the protector placement reads with product.styles.view too (Sales reads the Sizes tab).
+  const protectors = useProtectors({ api, styleId, revisionId, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.view, write: run })
   sizesReload.current = () => {
     prepacks.reload()
     protectors.reload()
@@ -459,7 +460,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // spec's own version, so a BOM edit of the same draft never clashes with it).
   // owb-pd4 (S4 settle 6): the designer changes the size table and how to measure of a DRAFT (the spec's own rule holds a released one).
   const specCan = useMemo(() => ({ manage: mayEditDraftParts(can), release: session.permissions.includes('product.bom.release'), library: can.view }), [can, session.permissions])
-  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.bomView, can: specCan, write: run })
+  // owb-pd5 (step 5.0; pd4s s.2): the spec and its how-to words read with product.styles.view too.
+  const spec = useSpec({ api, styleId, revisionId, scaleId: value?.sizeScale?.id ?? null, loadKey: versionKey, enabled: (tab === 'sizes' || sheet) && can.view, can: specCan, write: run })
   specReload.current = spec.reload
 
   // B-W2b-241: the BOM in depth — the structure and its check with the BOM's read (the tab's mark), the lines in depth and

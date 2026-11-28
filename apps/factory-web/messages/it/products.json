@@ -1692,6 +1692,7 @@
   },
   "family": {
     "ourRange": "La nostra gamma",
-    "madeFor": "Fatto per {customer}"
+    "madeFor": "Fatto per {customer}",
+    "forCustomer": "Fatto per un cliente"
   }
 }

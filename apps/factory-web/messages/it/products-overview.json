@@ -137,12 +137,6 @@
       "on": "Sì: ogni pezzo si può tagliare sulle misure di un pilota",
       "off": "No: solo in taglie"
     },
-    "table": {
-      "title": "Tabella taglie",
-      "held": "Il tuo ruolo non legge la tabella taglie.",
-      "heldWhy": "La tabella taglie, come misurare e le protezioni si leggono con il permesso sui materiali.",
-      "info": "Una riga per ogni punto di misura, una colonna per ogni taglia, in millimetri."
-    },
     "riders": {
       "title": "Schede misure dei piloti",
       "none": "Ancora nessuna riga d'ordine su misura aperta.",
