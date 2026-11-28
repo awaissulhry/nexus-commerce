@@ -269,6 +269,11 @@ model StoredFile {
   /// @not-money the relation to the customer's price rows whose source it is (the rows carry the grain)
   orderBrandPrices       OrderBrandPrice[]          @relation("OrderBrandPriceSourceFile")
   portalRequestPeople    PortalOrderRequestPerson[] @relation("PortalOrderRequestPersonSheet")
+  // owb-b1 sales.prisma, portal-sales.prisma (order workflow build, schema wave "order workflow 1/1"): the orders and order
+  // requests whose picture it is, the "I paid" notices whose proof it is.
+  salesOrderPictures     SalesOrder[]               @relation("SalesOrderPicture")
+  portalRequestPictures  PortalOrderRequest[]       @relation("PortalOrderRequestPicture")
+  paymentNoticeFiles     PaymentNotice[]            @relation("PaymentNoticeFile")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
@@ -353,6 +358,10 @@ enum FileCategory {
   /// sales.measurements.view (the API; each opening recorded), never shared with a floor, shared with a portal or a link only
   /// with its record's own party (the …_files_measurements_th_guards and …_files_record_party_th_guards triggers).
   MEASUREMENTS
+  /// owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 7): the customer's own shipping
+  /// label for goods we send on from our warehouse (a Shipment's file, uploaded by its customer through the portal or by the
+  /// office): the label ShipmentWarehouseLeg.customerLabelFileId names (the …_order_workflow_guards trigger, G9).
+  CUSTOMER_LABEL
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

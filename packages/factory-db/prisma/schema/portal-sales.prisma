@@ -39,6 +39,12 @@
 // measure, or not decided yet), colour, pieces, open choices (choices: names only, never a price or a person). All frozen
 // at Send. The style drafts the office made for a draft (styleIds) are office only: hidden from the customer's portal
 // people, added while DRAFT or SENT.
+//
+// owb-b1 (order workflow build, schema wave "order workflow 1/1"; LF plan.md § 4, PL-schema § 3, § 5A rows 2-4): the draft
+// and the sent request carry the order's picture (copied into the order at Confirm); a line may be taken out softly and put
+// back (removedAt); a sent request may be taken back to DRAFT, keeping its number (the …_order_workflow_guards redefinition
+// of the request's guard, G1). PaymentNotice: the customer's "I paid" (the customer's buyer tells us it paid; the office
+// records the payment itself with its own command, then marks the notice RECORDED, or DISMISSED).
 
 /// An order request from the portal (SAL-072, SAL-073, SAL-074; design portal.customer.neworder): a draft kept with us
 /// while the customer (or the office for it, OD s.1) builds it (the portal's "Draft saved 10:42"), then sent with a number of the company's
@@ -112,6 +118,17 @@ model PortalOrderRequest {
   /// the seed's buyer inserts were refused, 42501).
   styleIds       String[]                @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
   // ── end OD s.1
+  // ── owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 3, § 5A row 2)
+  /// The order's picture, as on SalesOrder (the same three names): a file of the tenant, an image or a PDF, never a fiscal
+  /// archive, body data or audio (the …_order_workflow_guards trigger, G2); null: the first line's design. Written by its
+  /// customer's portal people or the office while it is a DRAFT or SENT (a draft column, and the one SENT → SENT change
+  /// both doors may make: G1); frozen once decided. Confirm copies the three into the order it makes. All or none (G2).
+  /// Readable by its customer, who sees who set it, like lastEditedById.
+  pictureFileId  String?                 @db.Uuid
+  pictureSetAt   DateTime?               @db.Timestamptz(3)
+  /// Who set the picture: a person of the customer or of the office.
+  pictureSetById String?                 @db.Uuid
+  // ── end owb-b1
 
   company    Company                  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   party      Party                    @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -122,6 +139,11 @@ model PortalOrderRequest {
   lines      PortalOrderRequestLine[]
   // B-CP-005 (S2): the people named on its lines (a roster), removed with their line or the discarded draft.
   people     PortalOrderRequestPerson[]
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): its picture (Restrict, not Prisma's SetNull default: that
+  // would also clear tenantId); the customer's own columns used on its lines (order-columns.prisma), removed with the
+  // discarded draft.
+  picture        StoredFile?          @relation("PortalOrderRequestPicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lineColumnUses OrderLineColumnUse[] @relation("OrderLineColumnUseRequest")
 
   @@unique([tenantId, companyId, number])
   // The target of its lines' reference: a line of the same party.
@@ -217,6 +239,13 @@ model PortalOrderRequestLine {
   /// by the customer and the office while the request is a DRAFT (the line guard), frozen at Send.
   choices           Json?    @db.JsonB
   // ── end OD s.1
+  // ── owb-b1 (order workflow build, schema wave "order workflow 1/1"; PL-schema § 5A row 3)
+  /// Taken out of the draft ("Take it out", soft): when and by whom (a person of the customer or of the office), both
+  /// together (the API); "Put it back" clears both. A line taken out still holds its cells and sizes, is not counted or sent, and
+  /// goes with a discarded draft. Written while the request is a DRAFT, like every line cell (the line guard, unchanged).
+  removedAt         DateTime? @db.Timestamptz(3)
+  removedById       String?   @db.Uuid
+  // ── end owb-b1
 
   request         PortalOrderRequest       @relation(fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   // B-CP-005: optional (a DESCRIBED or MADE_TO_MEASURE line may name none); Restrict, not Prisma's SetNull default for an
@@ -228,6 +257,9 @@ model PortalOrderRequestLine {
   sizes           PortalOrderRequestSize[]
   // B-CP-005 (S2): the people on a by-person line, removed with it.
   people          PortalOrderRequestPerson[]
+  // owb-b1 (order workflow build, schema wave "order workflow 1/1"): order-columns.prisma, the customer's own column values
+  // on it, removed with it.
+  ownValues       OrderLineOwnValue[]      @relation("OrderLineOwnValueRequestLine")
 
   @@unique([tenantId, requestId, seq])
   // The target of its size rows' reference: a size of the same party.
@@ -609,4 +641,65 @@ enum PaymentIntentStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+}
+
+/// "I paid" (owb-b1, schema wave "order workflow 1/1"; PL-schema § 5A row 4): the customer's buyer tells us it paid for one of
+/// its orders (the whole order, a deposit request or a step of its payment plan), how much, on which day, how, with a note
+/// and a proof (a file). It is a notice, not a payment: the office records the payment itself with its own command and
+/// then marks the notice RECORDED, or DISMISSED (it found no such payment). A portal session inserts it OPEN for its own
+/// party (portal.payments.notify); the office answers it once (OPEN → RECORDED | DISMISSED, with when and by whom); nothing
+/// else changes and nothing is deleted (the …_order_workflow_guards trigger, G7). The customer reads its own notices,
+/// never who in the office answered.
+model PaymentNotice {
+  id               String             @id @db.Uuid
+  tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the foreign key; the partner role's policy key).
+  companyId        String             @db.Uuid
+  partyId          String             @db.Uuid
+  salesOrderId     String             @db.Uuid
+  /// What it pays, when the customer said: a deposit request of the order, or a step of its payment plan (null: the order).
+  depositRequestId String?            @db.Uuid
+  milestoneId      String?            @db.Uuid
+  /// How much the customer says it paid, in minor units of `currency` (above 0: the API).
+  /// @grain price
+  amount           Int
+  /// ISO 4217.
+  currency         String
+  /// The day the customer says it paid (not in the future: the API).
+  paidOn           DateTime           @db.Date
+  /// How, in the customer's words ("Bank transfer"); null: not said.
+  method           String?
+  /// The customer's note to us; null: none.
+  note             String?
+  /// The proof (a bank receipt): a file of the order shared with its customer; null: none.
+  fileId           String?            @db.Uuid
+  state            PaymentNoticeState @default(OPEN)
+  /// The office's answer: when and by whom, set exactly with RECORDED or DISMISSED, once. Who is hidden from the partner role.
+  answeredAt       DateTime?          @db.Timestamptz(3)
+  answeredById     String?            @db.Uuid
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The customer's person who told us (or the office person who typed it for the customer).
+  createdById      String?            @db.Uuid
+
+  // The order of the same company and customer; the deposit request and the step of that customer (Restrict, not
+  // Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId).
+  salesOrder     SalesOrder           @relation("PaymentNoticeOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  depositRequest DepositRequest?      @relation("PaymentNoticeDeposit", fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  milestone      SalesOrderMilestone? @relation("PaymentNoticeMilestone", fields: [tenantId, partyId, milestoneId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  file           StoredFile?          @relation("PaymentNoticeFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's notices (the Money tab), the open ones first.
+  @@index([tenantId, salesOrderId, state])
+  // The office's open notices of a customer.
+  @@index([tenantId, partyId, state])
+}
+
+/// Where an "I paid" notice stands (owb-b1): OPEN → RECORDED (the office recorded the payment) | DISMISSED (no such payment
+/// found). The last two are final.
+enum PaymentNoticeState {
+  OPEN
+  RECORDED
+  DISMISSED
 }
