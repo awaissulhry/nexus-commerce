@@ -1,0 +1,117 @@
+{
+  "head": {
+    "teams_one": "{count} squadra",
+    "teams_other": "{count} squadre",
+    "withTeam_one": "{count} ordine con una squadra",
+    "withTeam_other": "{count} ordini con una squadra",
+    "noTeam_one": "{count} ordine ancora senza squadra",
+    "noTeam_other": "{count} ordini ancora senza squadra",
+    "newTeam": "Nuova squadra…",
+    "readOnly": "Puoi solo leggere questa pagina",
+    "readNote": "Il responsabile di produzione assegna gli ordini alle squadre. Vedi la squadra di ogni ordine; su un ordine puoi chiedere un'altra squadra.",
+    "info": "Una colonna per squadra, e una per gli ordini che non hanno ancora una squadra. Una scheda apre l'ordine. I numeri sono di una squadra, mai di una sola persona: le squadre piccole non mostrano numeri. Il cliente non vede nessuna squadra.",
+    "infoLabel": "Su questa pagina"
+  },
+  "site": {
+    "choose": "Le squadre lavorano in un solo stabilimento. Scegli lo stabilimento:"
+  },
+  "filter": {
+    "label": "Mostra",
+    "all": "Tutte le squadre",
+    "none": "Ancora senza squadra"
+  },
+  "column": {
+    "none": "Ancora senza squadra",
+    "noneHint": "Ogni operaio vede questi cesti.",
+    "leader": "Capo: {name}",
+    "noLeader": "Ancora nessun capo",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "empty": "Nessun ordine ora.",
+    "noneEmpty": "Ogni ordine ha una squadra.",
+    "orders": "Ordini di {team}"
+  },
+  "load": {
+    "small": "—",
+    "smallInfo": "Le squadre piccole non mostrano numeri.",
+    "of": "{count} di {max} cesti",
+    "count_one": "{count} cesto",
+    "count_other": "{count} cesti"
+  },
+  "mark": {
+    "OVER_LIMIT": "Oltre il suo limite",
+    "NO_NEW_ORDERS": "Non prende nuovi ordini",
+    "MISSING_TODAY": "Persone assenti oggi",
+    "MISSING_TODAY_n": "{count} assenti oggi",
+    "LATE": "In ritardo",
+    "LATE_n": "{count} in ritardo"
+  },
+  "card": {
+    "baskets_one": "{count} cesto",
+    "baskets_other": "{count} cesti",
+    "due": "Consegna {date}",
+    "late": "In ritardo",
+    "inCharge": "Responsabile",
+    "give": "Assegna a una squadra…",
+    "change": "Cambia…"
+  },
+  "people": {
+    "label": "Persone di {team}",
+    "lend": "Presta {name}…",
+    "leader": "capo",
+    "onLoan": "in prestito"
+  },
+  "lend": {
+    "title": "Presta {name}",
+    "home": "Squadra di casa: {team}",
+    "homeNone": "Squadra di casa: nessuna (un operaio condiviso)",
+    "body": "La squadra di casa resta. Dopo l'ultimo giorno la persona torna in essa. La cronologia tiene chi ha prestato chi, fino a quando e perché.",
+    "to": "A quale squadra",
+    "noOther": "Non c'è un'altra squadra.",
+    "until": "Fino a",
+    "untilChoice": {
+      "TODAY": "Oggi",
+      "THREE_DAYS": "3 giorni",
+      "WEEK": "Una settimana",
+      "DAY": "Un giorno a scelta"
+    },
+    "pick": "L'ultimo giorno (al massimo 31 giorni)",
+    "reason": "Perché",
+    "reasonHint": "Per esempio: un ordine grande",
+    "act": "Presta",
+    "done": "{name} lavora con {team} fino al {date}.",
+    "held": {
+      "team": "Scegli prima la squadra.",
+      "noLine": "Questa squadra non ha una linea: per ora un prestito ha bisogno di una linea.",
+      "day": "Scegli un ultimo giorno da oggi, al massimo {count} giorni.",
+      "reason": "Di' perché la persona viene prestata.",
+      "reasonLong": "Al massimo {count} caratteri."
+    },
+    "refusal": {
+      "LEFT": "Questa persona se n'è andata: non viene prestata a nessuna squadra.",
+      "LINE_NOT_OF_SITE": "La linea della squadra non è dello stabilimento della persona.",
+      "TEAM_OTHER_SITE": "La squadra è di un altro stabilimento.",
+      "TEAM_ARCHIVED": "La squadra è chiusa.",
+      "TEAM_OTHER_LINE": "La squadra lavora su un'altra linea.",
+      "LOAN_OVERLAP": "La persona è già prestata in quei giorni: un prestito alla volta."
+    }
+  },
+  "privacy": "I numeri qui sono di una squadra, mai di una sola persona. Il cliente non vede nessuna squadra.",
+  "failed": "Non è stato possibile leggere le squadre.",
+  "notice": {
+    "saved": "Le squadre sono salvate.",
+    "dismiss": "Chiudi"
+  },
+  "common": {
+    "retry": "Riprova"
+  },
+  "error": {
+    "read": "Qualcosa è andato storto durante la lettura.",
+    "write": "Non è stato salvato. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "offline": "Nessuna risposta dalla fabbrica: controlla la rete e riprova.",
+    "notFound": "Non c'è più.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "È stato rifiutato così com'è: controlla cosa hai scelto."
+  }
+}

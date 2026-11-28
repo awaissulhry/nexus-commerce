@@ -47,7 +47,7 @@
       }
     },
     "FloorSession": {
-      "about": "Floor writes the sessions of its devices (sign-in, switch, sign-out, the idle slide, a PIN step-up, closing an expired one) and reads them on every request; office ends them when it revokes a device or badge, deactivates a worker or resets a PIN, and reads whether a device is in use.",
+      "about": "Floor writes the sessions of its devices (sign-in, switch, sign-out, the idle slide, a PIN step-up, closing an expired one, and owb-fl0's department pick on a phone: departmentId and stationId on its own session) and reads them on every request; office ends them when it revokes a device or badge, deactivates a worker or resets a PIN, and reads whether a device is in use.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
