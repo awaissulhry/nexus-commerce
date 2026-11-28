@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, type Locale } from './locales'
+import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, type FloorLocale, type Locale } from './locales'
 // B-W2b-F51: a right in words, never its code (rights.ts).
 import { rightOf, wordsOfRight } from './rights'
 
@@ -51,6 +51,19 @@ function buildCatalogue(): Readonly<Record<Locale, LocaleMessages>> {
 /** Every catalogue, by language and namespace. */
 export const CATALOGUE: Readonly<Record<Locale, LocaleMessages>> = buildCatalogue()
 
+/**
+ * owb-fl7 (pick J): the Urdu drafts of the floor's catalogues (`messages/ur/<floor namespace>.json`; scripts/factory/check-i18n.mjs
+ * allows `ur` for the floor's namespaces only). A key Urdu lacks shows in English (`messagesFor('ur', …)`).
+ */
+export const URDU: LocaleMessages = Object.freeze(
+  Object.fromEntries(
+    Object.entries(FILES).flatMap(([path, tree]): [string, Dictionary][] => {
+      const match = /([^/]+)\/([^/]+)\.json$/.exec(path)
+      return match && match[1] === 'ur' ? [[match[2]!, Object.freeze(flattenMessages(tree))]] : []
+    }),
+  ),
+)
+
 // ---- fix-voi-2: the words a reader outside the office reads -------------------------------------------------------
 
 /**
@@ -95,7 +108,9 @@ export function catalogueFor(locale: Locale, namespace: string, reader: Reader):
 }
 
 /** The catalogues a page needs, for one language: the provider passes only these to the browser. */
-export function messagesFor(locale: Locale, namespaces: readonly string[]): LocaleMessages {
+export function messagesFor(locale: Locale | FloorLocale, namespaces: readonly string[]): LocaleMessages {
+  // owb-fl7: Urdu (the floor only) = its drafts over the English words, key by key.
+  if (locale === 'ur') return Object.fromEntries(namespaces.map((namespace) => [namespace, { ...(CATALOGUE.en[namespace] ?? {}), ...(URDU[namespace] ?? {}) }]))
   const own = CATALOGUE[locale] ?? CATALOGUE[DEFAULT_LOCALE]
   return Object.fromEntries(namespaces.map((namespace) => [namespace, own[namespace] ?? {}]))
 }

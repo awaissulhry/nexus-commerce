@@ -34,7 +34,8 @@ export function FloorMe() {
   const feedback = useConfirmFeedback()
   const t = useT('floor-help2')
   const { frame, onFrame } = store.frame('tile.me', { showHome: true })
-  const { api, me, online, locale, queue, queueSnapshot, sessionEnded } = store
+  // owb-fl7: the floor's own language (Urdu where offered): the department names and the language buttons.
+  const { api, me, online, floorLocale: locale, queue, queueSnapshot, sessionEnded } = store
   const settings = useFloorDeviceSettings()
   const [profile, setProfile] = useState<FloorProfile | null>(keptProfile)
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>(keptProfile ? 'ready' : 'loading')

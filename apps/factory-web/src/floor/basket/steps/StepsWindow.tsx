@@ -33,7 +33,7 @@ type Loaded = { readonly state: 'loading' } | { readonly state: 'failed' } | { r
 type Mode = { readonly kind: 'steps' } | { readonly kind: 'why'; readonly key: string } | { readonly kind: 'route' } | { readonly kind: 'done'; readonly lines: readonly string[] }
 
 export function StepsWindowOf({ open, onClose, target, leader, onChanged }: { readonly open: boolean; readonly onClose: () => void; readonly target: StepsTarget | null; readonly leader: boolean; readonly onChanged: () => void }) {
-  const { api, me, locale, sessionEnded } = useFloor()
+  const { api, me, floorLocale: locale, sessionEnded } = useFloor()
   const tb = useT(BASKET_NS)
   const feedback = useConfirmFeedback()
   const { departments } = useDepartments(api)

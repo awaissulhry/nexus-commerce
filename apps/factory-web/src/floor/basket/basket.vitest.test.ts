@@ -258,7 +258,7 @@ function sources(dir: string): string[] {
 describe('every word of the basket screens exists in it and en', () => {
   it('names only keys of floor-basket (literal and built)', () => {
     const keys = new Set<string>()
-    for (const file of sources(DIR)) for (const match of readFileSync(file, 'utf8').matchAll(/\btb\(\s*'([A-Za-z0-9_.]+)'/g)) keys.add(match[1]!)
+    for (const file of sources(DIR)) for (const match of readFileSync(file, 'utf8').matchAll(/\b(?:tb|fw)\(\s*'([A-Za-z0-9_.]+)'/g)) keys.add(match[1]!)
     const built = [
       ...WORK_STATES.map((state) => `state.${state}`),
       'state.READY',

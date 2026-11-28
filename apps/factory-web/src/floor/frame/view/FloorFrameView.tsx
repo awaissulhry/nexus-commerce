@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { Clock, CloudOff, House, Languages, LogOut, ScanLine, UserPlus, UserRound, Users, X } from 'lucide-react'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
-import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
+import { FLOOR_LOCALE_NAMES, LOCALES, type FloorLocale } from '../../../lib/i18n/locales'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import type { CrewView } from '../../api'
@@ -32,6 +32,10 @@ export interface FrameModel {
   titleKey: string
   /** owb-fl5: a title already in words (a basket's number), in place of `titleKey`'s. */
   title?: string
+  /** owb-fl7: the floor language spoken now (Urdu where the site offers it); absent: the page's. */
+  locale?: FloorLocale
+  /** owb-fl7: the languages the picker offers (the site's floor languages); absent: Italian and English. */
+  locales?: readonly FloorLocale[]
   /** owb-fl6: the Undo bar of this person's last move or give (null: none); in the foot, above the screen's actions. */
   undo?: UndoBarModel | null
   online: boolean
@@ -66,7 +70,7 @@ export type FrameAction =
   | { type: 'menu'; open: boolean }
   | { type: 'help'; open: boolean }
   | { type: 'language'; open: boolean }
-  | { type: 'locale'; locale: Locale }
+  | { type: 'locale'; locale: FloorLocale }
   | { type: 'sign-out' }
   | { type: 'stay' }
   | { type: 'queue' }
@@ -91,7 +95,10 @@ export interface FloorFrameViewProps {
 
 export function FloorFrameView({ frame, onFrame, actions, lead, children }: FloorFrameViewProps) {
   const t = useT('floor')
-  const locale = useLocale()
+  const page = useLocale()
+  // owb-fl7: the floor's own language (Urdu reads Urdu words over English ones: the page's base is English then).
+  const locale: FloorLocale = frame.locale ?? page
+  const locales = frame.locales ?? LOCALES
   const send = (action: FrameAction) => onFrame?.(action)
   // owb-fl8: this phone's own settings (Floor › Me): Sound and vibration off → the confirm feedback is muted; Large words.
   const device = useFloorDeviceSettings()
@@ -136,7 +143,7 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
     <>
       {frame.showLanguage ? (
         <FloorButton size="sm" variant="secondary" icon={<Languages />} aria-haspopup="dialog" aria-expanded={Boolean(frame.languageOpen)} onClick={() => send({ type: 'language', open: true })}>
-          <span lang={locale}>{LOCALE_NAMES[locale]}</span>
+          <span lang={locale}>{FLOOR_LOCALE_NAMES[locale]}</span>
         </FloorButton>
       ) : null}
       <FloorHelpButton label={t('frame.help')} hasPopup="dialog" expanded={Boolean(frame.helpOpen)} onPress={() => send({ type: 'help', open: true })} />
@@ -172,7 +179,7 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
             refusedLabel={(count) => t('frame.refused', { count })}
             syncedLabel={t('frame.synced')}
             showWhenSynced={frame.showSynced}
-            lastSyncLabel={frame.lastSentAt ? t('frame.lastSent', { time: formatTime(frame.lastSentAt, { locale }) }) : undefined}
+            lastSyncLabel={frame.lastSentAt ? t('frame.lastSent', { time: formatTime(frame.lastSentAt, { locale: page }) }) : undefined}
             onOpenQueue={frame.queueButton ? () => send({ type: 'queue' }) : undefined}
             queueLabel={t('frame.openQueue')}
           />
@@ -221,7 +228,7 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
             </span>
             {t('frame.menu.switch')}
           </p>
-          <LocalePicker label={t('frame.menu.language')} locale={locale} onPick={(next) => send({ type: 'locale', locale: next })} />
+          <LocalePicker label={t('frame.menu.language')} locale={locale} locales={locales} onPick={(next) => send({ type: 'locale', locale: next })} />
           {frame.menu?.clock || frame.menu?.addPerson ? (
             <div className="fw-floor-row-actions">
               {frame.menu.clock ? (
@@ -275,6 +282,7 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
             label={t('frame.languageDialog.title')}
             hideLabel
             locale={locale}
+            locales={locales}
             onPick={(next) => {
               send({ type: 'locale', locale: next })
               send({ type: 'language', open: false })
@@ -286,8 +294,8 @@ export function FloorFrameView({ frame, onFrame, actions, lead, children }: Floo
   )
 }
 
-/** Each language named in its own words, never by a flag (A2 §3.1): big buttons, the current one pressed. */
-function LocalePicker({ label, hideLabel, locale, onPick }: { label: string; hideLabel?: boolean; locale: Locale; onPick: (locale: Locale) => void }) {
+/** Each language named in its own words, never by a flag (A2 §3.1): big buttons, the current one pressed. owb-fl7: the floor's languages. */
+function LocalePicker({ label, hideLabel, locale, locales, onPick }: { label: string; hideLabel?: boolean; locale: FloorLocale; locales: readonly FloorLocale[]; onPick: (locale: FloorLocale) => void }) {
   return (
     <div role="group" aria-label={label} className="fw-floor-locales">
       {hideLabel ? null : (
@@ -296,9 +304,9 @@ function LocalePicker({ label, hideLabel, locale, onPick }: { label: string; hid
         </span>
       )}
       <div className="fw-floor-locales-buttons">
-        {LOCALES.map((option) => (
-          <FloorButton key={option} size="md" variant={option === locale ? 'primary' : 'secondary'} aria-pressed={option === locale} lang={option} onClick={() => onPick(option)}>
-            {LOCALE_NAMES[option]}
+        {locales.map((option) => (
+          <FloorButton key={option} size="md" variant={option === locale ? 'primary' : 'secondary'} aria-pressed={option === locale} lang={option} dir={option === 'ur' ? 'rtl' : 'ltr'} onClick={() => onPick(option)}>
+            {FLOOR_LOCALE_NAMES[option]}
           </FloorButton>
         ))}
       </div>
