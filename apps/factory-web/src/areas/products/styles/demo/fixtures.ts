@@ -4,6 +4,7 @@ import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { StyleRecordView } from '../record/view/StyleRecordView'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, ProductRow, RouteSummaryStep, RoutingView, ScaleRow, StyleComplianceView, StyleOrders, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
@@ -172,6 +173,8 @@ export function demoStyle(options: StyleOptions = {}): StyleView {
     code: 'DEMO-JKT-01',
     name: 'Giacca Touring Demo',
     nameI18n: null,
+    // owb-pd4 (pd1: every style answer carries it): How it is made — departments, never a minute.
+    routeSummary: DEMO_ROUTE,
     productType: 'JACKET',
     season: 'FW27',
     brand: null,
@@ -315,9 +318,9 @@ const row = (n: number, code: string, name: string, extra: Partial<ProductRow>):
   typeName: null,
   family: extra.brand ? 'FOR_CUSTOMER' : 'OUR_RANGE',
   openOrders: n % 4,
-  agreedRange: n % 3 === 0 ? null : { low: String(240 + n * 10), high: String(300 + n * 15), count: 1 + (n % 3), currency: 'EUR' },
-  marginPct: n % 3 === 0 ? null : String(30 + n),
-  marginFrom: n % 3 === 0 ? null : n % 2 === 0 ? 'KIND' : 'KEPT',
+  agreedRange: asMoney('price', n % 3 === 0 ? null : { low: String(240 + n * 10), high: String(300 + n * 15), count: 1 + (n % 3), currency: 'EUR' as const }),
+  marginPct: asMoney('margin', n % 3 === 0 ? null : String(30 + n)),
+  marginFrom: asMoney('margin', n % 3 === 0 ? null : n % 2 === 0 ? ('KIND' as const) : ('KEPT' as const)),
   ...extra,
 })
 

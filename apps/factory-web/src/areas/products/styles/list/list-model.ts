@@ -90,7 +90,7 @@ export function typeWords(row: Pick<ProductRow, 'typeName' | 'productType'>): { 
 }
 
 /** The agreed price range (price grain; lowest–highest over every customer's agreed price), or null: none, or not in the role. */
-export function agreedText(range: ProductRow['agreedRange'], locale: 'it' | 'en'): string | null {
+export function agreedText(range: { readonly low: string; readonly high: string; readonly currency: string } | null | undefined, locale: 'it' | 'en'): string | null {
   if (!range) return null
   const low = moneyText(range.low, range.currency, locale)
   return Number(range.low) === Number(range.high) ? low : `${low} – ${moneyText(range.high, range.currency, locale)}`

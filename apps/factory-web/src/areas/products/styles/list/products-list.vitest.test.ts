@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { BRANDS, GRAINS, ROWS } from '../demo/fixtures'
 import type { LooksState } from '../gallery/gallery-model'
 import { agreedText, familyWords, marginHintKey, productCardOf, productColumns, protectionWords, sizesWords, thingsBefore, typeWords } from './list-model'
@@ -50,9 +51,9 @@ describe('the family and the type in words', () => {
     expect(agreedText({ low: '120', high: '120', count: 1, currency: 'EUR' }, 'en')).toBe('€120.00')
     expect(agreedText({ low: '120', high: '180', count: 2, currency: 'EUR' }, 'en')).toBe('€120.00 – €180.00')
     expect(agreedText(null, 'en')).toBeNull()
-    expect(marginHintKey(row({ marginPct: '35', marginFrom: 'KEPT' }))).toBe('list.margin.fromKept')
-    expect(marginHintKey(row({ marginPct: '35', marginFrom: 'KIND' }))).toBe('list.margin.fromKind')
-    expect(marginHintKey(row({ marginPct: null }))).toBeNull()
+    expect(marginHintKey(row({ marginPct: asMoney('margin', '35'), marginFrom: asMoney('margin', 'KEPT' as const) }))).toBe('list.margin.fromKept')
+    expect(marginHintKey(row({ marginPct: asMoney('margin', '35'), marginFrom: asMoney('margin', 'KIND' as const) }))).toBe('list.margin.fromKind')
+    expect(marginHintKey(row({ marginPct: asMoney('margin', null) }))).toBeNull()
   })
   it('"n things before release" only for a draft the gate checked', () => {
     const gate = { state: 'ready' as const, byStyle: { [ROWS[0]!.id]: { styleId: ROWS[0]!.id, code: 'X', revision: { id: 'r3', revision: 3, status: 'DRAFT' as const }, checked: true, completenessPct: '80', blockers: 2, warnings: 1, first: null, open: 3 } } }
@@ -75,7 +76,7 @@ describe('the phone cards at 375 px', () => {
     expect(JSON.stringify(card)).not.toContain('€')
   })
   it('a card shows the agreed price with the price grain and the margin with the margin grain', () => {
-    const card = productCardOf(row({ agreedRange: { low: '250', high: '315', count: 2, currency: 'EUR' }, marginPct: '31', marginFrom: 'KEPT' }), { grains: GRAINS.owner, looks, locale: 'en' })
+    const card = productCardOf(row({ agreedRange: asMoney('price', { low: '250', high: '315', count: 2, currency: 'EUR' as const }), marginPct: asMoney('margin', '31'), marginFrom: asMoney('margin', 'KEPT' as const) }), { grains: GRAINS.owner, looks, locale: 'en' })
     expect(card.price).toBe('€250.00 – €315.00')
     expect(card.margin).toEqual({ pct: '31', hint: 'list.margin.fromKept' })
     expect(card.picture).toBeNull()

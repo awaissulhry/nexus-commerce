@@ -5,13 +5,13 @@ import { complianceDocumentDetail, styleComplianceView, type ComplianceDocumentD
 import { materialRow, materialView, type MaterialRow, type MaterialView } from '@nexus/factory-domain/product/materials/contracts'
 import { operationRow, routingView, type OperationRow, type RoutingView } from '@nexus/factory-domain/product/routing/contracts'
 import { scaleRow, type ScaleRow } from '@nexus/factory-domain/product/sizes/contracts'
-import { ORDER_LIFE } from '@nexus/factory-domain/sales/order-life'
 import {
   colourRow,
   duplicatedView,
   duplicateOfferView,
   generatedSkus,
   revisionView,
+  styleOrdersView,
   styleRow,
   styleView,
   type ColourRow,
@@ -19,6 +19,8 @@ import {
   type DuplicateOfferView,
   type GeneratedSkus,
   type RevisionView,
+  type RouteSummaryStep,
+  type StyleOrdersView,
   type StyleRow,
   type StyleView,
 } from '@nexus/factory-domain/product/styles/contracts'
@@ -67,21 +69,12 @@ export interface StyleQuery {
   cursor?: string | null
 }
 
-// ---- owb-pd4 (step 4.1; S4 settle 1; owb-pd-server § Shape pd1): the list row's extras — the type's name (a product type profile),
-// the family, the open orders, the agreed price range (price grain) and the margin from the kept cost (cost grain). Read here
-// before pd1's contract holds them: each optional, so a row without them (an older API, a grain not held) draws "—", never 0.
-export const productRow = styleRow.extend({
-  typeName: z.string().nullable().optional(),
-  family: z.enum(['OUR_RANGE', 'FOR_CUSTOMER']).optional(),
-  openOrders: z.number().int().optional(),
-  agreedRange: z.object({ low: z.string(), high: z.string(), count: z.number().int(), currency: z.string() }).nullable().optional(),
-  marginPct: z.string().nullable().optional(),
-  marginFrom: z.enum(['KEPT', 'KIND']).nullable().optional(),
-})
-export type ProductRow = z.infer<typeof productRow>
+// ---- owb-pd4 (step 4.1; S4 settle 1): the Products list's row — pd1 (#2054) put its extras in the contract (typeName, family,
+// openOrders, agreedRange: price grain, marginPct + marginFrom: margin grain); the list reads them under the product's name.
+export type ProductRow = StyleRow
 // ---- end owb-pd4
 
-const stylePage = z.object({ styles: z.array(productRow), nextCursor: z.string().nullable(), count: z.number().int() })
+const stylePage = z.object({ styles: z.array(styleRow), nextCursor: z.string().nullable(), count: z.number().int() })
 export type StylePage = z.infer<typeof stylePage>
 
 export function listStyles(api: ApiClient, query: StyleQuery): Promise<StylePage> {
@@ -107,33 +100,19 @@ export async function countStyles(api: ApiClient, query: StyleQuery): Promise<nu
 
 const oneStyle = z.object({ style: styleView })
 
-// ---- owb-pd4 (step 4.3; owb-pd-server § Shape pd1): "How it is made" — the current revision's steps as departments, never a minute,
-// readable with product.styles.view (sales and the designer read it). Optional: absent before pd1 lands.
-export const routeSummaryStep = z.object({ departmentId: z.string(), number: z.number().int(), shortName: z.string(), tone: z.string(), icon: z.string() })
-export type RouteSummaryStep = z.infer<typeof routeSummaryStep>
-const oneProduct = z.object({ style: styleView.extend({ routeSummary: z.array(routeSummaryStep).optional() }) })
-export type ProductView = z.infer<typeof oneProduct>['style']
+// ---- owb-pd4 (step 4.3): "How it is made" — pd1 puts the route summary on every style answer (no minutes, product.styles.view).
+export type { RouteSummaryStep }
+export type ProductView = StyleView
 // ---- end owb-pd4
 
 export function getStyle(api: ApiClient, styleId: string): Promise<ProductView> {
-  return api.get(stylePath(styleId), { schema: oneProduct }).then((answer) => answer.style)
+  return api.get(stylePath(styleId), { schema: oneStyle }).then((answer) => answer.style)
 }
 
-// ---- owb-pd4 (steps 4.3, 4.4; owb-pd-server § Shape pd1): the open order lines of a product — Where it is used, the riders'
+// ---- owb-pd4 (steps 4.3, 4.4; pd1's contract styleOrdersView): the open order lines of a product — Where it is used, the riders'
 // measurement sheets. orders.view (or orders.view.own: only the orders the person is on); never a price.
-const styleOrderLine = z.object({
-  orderId: z.string(),
-  orderNumber: z.string(),
-  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(),
-  lineId: z.string(),
-  quantity: z.number().int(),
-  sizes: z.string().nullable(),
-  revision: z.number().int().nullable(),
-  measurement: z.enum(['FILE', 'TYPED', 'MISSING']).nullable(),
-  life: z.enum(ORDER_LIFE),
-})
-export const styleOrdersAnswer = z.object({ lines: z.array(styleOrderLine), totals: z.object({ openOrders: z.number().int(), openPieces: z.number().int() }) })
-export type StyleOrders = z.infer<typeof styleOrdersAnswer>
+export const styleOrdersAnswer = styleOrdersView
+export type StyleOrders = StyleOrdersView
 export type StyleOrderLine = StyleOrders['lines'][number]
 
 export function listStyleOrders(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<StyleOrders> {
