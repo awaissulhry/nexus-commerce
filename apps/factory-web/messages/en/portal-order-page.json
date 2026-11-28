@@ -1,0 +1,97 @@
+{
+  "band": {
+    "back": "Orders",
+    "send": "Review and send…",
+    "takeBack": "Take it back"
+  },
+  "tabs": {
+    "label": "Order",
+    "overview": "Overview",
+    "lines": "Lines",
+    "money": "Money",
+    "shipments": "Shipments",
+    "files": "Files"
+  },
+  "request": {
+    "name": "Your order",
+    "failed": "The order could not be read",
+    "failedBody": "Nothing changed. Try again in a moment.",
+    "retry": "Try again",
+    "where": {
+      "draft": "A draft: only you and your colleagues see it.",
+      "sent": "Sent: the factory reads it and confirms it."
+    },
+    "next": {
+      "draft": "Next: review it and send it to the factory.",
+      "sent": "Until the factory confirms it, you can take it back to change it."
+    },
+    "lines": {
+      "draft": "You change the lines of a draft in the order window.",
+      "sent": "The order is sent: take it back to change it.",
+      "open": "Open the order"
+    }
+  },
+  "where": {
+    "title": "Where your order is"
+  },
+  "asks": {
+    "title": "Asks & changes",
+    "none": "Nothing waits.",
+    "all": "All changes"
+  },
+  "changes": {
+    "title": "All changes"
+  },
+  "facts": {
+    "title": "Order facts",
+    "subject": "Subject",
+    "ref": "Your reference",
+    "wanted": "Wanted for",
+    "lines": "Lines",
+    "linesPieces": "{lines} lines · {pieces} pieces",
+    "sent": "Sent on",
+    "none": "—"
+  },
+  "linked": {
+    "title": "Linked records"
+  },
+  "designer": {
+    "title": "Ask the factory designer",
+    "line": "Write in this order's chat: type @ to ask the factory designer.",
+    "ask": "Open the chat"
+  },
+  "quiet": {
+    "money": "Money starts when the factory confirms the order.",
+    "shipments": "Nothing has left the factory yet."
+  },
+  "files": {
+    "kind": {
+      "mockups": "Mockups",
+      "sizes": "Size files",
+      "other": "Other files"
+    },
+    "locked": "A file you cannot open",
+    "none": "No files on this order yet."
+  },
+  "notice": {
+    "hide": "Hide"
+  },
+  "takeBack": {
+    "done": "Taken back: your order is a draft again. Change it and send it when it is ready.",
+    "started": "The factory has already started work on this order: ask the factory.",
+    "answered": "The factory has already answered this order.",
+    "stale": "The order changed meanwhile: we read it again. Try once more.",
+    "failed": "The order was not taken back. Try again in a moment."
+  },
+  "send": {
+    "done": "Your order is with the factory.",
+    "failed": "The order was not sent. Try again in a moment."
+  },
+  "held": {
+    "preview": "An office preview cannot send anything.",
+    "offline": "No connection",
+    "busy": "Working on it…",
+    "mayOrder": "A Buyer or your admin sends orders: ask them.",
+    "takeBack": "This order can no longer be taken back: ask the factory."
+  }
+}

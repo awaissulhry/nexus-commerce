@@ -26,6 +26,8 @@ import { readBundleByCode } from '../bundles/store'
 import { floorOrOffice, mayScan, maySite, officeOf, scanWorkOrder } from '../scans/access'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { deviceStationOf, readBundleScans, readHeader, readOperations, readScan, readStations, workerNames } from '../scans/store'
+// owb-fl2 (S5): the check reads the basket's own route and place, as the report does.
+import { basketInCommand } from '../baskets/second-done'
 import { componentFacts, FLAGGED_ACTION, guardRows, guardRowsOfScan, guardSettingsFor, lineFacts, OVERRIDDEN_ACTION, scannedLots, tracedOfLot, tracedOfWorkOrder, TRACED_ACTION, type GuardAuditRow } from './store'
 
 /**
@@ -59,9 +61,13 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
     const bundle = await readBundleByCode(db, scan.ok ? scan.text : typed)
     const workOrder = bundle ? await readHeader(db, bundle.workOrderId) : null
     if (!bundle || !workOrder || !mayScan(context, PRODUCTION_SCAN, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
-    const operations = await readOperations(db, workOrder.id)
+    const workOrderOperations = await readOperations(db, workOrder.id)
     const scans = await readBundleScans(db, bundle.id)
-    const flow = await bundleFlowOf(db, bundle, operations, standingScans(scans))
+    const flow = await bundleFlowOf(db, bundle, workOrderOperations, standingScans(scans))
+    // owb-fl2: the basket's own route and place (no edit, no move: the work order's operations and today's answers).
+    const basket = await basketInCommand(db, bundle.id, workOrderOperations, flow.standing)
+    const operations = basket.route
+    const movedHere = basket.place.how === 'MOVE' ? basket.place.operationId : null
     const stationId = context.audience === 'floor' ? await deviceStationOf(db, context.deviceId) : null
     const station = stationId ? ((await readStations(db, [stationId])).get(stationId) ?? null) : null
     const settings = await guardSettingsFor(db, workOrder.siteId)
@@ -69,6 +75,7 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
 
     let operation: ScanOperation | undefined = query.workOrderOperationId ? operations.find((candidate) => candidate.id === query.workOrderOperationId) : undefined
     if (query.workOrderOperationId && !operation) throw new NotFoundError('Not an operation of this bundle’s work order.')
+    if (!operation && !station && movedHere) operation = operations.find((candidate) => candidate.id === movedHere)
     if (!operation) {
       const next = operationFor({ operations, station: station ? { code: station.code, kind: station.kind } : null, standing: flow.standing, bundleId: bundle.id, bundle: { ...bundle, quantity: flow.quantity } })
       if (!next.ok) return { ...base, operation: null, hint: { code: next.refusal.code, message: next.refusal.message, fix: next.refusal.fix }, expected: null, beyondBundle: false, skipped: [], findings: [], components: { asked: [], traceable: [] } }
@@ -77,10 +84,11 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
     const reported = flow.standing.has(standingKey(bundle.id, operation.id))
     const lines = await lineFacts(db, { stationId, workOrderId: workOrder.id, kind: operation.workCentreKind })
     // The counts typed, or the usual report (all good of what reached it): what holds or warns before Finish.
-    const reached = passedTo(operations, operation, flow.quantity, flow.standing, bundle.id)
+    const movedInto = movedHere === operation.id
+    const reached = movedInto ? { previous: null, from: null, passed: flow.quantity, skipped: [] } : passedTo(operations, operation, flow.quantity, flow.standing, bundle.id)
     const padded = query.good !== undefined || query.scrap !== undefined || query.rework !== undefined
     const counts = padded ? { good: query.good ?? 0, scrap: query.scrap ?? 0, rework: query.rework ?? 0 } : { good: reached.passed, scrap: 0, rework: 0 }
-    const result = guardFindings({ operations, operation, bundleId: bundle.id, bundle: { code: bundle.code, quantity: flow.quantity }, workOrder, standing: flow.standing, counts, settings, lines })
+    const result = guardFindings({ operations, operation, bundleId: bundle.id, bundle: { code: bundle.code, quantity: flow.quantity }, workOrder, standing: flow.standing, counts, settings, lines, movedInto })
     const beyondBundle = counts.good + counts.scrap + counts.rework > flow.quantity
     const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId, operationId: operation.id })
     const asked = componentsAsked({ operations, operation, garmentTracking: facts.garmentTracking, materials: facts.materials })

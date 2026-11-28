@@ -705,7 +705,19 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `OrderStructureRule_open_same_orders(_any_kind)`: two open rules never fit exactly the same orders), the order's structure by
    hand (`OrderStructureOverride_one_open`, only ended, normal way exactly without a structure), OrderLineStructureKept
    append-only with its insert check, and ScanCodePlacement (a line of its own order, an image or PDF of its own customer,
-   page, place and a side of 20 mm or more)):
+   page, place and a side of 20 mm or more)),
+   `…_product_routes_guards` (order workflow build owb-pd2w, S4 schema wave 'routes' with 'cost Keep', between its generated
+   schema and policy folders: it REDEFINES the cost sheets' `factory_cost_sheet_guard` from `…_cost_sheets_w2b_guards` (a
+   sheet approved by its maker only when the company's own `CostingSettings.oneKeeperAllowed` is on and `keptAloneReason` is
+   not blank; the reason 1 to 500, fixed once approved) and drops and makes again the costing guards' index
+   `LabourRate_one_tenant_rate_per_kind_and_day` with `"departmentId" IS NULL` (its schema folder put the department into the
+   generated LabourRate key); NEW: StyleRoute and StyleRouteStep under the product guards' part rule as it is (frozen with
+   the revision) with their own checks (a customer route names its customer, of the route's company, the brand itself on a
+   brand's product; a step's operation of its department), RouteTemplate (closed, never deleted; the partial uniques
+   `RouteTemplate_open_name(_factory)`) and its steps, SalesOrderLineRoute (fixed once the order has an OrderPrint FIRST; a
+   picked route of the line's product and revision, never another customer's; "Only this order" with steps, why and when),
+   `LabourRate_department_check` with the partial uniques `LabourRate_one_company_rate_per_kind_and_day` and
+   `LabourRate_one_tenant_rate_per_department_and_day`, `BomLine_one_main`, and `CostingSettings_one_keeper_check`):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

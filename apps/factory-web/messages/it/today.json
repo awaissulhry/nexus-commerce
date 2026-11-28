@@ -1,0 +1,16 @@
+{
+  "orders": {
+    "label": "Ordini adesso",
+    "reading": "Lettura…",
+    "tilesFailed": "I conteggi degli ordini non si possono leggere ora.",
+    "tileDoor": "Apri il foglio degli ordini: {tile}",
+    "factoryNow": "La fabbrica adesso",
+    "factoryFailed": "Dove si trova il lavoro non si può leggere ora.",
+    "factoryNone": "Nessun ordine è in produzione adesso.",
+    "factoryPartial": "Contati sui primi 100 ordini in produzione.",
+    "lastChanges": "Ultime modifiche",
+    "changesFailed": "Le ultime modifiche non si possono leggere ora.",
+    "changesNone": "Ancora nessun ordine.",
+    "openSheet": "Apri il foglio degli ordini"
+  }
+}

@@ -140,6 +140,12 @@ export function wipOf(input: {
   readonly scans: readonly ScanFact[]
   readonly reworks?: readonly WipRework[] | undefined
   readonly lineOf: (stationId: string) => string | null
+  /**
+   * owb-fl2 (the basket's place, factory-domain production/baskets basketPlace how MOVE): bundle id → the step a hand move put it
+   * at (null: Ready to ship). A basket moved INTO a step it has no report at waits there with all its garments (it arrived by
+   * hand, not by the step before). Left out: today's answers.
+   */
+  readonly moved?: ReadonlyMap<string, string | null> | undefined
 }): Wip {
   const operations = [...input.operations].sort((a, b) => a.seq - b.seq)
   const standing = standingScans(input.scans)
@@ -198,7 +204,7 @@ export function wipOf(input: {
       const held = heldBy(bundle.id, flow, reworks)
       const heldHere = held !== null && flow.refusal !== null && held.foundAtOperationId === operation.id
       const doneHere = reworks.filter((rework) => rework.status === 'DONE' && rework.bundleId === bundle.id && rework.foundAtOperationId === operation.id)
-      const arrived = arrivedAt(bundle, operation)
+      const arrived = !own && input.moved?.get(bundle.id) === operation.id ? flow.quantity : arrivedAt(bundle, operation)
       const tally = bundle.part === null ? bundles : partBundles
       if (own || (passed && !heldHere)) tally.done++
       else if (heldHere || arrived > 0) tally.waiting++

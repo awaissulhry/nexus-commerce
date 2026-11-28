@@ -15,6 +15,8 @@ import { permissionCheck, type OfficeSession } from '../../../../../lib/session/
 export interface OfficeReach {
   readonly api: ApiClient | null
   readonly can: (permission: string) => boolean
+  /** owb-pd5b: the company the page works in (its id), or null. */
+  readonly companyId: string | null
 }
 
 function useSessionOrNull(): OfficeSession | null {
@@ -29,7 +31,8 @@ function useSessionOrNull(): OfficeSession | null {
 export function useOfficeReach(): OfficeReach {
   const session = useSessionOrNull()
   const company = session?.company?.code ?? null
+  const companyId = session?.company?.id ?? null
   const permissions = session?.permissions ?? null
   const present = session !== null
-  return useMemo<OfficeReach>(() => ({ api: present ? browserApi({ company }) : null, can: permissionCheck(permissions ?? []) }), [present, company, permissions])
+  return useMemo<OfficeReach>(() => ({ api: present ? browserApi({ company }) : null, can: permissionCheck(permissions ?? []), companyId }), [present, company, companyId, permissions])
 }

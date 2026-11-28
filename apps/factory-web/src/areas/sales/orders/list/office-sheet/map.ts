@@ -253,3 +253,20 @@ export function patchRow(row: SheetRowRead, lineId: string | null, column: Sheet
   })
   return { ...row, version, lines, pieces: lines.reduce((sum, line) => sum + line.pieces, 0) }
 }
+
+/**
+ * owb-of4 extra step — Give to the designer: confirmed orders (a SalesOrder: the route takes order ids) that are not withdrawn and not
+ * with the designer already; the others are skipped and counted; at most 100 at once.
+ */
+export function designerPlanOf(rows: readonly SheetRowRead[], keys: readonly string[], max = 100): { readonly go: SheetRowRead[]; readonly already: number; readonly other: number; readonly tooMany: boolean } {
+  const picked = rows.filter((row) => keys.includes(orderKeyOf(row)))
+  const go: SheetRowRead[] = []
+  let already = 0
+  let other = 0
+  for (const row of picked) {
+    if (row.kind !== 'ORDER' || row.life === 'WITHDRAWN') other++
+    else if (row.news.withDesigner) already++
+    else go.push(row)
+  }
+  return { go, already, other, tooMany: go.length > max }
+}

@@ -8,7 +8,9 @@ import {
   chargedOperationRefusal,
   clockCheck,
   correctionAskRefusal,
+  isOpen,
   normaliseDefects,
+  operationFor,
   otherWorkerRefusal,
   reportDecision,
   scansReadyRefusal,
@@ -72,6 +74,8 @@ import { undoViewer } from '@nexus/factory-domain/production/onbehalf/rules'
 import { PRODUCTION_SCAN_BEHALF } from '@nexus/factory-domain/production/onbehalf/permissions'
 import { checklistHoldInCommand } from './hooks/checklist'
 import { onBehalfRecordedInCommand, reportReason, type OnBehalf } from './hooks/onbehalf'
+// owb-fl2 (S5): the basket's own route and place in the report, and the second Done (a FORWARD move, no second scan).
+import { basketInCommand, isSecondDone, secondDone, type MovedOn } from '../baskets/second-done'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -238,7 +242,9 @@ export type RequestView = ReturnType<typeof requestView>
 // ---- outcomes ------------------------------------------------------------------------------------------------------------------
 
 export type Outcome =
-  | { readonly status: 'accepted' | 'duplicate'; readonly scan: ScanView; readonly request?: undefined; readonly refusal?: undefined }
+  | { readonly status: 'accepted' | 'duplicate'; readonly scan: ScanView; readonly request?: undefined; readonly refusal?: undefined; readonly moved?: undefined }
+  // owb-fl2: a second Done moved the basket on (a FORWARD move): no scan.
+  | { readonly status: 'accepted' | 'duplicate'; readonly moved: MovedOn; readonly scan?: undefined; readonly request?: undefined; readonly refusal?: undefined }
   | { readonly status: 'accepted' | 'duplicate'; readonly request: RequestView; readonly scan?: undefined; readonly refusal?: undefined }
   | { readonly status: 'refused'; readonly refusal: ScanRefusal; readonly scan?: undefined; readonly request?: undefined }
 
@@ -409,6 +415,8 @@ async function report(caller: CommandCaller, session: Session, input: ReportInpu
         },
         (tools) => reportInCommand(tools, { bundle, scanned, input, lines: normal.lines, counts, deviceTime, stationId, timeZone }),
       )
+      // owb-fl2: a second Done answers the move, not a scan.
+      if ('moved' in result) return { status: replayed ? 'duplicate' : 'accepted', moved: result } as Outcome
       return { status: replayed ? 'duplicate' : 'accepted', scan: result } as Outcome
     },
     () => reportedBefore(caller, session, input),
@@ -430,7 +438,7 @@ interface ReportWork {
 }
 
 /** The report INSIDE its command: the locks, the facts read again, the rules, the row, its lines, audits and event. */
-async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<ScanView> {
+async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<ScanView | MovedOn> {
   const context = floorOf({ factoryContext: tools.context })
   const { tx } = tools
   await scanWorkOrderLock(tx, context.tenantId, work.bundle.workOrderId)
@@ -461,14 +469,27 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // voided coupon, or a coupon of another operation than the one named, is refused.
   const coupon = await couponForScan(tx, locked.bundle.id, work.scanned, work.input.workOrderOperationId ?? null)
   if (coupon && !coupon.ok) refuse({ code: coupon.code, message: coupon.message, fix: coupon.fix, final: true })
+  // owb-fl2 (S5; factory-domain production/baskets): the basket's OWN route (its route edits) and place (its hand moves). With no
+  // edit and no move these are the operations array itself and today's answers: every rule below reads the route. A phone (no
+  // station) at a basket placed by a hand move reports at that step.
+  const basket = await basketInCommand(tx, locked.bundle.id, operations, flow.standing)
+  const movedHere = basket.place.how === 'MOVE' ? basket.place.operationId : null
+  const named = work.input.workOrderOperationId ?? (coupon?.ok ? coupon.operationId : null) ?? (station === null ? movedHere : null)
+  const bundleFacts = { code: locked.bundle.code, quantity: flow.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes }
+  // The second Done (where today's rule would refuse ALREADY_REPORTED): the step's report is older than the hand move that put
+  // the basket back here → a FORWARD move to the next step of its route; no second scan, no pay, no cost (both triggers stay).
+  const doneAt = named ?? (station ? ((found) => (found.ok ? found.operation.id : null))(operationFor({ operations: basket.route, station: { code: station.code, kind: station.kind }, standing: flow.standing, bundleId: locked.bundle.id, bundle: bundleFacts })) : null)
+  if (isOpen(workOrder.status) && locked.refusal === null && isSecondDone(basket, flow.standing, locked.bundle.id, doneAt)) {
+    return secondDone(tools, { context, workOrder, bundleId: locked.bundle.id, bundleCode: locked.bundle.code, basket, from: doneAt!, stationId: work.stationId, clientScanId: work.input.clientScanId, deviceTime: work.deviceTime })
+  }
 
   const decision = reportDecision({
     workOrder,
     bundleId: locked.bundle.id,
-    bundle: { code: locked.bundle.code, quantity: flow.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes },
+    bundle: bundleFacts,
     scanned: work.scanned,
-    operations,
-    operationId: work.input.workOrderOperationId ?? (coupon?.ok ? coupon.operationId : null),
+    operations: basket.route,
+    operationId: named,
     station: station ? { code: station.code, kind: station.kind } : null,
     kindReason: work.input.kindReason?.trim() || null,
     standing: flow.standing,
@@ -486,7 +507,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   const charged = chargedOperationRefusal(work.lines, operations.map((operation) => operation.id))
   if (charged) refuse(charged)
   // B-W2b-46 hook (production/guards): the site's checks hold the report (or a team leader's override lifts them); the lots at the operation.
-  const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override })
+  // owb-fl2: the guards read the basket's route; a basket moved INTO this step by hand is capped by its own garments.
+  const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations: basket.route, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override, movedInto: movedHere === decision.operation.id })
   // B-W2b-47 hook (hooks/checklist.ts; MES-102): Finish waits for the operation's required steps.
   await checklistHoldInCommand(tools, { bundleId: locked.bundle.id, bundleCode: locked.bundle.code, operationId: decision.operation.id })
   // Who it names: the site's floor rules (the trigger checks the same).
@@ -783,7 +805,10 @@ function scanAnswer(outcome: Outcome): { scan: ScanView; replayed: boolean } {
 }
 
 export async function reportScan(caller: CommandCaller, input: ReportInput) {
-  return scanAnswer(await report(caller, sessionOf(caller, 'online'), input))
+  const outcome = await report(caller, sessionOf(caller, 'online'), input)
+  // owb-fl2: a second Done moved the basket on (200/201 with no scan; `to`: the next step, null for Ready to ship).
+  if (outcome.status !== 'refused' && outcome.moved) return { scan: null, replayed: outcome.status === 'duplicate', moved: true, to: outcome.moved.to }
+  return { ...scanAnswer(outcome), moved: false, to: null }
 }
 
 export async function undoScan(caller: CommandCaller, input: UndoInput) {
@@ -866,11 +891,11 @@ export async function sendBatch(caller: CommandCaller, body: { readonly sentAt?:
     else if (item.action === 'UNDO') outcome = await undo(caller, session, item)
     else outcome = await ask(caller, session, item)
     if (outcome.status !== 'refused') {
-      answers.push({ clientScanId: item.clientScanId, action: item.action, status: outcome.status, scan: outcome.scan ?? null, request: outcome.request ?? null, refusal: null })
+      answers.push({ clientScanId: item.clientScanId, action: item.action, status: outcome.status, scan: outcome.scan ?? null, request: outcome.request ?? null, refusal: null, moved: outcome.moved !== undefined, movedGroupId: outcome.moved?.groupId ?? null })
       continue
     }
     const kept = await recordRefusal(caller, refusalDraft(session, item, outcome.refusal, await whereOf(caller, session, item), { stationId, subject, acknowledged }))
-    answers.push({ clientScanId: item.clientScanId, action: item.action, status: 'refused' as const, scan: null, request: null, refusal: { ...outcome.refusal, refusalId: kept.id } })
+    answers.push({ clientScanId: item.clientScanId, action: item.action, status: 'refused' as const, scan: null, request: null, refusal: { ...outcome.refusal, refusalId: kept.id }, moved: false, movedGroupId: null })
   }
   const now = serverClock.now()
   const sentAt = body.sentAt ? parseInstant(body.sentAt) : null

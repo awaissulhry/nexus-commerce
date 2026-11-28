@@ -39,6 +39,8 @@ import { discardRefusal, readRefusal, readRefusals, type RefusalState } from './
 import { requestView, scanView } from './scans'
 import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOperations, readOwnScans, readStations, readWorkOrderScans, siteTimeZone, workerNames, type Reader } from './store'
 import { firstPieceCardOf } from '../terminal/first-piece'
+// owb-fl2 (S5): the card reads the basket's own route and place (no edit, no move: the work order's operations, today's answers).
+import { basketInCommand } from '../baskets/second-done'
 
 /**
  * The scans' reads (B-W1-42; A2 SCR-090 the operation screen, SCR-072 a work order's scans, SCR-023 the refused scans;
@@ -82,11 +84,15 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     const bundle = await readBundleByCode(db, code)
     const workOrder = bundle ? await readHeader(db, bundle.workOrderId) : null
     if (!bundle || !workOrder || !mayScan(context, permission, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
-    const operations = await readOperations(db, workOrder.id)
+    const workOrderOperations = await readOperations(db, workOrder.id)
     const scans = await readBundleScans(db, bundle.id)
     // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments and a child's place in the flow.
-    const flow = await bundleFlowOf(db, bundle, operations, standingScans(scans))
+    const flow = await bundleFlowOf(db, bundle, workOrderOperations, standingScans(scans))
     const standing = flow.standing
+    // owb-fl2: the basket's route (its skipped steps not scanned, an added one scanned) and its place from a hand move.
+    const basket = await basketInCommand(db, bundle.id, workOrderOperations, standing)
+    const operations = basket.route
+    const movedHere = basket.place.how === 'MOVE' ? basket.place.operationId : null
     const stationId = context.audience === 'floor' ? await deviceStationOf(db, context.deviceId) : null
     const stations = await readStations(db, [stationId, ...scans.map((row) => row.stationId)])
     const scanSubject = await scanSubjectFor(db, workOrder.siteId)
@@ -95,7 +101,9 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     const style = await db.style.findUnique({ where: { id: workOrder.styleId }, select: { code: true, name: true } })
     const station = stationId ? (stations.get(stationId) ?? null) : null
     const facts = { operations, station: station ? { code: station.code, kind: station.kind } : null, standing, bundleId: bundle.id, bundle }
-    const next = operationFor(facts)
+    // owb-fl2: a tablet with no station (a phone) at a basket placed by a hand move: that step.
+    const movedStep = !station && movedHere ? operations.find((operation) => operation.id === movedHere) : undefined
+    const next = movedStep ? ({ ok: true, operation: movedStep } as const) : operationFor(facts)
     // Every operation of this station's kind is reported: the card says so, with when and where (never who).
     const done = next.ok ? (standing.get(standingKey(bundle.id, next.operation.id)) ?? null) : null
     const timeZone = await siteTimeZone(db, workOrder.siteId)
@@ -109,7 +117,8 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
       station,
       operations: operations.map((operation) => {
         const report = standing.get(standingKey(bundle.id, operation.id)) ?? null
-        const cap = capAt(operations, operation, { ...bundle, quantity: flow.quantity }, standing, bundle.id)
+        // owb-fl2: a basket moved INTO this step by hand carries its own garments to it (the guards' movedInto).
+        const cap = operation.id === movedHere && !report ? ({ ok: true, cap: flow.quantity, previous: null } as const) : capAt(operations, operation, { ...bundle, quantity: flow.quantity }, standing, bundle.id)
         const reached = cap.ok && cap.cap > 0
         return {
           id: operation.id,
