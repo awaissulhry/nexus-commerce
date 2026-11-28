@@ -149,7 +149,8 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
     expect(Object.fromEntries(list.chips.map((chip: Json) => [chip.chip, chip.count]))).toMatchObject({ OPEN: 3, REQUESTED: 0, ALL: 3, DELIVERED: 0, DATE_MOVED: 0 })
   })
 
-  it('finds an order by their PO, our number or a style; a viewer sees no price; the designer and another customer see none', async () => {
+  // owb-b7 (Owner yes 2026-11-28): the customer's Designer reads the orders too — like the viewer, without a price.
+  it('finds an order by their PO, our number or a style; a viewer and the designer see no price; another customer sees none', async () => {
     // fix-portal-numbers-1: our number still finds the order (it is printed on its confirmation); the row names it by the customer's PO.
     expect((await ok(browsers.buyer, '/portal/sales-orders?q=po-78')).items.map((row: Json) => row.customerRef)).toEqual(['SEED-PO-78'])
     expect((await ok(browsers.buyer, '/portal/sales-orders?q=SO-0001')).items.map((row: Json) => row.customerRef)).toEqual(['SEED-PO-77'])
@@ -159,7 +160,10 @@ describe('the orders list (SAL-075, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }
     expect(viewer.seesPrices).toBe(false)
     expect(viewer.count).toBe(3)
     expect(viewer.items.every((row: Json) => !('netAmount' in row))).toBe(true)
-    expect((await browsers.designer.get('/portal/sales-orders')).status).toBe(403)
+    const designer = await ok(browsers.designer, '/portal/sales-orders')
+    expect(designer.seesPrices).toBe(false)
+    expect(designer.count).toBe(3)
+    expect(designer.items.every((row: Json) => !('netAmount' in row))).toBe(true)
     expect((await ok(browsers.other, '/portal/sales-orders?chip=ALL')).count).toBe(0)
     expect((await browsers.buyer.get('/portal/sales-orders?chip=SOON')).status).toBe(400)
   })
@@ -205,7 +209,7 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect(list.items.map((row: Json) => row.customerRef).sort()).toEqual(['SEED-PO-77', 'SEED-PO-78']) // fix-portal-numbers-1
   })
 
-  it('shows the lines and sizes with what is open; prices only for the buyer; another customer gets 404', async () => {
+  it('shows the lines and sizes with what is open; prices only for the buyer (not the viewer, not the designer); another customer gets 404', async () => {
     const so2 = await orderId('SEED-SO-0002')
     const record = await ok(browsers.buyer, `/portal/sales-orders/${so2}`)
     expect(record.pieces).toEqual({ ordered: 7, shipped: 2, open: 5, closedShort: 0 })
@@ -222,7 +226,13 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect(viewer.lines[0]).not.toHaveProperty('unitPrice')
     expect(viewer.order).not.toHaveProperty('netAmount')
     expect((await browsers.other.get(`/portal/sales-orders/${so2}`)).status).toBe(404)
-    expect((await browsers.designer.get(`/portal/sales-orders/${so2}`)).status).toBe(403)
+    // owb-b7: the designer reads the order as the viewer does — its lines and sizes, never a price.
+    const designer = await ok(browsers.designer, `/portal/sales-orders/${so2}`)
+    expect(designer.seesPrices).toBe(false)
+    expect(designer.pieces).toEqual(record.pieces)
+    expect(designer.lines[0]).not.toHaveProperty('unitPrice')
+    expect(designer.lines.flatMap((line: Json) => line.sizes).every((size: Json) => !('unitPrice' in size))).toBe(true)
+    expect(designer.order).not.toHaveProperty('netAmount')
   })
 
   // ── pp-s s.1 PG-O1 (O3-W1; plan §0.5 "counts do not leak"): the customer's order names itself by its PO and the customer's own number,
@@ -447,8 +457,10 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     // This source's own four counts (other sources also use 'orders.' keys, e.g. approvals-out's orders.to_reconfirm).
     const own = ['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'orders.in_transit']
     const counts = (home: Json) => Object.fromEntries(home.counts.filter((count: Json) => own.includes(count.key)).map((count: Json) => [count.key, count.value]))
-    expect(counts(await ok(browsers.buyer, '/portal/home'))).toEqual({ 'orders.open': 3, 'orders.in_production': 0, 'orders.shipping_this_week': expect.any(Number), 'orders.in_transit': 1 })
-    expect(counts(await ok(browsers.designer, '/portal/home'))).toEqual({ 'orders.open': null, 'orders.in_production': null, 'orders.shipping_this_week': null, 'orders.in_transit': null })
+    const buyer = counts(await ok(browsers.buyer, '/portal/home'))
+    expect(buyer).toEqual({ 'orders.open': 3, 'orders.in_production': 0, 'orders.shipping_this_week': expect.any(Number), 'orders.in_transit': 1 })
+    // owb-b7: the customer's Designer reads the orders: the same four counts as its buyer (counts, never money).
+    expect(counts(await ok(browsers.designer, '/portal/home'))).toEqual(buyer)
     expect(counts(await ok(browsers.other, '/portal/home'))).toEqual({ 'orders.open': 0, 'orders.in_production': 0, 'orders.shipping_this_week': 0, 'orders.in_transit': 0 })
   })
 

@@ -322,8 +322,9 @@ describe('B-CP-019 the customer’s own price check in its portal', { timeout: S
       const write = await send(portal[who], 'PUT', `/portal/sales-orders/${order.id}/brand-prices`, { rows: [{ lineId: order.lines[0]!.id, unitPrice: '1' }] })
       expect(write.status, `${who}: ${JSON.stringify(write.body)}`).toBe(403)
     }
-    // A role that reaches the order but not its prices reads the words of the portal catalogue (portal-orders.json prices.none).
-    expect((await no(portal.viewer, 'GET', `/portal/sales-orders/${order.id}/price-check`, undefined, 403)).message).toBe('Prices are not part of your access.')
+    // A role that reaches the order but not its prices reads the words of the portal catalogue (portal-orders.json prices.none);
+    // owb-b7: the Designer reaches the order now (portal.salesOrders.view), so it is refused by the price grain, in the same words.
+    for (const who of ['viewer', 'designer'] as const) expect((await no(portal[who], 'GET', `/portal/sales-orders/${order.id}/price-check`, undefined, 403)).message, who).toBe('Prices are not part of your access.')
     expect(await rowsOf(order.id)).toEqual(before)
   })
 

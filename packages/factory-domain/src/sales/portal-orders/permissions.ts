@@ -14,8 +14,10 @@ import { definePartnerPermissions } from '../../auth/partners/permissions'
  *                      C1; B-PR-40: the old progressShared switch dropped). Prices only with the price
  *                      grain of the role (customer Buyer, Finance, Admin).
  *
- * Given to the customer Buyer, Finance, Quality and Viewer (../../auth/roles/templates PARTNER_ADDS); the customer Admin
- * follows by itself. Not the Designer (samples, tech packs and proofs), never a supplier, subcontractor or guest role.
+ * Given to the customer Buyer, Finance, Quality, Designer and Viewer (../../auth/roles/templates PARTNER_ADDS); the customer
+ * Admin follows by itself. owb-b7 (Owner yes 2026-11-28): the Designer reads the orders sheet and the order page too — without
+ * a price (its role has no price grain: the money fields drop, the Money tab and the price check answer 403) and without Send
+ * (that stays portal.orderRequests.manage). Never a supplier, subcontractor or guest role.
  */
 export const PORTAL_SALES_ORDERS_DEFINITIONS = definePartnerPermissions('portal', {
   'salesOrders.view': {
@@ -28,8 +30,8 @@ export const PORTAL_SALES_ORDERS_DEFINITIONS = definePartnerPermissions('portal'
 export const PORTAL_SALES_ORDERS_VIEW = 'portal.salesOrders.view' satisfies Permission
 export const PORTAL_SALES_ORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([PORTAL_SALES_ORDERS_VIEW])
 
-/** The customer roles that see the orders (template keys; the Admin follows). */
-export const SALES_ORDER_READER_TEMPLATES: readonly string[] = Object.freeze(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-viewer'])
+/** The customer roles that see the orders (template keys; the Admin follows). owb-b7: + the Designer (no price grain, no Send). */
+export const SALES_ORDER_READER_TEMPLATES: readonly string[] = Object.freeze(['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer'])
 
 /**
  * "I paid" (owb- order workflow, plan.md § 5 D "the customer's buyer: I paid"; PL-schema § 5A row 4 `PaymentNotice`; PL-split

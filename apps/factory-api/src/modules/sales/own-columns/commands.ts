@@ -39,7 +39,7 @@ import { columnView, COLUMN_SELECT, fieldsOf, lockParty, readPartyColumns, readR
  *
  *   portal  the customer's portal people who keep drafts (portal.orderDrafts.edit: the Buyer, the Designer, the Admin), inside their
  *           party (row-level security; the partner role writes the three tables of its own party). An ORDER's columns and values
- *           also need portal.salesOrders.view (who reads the orders: never the Designer). A preview writes nothing.
+ *           also need portal.salesOrders.view (who reads the orders; owb-b7: the Designer too). A preview writes nothing.
  *   office  orders.manage (orders.view to read) over the company and THAT customer (can() first: out of reach is 404, as a wrong id)
  *
  *   GET  /portal/own-columns                                   → { columns }                 office: GET /sales/own-columns?partyId=

@@ -55,7 +55,8 @@ const LEGAL = {
 /** A buyer: orders, documents, messages, search, approvals, ordering — no payments. */
 const BUYER = (permission: string) => permission.startsWith('portal.') && !permission.startsWith('portal.payments') ? true : permission === 'threads.read'
 const FINANCE = (permission: string) => permission.startsWith('portal.') || permission === 'threads.read'
-const DESIGNER = (permission: string) => ['portal.home.view', 'portal.search', 'portal.approve', 'portal.approvals.view', 'portal.comment'].includes(permission) || permission === 'threads.read'
+// owb-b7: the Designer reads its orders (no price, no Send).
+const DESIGNER = (permission: string) => ['portal.home.view', 'portal.search', 'portal.approve', 'portal.approvals.view', 'portal.comment', 'portal.salesOrders.view'].includes(permission) || permission === 'threads.read'
 
 const TODAY_BUILT: BuiltPages = { orders: false, documents: false, returns: false }
 const ALL_BUILT: BuiltPages = { orders: true, documents: true, returns: true }
@@ -549,7 +550,7 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
     },
     // ---- end B-TH-253
     { id: 'th-238-messages-none', label: 'Messages (Brand Beta): nothing yet — the account is still offered', model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { waiting: [], conversations: [] }) })), note: '“No messages yet.” and “Your conversation with Pelletteria Esempio · Write to us”.' },
-    { id: 'designer', label: 'A designer (no orders, documents or prices)', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'Sections the role cannot open are not drawn (fails closed); what waits and our messages remain.' },
+    { id: 'designer', label: 'A designer (its orders without prices; no documents)', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'Sections the role cannot open are not drawn (fails closed); what waits and our messages remain.' },
     {
       id: 'search',
       label: 'Find anything: several matches',
