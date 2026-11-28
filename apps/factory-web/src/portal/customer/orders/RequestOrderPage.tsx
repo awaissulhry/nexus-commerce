@@ -10,6 +10,9 @@ import { ReviewSendWindow } from '../../../lib/order-draft/view/ReviewSendWindow
 import { orderPicturePath, orderPictureSaver, pictureReader } from '../../../lib/record-picture/api'
 import { OrderPictureWindow } from '../../../lib/record-picture/OrderPictureWindow'
 import { WithMessages } from '../../../record-panels/i18n'
+// ---- owb-po6.1: the ONE lines table (web A's), mounted
+import { Button } from '@nexus/ui/primitives'
+import { lineRowsOfDraft, OrderLinesTable, ownColumnsOfRecord } from '../../../lib/order-lines'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
 import { sendDraft } from '../neworder/api'
 import { CustomerRequestRecordPage } from '../requests/RequestPage'
@@ -133,7 +136,7 @@ function RequestOrderContainer({ id, record, reading, failed, onRead, onRecord }
           refs: shown.customerRef ? { theirs: shown.customerRef, ours: null } : null,
           // The shared StateChip draws the life's own words (the label is only the plain pill's, never drawn with a life).
           status: { label: '', tone: 'neutral', life: shown.life, note: shown.note },
-          picture: { recordId: id, number: shown.title, onOpen: shown.may.picture ? () => setPictureOpen(true) : null },
+          picture: { recordId: id, number: shown.title, source: 'customerRequest', onOpen: shown.may.picture ? () => setPictureOpen(true) : null },
           actions: primary ? [primary] : [],
         }
       : { title: t('request.name'), back: { href: `${frame.prefix}/orders`, label: t('band.back') } },
@@ -148,6 +151,34 @@ function RequestOrderContainer({ id, record, reading, failed, onRead, onRecord }
     notice,
     // A's New order window still opens on this address (its ?draft=); the order band's own window comes with it.
     draftHref: shown?.status === 'DRAFT' ? `${frame.prefix}/orders/new?draft=${encodeURIComponent(id)}` : null,
+    // owb-po6.1: the ONE lines table — a draft reads here and changes in the order window (A's, today's address); a sent order reads
+    // ("take it back to change it": the table's own words). The Your price column only for a price holder.
+    lines:
+      record && shown ? (
+        <div className="fw-pord-tab">
+          <OrderLinesTable
+            model={{
+              rows: lineRowsOfDraft(record.request),
+              mode: shown.status === 'DRAFT' ? 'draft' : 'sent',
+              columns: ownColumnsOfRecord(record.request.ownColumns),
+              styles: [],
+              kinds: [],
+              prices: record.seesPrices ? { currency: record.request.currency, edit: false, byLine: Object.fromEntries(record.request.lines.map((line) => [line.id, { list: line.priceNow ?? null, own: line.brandUnitPrice ?? null }])) } : null,
+              pending: false,
+              removed: [],
+              writeHeld: shown.status === 'DRAFT' ? t('lines.draftHeld') : null,
+              saving: [],
+              columnsDoor: false,
+              door: 'portal',
+            }}
+          />
+          {shown.status === 'DRAFT' ? (
+            <Button asChild size="sm">
+              <a href={`${frame.prefix}/orders/new?draft=${encodeURIComponent(id)}`}>{t('request.lines.open')}</a>
+            </Button>
+          ) : null}
+        </div>
+      ) : undefined,
   }
 
   return (
@@ -160,7 +191,7 @@ function RequestOrderContainer({ id, record, reading, failed, onRead, onRecord }
           onClose={() => setPictureOpen(false)}
           number={shown.title}
           subject={shown.subject}
-          record={{ source: 'customerOrder', recordId: id, read: pictures }}
+          record={{ source: 'customerRequest', recordId: id, read: pictures }}
           now={{ fileId: shown.picture?.fileId ?? null, version: shown.version }}
           choices={pictureChoicesOfDraft(record)}
           save={orderPictureSaver(api, orderPicturePath('portal', 'request', id))}

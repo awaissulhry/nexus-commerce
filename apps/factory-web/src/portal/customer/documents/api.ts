@@ -57,7 +57,8 @@ export const docRefSchema = z.object({ id: z.string(), kind: z.string(), title: 
 export type DocRef = z.infer<typeof docRefSchema>
 
 export const receivedSchema = z.object({
-  shipment: z.object({ id: z.string(), number: z.string() }),
+  // owb-po6 (SH- wall): the office's shipment number is never read (optional until the server drops it); the row is named by its ship date.
+  shipment: z.object({ id: z.string(), number: z.string().optional() }),
   order: ownOrderSchema.nullable(), // fix-portal-numbers-1 (B-TH-303)
   shippedOn: z.string(),
   revision: z.number().nullable(),

@@ -231,7 +231,8 @@
     "photoAdded": "Added {date}",
     "view": "View",
     "addPhotos": "Add photos",
-    "orderOpen": "Open the order"
+    "orderOpen": "Open the order",
+    "shipmentNamed": "The delivery it came with"
   },
   "status": {
     "where": "Where it is",

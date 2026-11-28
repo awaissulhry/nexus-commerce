@@ -419,3 +419,66 @@
   gap: var(--nds-space-6);
   overflow-wrap: anywhere;
 }
+
+/* ── owb-po6.1: the lines' save bar words and each line's own doors (under its size run) ────────────────────────────────── */
+.fw-pord-asks {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}
+
+.fw-pord-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-8);
+}
+
+/* ── owb-po6.2: the payments plan (a step per row, its state and its one button at the end) ────────────────────────────── */
+.fw-pord-plan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pord-step {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  flex-wrap: wrap;
+}
+
+.fw-pord-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pord-step-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}
+
+/* ── owb-po6.3: "At the factory’s warehouse" on a shipment, its one button (the label file is picked through its own input) ── */
+.fw-pord-warehouse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-pord-label-pick {
+  align-self: flex-start;
+  cursor: pointer;
+}

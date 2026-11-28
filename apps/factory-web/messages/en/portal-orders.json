@@ -312,7 +312,8 @@
     "askChange": "Ask for a change on this line",
     "sizesTitle": "Sizes of each line",
     "sizesOf": "Line {seq} · {style} {colour}",
-    "reorder": "Reorder this line"
+    "reorder": "Reorder this line",
+    "ownFailed": "Your value was not saved. Try again in a moment."
   },
   "sizes": {
     "size": "Size",
@@ -386,7 +387,9 @@
       "trackOf": "Track shipment {number} on the carrier’s site"
     },
     "also_one": "Also {count} piece of your order {order}",
-    "also_other": "Also {count} pieces of your order {order}"
+    "also_other": "Also {count} pieces of your order {order}",
+    "labelSent": "Your shipping label is with the factory.",
+    "labelFailed": "The label was not sent. Try again in a moment."
   },
   "toShip": {
     "title": "Still to ship",
@@ -967,5 +970,12 @@
   },
   "strip": {
     "deposit": "Deposit to pay by {date}"
+  },
+  "money": {
+    "sent": "We told the factory. It records the payment when it arrives."
+  },
+  "picture": {
+    "saved": "The picture of the order changed.",
+    "failed": "The picture did not change. Try again in a moment."
   }
 }

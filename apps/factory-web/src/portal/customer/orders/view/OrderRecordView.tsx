@@ -35,6 +35,10 @@ import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
 import { OverviewTab } from './OverviewTab' // pp-w2 (w2.4): replaces Status & progress
 import { MoneyTab } from './MoneyTab' // owb-po5.2
+import type { OwnValue } from '../../../../lib/order-lines' // owb-po6.1
+import type { LineAsks } from '../order-lines' // owb-po6.1
+import type { MoneyRead, NoticeDraft } from '../money' // owb-po6.2
+import type { NoticeWindowModel } from './MoneyTab' // owb-po6.2
 import '../orders.css'
 import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
@@ -131,6 +135,17 @@ export interface OrderRecordViewModel {
   // Admin); absent or null: none (anyone else reads "Prices are not part of your access.", and no call is made).
   priceCheck?: PriceCheckModel | null
   // ---- end F-CP-143
+  /** owb-po6.1: the lines' asks typed after Confirm and not sent yet (the save bar); absent: none. */
+  lineAsks?: LineAsks  /** owb-po6.2: the money read (price grain; `hidden`: not built yet or refused — the round-1 cards) and the "I paid" window. */
+  money?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: MoneyRead | null }
+  noticeWindow?: NoticeWindowModel | null
+  /** owb-po6.3: "Report a complaint or a return…" (today's returns flow with this order; null: not part of the access). */
+  reportHref?: string | null
+  /** owb-po6.3: the shipment whose label is being sent, and why "Send the shipping label" waits (a preview, offline, no upload right). */
+  labelBusy?: string | null
+  labelHeld?: string | null
+  /** owb-po6.4: "Use as the picture" is saving. */
+  pictureBusy?: boolean
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -156,6 +171,22 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   onDismissNotice?: () => void
   /** owb-po5.3: Asks & changes › All changes (the ONE log's window). */
   onChanges?: () => void
+  // ---- owb-po6.1: the ONE lines table — an ask typed on a confirmed line, its save bar, an own column's value (at once)
+  onLineAsk?: (lineId: string, text: string) => void
+  onUndoAsk?: () => void
+  onDiscardAsks?: () => void
+  onReviewAsks?: () => void
+  onOwnValue?: (lineId: string, columnId: string, value: OwnValue['value'], version: number | null) => void
+  // ---- owb-po6.2: the money read again; "I paid: tell the factory…" on a step, its window
+  onRetryMoney?: () => void
+  onNotify?: (stepId: string) => void
+  onNoticeDraft?: (draft: NoticeDraft) => void
+  onNoticeSend?: () => void
+  onNoticeClose?: () => void
+  /** owb-po6.3: the label file picked for a shipment at the factory's warehouse: uploaded on the shipment, then sent. */
+  onSendLabel?: (shipmentId: string, file: File) => void
+  /** owb-po6.4: a file of the order becomes its picture (only for who may change it). */
+  onUsePicture?: (fileId: string) => void
   // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
   onRetryProduction?: () => void
   onAsk?: () => void
