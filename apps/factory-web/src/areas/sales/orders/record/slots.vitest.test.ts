@@ -44,8 +44,8 @@ const STUBS = [
   { path: 'areas/sales/orders/record/shipments/ShipWholeOrderWindow.tsx', name: 'ShipWholeOrderWindow', owner: 'S3 (owb-ss3)', draw: () => ShipWholeOrderWindow(windowProps), mounts: [BAND_ACTS] as string[], filled: true /* owb-ss3 */ },
   { path: 'areas/sales/orders/record/shipments/WarehouseLegWindow.tsx', name: 'WarehouseLegWindow', owner: 'S3 (owb-ss3)', draw: () => WarehouseLegWindow({ ...windowProps, act: 'SEND_ON' }), mounts: [BAND_ACTS] as string[], filled: true /* owb-ss3 */ },
   { path: 'areas/production/teams/parts/OrderTeamPart.tsx', name: 'OrderTeamPart', owner: 'S3 (owb-ss7)', draw: () => OrderTeamPart(part), mounts: [PRODUCTION_TAB], filled: true /* owb-ss7 7.3 */ },
-  { path: 'areas/production/order-structures/parts/OrderStructurePart.tsx', name: 'OrderStructurePart', owner: 'S3 (owb-ss8)', draw: () => OrderStructurePart(part), mounts: [PRODUCTION_TAB], filled: false },
-  { path: 'areas/production/order-structures/parts/CustomerStructurePart.tsx', name: 'CustomerStructurePart', owner: 'S3 (owb-ss8)', draw: () => CustomerStructurePart({ companyId: 'company-1', partyId: 'party-1' }), mounts: [TERMS_TAB], filled: false },
+  { path: 'areas/production/order-structures/parts/OrderStructurePart.tsx', name: 'OrderStructurePart', owner: 'S3 (owb-ss8)', draw: () => OrderStructurePart(part), mounts: [PRODUCTION_TAB], filled: true /* owb-ss8 8.4 */ },
+  { path: 'areas/production/order-structures/parts/CustomerStructurePart.tsx', name: 'CustomerStructurePart', owner: 'S3 (owb-ss8)', draw: () => CustomerStructurePart({ companyId: 'company-1', partyId: 'party-1' }), mounts: [TERMS_TAB], filled: true /* owb-ss8 8.4 */ },
   { path: 'areas/products/_shared/parts/RouteOfEachLinePart.tsx', name: 'RouteOfEachLinePart', owner: 'S4 (owb-pd6)', draw: () => RouteOfEachLinePart(part), mounts: [PRODUCTION_TAB], filled: true /* owb-pd6 step 6.4: filled */ },
   { path: 'areas/production/baskets/parts/FromTheFloorPart.tsx', name: 'FromTheFloorPart', owner: 'S5 (owb-fl9)', draw: () => FromTheFloorPart(part), mounts: [PRODUCTION_TAB], filled: true },
 ] as const
