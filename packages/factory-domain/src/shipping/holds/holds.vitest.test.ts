@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { placeProblems, placeRefusal, reasonsInForce, releasePermissionFor, releaseProblems, releaseRefusal, type HoldFacts } from './holds'
 import { SHIPPING_HOLDS_ADDS, SHIPPING_HOLDS_MANAGE, SHIPPING_HOLDS_RELEASE } from './permissions'
-import { systemHoldPlan, wantedHolds, type SystemHoldFacts } from './system'
+import { LIFT_WORDS, systemHoldPlan, wantedHolds, type SystemHoldFacts } from './system'
 
 // Made-up facts: dates, numbers and codes are invented for the test.
 const at = (iso: string) => new Date(iso)
@@ -43,22 +43,23 @@ describe('placing and releasing a hold (LOG-017)', () => {
 describe("the system's holds (FIN-079, LQ1:01)", () => {
   const base: SystemHoldFacts = { customerCode: 'TEST-C1', orderNumber: 'SO-TEST-1', balanceOpenSince: null, accountHolds: [], creditHeld: null, holds: [] }
 
-  it('wants the balance before shipping while its step is open, and lifts its own hold once it is paid', () => {
+  // owb- (order workflow, S3 ss1 step 1.4; R39 (a)): flipped — the balance before shipping is no longer a hold (a warning when the
+  // goods leave, modules/shipping); the system lifts its old balance holds, never a person's.
+  it('never wants the balance before shipping, open or not, and lifts its own old balance hold', () => {
     const open = { ...base, balanceOpenSince: at('2026-11-01T09:00:00Z') }
-    expect(wantedHolds(open).map((wanted) => wanted.reason)).toEqual(['BALANCE_UNPAID'])
-    expect(systemHoldPlan(open).place.map((wanted) => wanted.reason)).toEqual(['BALANCE_UNPAID'])
+    expect(wantedHolds(open)).toEqual([])
+    expect(systemHoldPlan(open).place).toEqual([])
     const placed = hold({ id: 'sys', reason: 'BALANCE_UNPAID', placedById: null })
-    expect(systemHoldPlan({ ...open, holds: [placed] })).toEqual({ place: [], lift: [] })
+    expect(systemHoldPlan({ ...open, holds: [placed] }).lift.map((row) => row.id)).toEqual(['sys'])
     expect(systemHoldPlan({ ...base, holds: [placed] }).lift.map((row) => row.id)).toEqual(['sys'])
+    expect(LIFT_WORDS.BALANCE_UNPAID).toMatch(/no longer holds the shipment/)
   })
 
-  it("never lifts a person's hold, and does not hold again what a person let go while the cause stood", () => {
+  it("never lifts a person's balance hold (the hand hold stays), and never places one again", () => {
     const personal = hold({ id: 'p', reason: 'BALANCE_UNPAID', placedById: 'person-1' })
-    expect(systemHoldPlan({ ...base, holds: [personal] }).lift).toEqual([])
+    expect(systemHoldPlan({ ...base, balanceOpenSince: at('2026-11-01T09:00:00Z'), holds: [personal] })).toEqual({ place: [], lift: [] })
     const letGo = hold({ id: 'sys', reason: 'BALANCE_UNPAID', placedById: null, releasedAt: at('2026-11-05T10:00:00Z'), releasedById: 'finance-1' })
-    expect(systemHoldPlan({ ...base, balanceOpenSince: at('2026-11-01T09:00:00Z'), holds: [letGo] }).place).toEqual([])
-    // A newer cause (a step made after the release) holds again.
-    expect(systemHoldPlan({ ...base, balanceOpenSince: at('2026-11-06T09:00:00Z'), holds: [letGo] }).place.map((wanted) => wanted.reason)).toEqual(['BALANCE_UNPAID'])
+    expect(systemHoldPlan({ ...base, balanceOpenSince: at('2026-11-06T09:00:00Z'), holds: [letGo] }).place).toEqual([])
   })
 
   it('maps account holds and the credit limit to credit, quality and other holds', () => {

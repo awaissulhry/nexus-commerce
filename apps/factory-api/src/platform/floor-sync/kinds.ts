@@ -27,6 +27,7 @@ import { CallRefusedError } from '../../modules/production/calls/access'
 import { answerCall } from '../../modules/production/calls/answer'
 import { queuedAnswerBody, sendContract } from '../../modules/production/calls/contract'
 import { closeAtStation, sendCall } from '../../modules/production/calls/station'
+import { applyBasketSignal } from '../../modules/production/baskets/queued'
 // B-W2b-33: the signed-in worker's clock kept offline.
 import { ClockRefusedError } from '../../modules/people/clock/access'
 import { clockFromQueue } from '../../modules/people/clock/clock'
@@ -644,6 +645,11 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       // B-W2b-384
       case 'shipping.carton.scan':
         return await applyCartonScan(caller, event, context.key)
+      // owb-fl3 (S5 floor): Do this first, Will be late, Tell the office (lead 88, shared-asks 09:15)
+      case 'production.baskets.flag':
+      case 'production.baskets.late':
+      case 'floor.suggestion':
+        return await applyBasketSignal(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

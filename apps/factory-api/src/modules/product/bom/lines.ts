@@ -6,6 +6,7 @@ import { hideYieldProblem, MAX_BOM_LINES, nextSeq, planLine, routingSeqProblem, 
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { readSteps } from '../routing/read'
+import { assertMayEditDraft } from '../drafts/may-edit' // owb-pd1 1.4: the designer edits a DRAFT's lines
 import {
   assertMayWrite,
   auditedLine,
@@ -75,8 +76,8 @@ async function plan(tools: CommandTools, draft: LockedDraft, current: LineRecord
 /** product.bom.addLine: a line at the end of the draft's BOM (or at the place sent). */
 export async function addLine(caller: CommandCaller, styleId: string, revisionId: string, body: AddLineBody, idempotencyKey?: string): Promise<BomView> {
   const context = contextOf(caller)
-  const { style } = await readRevisionFor(caller, styleId, revisionId)
-  assertMayWrite(context, PRODUCT_BOM_MANAGE, style.companyId)
+  const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
+  assertMayEditDraft(context, style.companyId, revision.status, PRODUCT_BOM_MANAGE) // owb-pd1 1.4: or the designer on a DRAFT
   const { version, ...change } = body
 
   const { result } = await command(caller, { name: 'product.bom.addLine', idempotencyKey, input: { styleId, revisionId, ...body } }, async (tools) => {
@@ -118,8 +119,8 @@ async function changeLine(
 ): Promise<BomView> {
   const context = contextOf(caller)
   const { styleId, revisionId, lineId } = target
-  const { style } = await readRevisionFor(caller, styleId, revisionId)
-  assertMayWrite(context, PRODUCT_BOM_MANAGE, style.companyId)
+  const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
+  assertMayEditDraft(context, style.companyId, revision.status, PRODUCT_BOM_MANAGE) // owb-pd1 1.4: or the designer on a DRAFT
 
   const { result } = await command(caller, { name, idempotencyKey, input }, async (tools) => {
     const draft = await lockDraft(tools, styleId, revisionId, version)
@@ -153,8 +154,8 @@ export function setColours(caller: CommandCaller, styleId: string, revisionId: s
 /** product.bom.removeLine: the line out of the draft, with its size quantities and grid cells. */
 export async function removeLine(caller: CommandCaller, styleId: string, revisionId: string, lineId: string, version: number, idempotencyKey?: string): Promise<BomView> {
   const context = contextOf(caller)
-  const { style } = await readRevisionFor(caller, styleId, revisionId)
-  assertMayWrite(context, PRODUCT_BOM_MANAGE, style.companyId)
+  const { style, revision } = await readRevisionFor(caller, styleId, revisionId)
+  assertMayEditDraft(context, style.companyId, revision.status, PRODUCT_BOM_MANAGE) // owb-pd1 1.4: or the designer on a DRAFT
 
   const { result } = await command(caller, { name: 'product.bom.removeLine', idempotencyKey, input: { styleId, revisionId, lineId, version } }, async (tools) => {
     const draft = await lockDraft(tools, styleId, revisionId, version)

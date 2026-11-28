@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { Eye, PencilLine, RefreshCw, WifiOff } from 'lucide-react'
 import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
-import { Banner, Card, Field } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { SaveStatus, type SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { DateField, useDsWords } from '../../i18n/ds-parts'
@@ -13,8 +13,13 @@ import type { SavedBy } from '../schema'
 import { DraftDoorProvider, useDraftWords, type DraftDoor } from '../words'
 import { ACCEPT, type FilesBoxActions, type UploadRow } from './files'
 import { OrderMail } from './OrderMail'
-import { ProductsTable, type ProductsTableActions } from './ProductsTable'
+import type { ProductsTableActions } from './ProductsTable'
 import { StillOpen } from './StillOpen'
+// owb-po3.1: the ONE lines table (lib/order-lines) replaces the products table's columns; the office's actions keep working (adapter).
+import { Card } from '@nexus/ui/components'
+import { Tag } from '@nexus/ui/primitives'
+import { lineRowsOfDraft, ownColumnsOfRecord, type LinePrices, type LineRow, type ModelStyle, type NewDesignKind } from '../../order-lines/model'
+import { OrderLinesTable, type OrderLinesActions } from '../../order-lines/view/OrderLinesTable'
 import '../order-draft.css'
 
 /**
@@ -50,8 +55,16 @@ export interface DraftPageModel {
   offlineSince: string | null
   /** "Add a product" drew a row that is not saved yet. */
   pending: boolean
-  /** The styles the Product cell offers (the customer's catalogue); null while not read. */
-  styles: readonly { readonly id: string; readonly code: string; readonly name: string }[] | null
+  /** The styles the Model cell offers (the customer's catalogue; `ownLabel` absent = Your designs); null while not read. */
+  styles: readonly { readonly id: string; readonly code: string; readonly name: string; readonly ownLabel?: boolean; readonly colours?: ModelStyle['colours'] }[] | null
+  /** owb-po3: "A new design: …" kinds (absent: the draft's made-to-measure garment types). */
+  kinds?: readonly NewDesignKind[]
+  /** owb-po3: money for the Your price column (a host with the price grain); absent or null: no column, no price key. */
+  prices?: LinePrices | null
+  /** owb-po3: the "Columns · n…" door (the host opens "Columns of your own"). */
+  columnsDoor?: boolean
+  /** owb-po3: a line's refusal said on leaving its field (line id → words). */
+  lineRefusals?: Readonly<Record<string, string>>
   /** Rows being saved. */
   saving: readonly string[]
   /** The files going up now, or that did not go (their words). */
@@ -72,7 +85,10 @@ export interface DraftPageActions {
   onRetrySave?: () => void
   /** The mail's Attachments (the draft's own files). */
   files?: FilesBoxActions
+  /** The office's products-table actions (kept): mapped onto the ONE lines table when `lines` is not given. */
   table?: ProductsTableActions
+  /** owb-po3: the ONE lines table's own actions (they win over `table`). */
+  lines?: OrderLinesActions
   /** A Still open item: the focus moves to its row (or the date card). */
   onStillOpen?: (entry: StillOpenEntry) => void
 }
@@ -213,7 +229,7 @@ function DraftBody({ model, actions, slots, onSendKey }: { model: DraftPageModel
         actions={{ onHeader: actions?.onHeader, onHeaderLeave: actions?.onHeaderLeave, files: actions?.files }}
       />
       {slots?.panels}
-      <ProductsTable model={{ rows, pending: model.pending, writeHeld: model.writeHeld, styles: model.styles, saving: model.saving }} actions={actions?.table} below={slots?.addFrom} />
+      <LinesCard model={model} request={request} actions={actions} below={slots?.addFrom} door={door} />
       {request ? (
         <>
           <DateCard model={model} actions={actions} problems={headerProblems.map((problem) => problemWords(problem, [], { t, price: () => null, locale: words.locale }))} />
@@ -301,4 +317,65 @@ function DateCard({ model, actions, problems }: { model: DraftPageModel; actions
       </section>
     </Card>
   )
+}
+
+/** The draft's ONE lines table (owb-po3): its rows, its mode, the office's products-table actions mapped onto it when no `lines`. */
+function LinesCard({ model, request, actions, below, door }: { model: DraftPageModel; request: DraftView['request'] | null; actions?: DraftPageActions; below?: ReactNode; door: DraftDoor }) {
+  const { t, locale } = useDraftWords()
+  const styles: ModelStyle[] = (model.styles ?? []).map((style) => ({ id: style.id, code: style.code, name: style.name, ownLabel: style.ownLabel ?? true, ...(style.colours ? { colours: style.colours } : {}) }))
+  const kinds: NewDesignKind[] = model.kinds ? [...model.kinds] : (request?.madeToMeasure?.garmentTypes ?? []).map((type) => ({ code: type.code, words: type.words[locale] }))
+  const typed = actions?.lines?.onPieces !== undefined
+  const rows: LineRow[] = request ? lineRowsOfDraft(request, { styles, kinds }).map((row) => (typed ? row : { ...row, pieces: { ...row.pieces, typed: false } })) : []
+  const lines = actions?.lines ?? linesFromTable(actions?.table, rows, kinds)
+  const count = rows.length
+  return (
+    <Card padded>
+      <section className="fw-od-section" id="od-products" tabIndex={-1} aria-labelledby="od-products-title">
+        <div className="fw-od-parthead">
+          <h2 id="od-products-title" className="fw-od-h2">
+            {t('tbl.title')}
+          </h2>
+          {count > 0 ? <Tag tone="neutral">{count === 1 ? t('tbl.count_one', { n: count }) : t('tbl.count_other', { n: count })}</Tag> : null}
+        </div>
+        <OrderLinesTable
+          model={{
+            rows,
+            mode: !request || request.status === 'DRAFT' ? 'draft' : 'sent',
+            columns: ownColumnsOfRecord(request?.ownColumns),
+            styles,
+            kinds,
+            prices: model.prices ?? null,
+            pending: model.pending,
+            removed: request?.removedLines ?? [],
+            writeHeld: model.writeHeld,
+            saving: model.saving,
+            columnsDoor: model.columnsDoor ?? false,
+            refusals: model.lineRefusals,
+            door,
+          }}
+          actions={lines}
+          foot={below}
+        />
+      </section>
+    </Card>
+  )
+}
+
+/** The office's products-table actions on the ONE table (until S2 wires `lines`): a model is a style or the customer's words. */
+export function linesFromTable(table: ProductsTableActions | undefined, rows: readonly LineRow[], kinds: readonly NewDesignKind[]): OrderLinesActions | undefined {
+  if (!table) return undefined
+  return {
+    onModel: (rowId, choice) =>
+      choice.kind === 'STYLE' ? table.onProduct?.(rowId, { styleId: choice.styleId }) : table.onProduct?.(rowId, { words: choice.kind === 'NEW' ? (kinds.find((kind) => kind.code === choice.garmentType)?.words ?? choice.garmentType) : '' }),
+    onMaterial: (rowId, value) => {
+      const row = rows.find((entry) => entry.id === rowId)
+      if (row?.material.how === 'COLOURWAY' && value !== '') table.onColour?.(rowId, { colourwayId: value })
+      else table.onOptions?.(rowId)
+    },
+    onAddMaterial: (rowId) => table.onOptions?.(rowId),
+    onSizes: (rowId) => table.onPieces?.(rowId),
+    onTakeOut: (rowId) => table.onRemove?.(rowId),
+    onAdd: () => table.onAdd?.(),
+    onDropPending: () => table.onDropPending?.(),
+  }
 }

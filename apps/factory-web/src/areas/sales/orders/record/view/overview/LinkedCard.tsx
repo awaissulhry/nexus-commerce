@@ -15,6 +15,7 @@ import { OverviewCard } from '../../../../../../lib/record-overview/Overview' //
 // ---- F-CO-K2: its rows are the kit's ONE list (its look comes with it: no stylesheet of the card's own); the rows' words are the
 // kit's (useOverviewWords: "None yet: …", "… ›" whose arrow never stands alone on a line — F-OM-fx6, now the kit's door(), S31) ----
 import { QuietLine, Row, RowList, useOverviewWords } from '../../../../../../lib/record-overview/Overview'
+import { useFlowWords } from '../../flow-words' // owb-of5 step 2: the Customer row (design: Linked records › Customer)
 // ---- end F-CO-K2
 
 /**
@@ -50,6 +51,7 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
     readOnly: readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }),
   })
   const label = (kind: LinkedRow['kind']) => t(`overview.linked.${kind}`)
+  const f = useFlowWords() // owb-of5
   return (
     <OverviewCard title={t('overview.linked.title')}>
       <RowList label={t('overview.linked.title')}>
@@ -63,6 +65,14 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
             </Row>
           ),
         )}
+        {/* owb-of5 step 2 (prototype rec.js Linked records: Customer ›): the order's customer, a door to its page. */}
+        {order.party ? (
+          <Row label={f('linked.customer')}>
+            <Link className="fw-so-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}>
+              {words.door(order.party.legalName)}
+            </Link>
+          </Row>
+        ) : null}
         {view.none.length > 0 && <QuietLine>{words.none(view.none.map(label).join(' · '))}</QuietLine>}
         {view.quiet.length > 0 && (
           <QuietLine>

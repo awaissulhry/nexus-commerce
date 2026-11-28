@@ -16,6 +16,8 @@ import { ShipmentsSection } from '../shipments/view/ShipmentsSection'
 import { WhereSection } from '../shipments/view/WhereSection'
 import '../shipments/view/shipments.css'
 // ---- end F-OS-101
+// owb-ss3 step 3.2: the legs of "to our warehouse first" (read by their own container: this layout fetches nothing).
+import { OrderLegs } from '../shipments/legs/OrderLegs'
 
 /**
  * F-OS-101 (order SHIPMENTS tab; 10-design §1; plan D1 — four sections become three, every function kept) — the tab's LAYOUT, and only
@@ -29,30 +31,43 @@ import '../shipments/view/shipments.css'
  *
  * The tab is a window on Warehouse › Shipments, not a home: every step opens Warehouse's own window in place or "Next ›" into it.
  * Warehouse's words come with the tab (SHIPMENTS_TAB_NS); the dialogs a row opens are its container's (use-shipments-acts).
+ *
+ * owb-ss3 step 3.2 (design plan § 5n, § 7): the sections are drawn inside the legs' container (`OrderLegs`): the bar gets its "At our
+ * warehouse" part, each row its leg (chip + It arrived at the warehouse / Send on to the customer, by the server's `may`), and Create
+ * shipment… opens for plan OR pack and send (shipping.plan OR shipping.manage).
  */
 export function ShipmentsTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const search = useSearchParams()?.toString() ?? ''
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
-  const where = whereOf(order, receivedOf(model.shipmentDeliveries?.value ?? null))
+  const received = receivedOf(model.shipmentDeliveries?.value ?? null)
+  // owb-ss3: the legs are read again when the order's shipments change (a status or a version).
+  const stamp = order.chain.shipments.map((row) => `${row.id}:${row.status}:${row.version ?? ''}`).join('|')
   return (
     <WithMessages namespaces={SHIPMENTS_TAB_NS}>
-      <div className="fw-pt fw-os">
-        <ShipmentsHead order={order} model={model} where={where} />
-        <WhereSection order={order} model={model} actions={actions} where={where} />
-        <ShipmentsSection order={order} model={model} actions={actions} where={where} />
-        {model.shipmentDoor /* F-OP-119 → F-OS-201: the one shipment window opened from its row (its container) */}
-        {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
-        {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
-        <AfterSalesSection order={order} model={model} actions={actions} />
-        {model.afterSalesDoor /* F-OS-303: Returns' New return, Quality's Log complaint or the claim link, opened in place (its container) */}
-        <p className="fw-so-hint">
-          {/* F-OM-104 (P0-B11): the door lands on Money › Invoices & credit notes (invoices.view), else on Payments. */}
-          <TabLink className="fw-so-link" href={`${tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}#${model.can.viewInvoices ? 'invoices' : 'payments'}`}>
-            {t('ship.moneyDoor')}
-          </TabLink>
-        </p>
-      </div>
+      <OrderLegs orderId={order.id} stamp={stamp}>
+        {(legs) => {
+          const where = whereOf(order, received, legs.atWarehouse)
+          return (
+            <div className="fw-pt fw-os">
+              <ShipmentsHead order={order} model={model} where={where} />
+              <WhereSection order={order} model={model} actions={actions} where={where} plan={legs.rights.plan} />
+              <ShipmentsSection order={order} model={model} actions={actions} where={where} legs={legs} />
+              {model.shipmentDoor /* F-OP-119 → F-OS-201: the one shipment window opened from its row (its container) */}
+              {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
+              {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
+              <AfterSalesSection order={order} model={model} actions={actions} />
+              {model.afterSalesDoor /* F-OS-303: Returns' New return, Quality's Log complaint or the claim link, opened in place (its container) */}
+              <p className="fw-so-hint">
+                {/* F-OM-104 (P0-B11): the door lands on Money › Invoices & credit notes (invoices.view), else on Payments. */}
+                <TabLink className="fw-so-link" href={`${tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}#${model.can.viewInvoices ? 'invoices' : 'payments'}`}>
+                  {t('ship.moneyDoor')}
+                </TabLink>
+              </p>
+            </div>
+          )
+        }}
+      </OrderLegs>
     </WithMessages>
   )
 }

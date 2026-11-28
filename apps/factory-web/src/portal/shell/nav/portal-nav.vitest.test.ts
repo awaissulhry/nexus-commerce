@@ -10,7 +10,9 @@ import { bottomBarLayout } from '@nexus/ui/components/BottomBar/index'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 // B-SA-054b: the address the API hands out for a notice's record.
 import { portalRecordPath } from '@nexus/factory-domain/portal/home/links'
-import { PORTAL_AREAS, PORTAL_PENDING_PERMISSIONS, portalChords, portalNavFor, portalNavLabelKeys, portalNavPermissions, portalPlace, recordPageOf, RECORD_PAGES, type PortalAreaDef, type PortalKind } from './portal-nav'
+import { BADGE_JOIN, PORTAL_AREAS, PORTAL_PENDING_PERMISSIONS, portalChordLabel, portalChords, portalNavFor, portalNavLabelKeys, portalNavPermissions, portalPlace, recordPageOf, RECORD_PAGES, type PortalKind } from './portal-nav'
+import { badgeOf } from '../model' // owb-po4.4
+import type { AreaNav } from '@nexus/ui/patterns/shell/index'
 
 const everything = () => true
 const ids = (kind: PortalKind, everyPage = true) => portalNavFor({ can: everything, kinds: [kind], everyPage }).areas.map((area) => [area.id, area.label, area.href])
@@ -21,8 +23,8 @@ const roleCan = (key: string) => {
 
 describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom bar)', () => {
   it('gives each partner kind its areas, in the design’s order, once every page is built', () => {
-    // F-PR-10: Production after Orders (the design review draws every page).
-    expect(ids('CUSTOMER').map(([id]) => id)).toEqual(['home', 'orders', 'production', 'quotes', 'documents', 'returns', 'account'])
+    // owb-po4.1 (order workflow plan § 5): the design's menu — Home · Orders · Customers · Products · People · Documents · Account.
+    expect(ids('CUSTOMER').map(([id]) => id)).toEqual(['home', 'orders', 'customers', 'products', 'people', 'documents', 'account'])
     expect(ids('SUPPLIER')).toEqual([
       ['home', 'nav.home', '/'],
       ['work', 'nav.purchaseOrders', '/orders'],
@@ -61,31 +63,27 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
       ['supplier-documents', 'nav.documents', '/documents'],
       ['profile', 'nav.profile', '/profile'],
     ])
-    // B-W2b-196: the customer's Account.
-    // B-W2b-191: the customer's Orders & tracking; B-W2b-194: New order & reorder joins Orders (two pages: the area keeps its own name), the
-    // Catalogue is the one page of Quotes & samples (it takes the page's name and address); B-W2b-195: Documents; B-W2b-197: Returns & claims.
+    // owb-po4.1: Orders holds the list, New order, Production and Returns & claims; Products the Catalogue and Samples & tech packs;
+    // People is its own page (owb-po4.3); Customers waits for its session (every row unbuilt: no door).
     expect(ids('CUSTOMER', false)).toEqual([
       ['home', 'nav.home', '/'],
       ['orders', 'nav.orders', '/orders'],
-      // F-PR-11: My production.
-      ['production', 'nav.production', '/production'],
-      // B-W2b-262: Samples & tech packs joins the Catalogue (two pages: the area keeps its name; Quotes & requests is not built, so
-      // the area opens its first page).
-      ['quotes', 'nav.quotesSamples', '/samples'],
+      ['products', 'nav.products', '/catalogue'],
+      ['people', 'nav.people', '/people'],
       ['documents', 'nav.documents', '/documents'],
-      ['returns', 'nav.returns', '/returns'],
       ['account', 'nav.account', '/account'],
     ])
   })
 
   it('fails closed: a role sees only the areas its permissions open (the Designer has no orders list, documents or returns)', () => {
     const designer = portalNavFor({ can: roleCan('customer-designer'), kinds: ['CUSTOMER'], everyPage: true })
-    // The Designer holds the catalogue and the samples (B-W2b-262; Quotes & samples keeps both) and its colleagues (Account).
-    // F-CP-152: and New order (it keeps drafts, portal.orderDrafts.edit): the Orders area left with that one page takes its name.
+    // The Designer holds the catalogue and the samples (Products keeps both) and its colleagues (People, Account). F-CP-152: and New
+    // order (it keeps drafts, portal.orderDrafts.edit): the Orders area left with that one page takes its name.
     expect(designer.areas.map((area) => [area.id, area.label])).toEqual([
       ['home', 'nav.home'],
       ['orders', 'nav.newOrder'],
-      ['quotes', 'nav.quotesSamples'],
+      ['products', 'nav.products'],
+      ['people', 'nav.people'],
       ['account', 'nav.account'],
     ])
     const invoices = portalNavFor({ can: roleCan('supplier-invoices'), kinds: ['SUPPLIER'], everyPage: true })
@@ -105,11 +103,11 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     ])
   })
 
-  it('the phone: a customer gets four tabs and More (Quotes & samples, Returns, Account); a workshop four tabs and no More', () => {
-    // F-PR-10: with Production a tab after Orders, Returns goes under More (every page drawn: the customer holds Production).
+  it('the phone: a customer gets Home · Orders · New order · Account and More; a workshop four tabs and no More', () => {
+    // owb-po4.2 (plan § 5 "phone bottom bar Home · Orders · New order · Account"): New order is a row of Orders marked a tab.
     const customer = bottomBarLayout(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }), '/')
-    expect(customer.tabs.map((tab) => tab.id)).toEqual(['home', 'orders', 'production', 'documents'])
-    expect(customer.more.map((entry) => entry.id)).toEqual(['quotes', 'returns', 'account'])
+    expect(customer.tabs.map((tab) => tab.id)).toEqual(['home', 'orders', 'orders.new', 'account'])
+    expect(customer.more.map((entry) => entry.id)).toEqual(['customers', 'products', 'people', 'documents'])
     expect(customer.current).toBe('home')
     const workshop = bottomBarLayout(portalNavFor({ can: everything, kinds: ['SUBCONTRACTOR'], everyPage: true }), '/jobs/x')
     expect(workshop.tabs.map((tab) => tab.id)).toEqual(['home', 'work', 'supplier-documents', 'profile'])
@@ -125,6 +123,8 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
 
   it('every badge is an area of the one task list, every label is in both languages', () => {
     for (const area of PORTAL_AREAS) if (area.badge) expect(TASK_AREAS).toContain(area.badge)
+    // owb-po4.4: a page that moved into an area brings its own count (Production, Returns).
+    for (const page of PORTAL_AREAS.flatMap((area) => area.pages ?? [])) if (page.badge) expect(TASK_AREAS).toContain(page.badge)
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale].portal ?? {}
       expect(portalNavLabelKeys().filter((key) => !(key in words))).toEqual([])
@@ -132,7 +132,7 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
   })
 
   it('keys: g h Home, g o Orders (or Jobs), g p Production, g d Documents', () => {
-    // F-PR-10: g p Production (every page drawn).
+    // F-PR-10: g p Production (every page drawn); owb-po4.1: Production is a row of Orders now and keeps its key.
     expect(portalChords(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }))).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
     expect(portalChords(portalNavFor({ can: everything, kinds: ['SUBCONTRACTOR'], everyPage: true }))).toEqual({ h: '/', o: '/jobs', d: '/documents' })
   })
@@ -189,11 +189,12 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       keys: portalChords(nav),
     }
   }
-  // B-W2b-262: a role with the samples page has Quotes & samples with its badge (approvals are answered there); Finance keeps the Catalogue.
-  // F-PR-11: the roles that see production (Buyer, Admin, Quality, Viewer, Production) have My production after Orders, no badge.
-  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders', 'production:nav.production', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerRead = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'production:nav.production', 'quotes:nav.quotesSamples#quotes', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
-  const customerFinance = ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'quotes:nav.catalogue', 'documents:nav.documents#documents', 'returns:nav.returns#returns', 'account:nav.account#account']
+  // owb-po4 (plan § 5 F): Production and Returns are rows of Orders and bring their counts (the row counts all three: one key joined
+  // by BADGE_JOIN); a role with the samples page has Products with its badge (approvals are answered there); Finance keeps the Catalogue
+  // (= Products, no badge). Every customer role has its colleagues: People (no count) and Account.
+  const customerFull = ['home:nav.home#home', 'orders:nav.orders#orders+production+returns', 'products:nav.products#quotes', 'people:nav.people', 'documents:nav.documents#documents', 'account:nav.account#account']
+  const customerRead = customerFull
+  const customerFinance = ['home:nav.home#home', 'orders:nav.orders#orders+returns', 'products:nav.products', 'people:nav.people', 'documents:nav.documents#documents', 'account:nav.account#account']
   const supplierOrders = ['home:nav.home#home', 'work:nav.purchaseOrders#orders', 'deliveries:nav.deliveries#deliveries', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const supplierPapers = ['home:nav.home#home', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
   const workshop = ['home:nav.home#home', 'work:nav.jobs#orders', 'supplier-documents:nav.documents#documents', 'profile:nav.profile#account']
@@ -205,10 +206,10 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       'customer-finance': customerFinance,
       'customer-quality': customerRead,
       // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues; F-CP-152: New order (its drafts), no count.
-      'customer-designer': ['home:nav.home#home', 'orders:nav.newOrder', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
-      // B-PR-13: the Production role — its orders, the samples (no catalogue), the shared files; its Production area (F-PR-10
-      // declared it, F-PR-11 built My production).
-      'customer-production': ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'production:nav.production', 'quotes:nav.samples#quotes', 'documents:nav.documents#documents', 'account:nav.account#account'],
+      'customer-designer': ['home:nav.home#home', 'orders:nav.newOrder', 'products:nav.products#quotes', 'people:nav.people', 'account:nav.account#account'],
+      // B-PR-13: the Production role — its orders and My production (a row of Orders, owb-po4.1), the samples (no catalogue: Products
+      // takes the page's name), the shared files.
+      'customer-production': ['home:nav.home#home', 'orders:nav.orders#orders+production', 'products:nav.samples#quotes', 'people:nav.people', 'documents:nav.documents#documents', 'account:nav.account#account'],
       'customer-viewer': customerRead,
       'customer-admin': customerFull,
       'supplier-orders': supplierOrders,
@@ -226,28 +227,32 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
     for (const entry of PARTNER_ROLE_TEMPLATES.filter((template) => template.kind && template.kind !== 'CUSTOMER')) {
       expect(asSigned(entry.key).rail, entry.key).toContain(`home:nav.home#${taskArea('APPROVE', entry.kind)}`)
     }
-    // A customer's on Quotes & samples (its badge once a page that shows approvals is built; Home lists them meanwhile).
-    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.badge === taskArea('APPROVE', 'CUSTOMER'))?.id).toBe('quotes')
+    // A customer's on Products (Samples & tech packs shows the approvals; owb-po4.1: Quotes & samples is Products).
+    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.badge === taskArea('APPROVE', 'CUSTOMER'))?.id).toBe('products')
   })
 
-  it('a count leads to its requests: Quotes & samples carries its badge once a page that shows quotes or approvals is built', () => {
-    // B-W2b-262: Samples & tech packs shows the approvals: the badge is there, the area opens its first built page.
-    const customer = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'quotes')!
-    expect([customer.label, customer.href, customer.badge]).toEqual(['nav.quotesSamples', '/samples', 'quotes'])
-    const catalogueOnly = portalNavFor({ can: (permission) => permission !== 'portal.samples.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'quotes')!
-    expect([catalogueOnly.label, catalogueOnly.href, catalogueOnly.badge]).toEqual(['nav.catalogue', '/catalogue', undefined])
-    const later = PORTAL_AREAS.map((def) => (def.id === 'quotes' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
-    const withQuotes = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }, later).areas.find((area) => area.id === 'quotes')!
-    expect([withQuotes.label, withQuotes.badge]).toEqual(['nav.quotesSamples', 'quotes'])
+  it('a count leads to its requests: Products carries its badge once a page that shows quotes or approvals is built', () => {
+    // B-W2b-262: Samples & tech packs shows the approvals: the badge is there; owb-po4.1: Products opens the Catalogue (its own page).
+    const customer = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'products')!
+    expect([customer.label, customer.href, customer.badge]).toEqual(['nav.products', '/catalogue', 'quotes'])
+    const catalogueOnly = portalNavFor({ can: (permission) => permission !== 'portal.samples.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'products')!
+    expect([catalogueOnly.label, catalogueOnly.href, catalogueOnly.badge]).toEqual(['nav.products', '/catalogue', undefined])
+    // Samples only (the Production role): the area takes the page's name and address, with its badge.
+    const samplesOnly = portalNavFor({ can: (permission) => permission !== 'portal.catalogue.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'products')!
+    expect([samplesOnly.label, samplesOnly.href, samplesOnly.badge]).toEqual(['nav.samples', '/samples', 'quotes'])
+    const later = PORTAL_AREAS.map((def) => (def.id === 'products' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
+    const withQuotes = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }, later).areas.find((area) => area.id === 'products')!
+    expect([withQuotes.label, withQuotes.badge]).toEqual(['nav.products', 'quotes'])
     // The design review draws the frame as it will be: the badge is there.
-    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.id === 'quotes')!.badge).toBe('quotes')
+    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true }).areas.find((area) => area.id === 'products')!.badge).toBe('quotes')
   })
 
-  it('the phone: four tabs and More for a customer; a supplier\'s one More row (Profile) is its fifth tab (the DS bar), a workshop four tabs', () => {
-    // F-PR-11: My production is a tab after Orders for the buyer, so Returns goes under More.
-    expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
-    expect(asSigned('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
-    expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home', 'orders'], more: ['quotes', 'account'] }) // F-CP-152
+  it('the phone: Home · Orders · New order · Account and More for a customer; a supplier\'s one More row (Profile) is its fifth tab (the DS bar), a workshop four tabs', () => {
+    // owb-po4.2: New order (a row of Orders) is a tab for who may start one; Products, People and Documents under More.
+    expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'orders.new', 'account'], more: ['products', 'people', 'documents'] })
+    expect(asSigned('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'account'], more: ['products', 'people', 'documents'] })
+    // F-CP-152: the Designer's Orders is New order itself (one page): one tab.
+    expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home', 'orders', 'account'], more: ['products', 'people'] })
     // Design portal.frame bottom-bar: "Supplier: Home · Orders (or Jobs) · Deliveries · Documents + More (Profile)"; the DS bar turns a
     // More of one row into a fifth tab (bottomBarModel: a sheet with one row is a wasted tap); Sign out is in the person menu.
     expect(asSigned('supplier-orders')).toMatchObject({ tabs: ['home', 'work', 'deliveries', 'supplier-documents', 'profile'], more: [] })
@@ -257,7 +262,7 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   })
 
   it('keys: g h, g o and g d where the person has those areas', () => {
-    // F-PR-11: g p opens My production.
+    // F-PR-11: g p opens My production (owb-po4.1: a row of Orders that keeps its key).
     expect(asSigned('customer-buyer').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
     expect(asSigned('customer-finance').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
     expect(asSigned('customer-designer').keys).toEqual({ h: '/', o: '/orders/new' }) // F-CP-152
@@ -283,61 +288,27 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
   })
 })
 
-// ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)): the customer's Production area and Home › Waiting for you ──
-describe('the Production area and Waiting for you (F-PR-10)', () => {
-  // The pages as built (F-PR-11 /production, F-PR-14 /waiting): kept as their own list so a later page step reads the same.
-  const BUILT: readonly PortalAreaDef[] = PORTAL_AREAS.map((def) => (def.id === 'production' ? { ...def, built: true } : def.id === 'home' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
-  const signedAs = (key: string, defs: readonly PortalAreaDef[] = BUILT) => {
+// ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)): the customer's Production and Waiting for you ──
+// owb-po4.1 (order workflow plan § 5 F, "nothing is lost"): Production is a row of Orders now (its id, key and count kept), and
+// Waiting for you is Home's card "What waits for you" (its page stays; the menu draws no row for it).
+describe('the Production row and Waiting for you (F-PR-10, moved by owb-po4.1)', () => {
+  const signedAs = (key: string) => {
     const template = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === key)!
     const capabilities = template.capabilities.byDefault.flatMap((capability) => PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === CAPABILITY_ROLE_KEYS[capability])!.permissions)
     const held = new Set<string>([...template.permissions, ...capabilities])
-    const nav = portalNavFor({ can: (permission) => held.has(permission), kinds: [template.kind as PortalKind] }, defs)
-    const phone = bottomBarLayout(nav, '/')
-    const home = nav.areas.find((area) => area.id === 'home')
-    return {
-      nav,
-      areas: nav.areas.map((area) => area.id),
-      homePages: home?.sections?.flatMap((section) => section.items.map((item) => item.id)) ?? [],
-      tabs: phone.tabs.map((tab) => tab.id),
-      more: phone.more.map((entry) => entry.id),
-      keys: portalChords(nav, defs),
-    }
+    const nav = portalNavFor({ can: (permission) => held.has(permission), kinds: [template.kind as PortalKind] })
+    const pagesOf = (id: string) => nav.areas.find((area) => area.id === id)?.sections?.flatMap((section) => section.items.map((item) => item.id)) ?? []
+    return { nav, areas: nav.areas.map((area) => area.id), orderPages: pagesOf('orders'), homePages: pagesOf('home'), keys: portalChords(nav) }
   }
 
-  it('declares Production after Orders for customers with portal.production.view, key p, a phone tab, and no badge yet', () => {
-    const def = PORTAL_AREAS.find((area) => area.id === 'production')!
-    expect(def).toMatchObject({ label: 'nav.production', href: '/production', permission: 'portal.production.view', kinds: ['CUSTOMER'], phone: 'tab', key: 'p' })
-    // No count of production items waiting on the customer exists yet (B-PR-20 / F-PR-15): never a made-up number.
-    expect(def.badge).toBeUndefined()
-    expect(PORTAL_AREAS.map((area) => area.id).indexOf('production')).toBe(PORTAL_AREAS.map((area) => area.id).indexOf('orders') + 1)
-  })
-
-  it('draws a door only to a page that exists: My production (F-PR-11) and Waiting for you (F-PR-14) are built', () => {
-    expect(PORTAL_AREAS.find((area) => area.id === 'production')!.built).toBe(true)
-    // F-PR-14: /waiting exists (app/(portal)/p/[party]/waiting/page.tsx): its door is drawn for those who see approvals.
-    expect(PORTAL_AREAS.find((area) => area.id === 'home')!.pages!.find((page) => page.id === 'home.waiting')!.built).toBe(true)
-    for (const key of ['customer-production', 'customer-buyer', 'customer-admin', 'customer-quality', 'customer-viewer']) {
-      const today = signedAs(key, PORTAL_AREAS)
-      expect(today.areas, key).toContain('production')
-      expect(today.homePages, key).toEqual(['home.overview', 'home.waiting'])
-      expect(today.keys.p, key).toBe('/production')
-    }
-    // The Designer answers sample and artwork approvals: Waiting for you, no production.
-    expect(signedAs('customer-designer', PORTAL_AREAS).homePages).toEqual(['home.overview', 'home.waiting'])
-    // Finance and the Designer do not see production: no door, no key.
-    for (const key of ['customer-finance', 'customer-designer']) {
-      const today = signedAs(key, PORTAL_AREAS)
-      expect(today.areas, key).not.toContain('production')
-      expect(today.keys.p, key).toBeUndefined()
-    }
-    // Finance sees no approvals: Home keeps its name and address with its one page.
-    expect(signedAs('customer-finance', PORTAL_AREAS).homePages).toEqual([])
-    const home = portalNavFor({ can: (permission) => permission !== 'portal.approvals.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'home')!
-    expect([home.label, home.href, home.badge, home.sections]).toEqual(['nav.home', '/', 'home', undefined])
+  it('declares Production as a row of Orders for customers with portal.production.view: key p, its own count, built', () => {
+    const page = PORTAL_AREAS.find((area) => area.id === 'orders')!.pages!.find((entry) => entry.id === 'production')!
+    expect(page).toMatchObject({ label: 'nav.production', href: '/production', permission: 'portal.production.view', key: 'p', badge: 'production', built: true })
+    expect(PORTAL_AREAS.map((area) => area.id)).not.toContain('production')
   })
 
   it('PW-P01 (nav): Production shows only to a customer session that holds portal.production.view — no other partner kind, no other role', () => {
-    const roles = Object.fromEntries(PARTNER_ROLE_TEMPLATES.filter((entry) => entry.kind).map((entry) => [entry.key, signedAs(entry.key).areas.includes('production')]))
+    const roles = Object.fromEntries(PARTNER_ROLE_TEMPLATES.filter((entry) => entry.kind).map((entry) => [entry.key, signedAs(entry.key).orderPages.includes('production')]))
     expect(roles).toEqual({
       'customer-buyer': true,
       'customer-finance': false,
@@ -355,64 +326,37 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
       'guest-accountant': false,
     })
     // Fails closed: a supplier, a workshop or a guest never gets it, even holding the permission.
-    for (const kind of ['SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const) expect(portalNavFor({ can: everything, kinds: [kind] }, BUILT).areas.map((area) => area.id), kind).not.toContain('production')
-    // A customer without the permission: no area, no key.
-    const without = portalNavFor({ can: (permission) => permission !== 'portal.production.view', kinds: ['CUSTOMER'] }, BUILT)
-    expect(without.areas.map((area) => area.id)).not.toContain('production')
-    expect(portalChords(without, BUILT).p).toBeUndefined()
-    // The manifest is data with no figure: the area carries no count of anyone's orders.
-    expect(portalNavFor({ can: everything, kinds: ['CUSTOMER'] }, BUILT).areas.find((area) => area.id === 'production')).toMatchObject({ label: 'nav.production', href: '/production' })
+    for (const kind of ['SUPPLIER', 'SUBCONTRACTOR', 'GUEST'] as const) expect(JSON.stringify(portalNavFor({ can: everything, kinds: [kind] }))).not.toContain('/production')
+    // A customer without the permission: no row, no key.
+    const without = portalNavFor({ can: (permission) => permission !== 'portal.production.view', kinds: ['CUSTOMER'] })
+    expect(JSON.stringify(without)).not.toContain('/production')
+    expect(portalChords(without).p).toBeUndefined()
+    for (const key of ['customer-finance', 'customer-designer']) expect(signedAs(key).keys.p, key).toBeUndefined()
   })
 
-  it('the phone: Production is a tab after Orders and Returns goes under More — only for the people with Production', () => {
-    expect(signedAs('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
-    expect(signedAs('customer-admin')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
-    expect(signedAs('customer-quality')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
-    expect(signedAs('customer-viewer')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
-    // The Production role has no Returns: Samples and Account under More.
-    expect(signedAs('customer-production')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'account'] })
-    // Without Production nothing moves: Returns stays a tab.
-    expect(signedAs('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
-    expect(signedAs('customer-designer')).toMatchObject({ tabs: ['home', 'orders'], more: ['quotes', 'account'] }) // F-CP-152
-    // My production lights the Production tab.
-    expect(bottomBarLayout(signedAs('customer-buyer').nav, '/production').current).toBe('production')
+  it('My production lights Orders (the rail, the phone) and its own row of the sub-sidebar; g p opens it', () => {
+    const { nav, keys } = signedAs('customer-buyer')
+    expect([portalPlace(nav, '/production')?.area.id, portalPlace(nav, '/production')?.item?.id]).toEqual(['orders', 'production'])
+    expect(bottomBarLayout(nav, '/production').current).toBe('orders')
+    expect(keys.p).toBe('/production')
+    expect(portalChordLabel(nav, '/production')).toBe('nav.production')
   })
 
-  it('Home › Waiting for you: a second Home page for a customer who sees approvals (the Designer too), never for a supplier', () => {
+  it('Waiting for you: no menu row any more — Home is one page again, its name, address and badge; /waiting still lights Home', () => {
     const home = PORTAL_AREAS.find((area) => area.id === 'home')!
-    expect(home.pages!.map((page) => [page.id, page.label, page.href, page.permission])).toEqual([
-      ['home.overview', 'nav.home', '/', 'portal.home.view'],
-      ['home.waiting', 'nav.waiting', '/waiting', 'portal.approvals.view'],
-    ])
-    expect(home.pages!.find((page) => page.id === 'home.waiting')!.kinds).toEqual(['CUSTOMER'])
-    for (const key of ['customer-production', 'customer-buyer', 'customer-admin', 'customer-quality', 'customer-viewer', 'customer-designer']) expect(signedAs(key).homePages, key).toEqual(['home.overview', 'home.waiting'])
-    // Finance does not see approvals: Home stays one page, its own name and address.
-    expect(signedAs('customer-finance').homePages).toEqual([])
-    for (const key of ['supplier-orders', 'supplier-quality', 'subcontractor-jobs', 'guest-accountant']) {
+    expect(home.pages!.find((page) => page.id === 'home.waiting')).toMatchObject({ href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], menu: false, built: true })
+    for (const key of ['customer-production', 'customer-buyer', 'customer-admin', 'customer-quality', 'customer-viewer', 'customer-designer', 'customer-finance', 'supplier-orders', 'subcontractor-jobs', 'guest-accountant']) {
       const signed = signedAs(key)
       expect(signed.homePages, key).toEqual([])
-      expect(signed.nav.areas.find((area) => area.id === 'home'), key).toMatchObject({ label: 'nav.home', href: '/' })
+      expect(signed.nav.areas.find((area) => area.id === 'home'), key).toMatchObject({ label: 'nav.home', href: '/', badge: 'home' })
     }
-    // The area stays Home (name, address, its badge); the page rows carry no number until F-PR-15 brings the count.
-    const area = signedAs('customer-buyer').nav.areas.find((entry) => entry.id === 'home')!
-    expect([area.label, area.href, area.badge]).toEqual(['nav.home', '/', 'home'])
-    expect(area.sections!.flatMap((section) => section.items).map((item) => item.badge)).toEqual([undefined, undefined])
-  })
-
-  it('Waiting for you is a place under Home: the band names the page, the phone lights Home', () => {
+    // The page is reached from Home's card: the address is placed in Home (the rail lights Home), as a card's page.
     const nav = signedAs('customer-buyer').nav
-    expect([portalPlace(nav, '/waiting')?.area.id, portalPlace(nav, '/waiting')?.item?.id]).toEqual(['home', 'home.waiting'])
-    expect([portalPlace(nav, '/')?.area.id, portalPlace(nav, '/')?.item?.id]).toEqual(['home', 'home.overview'])
-    // Home's own page is never the owner of another address.
+    expect(portalPlace(nav, '/waiting')).toMatchObject({ area: { id: 'home' }, card: true })
+    expect(portalPlace(nav, '/waiting')?.item).toBeUndefined()
+    // A page no row and no card owns is nobody's (a record's generic page): nothing is lit.
+    expect(portalPlace(nav, '/open/Ddt/x')).toBeNull()
     expect(portalPlace(nav, '/orders')?.area.id).toBe('orders')
-    expect(bottomBarLayout(nav, '/waiting').current).toBe('home')
-  })
-
-  it('keys: g p opens Production where the person has it', () => {
-    expect(signedAs('customer-buyer').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
-    expect(signedAs('customer-production').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
-    expect(signedAs('customer-finance').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
-    expect(signedAs('customer-designer').keys).toEqual({ h: '/', o: '/orders/new' }) // F-CP-152
   })
 
   it('names the areas in both languages, and the roles that see production say so', () => {
@@ -481,8 +425,8 @@ describe('F-CP-152 — Orders is any of its pages: a brand Designer sees New ord
   it('New order opens with either right: who keeps drafts, or who may order (the request like an e-mail); neither: no door', () => {
     expect(orders(['portal.salesOrders.view', 'portal.orderRequests.manage'])!.sections!.flatMap((section) => section.items).map((item) => item.id)).toEqual(['orders.list', 'orders.new'])
     expect(orders(['portal.orderRequests.manage'])!.href).toBe('/orders/new')
-    // Orders only (Quality, Viewer, Production, Finance): the list, its name "Orders & requests", its count.
-    expect([orders(['portal.salesOrders.view'])!.label, orders(['portal.salesOrders.view'])!.badge]).toEqual(['nav.ordersRequests', 'orders'])
+    // Orders only: the list, its name (owb-po4.1: the design's one name, "Orders"), its count.
+    expect([orders(['portal.salesOrders.view'])!.label, orders(['portal.salesOrders.view'])!.badge]).toEqual(['nav.orders', 'orders'])
     // Neither orders nor drafts nor ordering: no Orders area at all (fails closed), whatever home.view says.
     expect(orders([])).toBeUndefined()
     expect(portalNavPermissions()).toEqual(expect.arrayContaining(['portal.orderDrafts.edit', 'portal.orderRequests.manage']))
@@ -490,3 +434,98 @@ describe('F-CP-152 — Orders is any of its pages: a brand Designer sees New ord
 })
 // ── end F-CP-152 ──
 
+// ── owb-po4 (order workflow plan § 5 "Customer portal", § 5 F; the design's PORTAL_NAV) ──────────────────────────────────────────
+describe('owb-po4 — the portal menu: the five doors move, nothing is lost', () => {
+  const rowsOf = (nav: AreaNav) => nav.areas.flatMap((area) => [area.id, ...(area.sections ?? []).flatMap((section) => section.items.map((item) => item.id))])
+  const hrefsOf = (nav: AreaNav) => nav.areas.flatMap((area) => [area.href, ...(area.sections ?? []).flatMap((section) => section.items.map((item) => item.href))])
+  // Every customer door of the menu before owb-po4 (Home, Waiting for you, Orders & requests, New order, Production, Samples & tech packs,
+  // Catalogue, Documents, Returns & claims, Account): each still opens, from a row or from Home's card.
+  const OLD_DOORS: readonly (readonly [string, string])[] = [
+    ['/', 'home'],
+    ['/waiting', 'home'],
+    ['/orders', 'orders'],
+    ['/orders/new', 'orders'],
+    ['/production', 'orders'],
+    ['/returns', 'orders'],
+    ['/samples', 'products'],
+    ['/catalogue', 'products'],
+    ['/documents', 'documents'],
+    ['/account', 'account'],
+  ]
+
+  it('every old door is reachable: a row of its new area, or Home\'s card (Waiting for you); its route is still there', () => {
+    const nav = portalNavFor({ can: everything, kinds: ['CUSTOMER'] })
+    for (const [door, area] of OLD_DOORS) {
+      const place = portalPlace(nav, door)
+      expect(place?.area.id, door).toBe(area)
+      expect(hrefsOf(nav).includes(door) || place?.card === true, door).toBe(true)
+      expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]', door, 'page.tsx')), door).toBe(true)
+    }
+    // Projects, Terms, the request page and the record pages are kept (not menu doors): their routes and RECORD_PAGES lines stand.
+    expect(recordPageOf(['CUSTOMER'], 'Inquiry', 'q1')).toBe('/orders/requests/q1')
+    for (const route of ['projects/[id]', 'terms', 'orders/requests/[id]']) expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../../app/(portal)/p/[party]', route, 'page.tsx')), route).toBe(true)
+  })
+
+  it('the design\'s order and words: Home · Orders · Customers · Products · People · Documents · Account (every page drawn, prices seen)', () => {
+    const review = portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true, prices: true })
+    expect(review.areas.map((area) => [area.id, area.label])).toEqual([
+      ['home', 'nav.home'],
+      ['orders', 'nav.orders'],
+      ['customers', 'nav.customers'],
+      ['products', 'nav.products'],
+      ['people', 'nav.people'],
+      ['documents', 'nav.documents'],
+      ['account', 'nav.account'],
+    ])
+    const orders = review.areas.find((area) => area.id === 'orders')!.sections!.flatMap((section) => section.items)
+    expect(orders.map((item) => [item.id, item.label])).toEqual([
+      ['orders.list', 'nav.orders'],
+      ['orders.prices', 'nav.prices'],
+      ['orders.agreedPrices', 'nav.agreedPrices'],
+      ['orders.new', 'nav.newOrder'],
+      ['production', 'nav.production'],
+      ['returns', 'nav.returns'],
+    ])
+    expect(review.areas.find((area) => area.id === 'customers')!.sections!.flatMap((section) => section.items.map((item) => item.id))).toEqual(['customers.list', 'customers.payments'])
+    expect(review.areas.find((area) => area.id === 'products')!.sections!.flatMap((section) => section.items.map((item) => item.id))).toEqual(['products.catalogue', 'products.samples', 'products.quotes'])
+  })
+
+  it('built:false rows are absent: Prices, Agreed prices, Your customers, Payments (Customers has no door while all its rows are hidden)', () => {
+    const buyer = portalNavFor({ can: everything, kinds: ['CUSTOMER'], prices: true })
+    for (const id of ['orders.prices', 'orders.agreedPrices', 'customers', 'customers.list', 'customers.payments', 'products.quotes']) expect(rowsOf(buyer), id).not.toContain(id)
+    for (const id of ['orders.prices', 'orders.agreedPrices', 'customers.list', 'customers.payments']) expect(PORTAL_AREAS.flatMap((area) => area.pages ?? []).find((page) => page.id === id)?.built, id).toBe(false)
+    expect(PORTAL_PENDING_PERMISSIONS.has('portal.brandCustomers.view')).toBe(true)
+  })
+
+  it('a Designer sees no Prices row — never, not even in the design review; money fails closed while prices are unknown', () => {
+    const designer = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === 'customer-designer')!
+    expect(designer.grains).toEqual([])
+    for (const prices of [false, undefined, true]) {
+      const nav = portalNavFor({ can: roleCan('customer-designer'), kinds: ['CUSTOMER'], everyPage: true, prices })
+      expect(rowsOf(nav).filter((id) => /prices|payments/i.test(id)), String(prices)).toEqual([])
+    }
+    // Everything held, prices not known (the frame before GET /portal/access answers): no money row.
+    expect(rowsOf(portalNavFor({ can: everything, kinds: ['CUSTOMER'], everyPage: true })).filter((id) => /prices|payments/i.test(id))).toEqual([])
+    // A buyer who sees prices: the rows, once drawn.
+    expect(rowsOf(portalNavFor({ can: roleCan('customer-buyer'), kinds: ['CUSTOMER'], everyPage: true, prices: true }))).toEqual(expect.arrayContaining(['orders.prices', 'orders.agreedPrices']))
+  })
+
+  it('owb-po4.4: every task-list area lands on a badge of a rail row — no count is lost when a door moves', () => {
+    const keysOf = (nav: AreaNav) => nav.areas.flatMap((area) => (area.badge ? area.badge.split(BADGE_JOIN) : []))
+    const landed = new Set([...keysOf(portalNavFor({ can: everything, kinds: ['CUSTOMER'] })), ...keysOf(portalNavFor({ can: everything, kinds: ['SUPPLIER'] }))])
+    expect(TASK_AREAS.filter((area) => !landed.has(area))).toEqual([])
+    // The rows of Orders carry their own count in the sub-sidebar; the rail row adds them up (one key, joined).
+    const orders = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'orders')!
+    expect(orders.badge).toBe(['orders', 'production', 'returns'].join(BADGE_JOIN))
+    expect(orders.sections!.flatMap((section) => section.items).filter((item) => item.badge).map((item) => [item.id, item.badge])).toEqual([
+      ['production', 'production'],
+      ['returns', 'returns'],
+    ])
+    const badges = { orders: { count: 2, words: '2 to confirm' }, returns: { count: 1, words: '1 to send back' } }
+    expect(badgeOf(badges, orders.badge)).toEqual({ count: 3, words: '2 to confirm, 1 to send back' })
+    expect(badgeOf(badges, 'production')).toBeNull()
+    expect(badgeOf(null, orders.badge)).toBeNull()
+    expect(badgeOf(badges, undefined)).toBeNull()
+  })
+})
+// ── end owb-po4 ──

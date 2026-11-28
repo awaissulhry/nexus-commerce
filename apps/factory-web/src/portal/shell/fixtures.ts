@@ -44,7 +44,8 @@ const LEGAL = {
 } as const
 
 const ALL = (permission: string) => permission.startsWith('portal.') || permission === 'files.read' || permission === 'threads.read'
-const navFor = (kind: PortalKind, everyPage = true) => portalNavFor({ can: ALL, kinds: [kind], everyPage })
+// owb-po4.1: the design review reads as a customer's buyer, who sees prices (Prices, Agreed prices and Payments drawn as they will be).
+const navFor = (kind: PortalKind, everyPage = true) => portalNavFor({ can: ALL, kinds: [kind], everyPage, prices: kind === 'CUSTOMER' })
 
 const BADGES = [
   { area: 'orders', count: 2, words: { it: '2 da confermare', en: '2 to confirm' } },
@@ -338,7 +339,7 @@ export const designScreen = defineDesignScreen<PortalFrameCaseBuilder>({
       id: 'customer',
       label: 'Customer: Home, what waits for you (branded)',
       model: caseOf((locale) => ({ shell: shell(locale), page: home(locale) })),
-      note: 'The rail labelled at rest (6 areas, badges with their nouns: "Orders, 2 to confirm"), search, the bell (3 unread), the person menu. Tasks overdue first, due today with a countdown, a safe verb in place. Phone: the bottom bar (Home, Orders, Documents, Returns + More). Keys: / search, g h / g o / g d, ?.',
+      note: 'owb-po4: the office\'s rail (66 px, labels on hover or focus; badges with their nouns: "Orders, 2 to confirm") — Home · Orders · Customers · Products · People · Documents · Account — search, the bell (3 unread), the person menu. Tasks overdue first, due today with a countdown, a safe verb in place. Phone: the bottom bar (Home, Orders, New order, Account + More). Keys: / search, g h / g o / g p / g d, ?.',
     },
     {
       id: 'today',
@@ -346,6 +347,20 @@ export const designScreen = defineDesignScreen<PortalFrameCaseBuilder>({
       model: caseOf((locale) => ({ shell: shell(locale, { nav: navFor('CUSTOMER', false) }), page: home(locale) })),
       note: 'Navigation fails closed AND never shows a door to a page not built yet: until the area steps land, only Home.',
     },
+    // ---- owb-po4.2 (plan § 5: the office's rail + sub-sidebar; § 5 F: nothing lost)
+    {
+      id: 'po4-sub-sidebar',
+      label: 'Customer on Returns & claims: Orders\' sub-sidebar (a row of Orders now)',
+      model: caseOf((locale) => ({ shell: shell(locale, { path: '/returns', band: { title: words(locale)('nav.returns') } }), page: home(locale) })),
+      note: 'Orders holds Orders, Prices, Agreed prices, New order, Production, Returns & claims: the sub-sidebar\'s toggle sits beside the band and opens its pages from the left, under the top bar and beside the rail; the rail lights Orders. (The page\'s body here is a stand-in.)',
+    },
+    {
+      id: 'po4-card-page',
+      label: 'Customer on Waiting for you: Home\'s card, no menu row — the rail lights Home',
+      model: caseOf((locale) => ({ shell: shell(locale, { path: '/waiting', band: { title: words(locale)('nav.waiting') } }), page: home(locale) })),
+      note: 'Waiting for you is reached from Home\'s "What waits for you" card ("All N waiting"); its address keeps Home lit on the rail and the phone bar. No sub-sidebar: Home is one page.',
+    },
+    // ---- end owb-po4.2
     {
       id: 'supplier',
       label: 'Supplier (unbranded): free for suppliers',

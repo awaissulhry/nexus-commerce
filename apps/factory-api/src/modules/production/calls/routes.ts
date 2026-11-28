@@ -25,6 +25,9 @@ import { manifest } from './manifest'
 import { callCounts, callRecordOf, callsByHourOf, lineBoard, listCalls } from './reads'
 import { addDetails, closeAtStation, sendCall, stationState } from './station'
 import { createType, listTypes, updateType } from './types'
+// owb-fl3 (S5 server B): problems and asks on a phone.
+import { basketCallsContract, callFileAnnounceContract, callFileCompleteContract, callSpotContract, floorTypesContract } from './contract'
+import { announceCallFile, basketCalls, completeCallFile, floorTypes, setCallSpot } from './floor'
 
 /**
  * Help calls (B-W2b-35; ./station.ts, ./answer.ts, ./reads.ts, ./types.ts). Each write is one command with an
@@ -77,4 +80,15 @@ export default defineRoutes('production.calls', manifest, async (app) => {
   app.patch('/production/calls/types/:typeId', { schema: updateTypeContract }, async (request) => updateType(request, request.params.typeId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/production/calls/:callId', { schema: callRecordContract }, async (request) => callRecordOf(request, request.params.callId))
+
+  // ---- owb-fl3 (S5 server B): problems and asks on a phone (./floor.ts) ----
+  app.get('/production/calls/station/types', { schema: floorTypesContract }, async (request) => floorTypes(request, request.query))
+
+  app.post('/production/calls/:callId/files', { schema: callFileAnnounceContract }, async (request, reply) => reply.code(201).send(await announceCallFile(request, request.params.callId, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/production/calls/:callId/files/:fileId/complete', { schema: callFileCompleteContract }, async (request) => completeCallFile(request, request.params.callId, request.params.fileId, idempotencyKeyFrom(request)))
+
+  app.post('/production/calls/:callId/spot', { schema: callSpotContract }, async (request) => setCallSpot(request, request.params.callId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/production/baskets/:code/calls', { schema: basketCallsContract }, async (request) => basketCalls(request, request.params.code))
 })

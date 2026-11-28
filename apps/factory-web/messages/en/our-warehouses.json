@@ -1,0 +1,30 @@
+{
+  "section": {
+    "info": "A shipment that went to our own warehouse first waits here for the customer’s shipping label, then leaves for the customer: Send on to the customer. On the way: it left the factory and has not arrived yet.",
+    "answer": "{at} at our warehouse · {onTheWay} on the way",
+    "nothing": "Nothing here now."
+  },
+  "at": {
+    "title_one": "At our warehouse · {count} piece",
+    "title_other": "At our warehouse · {count} pieces",
+    "since": "Since {day}",
+    "labelYes": "The customer’s label is here",
+    "labelNo": "Waits for the customer’s label",
+    "empty": "Nothing waits here now."
+  },
+  "way": {
+    "title_one": "On the way · {count} piece",
+    "title_other": "On the way · {count} pieces",
+    "left": "Left on {day}",
+    "empty": "Nothing is on its way here."
+  },
+  "pieces_one": "{count} piece",
+  "pieces_other": "{count} pieces",
+  "act": {
+    "sendOn": "Send on to the customer",
+    "arrived": "It arrived at the warehouse"
+  },
+  "none": "The company has no warehouse of its own.",
+  "failed": "Couldn't load our warehouses",
+  "retry": "Try again"
+}

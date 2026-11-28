@@ -941,4 +941,20 @@ export const events = [
     live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'messageId'] },
   }),
   // ---- end B-SA-053
+  // ---- owb-pd1 (S4 products, step 1.3; design § 5x "Manage departments"): a department of the factory was added, renamed (its
+  // name, short name or names per language), closed or opened again (apps/factory-api modules/production/departments). The
+  // office screens that show the departments (the route builder, the chips) read the list again. Its id, number and what
+  // changed only: never a name, a person or a price.
+  defineEvent({
+    type: 'production.department_changed',
+    context: 'production',
+    description: 'A department of the factory was added, renamed, closed or opened again.',
+    payload: z.strictObject({
+      departmentId: z.uuid(),
+      number: z.number().int().min(1),
+      change: z.enum(['CREATED', 'RENAMED', 'CLOSED', 'OPENED']),
+    }),
+    live: { permission: 'workorders.view', also: 'product.styles.view', fields: ['departmentId', 'number', 'change'] },
+  }),
+  // ---- end owb-pd1
 ] as const

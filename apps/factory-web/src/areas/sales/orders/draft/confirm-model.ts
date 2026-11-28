@@ -1,4 +1,4 @@
-import { rowLabelOf, type ProductRow } from '../../../../lib/order-draft/model'
+import { rowLabelOf, stillOpenEntries, type ProductRow, type StillOpenEntry } from '../../../../lib/order-draft/model'
 import type { StillOpen } from '../../../../lib/order-draft/schema'
 import type { Translate } from '../../../../lib/i18n/messages'
 import type { ConfirmBody } from './api'
@@ -132,4 +132,38 @@ export function confirmBodyOf(rows: readonly ProductRow[], entries: Readonly<Rec
     map.push({ lineId: row.id, into: [{ styleId: entry.styleId, colourwayId: entry.colourwayId, ...(sizes.length > 0 ? { sizes } : {}), ...(price ? { unitPrice: price } : {}) }] })
   }
   return { as: confirmAsOf(rows), ...(map.length > 0 ? { map } : {}), ...(lines.length > 0 ? { lines } : {}) }
+}
+
+// ---- owb-of5 step 4 (design plan § 5g, § 5zl A "Confirm the order"; L1 pick A: the stops of today stay) --------------------------------
+
+/** The Promised field as the window opens: the day the customer wants, when it is not past; else empty (the person types it). */
+export const promiseStartOf = (requested: string | null | undefined, today: string): string => (requested && requested.slice(0, 10) >= today ? requested.slice(0, 10) : '')
+
+/** Why the promised day cannot be sent (a key of the flow's words): empty, or a day in the past; null: it can. */
+export function promiseProblemOf(value: string, today: string): 'cf.promiseEmpty' | 'cf.promisePast' | null {
+  const day = value.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 'cf.promiseEmpty'
+  return day < today ? 'cf.promisePast' : null
+}
+
+/**
+ * A line without a product (A-5, the one stop that stays): the first such row by its number — "Pick the product first" and the main
+ * button held until a product is picked (here in the window, or in the sheet). Null: every row names its product.
+ */
+export function productHeldOf(rows: readonly ProductRow[], entries: Readonly<Record<string, ConfirmEntry>>): { seq: number } | null {
+  for (const row of [...rows].sort((a, b) => a.seq - b.seq)) {
+    const entry = entries[row.id]
+    if (entry && !entry.styleId) return { seq: row.seq }
+  }
+  return null
+}
+
+/**
+ * The open details the window shows as yellow lines: what the draft left open that is NOT a stop today (the still-open items the
+ * order does not need to confirm — sizing, an option, the delivery date …). The stops (a product, a colour, pieces, an address) are
+ * the window's own fields and its held button, never a yellow line.
+ */
+export function openDetailsOf(stillOpen: StillOpen | undefined, rows: readonly ProductRow[], t: Translate): StillOpenEntry[] {
+  if (!stillOpen) return []
+  return stillOpenEntries({ ...stillOpen, items: stillOpen.items.filter((item) => !item.confirmNeeds) }, rows, t)
 }

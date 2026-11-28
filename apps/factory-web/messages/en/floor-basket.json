@@ -1,0 +1,129 @@
+{
+  "homePage": {
+    "forYou": "For you",
+    "scan": "Scan a basket",
+    "scanHint": "Point the camera at the basket card, or type its number.",
+    "here": "In this department",
+    "next": "Coming next",
+    "nothingHere": "No basket here now. Scan a basket card to start.",
+    "noDepartment": "Pick your department first: tap the department at the top.",
+    "loading": "Reading the baskets…",
+    "offline": "No network: the baskets show when it is back. Scan still works.",
+    "unavailable": "The baskets could not be read.",
+    "retry": "Try again",
+    "otherJobs": "Other jobs",
+    "flash": {
+      "done": "{code} → {dept}",
+      "moved": "{code}: moved on to {dept}",
+      "ready": "{code} is ready to ship",
+      "saved": "{code}: saved on this phone. It goes when the network is back."
+    }
+  },
+  "item": {
+    "CHANGED_DESIGN": "The design changed",
+    "ANSWER": "An answer for you",
+    "SOLVED": "Your problem is solved",
+    "HANDOVER": "Handover note",
+    "PROBLEM": "Problem",
+    "ASK": "Ask"
+  },
+  "state": {
+    "WAITING": "Waiting",
+    "WORKING": "Working",
+    "PAUSED": "Paused",
+    "READY": "Ready to ship"
+  },
+  "flag": {
+    "first": "First",
+    "problem": "Problem",
+    "late": "Late",
+    "lateDays_one": "Late: {count} day",
+    "lateDays_other": "Late: {count} days",
+    "rush": "Rush"
+  },
+  "dept": {
+    "button": "Department: {name}. Tap to change it.",
+    "none": "Pick a department",
+    "title": "Department",
+    "note": "Pick the department this phone works in.",
+    "chooseStation": "This department has several stations. Which one?",
+    "noStation": "This department has no station at this site. Ask the office to add one.",
+    "offline": "No network: the department changes when it is back.",
+    "failed": "The department did not change. Try again.",
+    "close": "Close"
+  },
+  "page": {
+    "title": "Basket {code}",
+    "loading": "Reading the basket…",
+    "notFound": "No basket with this code at this site.",
+    "offline": "No network: the basket shows when it is back.",
+    "unavailable": "The basket could not be read.",
+    "retry": "Try again",
+    "designPage": "Design page",
+    "readAloud": "Basket {code}. {state}. {step}",
+    "readStep": "Step {at} of {total}: {now}.",
+    "readNext": "Next: {next}."
+  },
+  "facts": {
+    "label": "About this basket",
+    "customer": "Customer {code}",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "due": "Due {date}"
+  },
+  "needs": {
+    "hold": {
+      "HOLD": "On hold",
+      "QUALITY_HOLD": "Quality hold",
+      "FIRST_PIECE": "Waits for the first piece check"
+    },
+    "changed": "The design changed",
+    "seen": "Seen on this phone"
+  },
+  "lock": {
+    "RESTRICTED": "Only a named worker opens this basket.",
+    "OTHER_TEAM": "This basket belongs to another team."
+  },
+  "stepBar": {
+    "step": "Step {at} / {total}",
+    "change": "Change",
+    "changeLabel": "Change the step of {code}",
+    "own": "Own route",
+    "ready": "Ready to ship",
+    "label": "The route: {count} steps"
+  },
+  "dock": {
+    "label": "The next step",
+    "start": "Start",
+    "resume": "Resume",
+    "pause": "Pause",
+    "done": "Done",
+    "passed": "Passed",
+    "packed": "Packed",
+    "sawDesign": "I saw the new design",
+    "takeHere": "Take it here",
+    "changeStep": "Change the step",
+    "askLeader": "Ask your team leader",
+    "sendBack": "Not good: send back to {dept}",
+    "qcFirst": "First tick the points and take the photos.",
+    "failed": "That did not go through. Try again.",
+    "needsNetwork": "This needs the network. Try again when it is back."
+  },
+  "elsewhere": {
+    "title": "This basket is in another department.",
+    "isAt": "It is at",
+    "offRoute": "Not on its route. Its next step is {step}.",
+    "offRouteNoNext": "Not on its route.",
+    "warned": "Taking it here is logged with a warning."
+  },
+  "qc": {
+    "title": "Quality check",
+    "count": "{done} / {total}",
+    "photo": "Photo: {words}",
+    "noFace": "Keep faces out of the picture.",
+    "take": "Take the photo",
+    "photoFailed": "The photo did not go. Try again.",
+    "photoOffline": "A photo needs the network.",
+    "ticked": "ticked"
+  }
+}

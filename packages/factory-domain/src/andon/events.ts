@@ -14,6 +14,7 @@ import { CALL_ACTORS, CALL_KINDS, CALL_STATUSES, CALL_STEPS, OUTCOME_TYPES } fro
  *   help_call.answered     a step of a call: seen, on the way, solved or cancelled, by a responder or by the station
  *                          that sent it
  *   help_call.changed      a call got its details (words added at the station) or what it led to (a maintenance job…)
+ *   help_call.escalated    owb-fl3: nobody came after the type's minutes; the job marked it once and the office is told
  *   help_call_type.changed a site's help-call type was added, changed, switched off or on again (the floor's tiles and
  *                          the office's routing read it again)
  *
@@ -80,6 +81,26 @@ export const events = [
       outcomeRecordType: z.enum(OUTCOME_TYPES).nullable(),
     }),
     live: { ...callLive, fields: ['callId', 'stationId', 'lineId', 'change'] },
+  }),
+  // owb-fl3 (order workflow S5, R53): the escalation job marked an open call nobody came to after its type's minutes; its notice
+  // tells the office ("It is at the office now"). Ids and codes only, and the minutes it waited.
+  defineEvent({
+    type: 'help_call.escalated',
+    context: 'andon',
+    description: "A help call nobody came to was escalated after its type's minutes (once): the office is told.",
+    payload: z.strictObject({
+      callId: z.uuid(),
+      typeId: z.uuid(),
+      code: z.string(),
+      kind,
+      stationId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      responderTeamId: z.uuid().nullable(),
+      workOrderId: z.uuid().nullable(),
+      bundleId: z.uuid().nullable(),
+      minutes: z.number().int().min(0),
+    }),
+    live: { ...callLive, fields: ['callId', 'stationId', 'lineId', 'kind', 'code'] },
   }),
   defineEvent({
     type: 'help_call_type.changed',
