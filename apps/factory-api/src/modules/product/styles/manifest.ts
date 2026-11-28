@@ -13,6 +13,9 @@ export const manifest = defineManifest({
   // B-OL-033: `?forOrder=` — the search for an order (also orders.view over its customer, checked by the handler; else 404).
   'GET /product/styles': view,
   'GET /product/styles/:styleId': view,
+  // owb-pd1 1.1: the product's open order lines ("Where it is used"); also orders.view, or orders.view.own and on the order
+  // (checked by the handler: ./orders.ts).
+  'GET /product/styles/:styleId/orders': view,
   'POST /product/styles': manage,
   'PATCH /product/styles/:styleId': manage,
   'POST /product/styles/:styleId/archive': manage,

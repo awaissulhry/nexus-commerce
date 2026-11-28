@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { id, input, instant, output } from '../../core/contracts'
 import { money, notMoney } from '../../money/marked'
+import { ORDER_LIFE } from '../../sales/order-life' // owb-pd1 1.1: the order's life word on "Where it is used"
 import { GARMENT_TRACKINGS } from '../../production/serials/rules'
 import { localisedNames } from '../materials/contracts'
 import { sizeCode } from '../sizes/contracts'
@@ -482,3 +483,41 @@ export const duplicatedView = output({
   noteCodes: z.array(output({ code: z.enum(COPY_NOTES), sizes: z.array(z.string()), count: z.number().int().nullable(), colourway: z.string().nullable() })),
 })
 export type DuplicatedView = z.infer<typeof duplicatedView>
+
+// ---- owb-pd1 (S4 products, step 1.1): where a product is used — the open order lines of a style ---------------------------
+/**
+ * How a made-to-measure line's measurement sheet stands (design § 5r "Riders' measurement sheets"): FILE — a measurement sheet
+ * file sits on the line (a MEASUREMENTS file of the order line); TYPED — the rider's measurements are typed (its measurement
+ * profile); MISSING — neither yet ("Not here yet"). A line in sizes has none (null).
+ */
+export const MEASUREMENT_SHEET_STATES = ['FILE', 'TYPED', 'MISSING'] as const
+export type MeasurementSheetState = (typeof MEASUREMENT_SHEET_STATES)[number]
+
+/**
+ * GET /product/styles/:styleId/orders (owb-pd1 1.1): the open order lines of the product (orders not CANCELLED, CLOSED or
+ * DELIVERED; no fee line), as far as the person sees orders (orders.view over company and customer; with only orders.view.own
+ * the orders the person is on). Never a price. `totals` counts every open line the person sees; `lines` lists the newest 500.
+ */
+export const styleOrderLine = output({
+  orderId: id(),
+  orderNumber: z.string(),
+  customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  lineId: id(),
+  /** The pieces the line still wants (its quantity less what was closed short). */
+  quantity: z.number().int(),
+  /** A line in sizes: "50 × 2 · 52 × 4" in the range's order; null for a made-to-measure line. */
+  sizes: z.string().nullable(),
+  /** The released revision the line is made to; null when the order fixes none. */
+  revision: z.number().int().nullable(),
+  measurement: z.enum(MEASUREMENT_SHEET_STATES).nullable(),
+  /** The order's life (factory-domain sales/order-life: the nine words of every door). */
+  life: z.enum(ORDER_LIFE),
+})
+export type StyleOrderLine = z.infer<typeof styleOrderLine>
+export const styleOrdersView = output({
+  lines: z.array(styleOrderLine),
+  /** Counts, no money ("total" is only the word). */
+  totals: notMoney(output({ openOrders: z.number().int(), openPieces: z.number().int() })),
+})
+export type StyleOrdersView = z.infer<typeof styleOrdersView>
+// ---- end owb-pd1 1.1
